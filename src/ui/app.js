@@ -206,7 +206,18 @@ export function initializeApp() {
     // Mode 6: Reference Elements
     refScaleSelect: document.getElementById('ref-scale-select'),
     btnPrintRef: document.getElementById('btn-print-ref'),
-    refTableBody: document.getElementById('ref-table-body')
+    refTableBody: document.getElementById('ref-table-body'),
+    refActiveScaleBadge: document.getElementById('ref-active-scale-badge'),
+    refQuickChips: document.getElementById('ref-quick-chips'),
+    refDensityBtnStandard: document.getElementById('ref-density-btn-standard'),
+    refDensityBtnCompact: document.getElementById('ref-density-btn-compact'),
+    refRulerContainer: document.getElementById('ref-ruler-container'),
+    refRulerScaleLabel: document.getElementById('ref-ruler-scale-label'),
+    refBenchmarksGrid: document.getElementById('ref-benchmarks-grid'),
+    refBenchmarksScaleLabel: document.getElementById('ref-benchmarks-scale-label'),
+    refDataTable: document.getElementById('ref-data-table'),
+    refTbScale: document.getElementById('ref-tb-scale'),
+    refTbDate: document.getElementById('ref-tb-date')
   };
 
   // ---------------------------------------------------------------------------
@@ -1075,32 +1086,182 @@ export function initializeApp() {
   }
 
   // ---------------------------------------------------------------------------
-  // 12. Mode 6: Reference Scale Chart
+  // 12. Mode 6: Architectural Drafting Reference Sheet
   // ---------------------------------------------------------------------------
   function renderReferenceChart() {
     if (!dom.refTableBody) return;
     state.refScaleRatio = parseFloat(dom.refScaleSelect?.value) || 50;
 
-    const lengthsCm = [0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0];
+    // 1. Update Active Scale Indicators
+    const scaleString = `SCALE 1:${state.refScaleRatio}`;
+    if (dom.refActiveScaleBadge) dom.refActiveScaleBadge.textContent = scaleString;
+    if (dom.refRulerScaleLabel) dom.refRulerScaleLabel.textContent = scaleString;
+    if (dom.refBenchmarksScaleLabel) dom.refBenchmarksScaleLabel.textContent = scaleString;
+    if (dom.refTbScale) dom.refTbScale.textContent = `1:${state.refScaleRatio}`;
+    if (dom.refTbDate) dom.refTbDate.textContent = new Date().toISOString().slice(0, 10);
 
-    dom.refTableBody.innerHTML = lengthsCm.map(cm => {
-      const realMeters = (cm * 0.01) * state.refScaleRatio;
+    // 2. Sync Quick Scale Preset Chips
+    if (dom.refQuickChips) {
+      dom.refQuickChips.querySelectorAll('.ref-chip-btn').forEach(btn => {
+        const r = parseFloat(btn.dataset.ratio);
+        btn.classList.toggle('active', r === state.refScaleRatio);
+      });
+    }
+
+    // 3. Render Printable Architectural Scale Ruler Graphic (150 mm on paper)
+    if (dom.refRulerContainer) {
+      const rulerMm = 150; // 15 cm printable ruler
+      const siteMetersTotal = (rulerMm / 1000) * state.refScaleRatio;
+      
+      let siteStep = 1;
+      if (state.refScaleRatio <= 20) siteStep = 0.2;
+      else if (state.refScaleRatio <= 50) siteStep = 0.5;
+      else if (state.refScaleRatio <= 100) siteStep = 1;
+      else if (state.refScaleRatio <= 250) siteStep = 2;
+      else siteStep = 5;
+
+      let siteTicksSvg = '';
+      for (let s = 0; s <= siteMetersTotal + 0.001; s += siteStep) {
+        const xPosMm = (s / state.refScaleRatio) * 1000;
+        if (xPosMm > rulerMm + 0.5) break;
+        const isMajor = Math.abs(s % (siteStep * 2)) < 0.001 || s === 0;
+        const tickH = isMajor ? 14 : 9;
+        const xPct = (xPosMm / rulerMm) * 100;
+        siteTicksSvg += `
+          <line x1="${xPct}%" y1="0" x2="${xPct}%" y2="${tickH}" stroke="currentColor" stroke-width="${isMajor ? 1.5 : 1}"/>
+          ${isMajor ? `<text x="${xPct}%" y="24" font-size="8" font-family="monospace" text-anchor="middle" fill="currentColor">${formatNumber(s, s < 1 ? 1 : 0)}m</text>` : ''}
+        `;
+      }
+
+      // Bottom edge: Paper cm ticks (every 10mm and 1mm)
+      let paperTicksSvg = '';
+      for (let cm = 0; cm <= rulerMm / 10; cm++) {
+        const xPct = ((cm * 10) / rulerMm) * 100;
+        paperTicksSvg += `
+          <line x1="${xPct}%" y1="52" x2="${xPct}%" y2="40" stroke="currentColor" stroke-width="1.5"/>
+          <text x="${xPct}%" y="37" font-size="7" font-family="monospace" text-anchor="middle" fill="currentColor">${cm}</text>
+        `;
+        if (cm < rulerMm / 10) {
+          const midPct = (((cm * 10) + 5) / rulerMm) * 100;
+          paperTicksSvg += `<line x1="${midPct}%" y1="52" x2="${midPct}%" y2="44" stroke="currentColor" stroke-width="1"/>`;
+        }
+      }
+
+      dom.refRulerContainer.innerHTML = `
+        <svg class="ruler-svg" viewBox="0 0 100 52" preserveAspectRatio="none" style="width: 150mm; max-width: 100%; height: 52px; color: var(--accent-primary);">
+          <rect x="0" y="0" width="100%" height="52" fill="none" stroke="currentColor" stroke-width="1"/>
+          ${siteTicksSvg}
+          ${paperTicksSvg}
+        </svg>
+      `;
+    }
+
+    // 4. Render Architectural Neufert Benchmarks
+    if (dom.refBenchmarksGrid) {
+      const benchmarks = [
+        { name: 'Standard Interior Door', wM: 0.90, hM: 2.10 },
+        { name: 'Ceiling Clearance (Min)', wM: 2.70, hM: null },
+        { name: 'Adult Human Stature', wM: 1.75, hM: null },
+        { name: 'Kitchen Counter Height', wM: 0.90, hM: null },
+        { name: 'Standard Parking Stall', wM: 2.50, hM: 5.00 },
+        { name: 'Stair Step Riser', wM: 0.17, hM: null },
+        { name: 'Office Desk Surface', wM: 1.60, hM: 0.80 },
+        { name: 'Corridor Width (Code)', wM: 1.20, hM: null }
+      ];
+
+      dom.refBenchmarksGrid.innerHTML = benchmarks.map(b => {
+        const siteText = b.hM ? `${b.wM.toFixed(2)} × ${b.hM.toFixed(2)} m` : `${b.wM.toFixed(2)} m`;
+        const paperW = (b.wM / state.refScaleRatio) * 100;
+        const paperH = b.hM ? (b.hM / state.refScaleRatio) * 100 : null;
+        const paperText = paperH ? `${formatNumber(paperW, 2)} × ${formatNumber(paperH, 2)} cm` : `${formatNumber(paperW, 2)} cm`;
+        return `
+          <div class="benchmark-card">
+            <span class="bm-name">${b.name}</span>
+            <span class="bm-site">Site: ${siteText}</span>
+            <span class="bm-paper">Paper: ${paperText}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 5. Render Master Dimension Data Table (Metric & Imperial Dual Data)
+    const metricLengthsCm = [
+      { cm: 0.05, label: '0.5 mm', isBenchmark: false },
+      { cm: 0.1, label: '1 mm (0.1 cm)', isBenchmark: false },
+      { cm: 0.2, label: '2 mm (0.2 cm)', isBenchmark: false },
+      { cm: 0.5, label: '5 mm (0.5 cm)', isBenchmark: true },
+      { cm: 1.0, label: '10 mm (1.0 cm)', isBenchmark: true },
+      { cm: 2.0, label: '20 mm (2.0 cm)', isBenchmark: false },
+      { cm: 5.0, label: '50 mm (5.0 cm)', isBenchmark: true },
+      { cm: 10.0, label: '100 mm (10.0 cm)', isBenchmark: true },
+      { cm: 15.0, label: '150 mm (15.0 cm)', isBenchmark: false },
+      { cm: 20.0, label: '200 mm (20.0 cm)', isBenchmark: true },
+      { cm: 25.0, label: '250 mm (25.0 cm)', isBenchmark: false },
+      { cm: 30.0, label: '300 mm (30.0 cm - Ruler)', isBenchmark: true },
+      { cm: 42.0, label: '420 mm (A3 Width)', isBenchmark: false },
+      { cm: 50.0, label: '500 mm (50.0 cm)', isBenchmark: true },
+      { cm: 100.0, label: '1000 mm (1.0 m Paper)', isBenchmark: true }
+    ];
+
+    const imperialLengthsIn = [
+      { in: 0.0625, label: '1/16" (1.59 mm)', isBenchmark: false },
+      { in: 0.125, label: '1/8" (3.18 mm)', isBenchmark: false },
+      { in: 0.25, label: '1/4" (6.35 mm)', isBenchmark: true },
+      { in: 0.375, label: '3/8" (9.53 mm)', isBenchmark: false },
+      { in: 0.5, label: '1/2" (12.70 mm)', isBenchmark: true },
+      { in: 0.75, label: '3/4" (19.05 mm)', isBenchmark: false },
+      { in: 1.0, label: '1" (25.40 mm)', isBenchmark: true },
+      { in: 1.5, label: '1-1/2" (38.10 mm)', isBenchmark: false },
+      { in: 2.0, label: '2" (50.80 mm)', isBenchmark: false },
+      { in: 3.0, label: '3" (76.20 mm)', isBenchmark: false },
+      { in: 6.0, label: '6" (152.40 mm)', isBenchmark: true },
+      { in: 12.0, label: '12" (1 ft on Paper)', isBenchmark: true }
+    ];
+
+    const metricRows = metricLengthsCm.map(item => {
+      const realMeters = (item.cm * 0.01) * state.refScaleRatio;
       const realMm = realMeters * 1000;
       const realCm = realMeters * 100;
       const realFt = realMeters / 0.3048;
       const realFtIn = formatFeetInches(realMeters / 0.0254);
 
       return `
-        <tr>
-          <td class="col-paper"><strong>${cm} cm</strong> <span style="font-size: 0.75rem; color: var(--text-muted);">(${cm * 10} mm)</span></td>
+        <tr class="${item.isBenchmark ? 'benchmark-row' : ''}">
+          <td class="col-paper"><strong>${item.label}</strong></td>
           <td class="col-real-m">${formatNumber(realMeters, 3)} m</td>
           <td class="col-real-cm">${formatNumber(realCm, 1)} cm</td>
-          <td class="col-real-mm">${formatNumber(realMm, 0)} mm</td>
+          <td class="col-real-mm col-mm-th">${formatNumber(realMm, 0)} mm</td>
           <td class="col-real-ft">${realFtIn}</td>
           <td class="col-real-dec-ft">${formatNumber(realFt, 2)} ft</td>
         </tr>
       `;
-    }).join('');
+    });
+
+    const imperialRows = imperialLengthsIn.map(item => {
+      const realMeters = (item.in * 0.0254) * state.refScaleRatio;
+      const realMm = realMeters * 1000;
+      const realCm = realMeters * 100;
+      const realFt = realMeters / 0.3048;
+      const realFtIn = formatFeetInches(realMeters / 0.0254);
+
+      return `
+        <tr class="${item.isBenchmark ? 'benchmark-row' : ''}">
+          <td class="col-paper"><strong>${item.label}</strong></td>
+          <td class="col-real-m">${formatNumber(realMeters, 3)} m</td>
+          <td class="col-real-cm">${formatNumber(realCm, 1)} cm</td>
+          <td class="col-real-mm col-mm-th">${formatNumber(realMm, 0)} mm</td>
+          <td class="col-real-ft">${realFtIn}</td>
+          <td class="col-real-dec-ft">${formatNumber(realFt, 2)} ft</td>
+        </tr>
+      `;
+    });
+
+    dom.refTableBody.innerHTML = `
+      <tr class="table-section-divider"><td colspan="6" style="background: var(--bg-surface-elevated); color: var(--text-tertiary); font-weight: 800; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.4rem 0.75rem;">— METRIC DRAWING MEASUREMENTS —</td></tr>
+      ${metricRows.join('')}
+      <tr class="table-section-divider"><td colspan="6" style="background: var(--bg-surface-elevated); color: var(--text-tertiary); font-weight: 800; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.4rem 0.75rem;">— IMPERIAL DRAWING MEASUREMENTS —</td></tr>
+      ${imperialRows.join('')}
+    `;
   }
 
   // ---------------------------------------------------------------------------
@@ -1544,8 +1705,39 @@ export function initializeApp() {
       });
     }
 
+    if (dom.refQuickChips) {
+      dom.refQuickChips.querySelectorAll('.ref-chip-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const r = parseFloat(btn.dataset.ratio);
+          state.refScaleRatio = r;
+          if (dom.refScaleSelect) dom.refScaleSelect.value = r;
+          renderReferenceChart();
+          AudioService.playTick();
+        });
+      });
+    }
+
+    if (dom.refDensityBtnStandard) {
+      dom.refDensityBtnStandard.addEventListener('click', () => {
+        dom.refDensityBtnStandard.classList.add('active');
+        dom.refDensityBtnCompact?.classList.remove('active');
+        dom.refDataTable?.classList.remove('compact-table');
+        AudioService.playTick();
+      });
+    }
+
+    if (dom.refDensityBtnCompact) {
+      dom.refDensityBtnCompact.addEventListener('click', () => {
+        dom.refDensityBtnCompact.classList.add('active');
+        dom.refDensityBtnStandard?.classList.remove('active');
+        dom.refDataTable?.classList.add('compact-table');
+        AudioService.playTick();
+      });
+    }
+
     if (dom.btnPrintRef) {
       dom.btnPrintRef.addEventListener('click', () => {
+        showToast('🖨️ Opening print dialog: Set Scale to 100% / Actual Size', 'info');
         window.print();
       });
     }

@@ -149,6 +149,13 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'ref-scale-select',
     'btn-print-ref',
     'ref-table-body',
+    'ref-active-scale-badge',
+    'ref-quick-chips',
+    'ref-ruler-container',
+    'ref-benchmarks-grid',
+    'ref-data-table',
+    'ref-density-btn-standard',
+    'ref-density-btn-compact',
 
     // Workflow Pipeline & Mathematical Explanation IDs
     'converter-math-formula',

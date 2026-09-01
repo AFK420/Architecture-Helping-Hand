@@ -867,53 +867,162 @@
     </section>
 
     <!-- ======================================================== -->
-    <!-- MODE 6: REFERENCE SCALE CHART                            -->
+    <!-- MODE 6: ARCHITECTURAL DRAFTING REFERENCE SHEET           -->
     <!-- ======================================================== -->
     <section id="mode-view-reference" class="tool-mode-view" aria-labelledby="heading-reference">
-      <div class="archi-card single-tool-card">
+      <div class="archi-card reference-sheet-card">
         <div class="corner-mark top-left"></div>
         <div class="corner-mark top-right"></div>
         <div class="corner-mark bottom-left"></div>
         <div class="corner-mark bottom-right"></div>
 
-        <div class="card-title-row">
-          <h2 id="heading-reference">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-              <line x1="16" y1="13" x2="8" y2="13"></line>
-              <line x1="16" y1="17" x2="8" y2="17"></line>
-            </svg>
-            Multi-Length Architectural Quick Reference Sheet
-          </h2>
-          <span class="card-tag">PRINT-READY SHEET</span>
-        </div>
-
-        <div class="ref-controls-row">
-          <div class="ref-select-box">
-            <label class="form-field-label">Select Reference Scale:</label>
-            <select id="ref-scale-select" class="form-select" aria-label="Reference scale selection"></select>
+        <!-- Sheet Title & Document Header -->
+        <div class="ref-sheet-header">
+          <div class="ref-title-group">
+            <h2 id="heading-reference">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+              </svg>
+              Architectural Multi-Scale Drafting Reference Sheet
+            </h2>
+            <div class="ref-sheet-subtitle">Technical dimension equivalency, physical scale ruler & calibration benchmark</div>
           </div>
-          <button id="btn-print-ref" class="action-tool-btn primary" title="Print this reference chart">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 6 2 18 2 18 9"></polyline>
-              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-              <rect x="6" y="14" width="12" height="8"></rect>
-            </svg>
-            Print Reference Sheet
-          </button>
+
+          <!-- Large Active Scale Indicator -->
+          <div class="ref-active-scale-block">
+            <span class="ref-active-label">ACTIVE DRAWING SCALE</span>
+            <span id="ref-active-scale-badge" class="ref-active-badge">SCALE 1:50</span>
+          </div>
         </div>
 
+        <!-- Controls Toolbar: Quick Presets + Scale Select + Density Toggle + Print Action -->
+        <div class="ref-controls-row">
+          <div class="ref-controls-left">
+            <div class="ref-select-box">
+              <label class="form-field-label">Scale Preset:</label>
+              <select id="ref-scale-select" class="form-select" aria-label="Reference scale selection"></select>
+            </div>
+
+            <!-- Quick Scale Preset Chips -->
+            <div class="ref-quick-chips" id="ref-quick-chips">
+              <button class="ref-chip-btn" data-ratio="10">1:10</button>
+              <button class="ref-chip-btn" data-ratio="20">1:20</button>
+              <button class="ref-chip-btn" data-ratio="25">1:25</button>
+              <button class="ref-chip-btn active" data-ratio="50">1:50</button>
+              <button class="ref-chip-btn" data-ratio="100">1:100</button>
+              <button class="ref-chip-btn" data-ratio="200">1:200</button>
+              <button class="ref-chip-btn" data-ratio="48">1/4"=1'</button>
+              <button class="ref-chip-btn" data-ratio="96">1/8"=1'</button>
+            </div>
+          </div>
+
+          <div class="ref-controls-right">
+            <!-- Table Density Toggle -->
+            <div class="ref-density-toggle">
+              <button id="ref-density-btn-standard" class="ref-density-btn active" data-density="standard" title="Full Standard Reference Table">Standard</button>
+              <button id="ref-density-btn-compact" class="ref-density-btn" data-density="compact" title="Compact High-Density Table">Compact</button>
+            </div>
+
+            <!-- Print Action Button -->
+            <button id="btn-print-ref" class="btn-primary-action compact" title="Print this reference sheet at 100% scale">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                <rect x="6" y="14" width="12" height="8"></rect>
+              </svg>
+              <span>PRINT REFERENCE SHEET</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Print Specification Warning Banner -->
+        <div class="print-warning-banner">
+          <div class="warn-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+          </div>
+          <div class="warn-text">
+            <strong>CRITICAL PRINT SETTING:</strong> In your browser print dialog, set <strong>Scale to 100% (Actual Size)</strong>. Do NOT select "Fit to Page" or "Shrink to Fit", as this will distort the printable scale ruler and paper measurements. Compatible with ISO A4 and ANSI Letter.
+          </div>
+        </div>
+
+        <!-- Physical Calibration Box -->
+        <div class="print-calibration-box">
+          <div class="calib-header">
+            <span class="calib-title">PRINT CALIBRATION</span>
+            <span class="calib-std-tag">ISO 216 / ANSI CALIBRATION TARGET</span>
+          </div>
+          <div class="calib-desc">This line should measure exactly 100 mm.</div>
+          
+          <div class="calib-visual-target">
+            <div class="calib-line-wrapper">
+              <div class="calib-end-tick start"></div>
+              <div class="calib-bar-100mm">
+                <div class="calib-subtick" style="left: 10mm;"></div>
+                <div class="calib-subtick" style="left: 20mm;"></div>
+                <div class="calib-subtick" style="left: 30mm;"></div>
+                <div class="calib-subtick" style="left: 40mm;"></div>
+                <div class="calib-subtick mid" style="left: 50mm;"></div>
+                <div class="calib-subtick" style="left: 60mm;"></div>
+                <div class="calib-subtick" style="left: 70mm;"></div>
+                <div class="calib-subtick" style="left: 80mm;"></div>
+                <div class="calib-subtick" style="left: 90mm;"></div>
+              </div>
+              <div class="calib-end-tick end"></div>
+            </div>
+            <div class="calib-numbers-row">
+              <span>0 mm</span>
+              <span>25 mm</span>
+              <span>50 mm</span>
+              <span>75 mm</span>
+              <span>100 mm</span>
+            </div>
+          </div>
+
+          <div class="calib-field-prompt">
+            Measure printed result: <span class="calib-line-blank">____________ mm</span>
+          </div>
+        </div>
+
+        <!-- Printable Scale Ruler Graphic -->
+        <div class="printable-ruler-section">
+          <div class="ruler-section-header">
+            <span class="ruler-title">PRINTABLE ARCHITECTURAL SCALE RULER</span>
+            <span id="ref-ruler-scale-label" class="ruler-scale-badge">SCALE 1:50</span>
+          </div>
+          <div id="ref-ruler-container" class="ruler-graphic-container">
+            <!-- Rendered dynamically by JS -->
+          </div>
+          <div class="ruler-instructions">Place straightedge or cut along border to use as an on-sheet drafting scale.</div>
+        </div>
+
+        <!-- Visual Neufert Architectural Benchmarks -->
+        <div class="ref-benchmarks-section">
+          <div class="benchmarks-header">
+            <span>COMMON ARCHITECTURAL BENCHMARKS AT <strong id="ref-benchmarks-scale-label">SCALE 1:50</strong></span>
+          </div>
+          <div id="ref-benchmarks-grid" class="benchmarks-grid">
+            <!-- Populated dynamically by JS -->
+          </div>
+        </div>
+
+        <!-- Master Dimension Reference Table -->
         <div class="table-scroll-container">
-          <table class="ref-data-table">
+          <table class="ref-data-table" id="ref-data-table">
             <thead>
               <tr>
-                <th>Drawing Length (Paper)</th>
-                <th>Real-World (Meters)</th>
-                <th>Real-World (Centimeters)</th>
-                <th>Real-World (Millimeters)</th>
-                <th>Architectural (Ft-In)</th>
-                <th>Decimal Feet (ft)</th>
+                <th class="sticky-th col-paper-th">Drawing Length (Paper)</th>
+                <th class="sticky-th">Real-World (Meters)</th>
+                <th class="sticky-th">Real-World (Centimeters)</th>
+                <th class="sticky-th col-mm-th">Real-World (Millimeters)</th>
+                <th class="sticky-th">Architectural (Ft-In)</th>
+                <th class="sticky-th">Decimal Feet (ft)</th>
               </tr>
             </thead>
             <tbody id="ref-table-body">
@@ -921,6 +1030,27 @@
             </tbody>
           </table>
         </div>
+
+        <!-- Sheet Title Block (For Print & PDF Export) -->
+        <div class="ref-sheet-titleblock">
+          <div class="tb-cell project">
+            <span class="tb-lbl">DOCUMENT</span>
+            <span class="tb-val">ARCHITECTURE HELPING HAND — QUICK REFERENCE SHEET</span>
+          </div>
+          <div class="tb-cell scale">
+            <span class="tb-lbl">ACTIVE SCALE</span>
+            <span class="tb-val" id="ref-tb-scale">1:50</span>
+          </div>
+          <div class="tb-cell paper">
+            <span class="tb-lbl">PAPER FORMAT</span>
+            <span class="tb-val">ISO A4 / US LETTER (PRINT @ 100%)</span>
+          </div>
+          <div class="tb-cell date">
+            <span class="tb-lbl">SHEET ID</span>
+            <span class="tb-val" id="ref-tb-date">AHH-REF-01</span>
+          </div>
+        </div>
+
       </div>
     </section>
   </main>
