@@ -168,7 +168,18 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'detector-math-formula',
     'detector-result-stale-tag',
     'areavol-math-formula',
-    'areavol-result-stale-tag'
+    'areavol-result-stale-tag',
+
+    // Unified Result Pattern & State Badges
+    'converter-state-badge',
+    'converter-context-strip',
+    'rescale-state-badge',
+    'rescale-context-strip',
+    'detector-state-badge',
+    'detector-context-strip',
+    'areavol-state-badge',
+    'areavol-context-strip',
+    'custom-furn-state-badge'
   ];
 
   for (const id of requiredIds) {

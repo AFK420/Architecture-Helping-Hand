@@ -2695,8 +2695,75 @@ function initializeApp() {
     refBenchmarksScaleLabel: document.getElementById('ref-benchmarks-scale-label'),
     refDataTable: document.getElementById('ref-data-table'),
     refTbScale: document.getElementById('ref-tb-scale'),
-    refTbDate: document.getElementById('ref-tb-date')
+    refTbDate: document.getElementById('ref-tb-date'),
+
+    // Unified Result State Elements
+    converterStateBadge: document.getElementById('converter-state-badge'),
+    converterContextStrip: document.getElementById('converter-context-strip'),
+    rescaleStateBadge: document.getElementById('rescale-state-badge'),
+    rescaleContextStrip: document.getElementById('rescale-context-strip'),
+    detectorStateBadge: document.getElementById('detector-state-badge'),
+    detectorContextStrip: document.getElementById('detector-context-strip'),
+    areavolStateBadge: document.getElementById('areavol-state-badge'),
+    areavolContextStrip: document.getElementById('areavol-context-strip'),
+    customFurnStateBadge: document.getElementById('custom-furn-state-badge')
   };
+
+  // ---------------------------------------------------------------------------
+  // Unified Result Pattern & Lifecycle Manager (READY -> RUNNING -> SUCCESS / ERROR)
+  // ---------------------------------------------------------------------------
+  function setUnifiedResultState({
+    toolPrefix,
+    status, // 'ready' | 'running' | 'success' | 'error'
+    errorText = '',
+    context = null,
+    btn = null
+  }) {
+    const panel = document.getElementById(`${toolPrefix}-result-panel`) || document.querySelector(`.${toolPrefix}-result-box`) || document.querySelector(`.${toolPrefix}-result-row`);
+    const badge = document.getElementById(`${toolPrefix}-state-badge`);
+    const errorBanner = document.getElementById(`${toolPrefix}-error-msg`);
+    const staleTag = document.getElementById(`${toolPrefix}-result-stale-tag`);
+    const contextStrip = document.getElementById(`${toolPrefix}-context-strip`);
+
+    if (panel) panel.dataset.state = status;
+
+    if (badge) {
+      badge.className = `result-state-pill state-${status}`;
+      switch (status) {
+        case 'ready': badge.textContent = 'READY'; break;
+        case 'running': badge.textContent = 'CALCULATING...'; break;
+        case 'success': badge.textContent = 'SUCCESS'; break;
+        case 'error': badge.textContent = 'CORRECTION REQUIRED'; break;
+      }
+    }
+
+    if (status === 'error') {
+      if (errorBanner) {
+        errorBanner.textContent = errorText;
+        errorBanner.style.display = 'flex';
+      }
+      if (staleTag) staleTag.style.display = 'inline-block';
+      if (btn) setRunButtonState(btn, 'error');
+    } else if (status === 'success') {
+      if (errorBanner) errorBanner.style.display = 'none';
+      if (staleTag) staleTag.style.display = 'none';
+      if (panel) {
+        panel.classList.remove('result-pulse');
+        void panel.offsetWidth;
+        panel.classList.add('result-pulse');
+        setTimeout(() => panel.classList.remove('result-pulse'), 200);
+      }
+      if (btn) setRunButtonState(btn, 'success');
+    } else if (status === 'running') {
+      if (btn) setRunButtonState(btn, 'running');
+    }
+
+    if (contextStrip && context) {
+      contextStrip.innerHTML = Object.entries(context)
+        .map(([k, v]) => `<span class="context-pill"><strong>${k}:</strong> ${v}</span>`)
+        .join('');
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // 1. Toast Notification System
@@ -2933,6 +3000,22 @@ function initializeApp() {
     state.converterInputUnit = dom.converterInputUnit?.value || 'cm';
     state.converterOutputUnit = dom.converterOutputUnit?.value || 'm';
 
+    // Actionable Empty Check
+    if (!rawInput || rawInput.trim() === '') {
+      setUnifiedResultState({
+        toolPrefix: 'converter',
+        status: 'error',
+        errorText: '⚠️ Drawing Measurement: Enter a measurement dimension (e.g. 10, 12.5, 3 1/2, or 12\'-6").',
+        btn: dom.btnRunConverter
+      });
+      if (dom.converterInputVal) dom.converterInputVal.classList.add('input-error');
+      if (state.lastValidConverter) {
+        if (dom.converterResultVal) dom.converterResultVal.textContent = state.lastValidConverter.val;
+        if (dom.converterResultUnit) dom.converterResultUnit.textContent = state.lastValidConverter.unit;
+      }
+      return;
+    }
+
     const parseRes = parseInput(rawInput, { allowNegative: false });
 
     // Handle Unit Suffix extraction if user typed e.g. "15.5cm"
@@ -2941,29 +3024,26 @@ function initializeApp() {
       if (dom.converterInputUnit) dom.converterInputUnit.value = parseRes.detectedUnit;
     }
 
-    if (!parseRes.isValid) {
-      if (dom.converterErrorMsg) {
-        dom.converterErrorMsg.textContent = `⚠️ Invalid input: ${parseRes.error || 'Please enter a positive numeric measurement'}`;
-        dom.converterErrorMsg.style.display = 'block';
-      }
+    if (!parseRes.isValid || parseRes.value <= 0) {
+      setUnifiedResultState({
+        toolPrefix: 'converter',
+        status: 'error',
+        errorText: `⚠️ Drawing Measurement: Enter a positive dimension greater than zero (${parseRes.error || 'e.g. 10, 12.5, 3 1/2'}).`,
+        btn: dom.btnRunConverter
+      });
       if (dom.converterInputVal) dom.converterInputVal.classList.add('input-error');
 
       // Preserve previous valid result if available
       if (state.lastValidConverter) {
         if (dom.converterResultVal) dom.converterResultVal.textContent = state.lastValidConverter.val;
         if (dom.converterResultUnit) dom.converterResultUnit.textContent = state.lastValidConverter.unit;
-        if (dom.converterResultStaleTag) dom.converterResultStaleTag.style.display = 'inline-block';
       } else {
         if (dom.converterResultVal) dom.converterResultVal.textContent = '---';
       }
-      setRunButtonState(dom.btnRunConverter, 'error');
       return;
     }
 
-    // Clear error state and stale indicator
-    if (dom.converterErrorMsg) dom.converterErrorMsg.style.display = 'none';
     if (dom.converterInputVal) dom.converterInputVal.classList.remove('input-error');
-    if (dom.converterResultStaleTag) dom.converterResultStaleTag.style.display = 'none';
 
     try {
       const calcRes = scaleDimension({
@@ -3026,13 +3106,24 @@ function initializeApp() {
         containerId: 'visualizer-container'
       });
 
-      setRunButtonState(dom.btnRunConverter, 'success');
+      // Update Unified Result Lifecycle State & Context Strip
+      const directionLabel = state.direction === 'drawing_to_real' ? 'Paper Drawing' : 'Real Site';
+      setUnifiedResultState({
+        toolPrefix: 'converter',
+        status: 'success',
+        context: {
+          'Scale': `1:${state.scaleRatio}`,
+          'Source Input': `${formatNumber(parseRes.value, 2)} ${state.converterInputUnit} (${directionLabel})`
+        },
+        btn: dom.btnRunConverter
+      });
     } catch (err) {
-      if (dom.converterErrorMsg) {
-        dom.converterErrorMsg.textContent = `⚠️ Calculation error: ${err.message}`;
-        dom.converterErrorMsg.style.display = 'block';
-      }
-      setRunButtonState(dom.btnRunConverter, 'error');
+      setUnifiedResultState({
+        toolPrefix: 'converter',
+        status: 'error',
+        errorText: `⚠️ Conversion error: ${err.message}`,
+        btn: dom.btnRunConverter
+      });
     }
   }
 
@@ -3096,35 +3187,70 @@ function initializeApp() {
     const targetRatio = parseFloat(dom.rescaleTargetRatio?.value);
     const rawVal = dom.rescaleOrigVal?.value || '';
 
-    state.rescaleOrigRatio = isNaN(origRatio) || origRatio <= 0 ? 50 : origRatio;
-    state.rescaleTargetRatio = isNaN(targetRatio) || targetRatio <= 0 ? 200 : targetRatio;
+    // Actionable Scale Validation
+    if (isNaN(origRatio) || origRatio <= 0) {
+      setUnifiedResultState({
+        toolPrefix: 'rescale',
+        status: 'error',
+        errorText: '⚠️ Original Scale (Scale A): Enter a scale denominator greater than 0 (e.g. 50 for 1:50).',
+        btn: dom.btnRunRescale
+      });
+      return;
+    }
+
+    if (isNaN(targetRatio) || targetRatio <= 0) {
+      setUnifiedResultState({
+        toolPrefix: 'rescale',
+        status: 'error',
+        errorText: '⚠️ Target Scale (Scale B): Enter a scale denominator greater than 0 (e.g. 200 for 1:200).',
+        btn: dom.btnRunRescale
+      });
+      return;
+    }
+
+    state.rescaleOrigRatio = origRatio;
+    state.rescaleTargetRatio = targetRatio;
     state.rescaleOrigUnit = dom.rescaleOrigUnit?.value || 'cm';
     state.rescaleTargetUnit = dom.rescaleTargetUnit?.value || 'cm';
 
+    // Actionable Dimension Empty Check
+    if (!rawVal || rawVal.trim() === '') {
+      setUnifiedResultState({
+        toolPrefix: 'rescale',
+        status: 'error',
+        errorText: '⚠️ Measured Length: Enter a positive drawing length measured on Sheet A (e.g. 12, 15.5, 3 1/2).',
+        btn: dom.btnRunRescale
+      });
+      if (dom.rescaleOrigVal) dom.rescaleOrigVal.classList.add('input-error');
+      if (state.lastValidRescale) {
+        if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = state.lastValidRescale.val;
+        if (dom.rescaleResultUnit) dom.rescaleResultUnit.textContent = state.lastValidRescale.unit;
+      }
+      return;
+    }
+
     const parsed = parseInput(rawVal, { allowNegative: false });
 
-    if (!parsed.isValid) {
-      if (dom.rescaleErrorMsg) {
-        dom.rescaleErrorMsg.textContent = `⚠️ Invalid dimension: ${parsed.error || 'Enter a positive drawing measurement'}`;
-        dom.rescaleErrorMsg.style.display = 'block';
-      }
+    if (!parsed.isValid || parsed.value <= 0) {
+      setUnifiedResultState({
+        toolPrefix: 'rescale',
+        status: 'error',
+        errorText: `⚠️ Measured Length: Enter a positive drawing measurement greater than zero (${parsed.error || 'e.g. 12, 15.5'}).`,
+        btn: dom.btnRunRescale
+      });
       if (dom.rescaleOrigVal) dom.rescaleOrigVal.classList.add('input-error');
 
       // Preserve previous valid result
       if (state.lastValidRescale) {
         if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = state.lastValidRescale.val;
         if (dom.rescaleResultUnit) dom.rescaleResultUnit.textContent = state.lastValidRescale.unit;
-        if (dom.rescaleResultStaleTag) dom.rescaleResultStaleTag.style.display = 'inline-block';
       } else {
         if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = '---';
       }
-      setRunButtonState(dom.btnRunRescale, 'error');
       return;
     }
 
-    if (dom.rescaleErrorMsg) dom.rescaleErrorMsg.style.display = 'none';
     if (dom.rescaleOrigVal) dom.rescaleOrigVal.classList.remove('input-error');
-    if (dom.rescaleResultStaleTag) dom.rescaleResultStaleTag.style.display = 'none';
 
     try {
       const res = rescaleDrawing({
@@ -3159,13 +3285,23 @@ function initializeApp() {
         dom.rescaleMathFormula.innerHTML = `<strong>Formula:</strong> New Length = Original (${formatNumber(parsed.value, 2)} ${state.rescaleOrigUnit} @ 1:${state.rescaleOrigRatio}) × (${state.rescaleOrigRatio} ÷ ${state.rescaleTargetRatio}) = <strong>${formatted} ${state.rescaleTargetUnit} (${pct}% ${tag})</strong>`;
       }
 
-      setRunButtonState(dom.btnRunRescale, 'success');
+      setUnifiedResultState({
+        toolPrefix: 'rescale',
+        status: 'success',
+        context: {
+          'Rescale': `1:${state.rescaleOrigRatio} ➔ 1:${state.rescaleTargetRatio}`,
+          'Source Sheet A': `${formatNumber(parsed.value, 2)} ${state.rescaleOrigUnit}`,
+          'Real Physical Distance': `${formatNumber(res.realMeters, 3)} m`
+        },
+        btn: dom.btnRunRescale
+      });
     } catch (err) {
-      if (dom.rescaleErrorMsg) {
-        dom.rescaleErrorMsg.textContent = `⚠️ Rescale error: ${err.message}`;
-        dom.rescaleErrorMsg.style.display = 'block';
-      }
-      setRunButtonState(dom.btnRunRescale, 'error');
+      setUnifiedResultState({
+        toolPrefix: 'rescale',
+        status: 'error',
+        errorText: `⚠️ Rescale error: ${err.message}`,
+        btn: dom.btnRunRescale
+      });
     }
   }
 
@@ -3173,32 +3309,74 @@ function initializeApp() {
   // 9. Mode 3: Scale Detector / Finder Engine
   // ---------------------------------------------------------------------------
   function calculateDetector() {
-    const paperP = parseInput(dom.detectorPaperVal?.value, { allowNegative: false });
-    const realP = parseInput(dom.detectorRealVal?.value, { allowNegative: false });
+    const rawPaper = dom.detectorPaperVal?.value || '';
+    const rawReal = dom.detectorRealVal?.value || '';
 
     state.detectPaperUnit = dom.detectorPaperUnit?.value || 'cm';
     state.detectRealUnit = dom.detectorRealUnit?.value || 'm';
 
-    if (!paperP.isValid || !realP.isValid) {
-      if (dom.detectorErrorMsg) {
-        dom.detectorErrorMsg.textContent = '⚠️ Please enter valid positive measurements for both paper and real-world dimensions';
-        dom.detectorErrorMsg.style.display = 'block';
+    // Actionable Empty Checks
+    if (!rawPaper || rawPaper.trim() === '') {
+      setUnifiedResultState({
+        toolPrefix: 'detector',
+        status: 'error',
+        errorText: '⚠️ Paper Dimension: Enter a measured drawing length (e.g. 4.5, 10, 2 1/4).',
+        btn: dom.btnRunDetector
+      });
+      if (dom.detectorPaperVal) dom.detectorPaperVal.classList.add('input-error');
+      if (state.lastValidDetector && dom.detectorRatioVal) {
+        dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
       }
-
-      // Preserve previous valid result
-      if (state.lastValidDetector) {
-        if (dom.detectorRatioVal) dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
-        if (dom.detectorResultStaleTag) dom.detectorResultStaleTag.style.display = 'inline-block';
-      } else {
-        if (dom.detectorRatioVal) dom.detectorRatioVal.textContent = '1 : ---';
-        if (dom.detectorPresetBadge) dom.detectorPresetBadge.textContent = 'Enter measurements above';
-      }
-      setRunButtonState(dom.btnRunDetector, 'error');
       return;
     }
 
-    if (dom.detectorErrorMsg) dom.detectorErrorMsg.style.display = 'none';
-    if (dom.detectorResultStaleTag) dom.detectorResultStaleTag.style.display = 'none';
+    const paperP = parseInput(rawPaper, { allowNegative: false });
+    if (!paperP.isValid || paperP.value <= 0) {
+      setUnifiedResultState({
+        toolPrefix: 'detector',
+        status: 'error',
+        errorText: `⚠️ Paper Dimension: Enter a positive drawing length greater than zero (${paperP.error || 'e.g. 4.5 cm'}).`,
+        btn: dom.btnRunDetector
+      });
+      if (dom.detectorPaperVal) dom.detectorPaperVal.classList.add('input-error');
+      if (state.lastValidDetector && dom.detectorRatioVal) {
+        dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
+      }
+      return;
+    }
+
+    if (dom.detectorPaperVal) dom.detectorPaperVal.classList.remove('input-error');
+
+    if (!rawReal || rawReal.trim() === '') {
+      setUnifiedResultState({
+        toolPrefix: 'detector',
+        status: 'error',
+        errorText: '⚠️ Real-World Dimension: Enter the known physical site distance (e.g. 9, 15, 30).',
+        btn: dom.btnRunDetector
+      });
+      if (dom.detectorRealVal) dom.detectorRealVal.classList.add('input-error');
+      if (state.lastValidDetector && dom.detectorRatioVal) {
+        dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
+      }
+      return;
+    }
+
+    const realP = parseInput(rawReal, { allowNegative: false });
+    if (!realP.isValid || realP.value <= 0) {
+      setUnifiedResultState({
+        toolPrefix: 'detector',
+        status: 'error',
+        errorText: `⚠️ Real-World Dimension: Enter a positive site dimension greater than zero (${realP.error || 'e.g. 9 m'}).`,
+        btn: dom.btnRunDetector
+      });
+      if (dom.detectorRealVal) dom.detectorRealVal.classList.add('input-error');
+      if (state.lastValidDetector && dom.detectorRatioVal) {
+        dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
+      }
+      return;
+    }
+
+    if (dom.detectorRealVal) dom.detectorRealVal.classList.remove('input-error');
 
     try {
       const res = detectScale({
@@ -3208,10 +3386,13 @@ function initializeApp() {
         realUnitKey: state.detectRealUnit
       });
 
-      if (res.ratio === null) {
-        if (dom.detectorRatioVal) dom.detectorRatioVal.textContent = '1 : ---';
-        if (dom.detectorPresetBadge) dom.detectorPresetBadge.textContent = 'Measurements must be > 0';
-        setRunButtonState(dom.btnRunDetector, 'error');
+      if (res.ratio === null || res.ratio <= 0) {
+        setUnifiedResultState({
+          toolPrefix: 'detector',
+          status: 'error',
+          errorText: '⚠️ Scale Detection: Dimensions must be greater than zero to determine scale.',
+          btn: dom.btnRunDetector
+        });
         return;
       }
 
@@ -3236,13 +3417,23 @@ function initializeApp() {
         dom.detectorMathFormula.innerHTML = `<strong>Formula:</strong> Scale 1:X = Real (${formatNumber(realP.value, 2)} ${state.detectRealUnit}) ÷ Paper (${formatNumber(paperP.value, 2)} ${state.detectPaperUnit}) = <strong>${res.ratioString}</strong>`;
       }
 
-      setRunButtonState(dom.btnRunDetector, 'success');
+      setUnifiedResultState({
+        toolPrefix: 'detector',
+        status: 'success',
+        context: {
+          'Drawing Line': `${formatNumber(paperP.value, 2)} ${state.detectPaperUnit}`,
+          'Physical Site': `${formatNumber(realP.value, 2)} ${state.detectRealUnit}`,
+          'Detected Ratio': res.ratioString
+        },
+        btn: dom.btnRunDetector
+      });
     } catch (err) {
-      if (dom.detectorErrorMsg) {
-        dom.detectorErrorMsg.textContent = `⚠️ Error: ${err.message}`;
-        dom.detectorErrorMsg.style.display = 'block';
-      }
-      setRunButtonState(dom.btnRunDetector, 'error');
+      setUnifiedResultState({
+        toolPrefix: 'detector',
+        status: 'error',
+        errorText: `⚠️ Detection error: ${err.message}`,
+        btn: dom.btnRunDetector
+      });
     }
   }
 
@@ -3251,34 +3442,58 @@ function initializeApp() {
   // ---------------------------------------------------------------------------
   function calculateAreaVolume() {
     const rawRatio = parseFloat(dom.areavolRatioInput?.value);
-    state.areavolRatio = isNaN(rawRatio) || rawRatio <= 0 ? 100 : rawRatio;
+    if (isNaN(rawRatio) || rawRatio <= 0) {
+      setUnifiedResultState({
+        toolPrefix: 'areavol',
+        status: 'error',
+        errorText: '⚠️ Scale Ratio: Enter a scale denominator ratio greater than 0 (e.g. 100 for 1:100).',
+        btn: dom.btnRunAreavol
+      });
+      return;
+    }
+
+    state.areavolRatio = rawRatio;
     state.areavolInputUnit = dom.areavolInputUnit?.value || (state.calcType === 'area' ? 'cm2' : 'cm3');
     state.areavolOutputUnit = dom.areavolOutputUnit?.value || (state.calcType === 'area' ? 'm2' : 'm3');
 
-    const parsed = parseInput(dom.areavolInputVal?.value, { allowNegative: false });
-
-    if (!parsed.isValid) {
-      if (dom.areavolErrorMsg) {
-        dom.areavolErrorMsg.textContent = `⚠️ Invalid measurement: ${parsed.error || 'Enter a valid positive number'}`;
-        dom.areavolErrorMsg.style.display = 'block';
+    const rawVal = dom.areavolInputVal?.value || '';
+    if (!rawVal || rawVal.trim() === '') {
+      setUnifiedResultState({
+        toolPrefix: 'areavol',
+        status: 'error',
+        errorText: '⚠️ Measurement Input: Enter a positive area or volume dimension (e.g. 4 m² or 25 sq ft).',
+        btn: dom.btnRunAreavol
+      });
+      if (dom.areavolInputVal) dom.areavolInputVal.classList.add('input-error');
+      if (state.lastValidAreavol) {
+        if (dom.areavolResultVal) dom.areavolResultVal.textContent = state.lastValidAreavol.val;
+        if (dom.areavolResultUnit) dom.areavolResultUnit.textContent = state.lastValidAreavol.unit;
       }
+      return;
+    }
+
+    const parsed = parseInput(rawVal, { allowNegative: false });
+
+    if (!parsed.isValid || parsed.value <= 0) {
+      setUnifiedResultState({
+        toolPrefix: 'areavol',
+        status: 'error',
+        errorText: `⚠️ Measurement Input: Enter a positive value greater than zero (${parsed.error || 'e.g. 4 m²'}).`,
+        btn: dom.btnRunAreavol
+      });
       if (dom.areavolInputVal) dom.areavolInputVal.classList.add('input-error');
 
       // Preserve previous valid result
       if (state.lastValidAreavol) {
         if (dom.areavolResultVal) dom.areavolResultVal.textContent = state.lastValidAreavol.val;
         if (dom.areavolResultUnit) dom.areavolResultUnit.textContent = state.lastValidAreavol.unit;
-        if (dom.areavolResultStaleTag) dom.areavolResultStaleTag.style.display = 'inline-block';
       } else {
         if (dom.areavolResultVal) dom.areavolResultVal.textContent = '---';
       }
-      setRunButtonState(dom.btnRunAreavol, 'error');
       return;
     }
 
-    if (dom.areavolErrorMsg) dom.areavolErrorMsg.style.display = 'none';
     if (dom.areavolInputVal) dom.areavolInputVal.classList.remove('input-error');
-    if (dom.areavolResultStaleTag) dom.areavolResultStaleTag.style.display = 'none';
 
     try {
       const isDrawingToReal = state.calcDirection === 'drawing_to_real';
@@ -3326,13 +3541,23 @@ function initializeApp() {
         dom.areavolMathFormula.innerHTML = `<strong>Formula:</strong> ${targetTitle} = Input (${formatNumber(parsed.value, 2)} ${state.areavolInputUnit}) ${op} Scale${powStr} (${state.areavolRatio}${powStr} = ${formatNumber(res.factor, 0)}) = <strong>${formatted} ${state.areavolOutputUnit}</strong>`;
       }
 
-      setRunButtonState(dom.btnRunAreavol, 'success');
+      setUnifiedResultState({
+        toolPrefix: 'areavol',
+        status: 'success',
+        context: {
+          'Scale Ratio': `1:${state.areavolRatio}`,
+          'Source Value': `${formatNumber(parsed.value, 2)} ${state.areavolInputUnit}`,
+          'Multiplier': `× ${formatNumber(res.factor, 0)}`
+        },
+        btn: dom.btnRunAreavol
+      });
     } catch (err) {
-      if (dom.areavolErrorMsg) {
-        dom.areavolErrorMsg.textContent = `⚠️ Scaling error: ${err.message}`;
-        dom.areavolErrorMsg.style.display = 'block';
-      }
-      setRunButtonState(dom.btnRunAreavol, 'error');
+      setUnifiedResultState({
+        toolPrefix: 'areavol',
+        status: 'error',
+        errorText: `⚠️ Scaling error: ${err.message}`,
+        btn: dom.btnRunAreavol
+      });
     }
   }
 
@@ -3516,15 +3741,52 @@ function initializeApp() {
   }
 
   function calculateCustomFurniture() {
-    const pw = parseInput(dom.customFurnW?.value, { allowNegative: false });
-    const pd = parseInput(dom.customFurnD?.value, { allowNegative: false });
+    const rawW = dom.customFurnW?.value || '';
+    const rawD = dom.customFurnD?.value || '';
 
     state.customFurnUnit = dom.customFurnUnit?.value || 'cm';
     state.furnitureScaleRatio = parseFloat(dom.furnScaleRatioInput?.value) || 50;
     state.furniturePaperUnit = dom.furnPaperUnitSelect?.value || 'cm';
 
-    if (!pw.isValid || !pd.isValid) {
-      if (dom.customFurnResult) dom.customFurnResult.textContent = 'Invalid dimensions';
+    if (!rawW || rawW.trim() === '') {
+      setUnifiedResultState({
+        toolPrefix: 'custom-furn',
+        status: 'error',
+        errorText: '⚠️ Custom Piece Width (W): Enter a positive width dimension (e.g. 240 cm).'
+      });
+      if (dom.customFurnResult) dom.customFurnResult.innerHTML = '<span style="color: var(--color-error);">⚠️ Please enter a positive width dimension</span>';
+      return;
+    }
+
+    const pw = parseInput(rawW, { allowNegative: false });
+    if (!pw.isValid || pw.value <= 0) {
+      setUnifiedResultState({
+        toolPrefix: 'custom-furn',
+        status: 'error',
+        errorText: '⚠️ Custom Piece Width (W): Width must be greater than zero.'
+      });
+      if (dom.customFurnResult) dom.customFurnResult.innerHTML = '<span style="color: var(--color-error);">⚠️ Width must be greater than zero</span>';
+      return;
+    }
+
+    if (!rawD || rawD.trim() === '') {
+      setUnifiedResultState({
+        toolPrefix: 'custom-furn',
+        status: 'error',
+        errorText: '⚠️ Custom Piece Depth (D): Enter a positive depth dimension (e.g. 100 cm).'
+      });
+      if (dom.customFurnResult) dom.customFurnResult.innerHTML = '<span style="color: var(--color-error);">⚠️ Please enter a positive depth dimension</span>';
+      return;
+    }
+
+    const pd = parseInput(rawD, { allowNegative: false });
+    if (!pd.isValid || pd.value <= 0) {
+      setUnifiedResultState({
+        toolPrefix: 'custom-furn',
+        status: 'error',
+        errorText: '⚠️ Custom Piece Depth (D): Depth must be greater than zero.'
+      });
+      if (dom.customFurnResult) dom.customFurnResult.innerHTML = '<span style="color: var(--color-error);">⚠️ Depth must be greater than zero</span>';
       return;
     }
 
@@ -3559,8 +3821,19 @@ function initializeApp() {
       const formatted = `Paper @ 1:${state.furnitureScaleRatio}: <strong>${paperFormatted}</strong> (${formatNumber(paperArea, 2)} ${state.furniturePaperUnit}²) | Real Footprint: <strong>${formatNumber(realAreaM2, 2)} m²</strong> (${formatNumber(realAreaSqFt, 1)} sq ft)`;
       
       if (dom.customFurnResult) dom.customFurnResult.innerHTML = formatted;
+      
+      setUnifiedResultState({
+        toolPrefix: 'custom-furn',
+        status: 'success'
+      });
       AudioService.playTick();
-    } catch (e) {}
+    } catch (e) {
+      setUnifiedResultState({
+        toolPrefix: 'custom-furn',
+        status: 'error',
+        errorText: `⚠️ Scaling error: ${e.message}`
+      });
+    }
   }
 
   // ---------------------------------------------------------------------------

@@ -275,20 +275,30 @@
             </div>
 
             <!-- STEP 3: FINAL CALCULATED ANSWER (HERO PANEL) -->
-            <div class="pipeline-step step-output result-hero-panel" id="converter-result-panel">
+            <div class="pipeline-step step-output result-hero-panel unified-result-panel" id="converter-result-panel" data-state="success">
               <div class="step-badge-row" style="justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                   <span class="step-num-badge output-badge">STEP 3</span>
                   <span class="step-kind-tag final-answer">FINAL CALCULATED ANSWER</span>
                 </div>
-                <span id="converter-result-stale-tag" class="stale-status-tag" style="display: none;">Showing previous valid result</span>
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span id="converter-state-badge" class="result-state-pill state-success">SUCCESS</span>
+                  <span id="converter-result-stale-tag" class="stale-status-tag" style="display: none;">Showing previous valid result</span>
+                </div>
               </div>
               
-              <div class="result-hero-label">Calculated Dimension</div>
+              <div class="result-hero-label">Calculated Real-World Dimension</div>
               <div class="result-main-value">
                 <span id="converter-result-val">5.000</span>
                 <span id="converter-result-unit" class="result-unit-suffix">m</span>
               </div>
+
+              <!-- Context & Active Scale -->
+              <div class="result-context-strip" id="converter-context-strip">
+                <span class="context-pill"><strong>Scale:</strong> 1:50</span>
+                <span class="context-pill"><strong>Input:</strong> 10.00 cm Drawing</span>
+              </div>
+
               <div class="result-secondary-readout" id="converter-secondary-readout">
                 16'-4 7/8" (196.85 in)
               </div>
@@ -447,24 +457,34 @@
           </div>
 
           <!-- STEP 3: RESULT HERO PANEL -->
-          <div class="pipeline-step step-output result-hero-panel">
+          <div class="pipeline-step step-output result-hero-panel unified-result-panel" id="rescale-result-panel" data-state="success">
             <div class="step-badge-row" style="justify-content: space-between;">
               <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <span class="step-num-badge output-badge">STEP 3</span>
                 <span class="step-kind-tag final-answer">DIMENSION ON NEW SHEET</span>
               </div>
-              <span id="rescale-result-stale-tag" class="stale-status-tag" style="display: none;">Showing previous valid result</span>
+              <div style="display: flex; align-items: center; gap: 0.4rem;">
+                <span id="rescale-state-badge" class="result-state-pill state-success">SUCCESS</span>
+                <span id="rescale-result-stale-tag" class="stale-status-tag" style="display: none;">Showing previous valid result</span>
+              </div>
             </div>
             <div class="result-hero-label">Draw On New Sheet As:</div>
             <div class="result-main-value">
               <span id="rescale-result-val">3.000</span>
               <span id="rescale-result-unit" class="result-unit-suffix">cm</span>
             </div>
+
+            <!-- Context Strip -->
+            <div class="result-context-strip" id="rescale-context-strip">
+              <span class="context-pill"><strong>Rescale:</strong> 1:50 ➔ 1:200</span>
+              <span class="context-pill"><strong>Real Distance:</strong> 6.000 m</span>
+            </div>
+
             <div class="result-sub-detail">
               Magnification Factor: <strong id="rescale-factor-badge" class="highlight-badge">25.0% (Reduced)</strong>
             </div>
             <div class="result-actions-bar">
-              <button id="btn-copy-rescale" class="action-tool-btn">
+              <button id="btn-copy-rescale" class="action-tool-btn" title="Copy rescaled dimension to clipboard">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -556,18 +576,28 @@
           </div>
 
           <!-- STEP 3: DETECTED SCALE HERO -->
-          <div class="pipeline-step step-output result-hero-panel">
+          <div class="pipeline-step step-output result-hero-panel unified-result-panel" id="detector-result-panel" data-state="success">
             <div class="step-badge-row" style="justify-content: space-between;">
               <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <span class="step-num-badge output-badge">STEP 3</span>
                 <span class="step-kind-tag final-answer">DETECTED ARCHITECTURAL SCALE</span>
               </div>
-              <span id="detector-result-stale-tag" class="stale-status-tag" style="display: none;">Showing previous valid result</span>
+              <div style="display: flex; align-items: center; gap: 0.4rem;">
+                <span id="detector-state-badge" class="result-state-pill state-success">SUCCESS</span>
+                <span id="detector-result-stale-tag" class="stale-status-tag" style="display: none;">Showing previous valid result</span>
+              </div>
             </div>
             <div class="result-hero-label">Determined Scale Ratio</div>
             <div class="result-main-value">
               <span id="detector-ratio-val">1 : 200</span>
             </div>
+
+            <!-- Context Strip -->
+            <div class="result-context-strip" id="detector-context-strip">
+              <span class="context-pill"><strong>Drawing:</strong> 4.50 cm</span>
+              <span class="context-pill"><strong>Real Site:</strong> 9.00 m</span>
+            </div>
+
             <div id="detector-preset-badge" class="preset-match-badge">
               Exact Match: <strong>1:200 (Site / Large Building)</strong>
             </div>
@@ -679,24 +709,34 @@
           </div>
 
           <!-- STEP 3: RESULT HERO PANEL -->
-          <div class="pipeline-step step-output result-hero-panel">
+          <div class="pipeline-step step-output result-hero-panel unified-result-panel" id="areavol-result-panel" data-state="success">
             <div class="step-badge-row" style="justify-content: space-between;">
               <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <span class="step-num-badge output-badge">STEP 3</span>
                 <span class="step-kind-tag final-answer">CALCULATED AREA / VOLUME</span>
               </div>
-              <span id="areavol-result-stale-tag" class="stale-status-tag" style="display: none;">Showing previous valid result</span>
+              <div style="display: flex; align-items: center; gap: 0.4rem;">
+                <span id="areavol-state-badge" class="result-state-pill state-success">SUCCESS</span>
+                <span id="areavol-result-stale-tag" class="stale-status-tag" style="display: none;">Showing previous valid result</span>
+              </div>
             </div>
-            <div class="result-hero-label">Result Dimension</div>
+            <div class="result-hero-label">Calculated Real-World Area / Volume</div>
             <div class="result-main-value">
               <span id="areavol-result-val">4.000</span>
               <span id="areavol-result-unit" class="result-unit-suffix">m²</span>
             </div>
+
+            <!-- Context Strip -->
+            <div class="result-context-strip" id="areavol-context-strip">
+              <span class="context-pill"><strong>Scale:</strong> 1:100</span>
+              <span class="context-pill"><strong>Input:</strong> 4 cm²</span>
+            </div>
+
             <div class="result-sub-detail">
               Scaling Multiplier: <strong id="areavol-factor-badge" class="highlight-badge">× 10,000 (100²)</strong>
             </div>
             <div class="result-actions-bar">
-              <button id="btn-copy-areavol" class="action-tool-btn">
+              <button id="btn-copy-areavol" class="action-tool-btn" title="Copy calculated area/volume result">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -847,14 +887,18 @@
               <span class="btn-text">CALCULATE SIZE</span>
             </button>
           </div>
-          <div class="custom-furn-result-row">
+          <div class="custom-furn-result-row unified-result-box" data-state="success">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem; width: 100%;">
+              <span class="custom-furn-result-lbl">SCALED PIECE & FOOTPRINT</span>
+              <span id="custom-furn-state-badge" class="result-state-pill state-success">SUCCESS</span>
+            </div>
             <div id="custom-furn-result" class="custom-furn-result-badge">
-              Paper @ 1:50: 4.80 × 2.00 cm | Footprint: 2.40 m² (25.8 sq ft)
+              Paper @ 1:50: <strong>4.80 × 2.00 cm</strong> (9.60 cm²) | Real Footprint: <strong>2.40 m²</strong> (25.8 sq ft)
             </div>
             <div class="custom-furn-actions">
               <button id="btn-planner-custom-furn" class="action-tool-btn compact primary" title="Add custom piece to Room Planner">+ Use in Planner</button>
-              <button id="btn-copy-custom-furn" class="action-tool-btn compact">Copy Size</button>
-              <button id="btn-send-custom-furn" class="action-tool-btn compact">To Converter</button>
+              <button id="btn-copy-custom-furn" class="action-tool-btn compact" title="Copy custom scaled dimensions">Copy Size</button>
+              <button id="btn-send-custom-furn" class="action-tool-btn compact" title="Send width to main Converter">To Converter</button>
             </div>
           </div>
         </div>
