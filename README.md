@@ -176,12 +176,15 @@ This repository serves as:
 * **Triangle**: Three-side calculations using Heron's formula ($s = \frac{a+b+c}{2}$, $A = \sqrt{s(s-a)(s-b)(s-c)}$).
 * **Arbitrary Polygon**: Multi-vertex 2D coordinates using the Shoelace formula (Gauss area algorithm) with signed clockwise/counter-clockwise orientation and collinearity detection.
 
-### 8. Dimension Workspace & Dynamic Schedule
-* **Persistent Architectural Scratchpad**: Enter multiple measurements (walls, openings, partitions, structural grids) and view them simultaneously.
-* **Simultaneous Live Scaling**: Switch drawing scales ($1:20, 1:50, 1:100, 1:200$, custom) to update drawing representations instantly across all rows.
-* **Independent Display Units**: Switch output units between metric ($mm, cm, m$) and imperial ($in, ft$, Architectural $ft\text{-}in$) on the fly.
-* **Live Cumulative Totals**: Instant sum of real-world and drawing lengths for all enabled valid rows.
-* **Row-Level Controls & Exports**: Duplicate rows, reorder ($\uparrow / \downarrow$), enable/disable, export TSV schedules, and save to Calculation Journal.
+### 8. Dimension Workspace & Dynamic Schedule (v1.1)
+* **Semantic Dimension Types**: Distinct roles for additive structural segments (`SEG`), planning tolerances (`ALW`), and non-additive reference openings (`REF`, default).
+* **Multi-Metric Totals Hero**: Calculates separate Segments Total, Allowances Total, Combined Total, and Reference Totals.
+* **Deterministic Quick Add**: Type natural single-line entries like `Wall A 4800`, `Door Opening 900mm`, `seg Bay 1 6m`, or `Gap 50 allowance`.
+* **Fast Inline Editing**: Double-click or click any name, measurement, or note cell to edit directly in place; click type badge to cycle roles.
+* **Grouping & Subtotals**: Organize dimensions into named groups with group subtotals and collapsible sections.
+* **CAD Clipboard Preparation**: Copy formatted schedules, additive segments, reference dimensions, or raw CAD numbers (`4800\n3200\n900`) for direct pasting into Rhino, AutoCAD, or SketchUp.
+* **Keyboard-First Workflow**: Full keyboard productivity (<kbd>N</kbd> new/focus, <kbd>D</kbd> duplicate, <kbd>Del</kbd> delete selected, <kbd>↑</kbd>/<kbd>↓</kbd> navigate, <kbd>Ctrl+C</kbd> copy).
+* **Display Density Modes**: Switch between Comfortable drafting mode and high-density Compact schedule view.
 
 ---
 

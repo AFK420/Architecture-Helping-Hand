@@ -1296,10 +1296,9 @@ function filterFurnitureCatalog(catalog, searchQuery = '', category = 'all', sor
 
 /**
  * Architecture Helping Hand - Dimension Workspace Core Model
- * Phase 2.5: Daily Architect Toolkit — Part 2: Dimension Workspace
- * Headless, high-precision architectural scratchpad and batch scaling engine.
+ * Phase 2.5: Daily Architect Toolkit — Part 2.5: Dimension Workspace v1.1
+ * Headless, high-precision architectural scratchpad, batch scaling engine & schedule generator.
  */
-
 
 
 
@@ -1308,6 +1307,8 @@ function filterFurnitureCatalog(catalog, searchQuery = '', category = 'all', sor
 const WORKSPACE_STORAGE_KEY = 'archiscale_dimension_workspace';
 const DEFAULT_WORKSPACE_SCALE = 50;
 const DEFAULT_DISPLAY_UNIT = 'mm';
+const DEFAULT_DIMENSION_TYPE = 'reference';
+const DEFAULT_DENSITY = 'comfortable';
 
 const SUPPORTED_DISPLAY_UNITS = Object.freeze([
   { key: 'mm', label: 'Millimeters (mm)', type: 'metric' },
@@ -1316,6 +1317,12 @@ const SUPPORTED_DISPLAY_UNITS = Object.freeze([
   { key: 'in', label: 'Inches (in)', type: 'imperial' },
   { key: 'ft', label: 'Decimal Feet (ft)', type: 'imperial' },
   { key: 'ft_in', label: 'Architectural (Ft-In)', type: 'imperial' }
+]);
+
+const SUPPORTED_DIMENSION_TYPES = Object.freeze([
+  { key: 'reference', label: 'Reference', shortLabel: 'REF', isAdditive: false, desc: 'Object / condition dimension (excluded from cumulative totals)' },
+  { key: 'segment', label: 'Segment', shortLabel: 'SEG', isAdditive: true, desc: 'Additive segment participating in cumulative totals' },
+  { key: 'allowance', label: 'Allowance', shortLabel: 'ALW', isAdditive: true, desc: 'Tolerance or clearance allowance added to totals' }
 ]);
 
 let entryIdCounter = 0;
@@ -1330,6 +1337,110 @@ function generateEntryId() {
 }
 
 /**
+ * Create a new dimension group container
+ * @param {string} [name='Group']
+ * @returns {Object} Group
+ */
+function createGroup(name = 'Group') {
+  return {
+    id: `grp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    name: typeof name === 'string' && name.trim() !== '' ? name.trim() : 'Group',
+    collapsed: false
+  };
+}
+
+/**
+ * Deterministically parse natural quick-add input string into name, measurement and type
+ * Examples: "Wall A 4800", "Door 900", "Gap 50mm allowance", "seg Bay 1 6m"
+ * @param {string} inputString
+ * @param {string} [defaultUnit='mm']
+ * @param {'reference'|'segment'|'allowance'} [fallbackType='reference']
+ * @returns {Object}
+ */
+function parseQuickAddString(inputString, defaultUnit = DEFAULT_DISPLAY_UNIT, fallbackType = DEFAULT_DIMENSION_TYPE) {
+  if (!inputString || typeof inputString !== 'string') {
+    return { name: 'Dimension', rawInput: '', dimensionType: fallbackType, isValid: false };
+  }
+
+  let text = inputString.trim();
+  if (!text) {
+    return { name: 'Dimension', rawInput: '', dimensionType: fallbackType, isValid: false };
+  }
+
+  let detectedType = fallbackType;
+
+  // 1. Check for type prefixes: "seg: Wall A 4800", "ref: Door 900", "alw: Gap 50", "[segment] Bay 1 6000"
+  const prefixMatch = text.match(/^(?:\[(segment|seg|reference|ref|allowance|alw)\]|(segment|seg|reference|ref|allowance|alw)[:\s]+)/i);
+  if (prefixMatch) {
+    const rawTag = (prefixMatch[1] || prefixMatch[2] || '').toLowerCase();
+    if (rawTag.startsWith('seg')) detectedType = 'segment';
+    else if (rawTag.startsWith('ref')) detectedType = 'reference';
+    else if (rawTag.startsWith('alw') || rawTag.startsWith('all')) detectedType = 'allowance';
+    text = text.slice(prefixMatch[0].length).trim();
+  } else {
+    // Check for trailing type suffix: "Gap 50 [allowance]" or "Wall A 4800 segment"
+    const suffixMatch = text.match(/\s+(?:\[(segment|seg|reference|ref|allowance|alw)\]|(segment|seg|reference|ref|allowance|alw))$/i);
+    if (suffixMatch) {
+      const rawTag = (suffixMatch[1] || suffixMatch[2] || '').toLowerCase();
+      if (rawTag.startsWith('seg')) detectedType = 'segment';
+      else if (rawTag.startsWith('ref')) detectedType = 'reference';
+      else if (rawTag.startsWith('alw') || rawTag.startsWith('all')) detectedType = 'allowance';
+      text = text.slice(0, suffixMatch.index).trim();
+    }
+  }
+
+  const tokens = text.split(/\s+/);
+  if (tokens.length === 1) {
+    const testParse = parseInput(tokens[0]);
+    if (testParse.isValid && testParse.value > 0) {
+      return {
+        name: 'Dimension',
+        rawInput: tokens[0],
+        dimensionType: detectedType,
+        isValid: true
+      };
+    } else {
+      return {
+        name: tokens[0],
+        rawInput: '',
+        dimensionType: detectedType,
+        isValid: false
+      };
+    }
+  }
+
+  // Scan backwards from the right for the measurement token(s)
+  let measurementPart = '';
+  let namePart = '';
+
+  for (let take = Math.min(3, tokens.length - 1); take >= 1; take--) {
+    const candidateMeas = tokens.slice(tokens.length - take).join(' ');
+    const testParse = parseInput(candidateMeas);
+    if (testParse.isValid && testParse.value > 0) {
+      measurementPart = candidateMeas;
+      namePart = tokens.slice(0, tokens.length - take).join(' ');
+      break;
+    }
+  }
+
+  if (measurementPart) {
+    return {
+      name: namePart.trim() || 'Dimension',
+      rawInput: measurementPart.trim(),
+      dimensionType: detectedType,
+      isValid: true
+    };
+  }
+
+  return {
+    name: text,
+    rawInput: '',
+    dimensionType: detectedType,
+    isValid: false
+  };
+}
+
+/**
  * Creates and normalizes a single dimension entry
  * @param {Object} data
  * @param {string} [defaultUnit='mm']
@@ -1341,11 +1452,20 @@ function createDimensionEntry(data = {}, defaultUnit = DEFAULT_DISPLAY_UNIT) {
   const rawInput = data.rawInput !== undefined && data.rawInput !== null ? String(data.rawInput).trim() : '';
   const notes = typeof data.notes === 'string' ? data.notes.trim() : '';
   const enabled = data.enabled !== false;
-  const groupId = typeof data.groupId === 'string' ? data.groupId : null;
+  const groupId = typeof data.groupId === 'string' && data.groupId.trim() !== '' ? data.groupId.trim() : null;
+
+  // Semantic dimension type: 'reference' (default), 'segment', 'allowance'
+  let dimensionType = DEFAULT_DIMENSION_TYPE;
+  if (data.dimensionType === 'segment' || data.dimensionType === 'allowance' || data.dimensionType === 'reference') {
+    dimensionType = data.dimensionType;
+  }
+
+  // Strict unit check
   const fallbackUnit = UNITS[defaultUnit] ? defaultUnit : 'mm';
 
   let realMeters = null;
   let parsedUnit = fallbackUnit;
+  let parsedNumericValue = 0;
   let isValid = false;
   let errorMessage = null;
 
@@ -1355,17 +1475,27 @@ function createDimensionEntry(data = {}, defaultUnit = DEFAULT_DISPLAY_UNIT) {
   } else {
     const parseRes = parseInput(rawInput);
     if (parseRes.isValid && parseRes.value > 0) {
-      const activeUnitKey = parseRes.detectedUnit || fallbackUnit;
-      const unitDef = UNITS[activeUnitKey] || UNITS[fallbackUnit];
-
-      if (unitDef) {
-        parsedUnit = unitDef.key;
-        realMeters = parseRes.value * unitDef.toMeters;
-        isValid = true;
-        errorMessage = null;
+      parsedNumericValue = parseRes.value;
+      if (parseRes.detectedUnit) {
+        if (UNITS[parseRes.detectedUnit]) {
+          parsedUnit = parseRes.detectedUnit;
+          realMeters = parseRes.value * UNITS[parseRes.detectedUnit].toMeters;
+          isValid = true;
+          errorMessage = null;
+        } else {
+          isValid = false;
+          errorMessage = `Unknown unit: ${parseRes.detectedUnit}`;
+        }
       } else {
-        isValid = false;
-        errorMessage = `Unknown unit: ${activeUnitKey}`;
+        if (UNITS[fallbackUnit]) {
+          parsedUnit = fallbackUnit;
+          realMeters = parseRes.value * UNITS[fallbackUnit].toMeters;
+          isValid = true;
+          errorMessage = null;
+        } else {
+          isValid = false;
+          errorMessage = `Invalid default unit: ${fallbackUnit}`;
+        }
       }
     } else {
       isValid = false;
@@ -1377,8 +1507,10 @@ function createDimensionEntry(data = {}, defaultUnit = DEFAULT_DISPLAY_UNIT) {
     id,
     name,
     rawInput,
+    dimensionType,
     defaultUnit: fallbackUnit,
     parsedUnit,
+    parsedNumericValue,
     realMeters,
     isValid,
     errorMessage,
@@ -1403,6 +1535,7 @@ function updateDimensionEntry(entry, updates = {}) {
     id: entry.id,
     name: updates.name !== undefined ? updates.name : entry.name,
     rawInput: updates.rawInput !== undefined ? updates.rawInput : entry.rawInput,
+    dimensionType: updates.dimensionType !== undefined ? updates.dimensionType : entry.dimensionType,
     defaultUnit: updates.defaultUnit !== undefined ? updates.defaultUnit : entry.defaultUnit,
     notes: updates.notes !== undefined ? updates.notes : entry.notes,
     enabled: updates.enabled !== undefined ? updates.enabled : entry.enabled,
@@ -1424,6 +1557,7 @@ function duplicateDimensionEntry(entry) {
     id: generateEntryId(),
     name: `${entry.name} (Copy)`,
     rawInput: entry.rawInput,
+    dimensionType: entry.dimensionType,
     defaultUnit: entry.defaultUnit,
     notes: entry.notes,
     enabled: entry.enabled,
@@ -1439,8 +1573,14 @@ function duplicateDimensionEntry(entry) {
  * @returns {string}
  */
 function formatMeasurementValue(meters, displayUnit = DEFAULT_DISPLAY_UNIT, precision = 3) {
-  if (meters === null || meters === undefined || isNaN(meters) || !isFinite(meters) || meters <= 0) {
+  if (meters === null || meters === undefined || isNaN(meters) || !isFinite(meters) || meters < 0) {
     return '---';
+  }
+
+  if (meters === 0) {
+    if (displayUnit === 'ft_in') return '0"';
+    const unitDef = UNITS[displayUnit] || UNITS.mm;
+    return `0 ${unitDef.symbol}`;
   }
 
   if (displayUnit === 'ft_in') {
@@ -1470,7 +1610,8 @@ function calculateEntryValues(entry, scaleRatio = DEFAULT_WORKSPACE_SCALE, displ
       drawingMeters: null,
       realFormatted: '---',
       drawingFormatted: '---',
-      rawInput: entry?.rawInput || ''
+      rawInput: entry?.rawInput || '',
+      dimensionType: entry?.dimensionType || DEFAULT_DIMENSION_TYPE
     };
   }
 
@@ -1484,12 +1625,14 @@ function calculateEntryValues(entry, scaleRatio = DEFAULT_WORKSPACE_SCALE, displ
     drawingMeters,
     realFormatted: formatMeasurementValue(realMeters, displayUnit, precision),
     drawingFormatted: formatMeasurementValue(drawingMeters, displayUnit, precision),
-    rawInput: entry.rawInput
+    rawInput: entry.rawInput,
+    dimensionType: entry.dimensionType || DEFAULT_DIMENSION_TYPE
   };
 }
 
 /**
- * Computes workspace totals across all enabled valid dimension rows
+ * Computes workspace totals with semantic segment, allowance, and combined totals
+ * Reference dimensions are excluded from cumulative totals.
  * @param {Array<Object>} entries
  * @param {number} scaleRatio
  * @param {string} displayUnit
@@ -1501,8 +1644,14 @@ function calculateWorkspaceTotals(entries = [], scaleRatio = DEFAULT_WORKSPACE_S
     entries = [];
   }
 
-  let totalRealMeters = 0;
-  let totalDrawingMeters = 0;
+  let segmentRealMeters = 0;
+  let allowanceRealMeters = 0;
+  let referenceRealMeters = 0;
+
+  let segmentCount = 0;
+  let allowanceCount = 0;
+  let referenceCount = 0;
+
   let enabledCount = 0;
   let validCount = 0;
   let invalidCount = 0;
@@ -1511,91 +1660,181 @@ function calculateWorkspaceTotals(entries = [], scaleRatio = DEFAULT_WORKSPACE_S
     if (!entry) continue;
     if (entry.enabled) {
       enabledCount++;
+      const type = entry.dimensionType || 'reference';
       if (entry.isValid && typeof entry.realMeters === 'number' && entry.realMeters > 0) {
         validCount++;
-        totalRealMeters += entry.realMeters;
+        if (type === 'segment') {
+          segmentRealMeters += entry.realMeters;
+          segmentCount++;
+        } else if (type === 'allowance') {
+          allowanceRealMeters += entry.realMeters;
+          allowanceCount++;
+        } else {
+          // reference
+          referenceRealMeters += entry.realMeters;
+          referenceCount++;
+        }
       } else {
         invalidCount++;
       }
     }
   }
 
-  if (scaleRatio > 0) {
-    totalDrawingMeters = totalRealMeters / scaleRatio;
-  }
+  const combinedRealMeters = segmentRealMeters + allowanceRealMeters;
+
+  const segmentDrawingMeters = scaleRatio > 0 ? segmentRealMeters / scaleRatio : 0;
+  const allowanceDrawingMeters = scaleRatio > 0 ? allowanceRealMeters / scaleRatio : 0;
+  const combinedDrawingMeters = scaleRatio > 0 ? combinedRealMeters / scaleRatio : 0;
+  const referenceDrawingMeters = scaleRatio > 0 ? referenceRealMeters / scaleRatio : 0;
 
   return {
     totalCount: entries.length,
     enabledCount,
     validCount,
     invalidCount,
+    segmentCount,
+    allowanceCount,
+    referenceCount,
     scaleRatio,
     displayUnit,
-    totalRealMeters,
-    totalDrawingMeters,
-    totalRealFormatted: validCount > 0 ? formatMeasurementValue(totalRealMeters, displayUnit, precision) : '0 ' + (displayUnit === 'ft_in' ? 'ft-in' : displayUnit),
-    totalDrawingFormatted: validCount > 0 ? formatMeasurementValue(totalDrawingMeters, displayUnit, precision) : '0 ' + (displayUnit === 'ft_in' ? 'ft-in' : displayUnit)
+
+    // Segment Totals
+    segmentRealMeters,
+    segmentDrawingMeters,
+    segmentRealFormatted: formatMeasurementValue(segmentRealMeters, displayUnit, precision),
+    segmentDrawingFormatted: formatMeasurementValue(segmentDrawingMeters, displayUnit, precision),
+
+    // Allowance Totals
+    allowanceRealMeters,
+    allowanceDrawingMeters,
+    allowanceRealFormatted: formatMeasurementValue(allowanceRealMeters, displayUnit, precision),
+    allowanceDrawingFormatted: formatMeasurementValue(allowanceDrawingMeters, displayUnit, precision),
+
+    // Combined Totals (Segments + Allowances)
+    totalRealMeters: combinedRealMeters,
+    totalDrawingMeters: combinedDrawingMeters,
+    totalRealFormatted: formatMeasurementValue(combinedRealMeters, displayUnit, precision),
+    totalDrawingFormatted: formatMeasurementValue(combinedDrawingMeters, displayUnit, precision),
+
+    // Reference Totals (Informational only)
+    referenceRealMeters,
+    referenceDrawingMeters,
+    referenceRealFormatted: formatMeasurementValue(referenceRealMeters, displayUnit, precision),
+    referenceDrawingFormatted: formatMeasurementValue(referenceDrawingMeters, displayUnit, precision),
+
+    // Summary breakdown
+    breakdownLabel: `${entries.length} items • ${segmentCount} segments • ${allowanceCount} allowances • ${referenceCount} references`
   };
 }
 
 /**
- * Formats all active workspace entries into clean architectural text for clipboard
+ * Computes subtotal for a specific group of entries
+ * @param {Array<Object>} entries
+ * @param {string} groupId
+ * @param {number} scaleRatio
+ * @param {string} displayUnit
+ * @param {number} [precision=3]
+ * @returns {Object}
+ */
+function calculateGroupTotals(entries = [], groupId, scaleRatio = DEFAULT_WORKSPACE_SCALE, displayUnit = DEFAULT_DISPLAY_UNIT, precision = 3) {
+  const groupEntries = (entries || []).filter(e => e && e.groupId === groupId);
+  return calculateWorkspaceTotals(groupEntries, scaleRatio, displayUnit, precision);
+}
+
+/**
+ * Formats all or filtered workspace entries into clean architectural text for clipboard or CAD
  * @param {Array<Object>} entries
  * @param {number} scaleRatio
  * @param {string} displayUnit
- * @param {'both'|'real'|'drawing'|'tsv'} [mode='both']
+ * @param {'both'|'real'|'drawing'|'tsv'|'raw'|'segments'|'references'|'allowances'|'selected'|Object} [options='both']
  * @returns {string}
  */
-function formatWorkspaceForClipboard(entries = [], scaleRatio = DEFAULT_WORKSPACE_SCALE, displayUnit = DEFAULT_DISPLAY_UNIT, mode = 'both') {
+function formatWorkspaceForClipboard(entries = [], scaleRatio = DEFAULT_WORKSPACE_SCALE, displayUnit = DEFAULT_DISPLAY_UNIT, options = 'both') {
   if (!Array.isArray(entries) || entries.length === 0) {
     return 'Workspace is empty.';
   }
 
-  const totals = calculateWorkspaceTotals(entries, scaleRatio, displayUnit);
+  const mode = typeof options === 'string' ? options : (options?.mode || 'both');
+  const selectedIds = Array.isArray(options?.selectedIds) ? new Set(options.selectedIds) : null;
+  const groups = Array.isArray(options?.groups) ? options.groups : [];
+  const groupMap = new Map(groups.map(g => [g.id, g.name]));
 
+  let targetEntries = entries;
+  if (mode === 'selected' && selectedIds) {
+    targetEntries = entries.filter(e => selectedIds.has(e.id));
+  } else if (mode === 'segments') {
+    targetEntries = entries.filter(e => (e.dimensionType || 'reference') === 'segment');
+  } else if (mode === 'references') {
+    targetEntries = entries.filter(e => (e.dimensionType || 'reference') === 'reference');
+  } else if (mode === 'allowances') {
+    targetEntries = entries.filter(e => (e.dimensionType || 'reference') === 'allowance');
+  }
+
+  if (targetEntries.length === 0) {
+    return 'No matching dimensions found.';
+  }
+
+  // 1. Raw numbers only for CAD/BIM pasting
+  if (mode === 'raw') {
+    return targetEntries.map(e => {
+      const calc = calculateEntryValues(e, scaleRatio, displayUnit);
+      return calc.isValid ? e.rawInput : '0';
+    }).join('\n');
+  }
+
+  // 2. TSV format for Excel / Google Sheets / Numbers
   if (mode === 'tsv') {
-    let tsv = 'Item Name\tRaw Input\tReal Dimension\tDrawing Dimension (1:' + scaleRatio + ')\tNotes\tStatus\n';
-    entries.forEach(entry => {
+    let tsv = 'Type\tItem Name\tRaw Input\tReal Dimension\tDrawing Dimension (1:' + scaleRatio + ')\tGroup\tNotes\tStatus\n';
+    targetEntries.forEach(entry => {
       const calc = calculateEntryValues(entry, scaleRatio, displayUnit);
-      tsv += `${entry.name}\t${entry.rawInput}\t${calc.realFormatted}\t${calc.drawingFormatted}\t${entry.notes}\t${entry.enabled ? 'Active' : 'Disabled'}\n`;
+      const grpName = entry.groupId ? (groupMap.get(entry.groupId) || 'Group') : '—';
+      tsv += `${(entry.dimensionType || 'reference').toUpperCase()}\t${entry.name}\t${entry.rawInput}\t${calc.realFormatted}\t${calc.drawingFormatted}\t${grpName}\t${entry.notes}\t${entry.enabled ? 'Active' : 'Disabled'}\n`;
     });
-    tsv += `TOTAL\t\t${totals.totalRealFormatted}\t${totals.totalDrawingFormatted}\t\t${totals.enabledCount} active rows\n`;
+    const totals = calculateWorkspaceTotals(targetEntries, scaleRatio, displayUnit);
+    tsv += `TOTAL SEGMENTS\t\t\t${totals.segmentRealFormatted}\t${totals.segmentDrawingFormatted}\t\t${totals.segmentCount} segments\n`;
+    tsv += `TOTAL ALLOWANCES\t\t\t${totals.allowanceRealFormatted}\t${totals.allowanceDrawingFormatted}\t\t${totals.allowanceCount} allowances\n`;
+    tsv += `COMBINED TOTAL\t\t\t${totals.totalRealFormatted}\t${totals.totalDrawingFormatted}\t\t${totals.enabledCount} active rows\n`;
     return tsv;
   }
 
+  // 3. Structured Architectural Schedule Text
+  const totals = calculateWorkspaceTotals(targetEntries, scaleRatio, displayUnit);
   let lines = [];
-  lines.push(`DIMENSION SCHEDULE (Scale 1:${scaleRatio} | Display: ${displayUnit.toUpperCase()})`);
-  lines.push('─────────────────────────────────────────────────────────────────');
+  lines.push(`ARCHITECTURAL DIMENSION SCHEDULE`);
+  lines.push(`Scale: 1:${scaleRatio} | Display Unit: ${displayUnit.toUpperCase()}`);
+  lines.push('──────────────────────────────────────────────────────────────────────────');
+  lines.push(`[TYPE] ITEM NAME ➔ REAL DIMENSION | DRAWING @ 1:${scaleRatio}`);
+  lines.push('──────────────────────────────────────────────────────────────────────────');
 
-  entries.forEach(entry => {
+  targetEntries.forEach(entry => {
+    const typeTag = `[${(entry.dimensionType || 'reference').toUpperCase().slice(0, 3)}]`;
     if (!entry.enabled) {
-      lines.push(`[DISABLED] ${entry.name}: ${entry.rawInput} (Excluded from totals)`);
+      lines.push(`${typeTag} [DISABLED] ${entry.name}: ${entry.rawInput}`);
       return;
     }
 
     const calc = calculateEntryValues(entry, scaleRatio, displayUnit);
-    const noteSuffix = entry.notes ? ` [${entry.notes}]` : '';
+    const noteSuffix = entry.notes ? ` (${entry.notes})` : '';
+    const grpSuffix = entry.groupId ? ` <${groupMap.get(entry.groupId) || 'Group'}>` : '';
 
     if (!calc.isValid) {
-      lines.push(`${entry.name}: ${entry.rawInput} ⚠ (Invalid input)${noteSuffix}`);
+      lines.push(`${typeTag} ${entry.name}: ${entry.rawInput} ⚠️ (Invalid)${noteSuffix}${grpSuffix}`);
     } else if (mode === 'real') {
-      lines.push(`${entry.name}: ${calc.realFormatted}${noteSuffix}`);
+      lines.push(`${typeTag} ${entry.name}: ${calc.realFormatted}${noteSuffix}${grpSuffix}`);
     } else if (mode === 'drawing') {
-      lines.push(`${entry.name}: ${calc.drawingFormatted} (1:${scaleRatio})${noteSuffix}`);
+      lines.push(`${typeTag} ${entry.name}: ${calc.drawingFormatted} (1:${scaleRatio})${noteSuffix}${grpSuffix}`);
     } else {
-      lines.push(`${entry.name}: ${calc.realFormatted} ➔ Drawing: ${calc.drawingFormatted}${noteSuffix}`);
+      lines.push(`${typeTag} ${entry.name}: ${calc.realFormatted} ➔ Drawing: ${calc.drawingFormatted}${noteSuffix}${grpSuffix}`);
     }
   });
 
-  lines.push('─────────────────────────────────────────────────────────────────');
-  if (mode === 'real') {
-    lines.push(`TOTAL REAL: ${totals.totalRealFormatted} (${totals.enabledCount} active measurements)`);
-  } else if (mode === 'drawing') {
-    lines.push(`TOTAL DRAWING @ 1:${scaleRatio}: ${totals.totalDrawingFormatted} (${totals.enabledCount} active measurements)`);
-  } else {
-    lines.push(`TOTAL REAL: ${totals.totalRealFormatted}`);
-    lines.push(`TOTAL DRAWING @ 1:${scaleRatio}: ${totals.totalDrawingFormatted}`);
+  lines.push('──────────────────────────────────────────────────────────────────────────');
+  lines.push(`TOTAL SEGMENTS:   ${totals.segmentRealFormatted} (Drawing: ${totals.segmentDrawingFormatted}) [${totals.segmentCount} segments]`);
+  if (totals.allowanceCount > 0) {
+    lines.push(`TOTAL ALLOWANCES: ${totals.allowanceRealFormatted} (Drawing: ${totals.allowanceDrawingFormatted}) [${totals.allowanceCount} allowances]`);
   }
+  lines.push(`COMBINED TOTAL:   ${totals.totalRealFormatted} (Drawing: ${totals.totalDrawingFormatted})`);
+  lines.push(`REFERENCES:       ${totals.referenceRealFormatted} (${totals.referenceCount} reference dimensions, excluded from total)`);
 
   return lines.join('\n');
 }
@@ -1606,15 +1845,18 @@ function formatWorkspaceForClipboard(entries = [], scaleRatio = DEFAULT_WORKSPAC
  */
 function createDefaultWorkspace() {
   const sampleEntries = [
-    { name: 'Exterior Wall A', rawInput: '4.8m', defaultUnit: 'm', notes: 'North elevation' },
-    { name: 'Main Entry Door', rawInput: '900mm', defaultUnit: 'mm', notes: 'Clear opening' },
-    { name: 'Ribbon Window', rawInput: '2.4m', defaultUnit: 'm', notes: 'Sill height 900mm' },
-    { name: 'Interior Partition', rawInput: '3250mm', defaultUnit: 'mm', notes: 'Drywall partition' }
+    { name: 'Exterior Wall A', rawInput: '4.8m', dimensionType: 'segment', defaultUnit: 'm', notes: 'North elevation run' },
+    { name: 'Main Entry Door', rawInput: '900mm', dimensionType: 'reference', defaultUnit: 'mm', notes: 'Clear opening' },
+    { name: 'Ribbon Window', rawInput: '2.4m', dimensionType: 'reference', defaultUnit: 'm', notes: 'Sill height 900mm' },
+    { name: 'Interior Partition', rawInput: '3200mm', dimensionType: 'segment', defaultUnit: 'mm', notes: 'Drywall partition' },
+    { name: 'Expansion Joint', rawInput: '50mm', dimensionType: 'allowance', defaultUnit: 'mm', notes: 'Thermal gap' }
   ];
 
   return {
     scaleRatio: DEFAULT_WORKSPACE_SCALE,
     displayUnit: DEFAULT_DISPLAY_UNIT,
+    density: DEFAULT_DENSITY,
+    groups: [],
     entries: sampleEntries.map(s => createDimensionEntry(s))
   };
 }
@@ -1630,9 +1872,11 @@ function serializeWorkspace(workspace) {
   }
 
   const payload = {
-    version: '2.5.0',
+    version: '2.5.1',
     scaleRatio: typeof workspace.scaleRatio === 'number' && workspace.scaleRatio > 0 ? workspace.scaleRatio : DEFAULT_WORKSPACE_SCALE,
     displayUnit: typeof workspace.displayUnit === 'string' ? workspace.displayUnit : DEFAULT_DISPLAY_UNIT,
+    density: workspace.density === 'compact' ? 'compact' : DEFAULT_DENSITY,
+    groups: Array.isArray(workspace.groups) ? workspace.groups : [],
     entries: Array.isArray(workspace.entries) ? workspace.entries : []
   };
 
@@ -1640,7 +1884,7 @@ function serializeWorkspace(workspace) {
 }
 
 /**
- * Safely deserializes a workspace state with error recovery and sanitation
+ * Safely deserializes a workspace state with error recovery and backwards compatibility
  * @param {string|Object} raw
  * @returns {Object}
  */
@@ -1657,18 +1901,35 @@ function deserializeWorkspace(raw) {
 
     const scaleRatio = typeof parsed.scaleRatio === 'number' && parsed.scaleRatio > 0 ? parsed.scaleRatio : DEFAULT_WORKSPACE_SCALE;
     const displayUnit = typeof parsed.displayUnit === 'string' ? parsed.displayUnit : DEFAULT_DISPLAY_UNIT;
+    const density = parsed.density === 'compact' ? 'compact' : DEFAULT_DENSITY;
+    const groups = Array.isArray(parsed.groups) ? parsed.groups.map(g => ({
+      id: g.id || `grp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: g.name || 'Group',
+      collapsed: Boolean(g.collapsed)
+    })) : [];
 
     let entries = [];
     if (Array.isArray(parsed.entries)) {
       entries = parsed.entries.map(item => {
         if (!item || typeof item !== 'object') return null;
-        return createDimensionEntry(item, item.defaultUnit || displayUnit);
+        return createDimensionEntry({
+          id: item.id,
+          name: item.name,
+          rawInput: item.rawInput,
+          dimensionType: item.dimensionType || 'reference',
+          defaultUnit: item.defaultUnit || displayUnit,
+          notes: item.notes,
+          enabled: item.enabled,
+          groupId: item.groupId
+        }, item.defaultUnit || displayUnit);
       }).filter(Boolean);
     }
 
     return {
       scaleRatio,
       displayUnit,
+      density,
+      groups,
       entries
     };
   } catch (e) {
@@ -3443,6 +3704,8 @@ function initializeApp() {
 
     // Mode 7: Dimension Workspace
     workspace: deserializeWorkspace(StorageService.getItem(WORKSPACE_STORAGE_KEY)),
+    workspaceSelectedIds: new Set(),
+    workspaceEditingCell: null, // { id: string, field: string }
 
     // Cached Previous Valid Calculations (Never wipe to empty on invalid keystroke)
     lastValidConverter: null,
@@ -3603,6 +3866,8 @@ function initializeApp() {
     customFurnStateBadge: document.getElementById('custom-furn-state-badge'),
 
     // Mode 7: Dimension Workspace Elements
+    workspaceDensityStandard: document.getElementById('workspace-density-standard'),
+    workspaceDensityCompact: document.getElementById('workspace-density-compact'),
     workspaceStateBadge: document.getElementById('workspace-state-badge'),
     workspaceScaleSelect: document.getElementById('workspace-scale-select'),
     workspaceCustomScaleGroup: document.getElementById('workspace-custom-scale-group'),
@@ -3610,25 +3875,45 @@ function initializeApp() {
     workspaceUnitSelect: document.getElementById('workspace-unit-select'),
     workspaceQuickChips: document.getElementById('workspace-quick-chips'),
     workspaceAddForm: document.getElementById('workspace-add-form'),
+    workspaceAddType: document.getElementById('workspace-add-type'),
     workspaceAddName: document.getElementById('workspace-add-name'),
     workspaceAddInput: document.getElementById('workspace-add-input'),
     workspaceAddUnit: document.getElementById('workspace-add-unit'),
     workspaceAddNotes: document.getElementById('workspace-add-notes'),
     workspaceAddBtn: document.getElementById('workspace-add-btn'),
     workspaceAddError: document.getElementById('workspace-add-error'),
+    workspaceBreakdownBadge: document.getElementById('workspace-breakdown-badge'),
+    workspaceSelectionStatus: document.getElementById('workspace-selection-status'),
+    workspaceSelectionCount: document.getElementById('workspace-selection-count'),
+    workspaceSelectAll: document.getElementById('workspace-select-all'),
     workspaceTable: document.getElementById('workspace-table'),
     workspaceTableBody: document.getElementById('workspace-table-body'),
     workspaceThDrawing: document.getElementById('workspace-th-drawing'),
     workspaceCardsList: document.getElementById('workspace-cards-list'),
     workspaceEmptyState: document.getElementById('workspace-empty-state'),
     workspaceLoadSamplesBtn: document.getElementById('workspace-load-samples-btn'),
+    workspaceTotalsCard: document.getElementById('workspace-totals-card'),
     workspaceActiveCount: document.getElementById('workspace-active-count'),
+    workspaceTotalSegmentsReal: document.getElementById('workspace-total-segments-real'),
+    workspaceTotalSegmentsDrawing: document.getElementById('workspace-total-segments-drawing'),
+    workspaceTotalAllowancesReal: document.getElementById('workspace-total-allowances-real'),
+    workspaceTotalAllowancesDrawing: document.getElementById('workspace-total-allowances-drawing'),
+    workspaceTotalCombinedReal: document.getElementById('workspace-total-combined-real'),
+    workspaceTotalCombinedDrawing: document.getElementById('workspace-total-combined-drawing'),
+    workspaceTotalReferencesReal: document.getElementById('workspace-total-references-real'),
+    workspaceReferencesCountLabel: document.getElementById('workspace-references-count-label'),
     workspaceTotalRealVal: document.getElementById('workspace-total-real-val'),
     workspaceTotalDrawingVal: document.getElementById('workspace-total-drawing-val'),
     workspaceTotalDrawingLabel: document.getElementById('workspace-total-drawing-label'),
+    workspaceActionsToolbar: document.getElementById('workspace-actions-toolbar'),
+    workspaceCopySelectedBtn: document.getElementById('workspace-copy-selected-btn'),
+    workspaceCopySegmentsBtn: document.getElementById('workspace-copy-segments-btn'),
+    workspaceCopyReferencesBtn: document.getElementById('workspace-copy-references-btn'),
     workspaceCopyAllBtn: document.getElementById('workspace-copy-all-btn'),
+    workspaceCopyRawBtn: document.getElementById('workspace-copy-raw-btn'),
     workspaceCopyDrawingBtn: document.getElementById('workspace-copy-drawing-btn'),
     workspaceExportTsvBtn: document.getElementById('workspace-export-tsv-btn'),
+    workspaceAddGroupBtn: document.getElementById('workspace-add-group-btn'),
     workspaceSaveJournalBtn: document.getElementById('workspace-save-journal-btn'),
     workspaceClearBtn: document.getElementById('workspace-clear-btn')
   };
@@ -5272,7 +5557,7 @@ function initializeApp() {
   }
 
   // ---------------------------------------------------------------------------
-  // 13b. Mode 7: Dimension Workspace Controller
+  // 13b. Mode 7: Dimension Workspace Controller (v1.1 Polish)
   // ---------------------------------------------------------------------------
   function saveWorkspace() {
     try {
@@ -5288,7 +5573,7 @@ function initializeApp() {
     const ws = state.workspace;
     const totals = calculateWorkspaceTotals(ws.entries, ws.scaleRatio, ws.displayUnit, state.precision);
 
-    // Sync Scale Select
+    // 1. Sync Scale Select
     if (dom.workspaceScaleSelect) {
       const knownValues = ['1', '2', '5', '10', '20', '25', '50', '100', '200', '500', '1000'];
       if (knownValues.includes(String(ws.scaleRatio))) {
@@ -5303,12 +5588,12 @@ function initializeApp() {
       }
     }
 
-    // Sync Display Unit Select
+    // 2. Sync Display Unit Select
     if (dom.workspaceUnitSelect) {
       dom.workspaceUnitSelect.value = ws.displayUnit;
     }
 
-    // Sync Quick Scale Chips
+    // 3. Sync Quick Scale Chips
     if (dom.workspaceQuickChips) {
       dom.workspaceQuickChips.querySelectorAll('.scale-chip').forEach(chip => {
         const chipScale = parseFloat(chip.dataset.scale);
@@ -5316,7 +5601,15 @@ function initializeApp() {
       });
     }
 
-    // Update Table Column Header & Totals Labels
+    // 4. Sync Density Toggles
+    if (dom.workspaceDensityStandard && dom.workspaceDensityCompact) {
+      const isCompact = ws.density === 'compact';
+      dom.workspaceDensityStandard.classList.toggle('active', !isCompact);
+      dom.workspaceDensityCompact.classList.toggle('active', isCompact);
+      if (dom.workspaceTable) dom.workspaceTable.classList.toggle('compact-mode', isCompact);
+    }
+
+    // 5. Update Table Column Header & Totals Labels
     if (dom.workspaceThDrawing) {
       dom.workspaceThDrawing.textContent = `Drawing @ 1:${ws.scaleRatio}`;
     }
@@ -5324,27 +5617,92 @@ function initializeApp() {
       dom.workspaceTotalDrawingLabel.textContent = `TOTAL DRAWING @ 1:${ws.scaleRatio}`;
     }
 
+    // 6. Update Breakdown Badge & Selection Status
+    if (dom.workspaceBreakdownBadge) {
+      dom.workspaceBreakdownBadge.textContent = totals.breakdownLabel;
+    }
+
+    const selectedCount = state.workspaceSelectedIds.size;
+    if (dom.workspaceSelectionStatus) {
+      dom.workspaceSelectionStatus.style.display = selectedCount > 0 ? 'inline-block' : 'none';
+    }
+    if (dom.workspaceSelectionCount) {
+      dom.workspaceSelectionCount.textContent = `${selectedCount} selected`;
+    }
+    if (dom.workspaceSelectAll) {
+      dom.workspaceSelectAll.checked = ws.entries.length > 0 && ws.entries.every(e => state.workspaceSelectedIds.has(e.id));
+    }
+
+    // 7. Group indexing
+    const groupMap = new Map((ws.groups || []).map(g => [g.id, g]));
+    const collapsedGroupIds = new Set((ws.groups || []).filter(g => g.collapsed).map(g => g.id));
+
     // Render Table Rows (Desktop) & Cards (Mobile)
     let tableHtml = '';
     let cardsHtml = '';
+    let currentGroupId = undefined;
 
     ws.entries.forEach((entry, index) => {
       const calc = calculateEntryValues(entry, ws.scaleRatio, ws.displayUnit, state.precision);
       const isInvalid = !calc.isValid;
       const isFirst = index === 0;
       const isLast = index === ws.entries.length - 1;
+      const isSelected = state.workspaceSelectedIds.has(entry.id);
+      const dimType = entry.dimensionType || DEFAULT_DIMENSION_TYPE;
+      const badgeClass = dimType === 'segment' ? 'badge-seg' : (dimType === 'allowance' ? 'badge-alw' : 'badge-ref');
+      const badgeLabel = dimType === 'segment' ? 'SEG' : (dimType === 'allowance' ? 'ALW' : 'REF');
+      const groupObj = entry.groupId ? groupMap.get(entry.groupId) : null;
+
+      // Check for group boundary header
+      if (entry.groupId && entry.groupId !== currentGroupId) {
+        currentGroupId = entry.groupId;
+        const grp = groupObj || { id: entry.groupId, name: 'Group', collapsed: false };
+        const grpTotals = calculateGroupTotals(ws.entries, grp.id, ws.scaleRatio, ws.displayUnit, state.precision);
+        tableHtml += `
+          <tr class="workspace-group-header" data-group-id="${grp.id}">
+            <td colspan="10">
+              <div class="group-title-wrap">
+                <button type="button" class="group-collapse-btn ws-group-toggle" data-group-id="${grp.id}" title="${grp.collapsed ? 'Expand group' : 'Collapse group'}">
+                  <span>${grp.collapsed ? '▶' : '▼'}</span>
+                  <span>📁 ${escapeHtml(grp.name)}</span>
+                  <small style="color: var(--text-muted); font-weight: normal;">(${grpTotals.totalCount} items)</small>
+                </button>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span class="group-subtotal-badge">Segments: ${grpTotals.segmentRealFormatted} ➔ ${grpTotals.segmentDrawingFormatted}</span>
+                  <button type="button" class="row-action-btn ws-ungroup-btn" data-group-id="${grp.id}" title="Remove all from group" style="font-size: 0.65rem;">Ungroup</button>
+                </div>
+              </div>
+            </td>
+          </tr>
+        `;
+      } else if (!entry.groupId && currentGroupId !== null) {
+        currentGroupId = null;
+      }
+
+      // If entry belongs to a collapsed group, skip rendering in table/cards
+      if (entry.groupId && collapsedGroupIds.has(entry.groupId)) {
+        return;
+      }
+
+      // Inline Editing state
+      const isEditingName = state.workspaceEditingCell?.id === entry.id && state.workspaceEditingCell?.field === 'name';
+      const isEditingInput = state.workspaceEditingCell?.id === entry.id && state.workspaceEditingCell?.field === 'rawInput';
+      const isEditingNotes = state.workspaceEditingCell?.id === entry.id && state.workspaceEditingCell?.field === 'notes';
 
       // Table Row
       tableHtml += `
-        <tr class="${!entry.enabled ? 'row-disabled' : ''} ${isInvalid ? 'row-invalid' : ''}" data-id="${entry.id}">
+        <tr class="${!entry.enabled ? 'row-disabled' : ''} ${isInvalid ? 'row-invalid' : ''} ${isSelected ? 'row-selected' : ''}" data-id="${entry.id}">
           <td style="text-align: center;">
-            <input type="checkbox" class="ws-toggle-btn form-checkbox" data-id="${entry.id}" ${entry.enabled ? 'checked' : ''} title="${entry.enabled ? 'Disable row' : 'Enable row'}" aria-label="Toggle ${escapeHtml(entry.name)}">
+            <input type="checkbox" class="ws-select-row-checkbox form-checkbox" data-id="${entry.id}" ${isSelected ? 'checked' : ''} title="Select row">
           </td>
           <td>
-            <strong class="ws-name-text">${escapeHtml(entry.name)}</strong>
+            <span class="type-badge ${badgeClass} ws-type-toggle" data-id="${entry.id}" title="Click to cycle type (Segment / Allowance / Reference)">${badgeLabel}</span>
           </td>
-          <td>
-            <span class="col-input-badge">${escapeHtml(entry.rawInput)}</span>
+          <td class="cell-editable ws-cell-name" data-id="${entry.id}" data-field="name" title="Click to edit name">
+            ${isEditingName ? `<input type="text" class="inline-edit-input ws-inline-input" data-id="${entry.id}" data-field="name" value="${escapeHtml(entry.name)}">` : `<strong class="ws-name-text">${escapeHtml(entry.name)}</strong>`}
+          </td>
+          <td class="cell-editable ws-cell-input" data-id="${entry.id}" data-field="rawInput" title="Click to edit measurement">
+            ${isEditingInput ? `<input type="text" class="inline-edit-input ws-inline-input" data-id="${entry.id}" data-field="rawInput" value="${escapeHtml(entry.rawInput)}">` : `<span class="col-input-badge">${escapeHtml(entry.rawInput)}</span>`}
           </td>
           <td class="col-real">
             ${isInvalid ? `<span class="col-err" title="${escapeHtml(calc.errorMessage || 'Invalid')}">⚠️ ${escapeHtml(calc.errorMessage || 'Invalid')}</span>` : calc.realFormatted}
@@ -5352,8 +5710,14 @@ function initializeApp() {
           <td class="col-drawing">
             ${isInvalid ? '---' : calc.drawingFormatted}
           </td>
-          <td class="col-notes">
-            ${escapeHtml(entry.notes || '—')}
+          <td>
+            ${groupObj ? `<span class="col-group-tag" title="Group: ${escapeHtml(groupObj.name)}">${escapeHtml(groupObj.name)}</span>` : '<span style="color: var(--text-muted); font-size: 0.7rem;">—</span>'}
+          </td>
+          <td class="cell-editable ws-cell-notes" data-id="${entry.id}" data-field="notes" title="Click to edit notes">
+            ${isEditingNotes ? `<input type="text" class="inline-edit-input ws-inline-input" data-id="${entry.id}" data-field="notes" value="${escapeHtml(entry.notes)}">` : `<span class="col-notes">${escapeHtml(entry.notes || '—')}</span>`}
+          </td>
+          <td style="text-align: center;">
+            <input type="checkbox" class="ws-toggle-btn form-checkbox" data-id="${entry.id}" ${entry.enabled ? 'checked' : ''} title="${entry.enabled ? 'Disable row' : 'Enable row'}" aria-label="Toggle ${escapeHtml(entry.name)}">
           </td>
           <td>
             <div class="row-actions-group">
@@ -5363,15 +5727,9 @@ function initializeApp() {
               <button type="button" class="row-action-btn ws-dup-row-btn" data-id="${entry.id}" title="Duplicate row">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
               </button>
-              <button type="button" class="row-action-btn ws-up-row-btn" data-id="${entry.id}" ${isFirst ? 'disabled style="opacity: 0.3;"' : ''} title="Move up">
-                ↑
-              </button>
-              <button type="button" class="row-action-btn ws-down-row-btn" data-id="${entry.id}" ${isLast ? 'disabled style="opacity: 0.3;"' : ''} title="Move down">
-                ↓
-              </button>
-              <button type="button" class="row-action-btn danger ws-del-row-btn" data-id="${entry.id}" title="Delete row">
-                ✕
-              </button>
+              <button type="button" class="row-action-btn ws-up-row-btn" data-id="${entry.id}" ${isFirst ? 'disabled style="opacity: 0.3;"' : ''} title="Move up">↑</button>
+              <button type="button" class="row-action-btn ws-down-row-btn" data-id="${entry.id}" ${isLast ? 'disabled style="opacity: 0.3;"' : ''} title="Move down">↓</button>
+              <button type="button" class="row-action-btn danger ws-del-row-btn" data-id="${entry.id}" title="Delete row">✕</button>
             </div>
           </td>
         </tr>
@@ -5379,10 +5737,11 @@ function initializeApp() {
 
       // Mobile Card
       cardsHtml += `
-        <div class="dim-card ${!entry.enabled ? 'row-disabled' : ''} ${isInvalid ? 'row-invalid' : ''}" data-id="${entry.id}">
+        <div class="dim-card ${!entry.enabled ? 'row-disabled' : ''} ${isInvalid ? 'row-invalid' : ''} ${isSelected ? 'row-selected' : ''}" data-id="${entry.id}">
           <div class="dim-card-header">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="ws-toggle-btn form-checkbox" data-id="${entry.id}" ${entry.enabled ? 'checked' : ''} aria-label="Toggle ${escapeHtml(entry.name)}">
+              <input type="checkbox" class="ws-select-row-checkbox form-checkbox" data-id="${entry.id}" ${isSelected ? 'checked' : ''} aria-label="Select ${escapeHtml(entry.name)}">
+              <span class="type-badge ${badgeClass} ws-type-toggle" data-id="${entry.id}">${badgeLabel}</span>
               <span class="dim-card-title">${escapeHtml(entry.name)}</span>
             </div>
             <span class="col-input-badge">${escapeHtml(entry.rawInput)}</span>
@@ -5399,6 +5758,7 @@ function initializeApp() {
           </div>
           ${entry.notes ? `<div style="font-size: 0.72rem; color: var(--text-secondary);">📝 ${escapeHtml(entry.notes)}</div>` : ''}
           <div class="dim-card-actions">
+            <button type="button" class="row-action-btn ws-toggle-btn" data-id="${entry.id}">${entry.enabled ? 'Disable' : 'Enable'}</button>
             <button type="button" class="row-action-btn ws-copy-row-btn" data-id="${entry.id}" title="Copy value">Copy</button>
             <button type="button" class="row-action-btn ws-dup-row-btn" data-id="${entry.id}" title="Duplicate">Duplicate</button>
             <button type="button" class="row-action-btn ws-up-row-btn" data-id="${entry.id}" ${isFirst ? 'disabled' : ''}>↑</button>
@@ -5417,16 +5777,38 @@ function initializeApp() {
     if (dom.workspaceEmptyState) dom.workspaceEmptyState.style.display = isEmpty ? 'flex' : 'none';
     if (dom.workspaceTable) dom.workspaceTable.style.display = isEmpty ? 'none' : 'table';
 
-    // Update Totals Display
+    // Update Multi-Metric Semantic Totals Display
     if (dom.workspaceActiveCount) {
       dom.workspaceActiveCount.textContent = `${totals.enabledCount} of ${totals.totalCount} active measurements`;
     }
-    if (dom.workspaceTotalRealVal) {
-      dom.workspaceTotalRealVal.textContent = totals.totalRealFormatted;
+    if (dom.workspaceTotalSegmentsReal) {
+      dom.workspaceTotalSegmentsReal.textContent = totals.segmentRealFormatted;
     }
-    if (dom.workspaceTotalDrawingVal) {
-      dom.workspaceTotalDrawingVal.textContent = totals.totalDrawingFormatted;
+    if (dom.workspaceTotalSegmentsDrawing) {
+      dom.workspaceTotalSegmentsDrawing.textContent = totals.segmentDrawingFormatted;
     }
+    if (dom.workspaceTotalAllowancesReal) {
+      dom.workspaceTotalAllowancesReal.textContent = totals.allowanceRealFormatted;
+    }
+    if (dom.workspaceTotalAllowancesDrawing) {
+      dom.workspaceTotalAllowancesDrawing.textContent = totals.allowanceDrawingFormatted;
+    }
+    if (dom.workspaceTotalCombinedReal) {
+      dom.workspaceTotalCombinedReal.textContent = totals.totalRealFormatted;
+    }
+    if (dom.workspaceTotalCombinedDrawing) {
+      dom.workspaceTotalCombinedDrawing.textContent = totals.totalDrawingFormatted;
+    }
+    if (dom.workspaceTotalReferencesReal) {
+      dom.workspaceTotalReferencesReal.textContent = totals.referenceRealFormatted;
+    }
+    if (dom.workspaceReferencesCountLabel) {
+      dom.workspaceReferencesCountLabel.textContent = `${totals.referenceCount} reference items`;
+    }
+
+    // Backwards compatibility elements
+    if (dom.workspaceTotalRealVal) dom.workspaceTotalRealVal.textContent = totals.totalRealFormatted;
+    if (dom.workspaceTotalDrawingVal) dom.workspaceTotalDrawingVal.textContent = totals.totalDrawingFormatted;
 
     // Update State Badge
     if (dom.workspaceStateBadge) {
@@ -5440,10 +5822,132 @@ function initializeApp() {
     }
 
     attachWorkspaceRowEvents();
+
+    // Focus active inline input if editing
+    if (state.workspaceEditingCell) {
+      const inlineInput = dom.workspaceTableBody?.querySelector('.ws-inline-input');
+      if (inlineInput) {
+        inlineInput.focus();
+        inlineInput.select();
+      }
+    }
   }
 
   function attachWorkspaceRowEvents() {
-    // Toggle checkboxes
+    // 1. Select Row Checkboxes
+    document.querySelectorAll('.ws-select-row-checkbox').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        const id = e.target.dataset.id;
+        if (e.target.checked) {
+          state.workspaceSelectedIds.add(id);
+        } else {
+          state.workspaceSelectedIds.delete(id);
+        }
+        renderWorkspace();
+      });
+    });
+
+    // 2. Type Badges Click to Cycle (reference -> segment -> allowance -> reference)
+    document.querySelectorAll('.ws-type-toggle').forEach(badge => {
+      badge.addEventListener('click', () => {
+        const id = badge.dataset.id;
+        const entry = state.workspace.entries.find(x => x.id === id);
+        if (entry) {
+          const current = entry.dimensionType || DEFAULT_DIMENSION_TYPE;
+          const next = current === 'reference' ? 'segment' : (current === 'segment' ? 'allowance' : 'reference');
+          entry.dimensionType = next;
+          saveWorkspace();
+          renderWorkspace();
+          AudioService.playTick();
+          showToast(`Set ${entry.name} type to ${next.toUpperCase()}`);
+        }
+      });
+    });
+
+    // 3. Group toggle collapse
+    document.querySelectorAll('.ws-group-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const grpId = btn.dataset.groupId;
+        const grp = (state.workspace.groups || []).find(g => g.id === grpId);
+        if (grp) {
+          grp.collapsed = !grp.collapsed;
+          saveWorkspace();
+          renderWorkspace();
+          AudioService.playTick();
+        }
+      });
+    });
+
+    // 4. Ungroup all entries in group
+    document.querySelectorAll('.ws-ungroup-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const grpId = btn.dataset.groupId;
+        state.workspace.entries.forEach(e => {
+          if (e.groupId === grpId) e.groupId = null;
+        });
+        state.workspace.groups = (state.workspace.groups || []).filter(g => g.id !== grpId);
+        saveWorkspace();
+        renderWorkspace();
+        AudioService.playTick();
+        showToast('Ungrouped entries');
+      });
+    });
+
+    // 5. Inline Editing Cell Activation
+    document.querySelectorAll('.cell-editable').forEach(cell => {
+      cell.addEventListener('click', (e) => {
+        if (e.target.tagName === 'INPUT') return;
+        const id = cell.dataset.id;
+        const field = cell.dataset.field;
+        state.workspaceEditingCell = { id, field };
+        renderWorkspace();
+      });
+    });
+
+    // 6. Inline Input Event Handlers
+    document.querySelectorAll('.ws-inline-input').forEach(input => {
+      let isCommitted = false;
+      const commitEdit = () => {
+        if (isCommitted || !state.workspaceEditingCell) return;
+        isCommitted = true;
+        const { id, field } = state.workspaceEditingCell;
+        const entry = state.workspace.entries.find(x => x.id === id);
+        if (entry) {
+          const newVal = input.value.trim();
+          if (field === 'rawInput') {
+            const updated = updateDimensionEntry(entry, { rawInput: newVal });
+            const idx = state.workspace.entries.findIndex(x => x.id === id);
+            if (idx !== -1) state.workspace.entries[idx] = updated;
+          } else if (field === 'name') {
+            entry.name = newVal || 'Dimension';
+          } else if (field === 'notes') {
+            entry.notes = newVal;
+          }
+          saveWorkspace();
+        }
+        state.workspaceEditingCell = null;
+        renderWorkspace();
+        AudioService.playTick();
+      };
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commitEdit();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          isCommitted = true;
+          state.workspaceEditingCell = null;
+          renderWorkspace();
+        }
+      });
+
+      input.addEventListener('blur', () => {
+        commitEdit();
+      });
+    });
+
+    // 7. Toggle on/off checkboxes
     document.querySelectorAll('.ws-toggle-btn').forEach(btn => {
       btn.addEventListener('change', (e) => {
         const id = e.target.dataset.id;
@@ -5457,15 +5961,15 @@ function initializeApp() {
       });
     });
 
-    // Copy single row measurement
+    // 8. Copy single row measurement
     document.querySelectorAll('.ws-copy-row-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         const entry = state.workspace.entries.find(x => x.id === id);
         if (entry) {
           const calc = calculateEntryValues(entry, state.workspace.scaleRatio, state.workspace.displayUnit, state.precision);
           if (calc.isValid) {
-            copyToClipboard(`${entry.name}: ${calc.realFormatted} (Drawing @ 1:${state.workspace.scaleRatio}: ${calc.drawingFormatted})`, `${entry.name} Dimension`);
+            copyToClipboard(`${calc.realFormatted}`, `${entry.name} Real Dimension`);
           } else {
             showToast('Cannot copy invalid measurement', 'warning');
           }
@@ -5473,9 +5977,9 @@ function initializeApp() {
       });
     });
 
-    // Duplicate row
+    // 9. Duplicate row
     document.querySelectorAll('.ws-dup-row-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         const idx = state.workspace.entries.findIndex(x => x.id === id);
         if (idx !== -1) {
@@ -5489,9 +5993,9 @@ function initializeApp() {
       });
     });
 
-    // Move row up
+    // 10. Move row up
     document.querySelectorAll('.ws-up-row-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         const idx = state.workspace.entries.findIndex(x => x.id === id);
         if (idx > 0) {
@@ -5505,9 +6009,9 @@ function initializeApp() {
       });
     });
 
-    // Move row down
+    // 11. Move row down
     document.querySelectorAll('.ws-down-row-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         const idx = state.workspace.entries.findIndex(x => x.id === id);
         if (idx !== -1 && idx < state.workspace.entries.length - 1) {
@@ -5521,14 +6025,15 @@ function initializeApp() {
       });
     });
 
-    // Delete row
+    // 12. Delete row
     document.querySelectorAll('.ws-del-row-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         const idx = state.workspace.entries.findIndex(x => x.id === id);
         if (idx !== -1) {
           const deletedName = state.workspace.entries[idx].name;
           state.workspace.entries.splice(idx, 1);
+          state.workspaceSelectedIds.delete(id);
           saveWorkspace();
           renderWorkspace();
           AudioService.playTick();
@@ -6329,6 +6834,35 @@ function initializeApp() {
     }
 
     // Mode 7: Dimension Workspace Listeners
+    if (dom.workspaceDensityStandard) {
+      dom.workspaceDensityStandard.addEventListener('click', () => {
+        state.workspace.density = 'comfortable';
+        saveWorkspace();
+        renderWorkspace();
+        AudioService.playTick();
+      });
+    }
+
+    if (dom.workspaceDensityCompact) {
+      dom.workspaceDensityCompact.addEventListener('click', () => {
+        state.workspace.density = 'compact';
+        saveWorkspace();
+        renderWorkspace();
+        AudioService.playTick();
+      });
+    }
+
+    if (dom.workspaceSelectAll) {
+      dom.workspaceSelectAll.addEventListener('change', (e) => {
+        if (e.target.checked) {
+          state.workspace.entries.forEach(item => state.workspaceSelectedIds.add(item.id));
+        } else {
+          state.workspaceSelectedIds.clear();
+        }
+        renderWorkspace();
+      });
+    }
+
     if (dom.workspaceScaleSelect) {
       dom.workspaceScaleSelect.addEventListener('change', (e) => {
         const val = e.target.value;
@@ -6382,14 +6916,29 @@ function initializeApp() {
     if (dom.workspaceAddForm) {
       dom.workspaceAddForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        const rawInput = dom.workspaceAddInput?.value?.trim() || '';
+        let rawInput = dom.workspaceAddInput?.value?.trim() || '';
         if (!rawInput) return;
 
-        const name = dom.workspaceAddName?.value?.trim() || 'Dimension';
+        let name = dom.workspaceAddName?.value?.trim() || '';
+        let dimensionType = dom.workspaceAddType?.value || DEFAULT_DIMENSION_TYPE;
         const defaultUnit = dom.workspaceAddUnit?.value || state.workspace.displayUnit || 'mm';
         const notes = dom.workspaceAddNotes?.value?.trim() || '';
 
-        const newEntry = createDimensionEntry({ name, rawInput, defaultUnit, notes }, defaultUnit);
+        // Deterministic Natural Quick Add Syntax (e.g. "Wall A 4800")
+        if (name === '' && rawInput !== '') {
+          const quickParsed = parseQuickAddString(rawInput, defaultUnit, dimensionType);
+          if (quickParsed.isValid) {
+            name = quickParsed.name;
+            rawInput = quickParsed.rawInput;
+            dimensionType = quickParsed.dimensionType;
+          } else {
+            name = 'Dimension';
+          }
+        } else if (name === '') {
+          name = 'Dimension';
+        }
+
+        const newEntry = createDimensionEntry({ name, rawInput, dimensionType, defaultUnit, notes }, defaultUnit);
         state.workspace.entries.push(newEntry);
         saveWorkspace();
         renderWorkspace();
@@ -6401,7 +6950,7 @@ function initializeApp() {
         if (dom.workspaceAddInput) dom.workspaceAddInput.focus();
 
         if (newEntry.isValid) {
-          showToast(`Added "${newEntry.name}" (${newEntry.rawInput})`);
+          showToast(`Added [${newEntry.dimensionType.toUpperCase()}] ${newEntry.name} (${newEntry.rawInput})`);
         } else {
           showToast(`Added "${newEntry.name}" ⚠️ (Check measurement syntax)`, 'warning');
         }
@@ -6411,6 +6960,7 @@ function initializeApp() {
     if (dom.workspaceLoadSamplesBtn) {
       dom.workspaceLoadSamplesBtn.addEventListener('click', () => {
         state.workspace = createDefaultWorkspace();
+        state.workspaceSelectedIds.clear();
         saveWorkspace();
         renderWorkspace();
         AudioService.playTick();
@@ -6418,25 +6968,106 @@ function initializeApp() {
       });
     }
 
+    if (dom.workspaceCopySelectedBtn) {
+      dom.workspaceCopySelectedBtn.addEventListener('click', () => {
+        if (state.workspaceSelectedIds.size === 0) {
+          showToast('No dimensions selected to copy', 'warning');
+          return;
+        }
+        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+          mode: 'selected',
+          selectedIds: Array.from(state.workspaceSelectedIds),
+          groups: state.workspace.groups
+        });
+        copyToClipboard(text, `${state.workspaceSelectedIds.size} Selected Dimensions`);
+      });
+    }
+
+    if (dom.workspaceCopySegmentsBtn) {
+      dom.workspaceCopySegmentsBtn.addEventListener('click', () => {
+        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+          mode: 'segments',
+          groups: state.workspace.groups
+        });
+        copyToClipboard(text, 'Additive Segment Dimensions');
+      });
+    }
+
+    if (dom.workspaceCopyReferencesBtn) {
+      dom.workspaceCopyReferencesBtn.addEventListener('click', () => {
+        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+          mode: 'references',
+          groups: state.workspace.groups
+        });
+        copyToClipboard(text, 'Reference Dimensions');
+      });
+    }
+
     if (dom.workspaceCopyAllBtn) {
       dom.workspaceCopyAllBtn.addEventListener('click', () => {
-        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, 'both');
+        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+          mode: 'both',
+          groups: state.workspace.groups
+        });
         copyToClipboard(text, 'Full Dimension Schedule');
+      });
+    }
+
+    if (dom.workspaceCopyRawBtn) {
+      dom.workspaceCopyRawBtn.addEventListener('click', () => {
+        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+          mode: 'raw',
+          groups: state.workspace.groups
+        });
+        copyToClipboard(text, 'Raw CAD Numbers');
       });
     }
 
     if (dom.workspaceCopyDrawingBtn) {
       dom.workspaceCopyDrawingBtn.addEventListener('click', () => {
-        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, 'drawing');
+        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+          mode: 'drawing',
+          groups: state.workspace.groups
+        });
         copyToClipboard(text, `Drawing Values (@ 1:${state.workspace.scaleRatio})`);
       });
     }
 
     if (dom.workspaceExportTsvBtn) {
       dom.workspaceExportTsvBtn.addEventListener('click', () => {
-        const tsv = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, 'tsv');
+        const tsv = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+          mode: 'tsv',
+          groups: state.workspace.groups
+        });
         downloadFile(tsv, `dimension-schedule-1to${state.workspace.scaleRatio}-${Date.now()}.tsv`, 'text/tab-separated-values');
         showToast('Exported schedule as TSV spreadsheet');
+      });
+    }
+
+    if (dom.workspaceAddGroupBtn) {
+      dom.workspaceAddGroupBtn.addEventListener('click', () => {
+        const grpNum = (state.workspace.groups?.length || 0) + 1;
+        const grpName = window.prompt('Enter group name (e.g. Wall North, Bay Grid):', `Group ${grpNum}`);
+        if (grpName && grpName.trim()) {
+          const newGrp = createGroup(grpName.trim());
+          if (!Array.isArray(state.workspace.groups)) state.workspace.groups = [];
+          state.workspace.groups.push(newGrp);
+
+          // If rows are selected, assign them to this group
+          if (state.workspaceSelectedIds.size > 0) {
+            state.workspace.entries.forEach(entry => {
+              if (state.workspaceSelectedIds.has(entry.id)) {
+                entry.groupId = newGrp.id;
+              }
+            });
+            state.workspaceSelectedIds.clear();
+          }
+
+          saveWorkspace();
+          renderWorkspace();
+          AudioService.playTick();
+          showToast(`Created group "${newGrp.name}"`);
+        }
       });
     }
 
@@ -6452,8 +7083,10 @@ function initializeApp() {
           showToast('Workspace is already empty', 'warning');
           return;
         }
-        if (window.confirm('Clear all dimensions from the workspace?')) {
+        if (window.confirm('Clear all dimensions and groups from the workspace?')) {
           state.workspace.entries = [];
+          state.workspace.groups = [];
+          state.workspaceSelectedIds.clear();
           saveWorkspace();
           renderWorkspace();
           AudioService.playTick();
@@ -6478,7 +7111,7 @@ function initializeApp() {
         return;
       }
 
-      // Esc closes Command Palette first, then drawers/modals
+      // Esc closes Command Palette first, then drawers/modals/selection
       if (e.key === 'Escape') {
         if (dom.commandPaletteModal?.classList.contains('open')) {
           e.preventDefault();
@@ -6491,12 +7124,95 @@ function initializeApp() {
           dom.shortcutsModal.classList.remove('open');
           dom.modalBackdrop?.classList.remove('open');
         }
+        if (state.currentMode === 'workspace' && state.workspaceSelectedIds.size > 0) {
+          state.workspaceSelectedIds.clear();
+          renderWorkspace();
+          return;
+        }
         if (activeEl && activeEl.blur) activeEl.blur();
         return;
       }
 
+      // Quick Add form shortcut: Ctrl+Enter or Cmd+Enter inside form
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && state.currentMode === 'workspace') {
+        if (dom.workspaceAddForm) {
+          e.preventDefault();
+          dom.workspaceAddForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+          return;
+        }
+      }
+
       // If user is focused inside an input field, do not hijack letter/number shortcuts
       if (isInputFocused) return;
+
+      // Mode 7 Workspace-specific shortcuts (when not focused in inputs)
+      if (state.currentMode === 'workspace') {
+        if (e.key === 'n' || e.key === 'N') {
+          e.preventDefault();
+          dom.workspaceAddInput?.focus();
+          dom.workspaceAddInput?.select();
+          return;
+        }
+        if (e.key === 'd' || e.key === 'D') {
+          if (state.workspaceSelectedIds.size === 1) {
+            e.preventDefault();
+            const id = Array.from(state.workspaceSelectedIds)[0];
+            const idx = state.workspace.entries.findIndex(x => x.id === id);
+            if (idx !== -1) {
+              const dup = duplicateDimensionEntry(state.workspace.entries[idx]);
+              state.workspace.entries.splice(idx + 1, 0, dup);
+              saveWorkspace();
+              renderWorkspace();
+              AudioService.playTick();
+              showToast(`Duplicated "${dup.name}"`);
+            }
+            return;
+          }
+        }
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          if (state.workspaceSelectedIds.size > 0) {
+            e.preventDefault();
+            const count = state.workspaceSelectedIds.size;
+            state.workspace.entries = state.workspace.entries.filter(x => !state.workspaceSelectedIds.has(x.id));
+            state.workspaceSelectedIds.clear();
+            saveWorkspace();
+            renderWorkspace();
+            AudioService.playTick();
+            showToast(`Deleted ${count} selected dimension${count > 1 ? 's' : ''}`);
+            return;
+          }
+        }
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+          if (state.workspaceSelectedIds.size > 0) {
+            e.preventDefault();
+            const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+              mode: 'selected',
+              selectedIds: Array.from(state.workspaceSelectedIds),
+              groups: state.workspace.groups
+            });
+            copyToClipboard(text, `${state.workspaceSelectedIds.size} Selected Dimensions`);
+            return;
+          }
+        }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          if (state.workspace.entries.length > 0) {
+            e.preventDefault();
+            const ids = state.workspace.entries.map(x => x.id);
+            const currentSelectedId = Array.from(state.workspaceSelectedIds)[0];
+            let currentIdx = ids.indexOf(currentSelectedId);
+            let nextIdx = 0;
+            if (e.key === 'ArrowDown') {
+              nextIdx = currentIdx === -1 ? 0 : Math.min(ids.length - 1, currentIdx + 1);
+            } else {
+              nextIdx = currentIdx === -1 ? ids.length - 1 : Math.max(0, currentIdx - 1);
+            }
+            state.workspaceSelectedIds.clear();
+            state.workspaceSelectedIds.add(ids[nextIdx]);
+            renderWorkspace();
+            return;
+          }
+        }
+      }
 
       if (e.key === '1') { e.preventDefault(); switchMode('converter'); }
       else if (e.key === '2') { e.preventDefault(); switchMode('rescale'); }

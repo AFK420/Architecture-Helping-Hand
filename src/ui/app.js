@@ -26,8 +26,12 @@ import {
   createDimensionEntry,
   updateDimensionEntry,
   duplicateDimensionEntry,
+  createGroup,
+  parseQuickAddString,
+  formatMeasurementValue,
   calculateEntryValues,
   calculateWorkspaceTotals,
+  calculateGroupTotals,
   formatWorkspaceForClipboard,
   createDefaultWorkspace,
   serializeWorkspace,
@@ -35,7 +39,10 @@ import {
   WORKSPACE_STORAGE_KEY,
   DEFAULT_WORKSPACE_SCALE,
   DEFAULT_DISPLAY_UNIT,
-  SUPPORTED_DISPLAY_UNITS
+  DEFAULT_DIMENSION_TYPE,
+  DEFAULT_DENSITY,
+  SUPPORTED_DISPLAY_UNITS,
+  SUPPORTED_DIMENSION_TYPES
 } from '../core/dimension-workspace.js';
 import { StorageService } from '../services/storage.js';
 import { AudioService } from '../services/audio.js';
@@ -97,6 +104,8 @@ export function initializeApp() {
 
     // Mode 7: Dimension Workspace
     workspace: deserializeWorkspace(StorageService.getItem(WORKSPACE_STORAGE_KEY)),
+    workspaceSelectedIds: new Set(),
+    workspaceEditingCell: null, // { id: string, field: string }
 
     // Cached Previous Valid Calculations (Never wipe to empty on invalid keystroke)
     lastValidConverter: null,
@@ -257,6 +266,8 @@ export function initializeApp() {
     customFurnStateBadge: document.getElementById('custom-furn-state-badge'),
 
     // Mode 7: Dimension Workspace Elements
+    workspaceDensityStandard: document.getElementById('workspace-density-standard'),
+    workspaceDensityCompact: document.getElementById('workspace-density-compact'),
     workspaceStateBadge: document.getElementById('workspace-state-badge'),
     workspaceScaleSelect: document.getElementById('workspace-scale-select'),
     workspaceCustomScaleGroup: document.getElementById('workspace-custom-scale-group'),
@@ -264,25 +275,45 @@ export function initializeApp() {
     workspaceUnitSelect: document.getElementById('workspace-unit-select'),
     workspaceQuickChips: document.getElementById('workspace-quick-chips'),
     workspaceAddForm: document.getElementById('workspace-add-form'),
+    workspaceAddType: document.getElementById('workspace-add-type'),
     workspaceAddName: document.getElementById('workspace-add-name'),
     workspaceAddInput: document.getElementById('workspace-add-input'),
     workspaceAddUnit: document.getElementById('workspace-add-unit'),
     workspaceAddNotes: document.getElementById('workspace-add-notes'),
     workspaceAddBtn: document.getElementById('workspace-add-btn'),
     workspaceAddError: document.getElementById('workspace-add-error'),
+    workspaceBreakdownBadge: document.getElementById('workspace-breakdown-badge'),
+    workspaceSelectionStatus: document.getElementById('workspace-selection-status'),
+    workspaceSelectionCount: document.getElementById('workspace-selection-count'),
+    workspaceSelectAll: document.getElementById('workspace-select-all'),
     workspaceTable: document.getElementById('workspace-table'),
     workspaceTableBody: document.getElementById('workspace-table-body'),
     workspaceThDrawing: document.getElementById('workspace-th-drawing'),
     workspaceCardsList: document.getElementById('workspace-cards-list'),
     workspaceEmptyState: document.getElementById('workspace-empty-state'),
     workspaceLoadSamplesBtn: document.getElementById('workspace-load-samples-btn'),
+    workspaceTotalsCard: document.getElementById('workspace-totals-card'),
     workspaceActiveCount: document.getElementById('workspace-active-count'),
+    workspaceTotalSegmentsReal: document.getElementById('workspace-total-segments-real'),
+    workspaceTotalSegmentsDrawing: document.getElementById('workspace-total-segments-drawing'),
+    workspaceTotalAllowancesReal: document.getElementById('workspace-total-allowances-real'),
+    workspaceTotalAllowancesDrawing: document.getElementById('workspace-total-allowances-drawing'),
+    workspaceTotalCombinedReal: document.getElementById('workspace-total-combined-real'),
+    workspaceTotalCombinedDrawing: document.getElementById('workspace-total-combined-drawing'),
+    workspaceTotalReferencesReal: document.getElementById('workspace-total-references-real'),
+    workspaceReferencesCountLabel: document.getElementById('workspace-references-count-label'),
     workspaceTotalRealVal: document.getElementById('workspace-total-real-val'),
     workspaceTotalDrawingVal: document.getElementById('workspace-total-drawing-val'),
     workspaceTotalDrawingLabel: document.getElementById('workspace-total-drawing-label'),
+    workspaceActionsToolbar: document.getElementById('workspace-actions-toolbar'),
+    workspaceCopySelectedBtn: document.getElementById('workspace-copy-selected-btn'),
+    workspaceCopySegmentsBtn: document.getElementById('workspace-copy-segments-btn'),
+    workspaceCopyReferencesBtn: document.getElementById('workspace-copy-references-btn'),
     workspaceCopyAllBtn: document.getElementById('workspace-copy-all-btn'),
+    workspaceCopyRawBtn: document.getElementById('workspace-copy-raw-btn'),
     workspaceCopyDrawingBtn: document.getElementById('workspace-copy-drawing-btn'),
     workspaceExportTsvBtn: document.getElementById('workspace-export-tsv-btn'),
+    workspaceAddGroupBtn: document.getElementById('workspace-add-group-btn'),
     workspaceSaveJournalBtn: document.getElementById('workspace-save-journal-btn'),
     workspaceClearBtn: document.getElementById('workspace-clear-btn')
   };
@@ -1926,7 +1957,7 @@ export function initializeApp() {
   }
 
   // ---------------------------------------------------------------------------
-  // 13b. Mode 7: Dimension Workspace Controller
+  // 13b. Mode 7: Dimension Workspace Controller (v1.1 Polish)
   // ---------------------------------------------------------------------------
   function saveWorkspace() {
     try {
@@ -1942,7 +1973,7 @@ export function initializeApp() {
     const ws = state.workspace;
     const totals = calculateWorkspaceTotals(ws.entries, ws.scaleRatio, ws.displayUnit, state.precision);
 
-    // Sync Scale Select
+    // 1. Sync Scale Select
     if (dom.workspaceScaleSelect) {
       const knownValues = ['1', '2', '5', '10', '20', '25', '50', '100', '200', '500', '1000'];
       if (knownValues.includes(String(ws.scaleRatio))) {
@@ -1957,12 +1988,12 @@ export function initializeApp() {
       }
     }
 
-    // Sync Display Unit Select
+    // 2. Sync Display Unit Select
     if (dom.workspaceUnitSelect) {
       dom.workspaceUnitSelect.value = ws.displayUnit;
     }
 
-    // Sync Quick Scale Chips
+    // 3. Sync Quick Scale Chips
     if (dom.workspaceQuickChips) {
       dom.workspaceQuickChips.querySelectorAll('.scale-chip').forEach(chip => {
         const chipScale = parseFloat(chip.dataset.scale);
@@ -1970,7 +2001,15 @@ export function initializeApp() {
       });
     }
 
-    // Update Table Column Header & Totals Labels
+    // 4. Sync Density Toggles
+    if (dom.workspaceDensityStandard && dom.workspaceDensityCompact) {
+      const isCompact = ws.density === 'compact';
+      dom.workspaceDensityStandard.classList.toggle('active', !isCompact);
+      dom.workspaceDensityCompact.classList.toggle('active', isCompact);
+      if (dom.workspaceTable) dom.workspaceTable.classList.toggle('compact-mode', isCompact);
+    }
+
+    // 5. Update Table Column Header & Totals Labels
     if (dom.workspaceThDrawing) {
       dom.workspaceThDrawing.textContent = `Drawing @ 1:${ws.scaleRatio}`;
     }
@@ -1978,27 +2017,92 @@ export function initializeApp() {
       dom.workspaceTotalDrawingLabel.textContent = `TOTAL DRAWING @ 1:${ws.scaleRatio}`;
     }
 
+    // 6. Update Breakdown Badge & Selection Status
+    if (dom.workspaceBreakdownBadge) {
+      dom.workspaceBreakdownBadge.textContent = totals.breakdownLabel;
+    }
+
+    const selectedCount = state.workspaceSelectedIds.size;
+    if (dom.workspaceSelectionStatus) {
+      dom.workspaceSelectionStatus.style.display = selectedCount > 0 ? 'inline-block' : 'none';
+    }
+    if (dom.workspaceSelectionCount) {
+      dom.workspaceSelectionCount.textContent = `${selectedCount} selected`;
+    }
+    if (dom.workspaceSelectAll) {
+      dom.workspaceSelectAll.checked = ws.entries.length > 0 && ws.entries.every(e => state.workspaceSelectedIds.has(e.id));
+    }
+
+    // 7. Group indexing
+    const groupMap = new Map((ws.groups || []).map(g => [g.id, g]));
+    const collapsedGroupIds = new Set((ws.groups || []).filter(g => g.collapsed).map(g => g.id));
+
     // Render Table Rows (Desktop) & Cards (Mobile)
     let tableHtml = '';
     let cardsHtml = '';
+    let currentGroupId = undefined;
 
     ws.entries.forEach((entry, index) => {
       const calc = calculateEntryValues(entry, ws.scaleRatio, ws.displayUnit, state.precision);
       const isInvalid = !calc.isValid;
       const isFirst = index === 0;
       const isLast = index === ws.entries.length - 1;
+      const isSelected = state.workspaceSelectedIds.has(entry.id);
+      const dimType = entry.dimensionType || DEFAULT_DIMENSION_TYPE;
+      const badgeClass = dimType === 'segment' ? 'badge-seg' : (dimType === 'allowance' ? 'badge-alw' : 'badge-ref');
+      const badgeLabel = dimType === 'segment' ? 'SEG' : (dimType === 'allowance' ? 'ALW' : 'REF');
+      const groupObj = entry.groupId ? groupMap.get(entry.groupId) : null;
+
+      // Check for group boundary header
+      if (entry.groupId && entry.groupId !== currentGroupId) {
+        currentGroupId = entry.groupId;
+        const grp = groupObj || { id: entry.groupId, name: 'Group', collapsed: false };
+        const grpTotals = calculateGroupTotals(ws.entries, grp.id, ws.scaleRatio, ws.displayUnit, state.precision);
+        tableHtml += `
+          <tr class="workspace-group-header" data-group-id="${grp.id}">
+            <td colspan="10">
+              <div class="group-title-wrap">
+                <button type="button" class="group-collapse-btn ws-group-toggle" data-group-id="${grp.id}" title="${grp.collapsed ? 'Expand group' : 'Collapse group'}">
+                  <span>${grp.collapsed ? '▶' : '▼'}</span>
+                  <span>📁 ${escapeHtml(grp.name)}</span>
+                  <small style="color: var(--text-muted); font-weight: normal;">(${grpTotals.totalCount} items)</small>
+                </button>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span class="group-subtotal-badge">Segments: ${grpTotals.segmentRealFormatted} ➔ ${grpTotals.segmentDrawingFormatted}</span>
+                  <button type="button" class="row-action-btn ws-ungroup-btn" data-group-id="${grp.id}" title="Remove all from group" style="font-size: 0.65rem;">Ungroup</button>
+                </div>
+              </div>
+            </td>
+          </tr>
+        `;
+      } else if (!entry.groupId && currentGroupId !== null) {
+        currentGroupId = null;
+      }
+
+      // If entry belongs to a collapsed group, skip rendering in table/cards
+      if (entry.groupId && collapsedGroupIds.has(entry.groupId)) {
+        return;
+      }
+
+      // Inline Editing state
+      const isEditingName = state.workspaceEditingCell?.id === entry.id && state.workspaceEditingCell?.field === 'name';
+      const isEditingInput = state.workspaceEditingCell?.id === entry.id && state.workspaceEditingCell?.field === 'rawInput';
+      const isEditingNotes = state.workspaceEditingCell?.id === entry.id && state.workspaceEditingCell?.field === 'notes';
 
       // Table Row
       tableHtml += `
-        <tr class="${!entry.enabled ? 'row-disabled' : ''} ${isInvalid ? 'row-invalid' : ''}" data-id="${entry.id}">
+        <tr class="${!entry.enabled ? 'row-disabled' : ''} ${isInvalid ? 'row-invalid' : ''} ${isSelected ? 'row-selected' : ''}" data-id="${entry.id}">
           <td style="text-align: center;">
-            <input type="checkbox" class="ws-toggle-btn form-checkbox" data-id="${entry.id}" ${entry.enabled ? 'checked' : ''} title="${entry.enabled ? 'Disable row' : 'Enable row'}" aria-label="Toggle ${escapeHtml(entry.name)}">
+            <input type="checkbox" class="ws-select-row-checkbox form-checkbox" data-id="${entry.id}" ${isSelected ? 'checked' : ''} title="Select row">
           </td>
           <td>
-            <strong class="ws-name-text">${escapeHtml(entry.name)}</strong>
+            <span class="type-badge ${badgeClass} ws-type-toggle" data-id="${entry.id}" title="Click to cycle type (Segment / Allowance / Reference)">${badgeLabel}</span>
           </td>
-          <td>
-            <span class="col-input-badge">${escapeHtml(entry.rawInput)}</span>
+          <td class="cell-editable ws-cell-name" data-id="${entry.id}" data-field="name" title="Click to edit name">
+            ${isEditingName ? `<input type="text" class="inline-edit-input ws-inline-input" data-id="${entry.id}" data-field="name" value="${escapeHtml(entry.name)}">` : `<strong class="ws-name-text">${escapeHtml(entry.name)}</strong>`}
+          </td>
+          <td class="cell-editable ws-cell-input" data-id="${entry.id}" data-field="rawInput" title="Click to edit measurement">
+            ${isEditingInput ? `<input type="text" class="inline-edit-input ws-inline-input" data-id="${entry.id}" data-field="rawInput" value="${escapeHtml(entry.rawInput)}">` : `<span class="col-input-badge">${escapeHtml(entry.rawInput)}</span>`}
           </td>
           <td class="col-real">
             ${isInvalid ? `<span class="col-err" title="${escapeHtml(calc.errorMessage || 'Invalid')}">⚠️ ${escapeHtml(calc.errorMessage || 'Invalid')}</span>` : calc.realFormatted}
@@ -2006,8 +2110,14 @@ export function initializeApp() {
           <td class="col-drawing">
             ${isInvalid ? '---' : calc.drawingFormatted}
           </td>
-          <td class="col-notes">
-            ${escapeHtml(entry.notes || '—')}
+          <td>
+            ${groupObj ? `<span class="col-group-tag" title="Group: ${escapeHtml(groupObj.name)}">${escapeHtml(groupObj.name)}</span>` : '<span style="color: var(--text-muted); font-size: 0.7rem;">—</span>'}
+          </td>
+          <td class="cell-editable ws-cell-notes" data-id="${entry.id}" data-field="notes" title="Click to edit notes">
+            ${isEditingNotes ? `<input type="text" class="inline-edit-input ws-inline-input" data-id="${entry.id}" data-field="notes" value="${escapeHtml(entry.notes)}">` : `<span class="col-notes">${escapeHtml(entry.notes || '—')}</span>`}
+          </td>
+          <td style="text-align: center;">
+            <input type="checkbox" class="ws-toggle-btn form-checkbox" data-id="${entry.id}" ${entry.enabled ? 'checked' : ''} title="${entry.enabled ? 'Disable row' : 'Enable row'}" aria-label="Toggle ${escapeHtml(entry.name)}">
           </td>
           <td>
             <div class="row-actions-group">
@@ -2017,15 +2127,9 @@ export function initializeApp() {
               <button type="button" class="row-action-btn ws-dup-row-btn" data-id="${entry.id}" title="Duplicate row">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
               </button>
-              <button type="button" class="row-action-btn ws-up-row-btn" data-id="${entry.id}" ${isFirst ? 'disabled style="opacity: 0.3;"' : ''} title="Move up">
-                ↑
-              </button>
-              <button type="button" class="row-action-btn ws-down-row-btn" data-id="${entry.id}" ${isLast ? 'disabled style="opacity: 0.3;"' : ''} title="Move down">
-                ↓
-              </button>
-              <button type="button" class="row-action-btn danger ws-del-row-btn" data-id="${entry.id}" title="Delete row">
-                ✕
-              </button>
+              <button type="button" class="row-action-btn ws-up-row-btn" data-id="${entry.id}" ${isFirst ? 'disabled style="opacity: 0.3;"' : ''} title="Move up">↑</button>
+              <button type="button" class="row-action-btn ws-down-row-btn" data-id="${entry.id}" ${isLast ? 'disabled style="opacity: 0.3;"' : ''} title="Move down">↓</button>
+              <button type="button" class="row-action-btn danger ws-del-row-btn" data-id="${entry.id}" title="Delete row">✕</button>
             </div>
           </td>
         </tr>
@@ -2033,10 +2137,11 @@ export function initializeApp() {
 
       // Mobile Card
       cardsHtml += `
-        <div class="dim-card ${!entry.enabled ? 'row-disabled' : ''} ${isInvalid ? 'row-invalid' : ''}" data-id="${entry.id}">
+        <div class="dim-card ${!entry.enabled ? 'row-disabled' : ''} ${isInvalid ? 'row-invalid' : ''} ${isSelected ? 'row-selected' : ''}" data-id="${entry.id}">
           <div class="dim-card-header">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="ws-toggle-btn form-checkbox" data-id="${entry.id}" ${entry.enabled ? 'checked' : ''} aria-label="Toggle ${escapeHtml(entry.name)}">
+              <input type="checkbox" class="ws-select-row-checkbox form-checkbox" data-id="${entry.id}" ${isSelected ? 'checked' : ''} aria-label="Select ${escapeHtml(entry.name)}">
+              <span class="type-badge ${badgeClass} ws-type-toggle" data-id="${entry.id}">${badgeLabel}</span>
               <span class="dim-card-title">${escapeHtml(entry.name)}</span>
             </div>
             <span class="col-input-badge">${escapeHtml(entry.rawInput)}</span>
@@ -2053,6 +2158,7 @@ export function initializeApp() {
           </div>
           ${entry.notes ? `<div style="font-size: 0.72rem; color: var(--text-secondary);">📝 ${escapeHtml(entry.notes)}</div>` : ''}
           <div class="dim-card-actions">
+            <button type="button" class="row-action-btn ws-toggle-btn" data-id="${entry.id}">${entry.enabled ? 'Disable' : 'Enable'}</button>
             <button type="button" class="row-action-btn ws-copy-row-btn" data-id="${entry.id}" title="Copy value">Copy</button>
             <button type="button" class="row-action-btn ws-dup-row-btn" data-id="${entry.id}" title="Duplicate">Duplicate</button>
             <button type="button" class="row-action-btn ws-up-row-btn" data-id="${entry.id}" ${isFirst ? 'disabled' : ''}>↑</button>
@@ -2071,16 +2177,38 @@ export function initializeApp() {
     if (dom.workspaceEmptyState) dom.workspaceEmptyState.style.display = isEmpty ? 'flex' : 'none';
     if (dom.workspaceTable) dom.workspaceTable.style.display = isEmpty ? 'none' : 'table';
 
-    // Update Totals Display
+    // Update Multi-Metric Semantic Totals Display
     if (dom.workspaceActiveCount) {
       dom.workspaceActiveCount.textContent = `${totals.enabledCount} of ${totals.totalCount} active measurements`;
     }
-    if (dom.workspaceTotalRealVal) {
-      dom.workspaceTotalRealVal.textContent = totals.totalRealFormatted;
+    if (dom.workspaceTotalSegmentsReal) {
+      dom.workspaceTotalSegmentsReal.textContent = totals.segmentRealFormatted;
     }
-    if (dom.workspaceTotalDrawingVal) {
-      dom.workspaceTotalDrawingVal.textContent = totals.totalDrawingFormatted;
+    if (dom.workspaceTotalSegmentsDrawing) {
+      dom.workspaceTotalSegmentsDrawing.textContent = totals.segmentDrawingFormatted;
     }
+    if (dom.workspaceTotalAllowancesReal) {
+      dom.workspaceTotalAllowancesReal.textContent = totals.allowanceRealFormatted;
+    }
+    if (dom.workspaceTotalAllowancesDrawing) {
+      dom.workspaceTotalAllowancesDrawing.textContent = totals.allowanceDrawingFormatted;
+    }
+    if (dom.workspaceTotalCombinedReal) {
+      dom.workspaceTotalCombinedReal.textContent = totals.totalRealFormatted;
+    }
+    if (dom.workspaceTotalCombinedDrawing) {
+      dom.workspaceTotalCombinedDrawing.textContent = totals.totalDrawingFormatted;
+    }
+    if (dom.workspaceTotalReferencesReal) {
+      dom.workspaceTotalReferencesReal.textContent = totals.referenceRealFormatted;
+    }
+    if (dom.workspaceReferencesCountLabel) {
+      dom.workspaceReferencesCountLabel.textContent = `${totals.referenceCount} reference items`;
+    }
+
+    // Backwards compatibility elements
+    if (dom.workspaceTotalRealVal) dom.workspaceTotalRealVal.textContent = totals.totalRealFormatted;
+    if (dom.workspaceTotalDrawingVal) dom.workspaceTotalDrawingVal.textContent = totals.totalDrawingFormatted;
 
     // Update State Badge
     if (dom.workspaceStateBadge) {
@@ -2094,10 +2222,132 @@ export function initializeApp() {
     }
 
     attachWorkspaceRowEvents();
+
+    // Focus active inline input if editing
+    if (state.workspaceEditingCell) {
+      const inlineInput = dom.workspaceTableBody?.querySelector('.ws-inline-input');
+      if (inlineInput) {
+        inlineInput.focus();
+        inlineInput.select();
+      }
+    }
   }
 
   function attachWorkspaceRowEvents() {
-    // Toggle checkboxes
+    // 1. Select Row Checkboxes
+    document.querySelectorAll('.ws-select-row-checkbox').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        const id = e.target.dataset.id;
+        if (e.target.checked) {
+          state.workspaceSelectedIds.add(id);
+        } else {
+          state.workspaceSelectedIds.delete(id);
+        }
+        renderWorkspace();
+      });
+    });
+
+    // 2. Type Badges Click to Cycle (reference -> segment -> allowance -> reference)
+    document.querySelectorAll('.ws-type-toggle').forEach(badge => {
+      badge.addEventListener('click', () => {
+        const id = badge.dataset.id;
+        const entry = state.workspace.entries.find(x => x.id === id);
+        if (entry) {
+          const current = entry.dimensionType || DEFAULT_DIMENSION_TYPE;
+          const next = current === 'reference' ? 'segment' : (current === 'segment' ? 'allowance' : 'reference');
+          entry.dimensionType = next;
+          saveWorkspace();
+          renderWorkspace();
+          AudioService.playTick();
+          showToast(`Set ${entry.name} type to ${next.toUpperCase()}`);
+        }
+      });
+    });
+
+    // 3. Group toggle collapse
+    document.querySelectorAll('.ws-group-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const grpId = btn.dataset.groupId;
+        const grp = (state.workspace.groups || []).find(g => g.id === grpId);
+        if (grp) {
+          grp.collapsed = !grp.collapsed;
+          saveWorkspace();
+          renderWorkspace();
+          AudioService.playTick();
+        }
+      });
+    });
+
+    // 4. Ungroup all entries in group
+    document.querySelectorAll('.ws-ungroup-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const grpId = btn.dataset.groupId;
+        state.workspace.entries.forEach(e => {
+          if (e.groupId === grpId) e.groupId = null;
+        });
+        state.workspace.groups = (state.workspace.groups || []).filter(g => g.id !== grpId);
+        saveWorkspace();
+        renderWorkspace();
+        AudioService.playTick();
+        showToast('Ungrouped entries');
+      });
+    });
+
+    // 5. Inline Editing Cell Activation
+    document.querySelectorAll('.cell-editable').forEach(cell => {
+      cell.addEventListener('click', (e) => {
+        if (e.target.tagName === 'INPUT') return;
+        const id = cell.dataset.id;
+        const field = cell.dataset.field;
+        state.workspaceEditingCell = { id, field };
+        renderWorkspace();
+      });
+    });
+
+    // 6. Inline Input Event Handlers
+    document.querySelectorAll('.ws-inline-input').forEach(input => {
+      let isCommitted = false;
+      const commitEdit = () => {
+        if (isCommitted || !state.workspaceEditingCell) return;
+        isCommitted = true;
+        const { id, field } = state.workspaceEditingCell;
+        const entry = state.workspace.entries.find(x => x.id === id);
+        if (entry) {
+          const newVal = input.value.trim();
+          if (field === 'rawInput') {
+            const updated = updateDimensionEntry(entry, { rawInput: newVal });
+            const idx = state.workspace.entries.findIndex(x => x.id === id);
+            if (idx !== -1) state.workspace.entries[idx] = updated;
+          } else if (field === 'name') {
+            entry.name = newVal || 'Dimension';
+          } else if (field === 'notes') {
+            entry.notes = newVal;
+          }
+          saveWorkspace();
+        }
+        state.workspaceEditingCell = null;
+        renderWorkspace();
+        AudioService.playTick();
+      };
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commitEdit();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          isCommitted = true;
+          state.workspaceEditingCell = null;
+          renderWorkspace();
+        }
+      });
+
+      input.addEventListener('blur', () => {
+        commitEdit();
+      });
+    });
+
+    // 7. Toggle on/off checkboxes
     document.querySelectorAll('.ws-toggle-btn').forEach(btn => {
       btn.addEventListener('change', (e) => {
         const id = e.target.dataset.id;
@@ -2111,15 +2361,15 @@ export function initializeApp() {
       });
     });
 
-    // Copy single row measurement
+    // 8. Copy single row measurement
     document.querySelectorAll('.ws-copy-row-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         const entry = state.workspace.entries.find(x => x.id === id);
         if (entry) {
           const calc = calculateEntryValues(entry, state.workspace.scaleRatio, state.workspace.displayUnit, state.precision);
           if (calc.isValid) {
-            copyToClipboard(`${entry.name}: ${calc.realFormatted} (Drawing @ 1:${state.workspace.scaleRatio}: ${calc.drawingFormatted})`, `${entry.name} Dimension`);
+            copyToClipboard(`${calc.realFormatted}`, `${entry.name} Real Dimension`);
           } else {
             showToast('Cannot copy invalid measurement', 'warning');
           }
@@ -2127,9 +2377,9 @@ export function initializeApp() {
       });
     });
 
-    // Duplicate row
+    // 9. Duplicate row
     document.querySelectorAll('.ws-dup-row-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         const idx = state.workspace.entries.findIndex(x => x.id === id);
         if (idx !== -1) {
@@ -2143,9 +2393,9 @@ export function initializeApp() {
       });
     });
 
-    // Move row up
+    // 10. Move row up
     document.querySelectorAll('.ws-up-row-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         const idx = state.workspace.entries.findIndex(x => x.id === id);
         if (idx > 0) {
@@ -2159,9 +2409,9 @@ export function initializeApp() {
       });
     });
 
-    // Move row down
+    // 11. Move row down
     document.querySelectorAll('.ws-down-row-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         const idx = state.workspace.entries.findIndex(x => x.id === id);
         if (idx !== -1 && idx < state.workspace.entries.length - 1) {
@@ -2175,14 +2425,15 @@ export function initializeApp() {
       });
     });
 
-    // Delete row
+    // 12. Delete row
     document.querySelectorAll('.ws-del-row-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         const idx = state.workspace.entries.findIndex(x => x.id === id);
         if (idx !== -1) {
           const deletedName = state.workspace.entries[idx].name;
           state.workspace.entries.splice(idx, 1);
+          state.workspaceSelectedIds.delete(id);
           saveWorkspace();
           renderWorkspace();
           AudioService.playTick();
@@ -2983,6 +3234,35 @@ export function initializeApp() {
     }
 
     // Mode 7: Dimension Workspace Listeners
+    if (dom.workspaceDensityStandard) {
+      dom.workspaceDensityStandard.addEventListener('click', () => {
+        state.workspace.density = 'comfortable';
+        saveWorkspace();
+        renderWorkspace();
+        AudioService.playTick();
+      });
+    }
+
+    if (dom.workspaceDensityCompact) {
+      dom.workspaceDensityCompact.addEventListener('click', () => {
+        state.workspace.density = 'compact';
+        saveWorkspace();
+        renderWorkspace();
+        AudioService.playTick();
+      });
+    }
+
+    if (dom.workspaceSelectAll) {
+      dom.workspaceSelectAll.addEventListener('change', (e) => {
+        if (e.target.checked) {
+          state.workspace.entries.forEach(item => state.workspaceSelectedIds.add(item.id));
+        } else {
+          state.workspaceSelectedIds.clear();
+        }
+        renderWorkspace();
+      });
+    }
+
     if (dom.workspaceScaleSelect) {
       dom.workspaceScaleSelect.addEventListener('change', (e) => {
         const val = e.target.value;
@@ -3036,14 +3316,29 @@ export function initializeApp() {
     if (dom.workspaceAddForm) {
       dom.workspaceAddForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        const rawInput = dom.workspaceAddInput?.value?.trim() || '';
+        let rawInput = dom.workspaceAddInput?.value?.trim() || '';
         if (!rawInput) return;
 
-        const name = dom.workspaceAddName?.value?.trim() || 'Dimension';
+        let name = dom.workspaceAddName?.value?.trim() || '';
+        let dimensionType = dom.workspaceAddType?.value || DEFAULT_DIMENSION_TYPE;
         const defaultUnit = dom.workspaceAddUnit?.value || state.workspace.displayUnit || 'mm';
         const notes = dom.workspaceAddNotes?.value?.trim() || '';
 
-        const newEntry = createDimensionEntry({ name, rawInput, defaultUnit, notes }, defaultUnit);
+        // Deterministic Natural Quick Add Syntax (e.g. "Wall A 4800")
+        if (name === '' && rawInput !== '') {
+          const quickParsed = parseQuickAddString(rawInput, defaultUnit, dimensionType);
+          if (quickParsed.isValid) {
+            name = quickParsed.name;
+            rawInput = quickParsed.rawInput;
+            dimensionType = quickParsed.dimensionType;
+          } else {
+            name = 'Dimension';
+          }
+        } else if (name === '') {
+          name = 'Dimension';
+        }
+
+        const newEntry = createDimensionEntry({ name, rawInput, dimensionType, defaultUnit, notes }, defaultUnit);
         state.workspace.entries.push(newEntry);
         saveWorkspace();
         renderWorkspace();
@@ -3055,7 +3350,7 @@ export function initializeApp() {
         if (dom.workspaceAddInput) dom.workspaceAddInput.focus();
 
         if (newEntry.isValid) {
-          showToast(`Added "${newEntry.name}" (${newEntry.rawInput})`);
+          showToast(`Added [${newEntry.dimensionType.toUpperCase()}] ${newEntry.name} (${newEntry.rawInput})`);
         } else {
           showToast(`Added "${newEntry.name}" ⚠️ (Check measurement syntax)`, 'warning');
         }
@@ -3065,6 +3360,7 @@ export function initializeApp() {
     if (dom.workspaceLoadSamplesBtn) {
       dom.workspaceLoadSamplesBtn.addEventListener('click', () => {
         state.workspace = createDefaultWorkspace();
+        state.workspaceSelectedIds.clear();
         saveWorkspace();
         renderWorkspace();
         AudioService.playTick();
@@ -3072,25 +3368,106 @@ export function initializeApp() {
       });
     }
 
+    if (dom.workspaceCopySelectedBtn) {
+      dom.workspaceCopySelectedBtn.addEventListener('click', () => {
+        if (state.workspaceSelectedIds.size === 0) {
+          showToast('No dimensions selected to copy', 'warning');
+          return;
+        }
+        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+          mode: 'selected',
+          selectedIds: Array.from(state.workspaceSelectedIds),
+          groups: state.workspace.groups
+        });
+        copyToClipboard(text, `${state.workspaceSelectedIds.size} Selected Dimensions`);
+      });
+    }
+
+    if (dom.workspaceCopySegmentsBtn) {
+      dom.workspaceCopySegmentsBtn.addEventListener('click', () => {
+        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+          mode: 'segments',
+          groups: state.workspace.groups
+        });
+        copyToClipboard(text, 'Additive Segment Dimensions');
+      });
+    }
+
+    if (dom.workspaceCopyReferencesBtn) {
+      dom.workspaceCopyReferencesBtn.addEventListener('click', () => {
+        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+          mode: 'references',
+          groups: state.workspace.groups
+        });
+        copyToClipboard(text, 'Reference Dimensions');
+      });
+    }
+
     if (dom.workspaceCopyAllBtn) {
       dom.workspaceCopyAllBtn.addEventListener('click', () => {
-        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, 'both');
+        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+          mode: 'both',
+          groups: state.workspace.groups
+        });
         copyToClipboard(text, 'Full Dimension Schedule');
+      });
+    }
+
+    if (dom.workspaceCopyRawBtn) {
+      dom.workspaceCopyRawBtn.addEventListener('click', () => {
+        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+          mode: 'raw',
+          groups: state.workspace.groups
+        });
+        copyToClipboard(text, 'Raw CAD Numbers');
       });
     }
 
     if (dom.workspaceCopyDrawingBtn) {
       dom.workspaceCopyDrawingBtn.addEventListener('click', () => {
-        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, 'drawing');
+        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+          mode: 'drawing',
+          groups: state.workspace.groups
+        });
         copyToClipboard(text, `Drawing Values (@ 1:${state.workspace.scaleRatio})`);
       });
     }
 
     if (dom.workspaceExportTsvBtn) {
       dom.workspaceExportTsvBtn.addEventListener('click', () => {
-        const tsv = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, 'tsv');
+        const tsv = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+          mode: 'tsv',
+          groups: state.workspace.groups
+        });
         downloadFile(tsv, `dimension-schedule-1to${state.workspace.scaleRatio}-${Date.now()}.tsv`, 'text/tab-separated-values');
         showToast('Exported schedule as TSV spreadsheet');
+      });
+    }
+
+    if (dom.workspaceAddGroupBtn) {
+      dom.workspaceAddGroupBtn.addEventListener('click', () => {
+        const grpNum = (state.workspace.groups?.length || 0) + 1;
+        const grpName = window.prompt('Enter group name (e.g. Wall North, Bay Grid):', `Group ${grpNum}`);
+        if (grpName && grpName.trim()) {
+          const newGrp = createGroup(grpName.trim());
+          if (!Array.isArray(state.workspace.groups)) state.workspace.groups = [];
+          state.workspace.groups.push(newGrp);
+
+          // If rows are selected, assign them to this group
+          if (state.workspaceSelectedIds.size > 0) {
+            state.workspace.entries.forEach(entry => {
+              if (state.workspaceSelectedIds.has(entry.id)) {
+                entry.groupId = newGrp.id;
+              }
+            });
+            state.workspaceSelectedIds.clear();
+          }
+
+          saveWorkspace();
+          renderWorkspace();
+          AudioService.playTick();
+          showToast(`Created group "${newGrp.name}"`);
+        }
       });
     }
 
@@ -3106,8 +3483,10 @@ export function initializeApp() {
           showToast('Workspace is already empty', 'warning');
           return;
         }
-        if (window.confirm('Clear all dimensions from the workspace?')) {
+        if (window.confirm('Clear all dimensions and groups from the workspace?')) {
           state.workspace.entries = [];
+          state.workspace.groups = [];
+          state.workspaceSelectedIds.clear();
           saveWorkspace();
           renderWorkspace();
           AudioService.playTick();
@@ -3132,7 +3511,7 @@ export function initializeApp() {
         return;
       }
 
-      // Esc closes Command Palette first, then drawers/modals
+      // Esc closes Command Palette first, then drawers/modals/selection
       if (e.key === 'Escape') {
         if (dom.commandPaletteModal?.classList.contains('open')) {
           e.preventDefault();
@@ -3145,12 +3524,95 @@ export function initializeApp() {
           dom.shortcutsModal.classList.remove('open');
           dom.modalBackdrop?.classList.remove('open');
         }
+        if (state.currentMode === 'workspace' && state.workspaceSelectedIds.size > 0) {
+          state.workspaceSelectedIds.clear();
+          renderWorkspace();
+          return;
+        }
         if (activeEl && activeEl.blur) activeEl.blur();
         return;
       }
 
+      // Quick Add form shortcut: Ctrl+Enter or Cmd+Enter inside form
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && state.currentMode === 'workspace') {
+        if (dom.workspaceAddForm) {
+          e.preventDefault();
+          dom.workspaceAddForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+          return;
+        }
+      }
+
       // If user is focused inside an input field, do not hijack letter/number shortcuts
       if (isInputFocused) return;
+
+      // Mode 7 Workspace-specific shortcuts (when not focused in inputs)
+      if (state.currentMode === 'workspace') {
+        if (e.key === 'n' || e.key === 'N') {
+          e.preventDefault();
+          dom.workspaceAddInput?.focus();
+          dom.workspaceAddInput?.select();
+          return;
+        }
+        if (e.key === 'd' || e.key === 'D') {
+          if (state.workspaceSelectedIds.size === 1) {
+            e.preventDefault();
+            const id = Array.from(state.workspaceSelectedIds)[0];
+            const idx = state.workspace.entries.findIndex(x => x.id === id);
+            if (idx !== -1) {
+              const dup = duplicateDimensionEntry(state.workspace.entries[idx]);
+              state.workspace.entries.splice(idx + 1, 0, dup);
+              saveWorkspace();
+              renderWorkspace();
+              AudioService.playTick();
+              showToast(`Duplicated "${dup.name}"`);
+            }
+            return;
+          }
+        }
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          if (state.workspaceSelectedIds.size > 0) {
+            e.preventDefault();
+            const count = state.workspaceSelectedIds.size;
+            state.workspace.entries = state.workspace.entries.filter(x => !state.workspaceSelectedIds.has(x.id));
+            state.workspaceSelectedIds.clear();
+            saveWorkspace();
+            renderWorkspace();
+            AudioService.playTick();
+            showToast(`Deleted ${count} selected dimension${count > 1 ? 's' : ''}`);
+            return;
+          }
+        }
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+          if (state.workspaceSelectedIds.size > 0) {
+            e.preventDefault();
+            const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+              mode: 'selected',
+              selectedIds: Array.from(state.workspaceSelectedIds),
+              groups: state.workspace.groups
+            });
+            copyToClipboard(text, `${state.workspaceSelectedIds.size} Selected Dimensions`);
+            return;
+          }
+        }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          if (state.workspace.entries.length > 0) {
+            e.preventDefault();
+            const ids = state.workspace.entries.map(x => x.id);
+            const currentSelectedId = Array.from(state.workspaceSelectedIds)[0];
+            let currentIdx = ids.indexOf(currentSelectedId);
+            let nextIdx = 0;
+            if (e.key === 'ArrowDown') {
+              nextIdx = currentIdx === -1 ? 0 : Math.min(ids.length - 1, currentIdx + 1);
+            } else {
+              nextIdx = currentIdx === -1 ? ids.length - 1 : Math.max(0, currentIdx - 1);
+            }
+            state.workspaceSelectedIds.clear();
+            state.workspaceSelectedIds.add(ids[nextIdx]);
+            renderWorkspace();
+            return;
+          }
+        }
+      }
 
       if (e.key === '1') { e.preventDefault(); switchMode('converter'); }
       else if (e.key === '2') { e.preventDefault(); switchMode('rescale'); }

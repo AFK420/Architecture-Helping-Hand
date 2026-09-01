@@ -1140,6 +1140,11 @@
             <p class="card-subtitle">Architectural Scratchpad, Multi-Measurement Scaling Schedule & Batch Totals</p>
           </div>
           <div class="workspace-header-controls">
+            <!-- Density Toggle -->
+            <div class="ref-density-toggle" role="group" aria-label="Schedule density mode">
+              <button type="button" id="workspace-density-standard" class="density-btn active" title="Standard comfortable row spacing">Standard</button>
+              <button type="button" id="workspace-density-compact" class="density-btn" title="Compact high-density rows">Compact</button>
+            </div>
             <span id="workspace-state-badge" class="state-badge state-ready">READY</span>
           </div>
         </div>
@@ -1192,20 +1197,28 @@
           </div>
         </div>
 
-        <!-- Add Dimension Input Form -->
+        <!-- Quick Add / Add Dimension Form -->
         <div class="workspace-add-section">
           <form id="workspace-add-form" class="workspace-add-form" autocomplete="off">
-            <div class="form-row-grid">
+            <div class="form-row-grid workspace-inputs-grid">
+              <div class="form-group col-type">
+                <label for="workspace-add-type" class="field-label">Role / Type</label>
+                <select id="workspace-add-type" class="form-select" aria-label="Dimension semantic type">
+                  <option value="reference" selected>REF (Reference)</option>
+                  <option value="segment">SEG (Additive Segment)</option>
+                  <option value="allowance">ALW (Tolerance Allowance)</option>
+                </select>
+              </div>
               <div class="form-group col-name">
                 <label for="workspace-add-name" class="field-label">Item / Member Name</label>
                 <input type="text" id="workspace-add-name" class="form-input" placeholder="e.g. Wall A, Door Opening, Beam" aria-label="Dimension item name">
               </div>
               <div class="form-group col-input">
-                <label for="workspace-add-input" class="field-label">Measurement Input</label>
-                <input type="text" id="workspace-add-input" class="form-input" placeholder="e.g. 2.4m, 900, 7' 10&quot;, 3 1/2&quot;" aria-label="Raw measurement input" required>
+                <label for="workspace-add-input" class="field-label">Measurement / Quick String</label>
+                <input type="text" id="workspace-add-input" class="form-input" placeholder="e.g. 2.4m, 900, 7' 10&quot; or 'Wall A 4800' (Press N to focus)" aria-label="Raw measurement input" required>
               </div>
               <div class="form-group col-unit">
-                <label for="workspace-add-unit" class="field-label">Default Unit</label>
+                <label for="workspace-add-unit" class="field-label">Fallback Unit</label>
                 <select id="workspace-add-unit" class="form-select" aria-label="Default unit if unstated">
                   <option value="mm" selected>mm</option>
                   <option value="cm">cm</option>
@@ -1216,21 +1229,31 @@
               </div>
               <div class="form-group col-notes">
                 <label for="workspace-add-notes" class="field-label">Notes (Optional)</label>
-                <input type="text" id="workspace-add-notes" class="form-input" placeholder="e.g. Verify on site, Structural" aria-label="Optional notes">
+                <input type="text" id="workspace-add-notes" class="form-input" placeholder="e.g. Verify on site, North" aria-label="Optional notes">
               </div>
               <div class="form-group col-btn">
                 <label class="field-label">&nbsp;</label>
-                <button type="submit" id="workspace-add-btn" class="calc-btn primary-action">
+                <button type="submit" id="workspace-add-btn" class="calc-btn primary-action" title="Add dimension row (Enter)">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <line x1="12" y1="5" x2="12" y2="19"></line>
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                   </svg>
-                  <span>Add Dimension</span>
+                  <span>+ Add</span>
                 </button>
               </div>
             </div>
           </form>
           <div id="workspace-add-error" class="workspace-inline-error" style="display: none;"></div>
+        </div>
+
+        <!-- Schedule Sub-header Bar (Item breakdown counts & select actions) -->
+        <div class="workspace-sub-bar">
+          <div class="breakdown-pills">
+            <span id="workspace-breakdown-badge" class="breakdown-pill">0 items • 0 segments • 0 allowances • 0 references</span>
+          </div>
+          <div class="selection-status" id="workspace-selection-status" style="display: none;">
+            <span id="workspace-selection-count">0 selected</span>
+          </div>
         </div>
 
         <!-- Dimension Schedule Table (Desktop & Tablet) -->
@@ -1239,13 +1262,18 @@
             <table class="workspace-table" id="workspace-table">
               <thead>
                 <tr>
-                  <th style="width: 44px; text-align: center;">On</th>
+                  <th style="width: 36px; text-align: center;">
+                    <input type="checkbox" id="workspace-select-all" title="Select all rows" aria-label="Select all rows">
+                  </th>
+                  <th style="width: 68px;">Type</th>
                   <th>Item Name</th>
                   <th>Raw Input</th>
-                  <th>Real Dimension</th>
-                  <th id="workspace-th-drawing">Drawing @ 1:50</th>
+                  <th style="text-align: right;">Real Dimension</th>
+                  <th style="text-align: right;" id="workspace-th-drawing">Drawing @ 1:50</th>
+                  <th>Group</th>
                   <th>Notes</th>
-                  <th style="text-align: right; width: 170px;">Actions</th>
+                  <th style="text-align: center; width: 60px;">On</th>
+                  <th style="text-align: right; width: 140px;">Actions</th>
                 </tr>
               </thead>
               <tbody id="workspace-table-body">
@@ -1262,51 +1290,106 @@
           <!-- Empty Workspace State -->
           <div id="workspace-empty-state" class="workspace-empty-state" style="display: none;">
             <div class="empty-icon">📐</div>
-            <div class="empty-title">No Dimensions in Workspace</div>
-            <div class="empty-desc">Enter measurements in the form above or load a sample architectural dimension schedule to get started.</div>
-            <button type="button" id="workspace-load-samples-btn" class="hist-btn" style="margin-top: 0.5rem;">
+            <div class="empty-title">DIMENSION WORKSPACE</div>
+            <div class="empty-desc">Your architectural scratchpad is empty. Add a dimension above to begin.</div>
+            <div class="empty-examples">
+              <span class="ex-label">Syntax Examples:</span>
+              <code>Wall A 4800</code>
+              <code>Door Opening 900</code>
+              <code>Window 1800mm</code>
+              <code>Gap 50 allowance</code>
+            </div>
+            <button type="button" id="workspace-load-samples-btn" class="hist-btn" style="margin-top: 0.75rem;">
               Load Sample Architectural Schedule
             </button>
           </div>
         </div>
 
-        <!-- Live Totals Hero Panel -->
+        <!-- Live Totals Hero Panel with Semantic Breakdown -->
         <div class="workspace-totals-card" id="workspace-totals-card">
           <div class="totals-info">
             <span class="totals-label">WORKSPACE SUMMARY TOTALS</span>
             <span id="workspace-active-count" class="totals-count-badge">0 active measurements</span>
           </div>
-          <div class="totals-hero-values">
-            <div class="total-metric-block">
-              <span class="total-type-label">TOTAL REAL-WORLD</span>
-              <div class="total-val-wrap">
-                <span id="workspace-total-real-val" class="result-hero-number">0</span>
+
+          <!-- Multi-Metric Semantic Grid -->
+          <div class="totals-breakdown-grid">
+            <div class="totals-col-metric">
+              <span class="metric-title">TOTAL SEGMENTS <small>(Additive)</small></span>
+              <div class="metric-val-row">
+                <span id="workspace-total-segments-real" class="val-real">0 mm</span>
+                <span class="val-arrow">➔</span>
+                <span id="workspace-total-segments-drawing" class="val-drawing">0 mm</span>
               </div>
             </div>
-            <div class="total-divider">➔</div>
-            <div class="total-metric-block">
-              <span class="total-type-label" id="workspace-total-drawing-label">TOTAL DRAWING @ 1:50</span>
-              <div class="total-val-wrap">
-                <span id="workspace-total-drawing-val" class="result-hero-number">0</span>
+
+            <div class="totals-col-metric">
+              <span class="metric-title">TOTAL ALLOWANCES <small>(Tolerances)</small></span>
+              <div class="metric-val-row">
+                <span id="workspace-total-allowances-real" class="val-real">0 mm</span>
+                <span class="val-arrow">➔</span>
+                <span id="workspace-total-allowances-drawing" class="val-drawing">0 mm</span>
+              </div>
+            </div>
+
+            <div class="totals-col-metric highlight-metric">
+              <span class="metric-title">COMBINED TOTAL <small>(Segments + Allowances)</small></span>
+              <div class="metric-val-row">
+                <span id="workspace-total-combined-real" class="val-real val-hero">0 mm</span>
+                <span class="val-arrow">➔</span>
+                <span id="workspace-total-combined-drawing" class="val-drawing val-hero">0 mm</span>
+              </div>
+            </div>
+
+            <div class="totals-col-metric ref-metric">
+              <span class="metric-title">REFERENCES <small>(Excluded from Total)</small></span>
+              <div class="metric-val-row">
+                <span id="workspace-total-references-real" class="val-real">0 mm</span>
+                <span class="val-note" id="workspace-references-count-label">0 items</span>
               </div>
             </div>
           </div>
+
+          <!-- Legacy contract bindings (hidden fallback) -->
+          <span id="workspace-total-real-val" style="display:none;">0</span>
+          <span id="workspace-total-drawing-val" style="display:none;">0</span>
+          <span id="workspace-total-drawing-label" style="display:none;">TOTAL DRAWING @ 1:50</span>
         </div>
 
         <!-- Workspace Actions Toolbar -->
         <div class="workspace-actions-toolbar" id="workspace-actions-toolbar">
           <div class="toolbar-left">
-            <button type="button" id="workspace-copy-all-btn" class="hist-btn" title="Copy formatted dimension schedule to clipboard">
+            <button type="button" id="workspace-copy-selected-btn" class="hist-btn" title="Copy currently selected dimensions">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
-              <span>Copy All</span>
+              <span>Copy Selected</span>
+            </button>
+            <button type="button" id="workspace-copy-segments-btn" class="hist-btn" title="Copy additive segments only">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+              <span>Copy Segments</span>
+            </button>
+            <button type="button" id="workspace-copy-references-btn" class="hist-btn" title="Copy reference dimensions only">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              <span>Copy References</span>
+            </button>
+            <button type="button" id="workspace-copy-all-btn" class="hist-btn" title="Copy complete formatted dimension schedule">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+              <span>Copy Schedule</span>
+            </button>
+            <button type="button" id="workspace-copy-raw-btn" class="hist-btn" title="Copy raw numbers for CAD/Rhino/AutoCAD pasting">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+              <span>Copy Raw (CAD)</span>
             </button>
             <button type="button" id="workspace-copy-drawing-btn" class="hist-btn" title="Copy drawing scaled values only">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-              <span>Copy Drawing Values</span>
+              <span>Drawing Values</span>
             </button>
             <button type="button" id="workspace-export-tsv-btn" class="hist-btn" title="Export schedule as TSV spreadsheet format">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
               <span>Export TSV</span>
+            </button>
+            <button type="button" id="workspace-add-group-btn" class="hist-btn" title="Create or assign dimension group">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              <span>Group</span>
             </button>
             <button type="button" id="workspace-save-journal-btn" class="hist-btn" title="Save workspace summary to calculation journal">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
