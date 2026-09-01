@@ -1615,6 +1615,494 @@ const HistoryService = {
 
 
   // =========================================================================
+  // MODULE: Commands
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Global Command Center & Registry Service
+ * Phase 2.5: Daily Architect Toolkit — Part 1: Global Command Palette
+ */
+
+
+
+const RECENT_COMMANDS_KEY = 'archiscale_recent_commands';
+const FAVORITE_COMMANDS_KEY = 'archiscale_favorite_commands';
+const MAX_RECENT_COMMANDS = 10;
+const MAX_FAVORITE_COMMANDS = 10;
+
+/**
+ * Default Built-in Commands Definition
+ */
+const DEFAULT_COMMANDS = [
+  // 1. Navigation Commands
+  {
+    id: 'nav-converter',
+    title: 'Scale Converter',
+    description: 'Convert dimensions between paper drawing and real-world site',
+    category: 'Navigation',
+    icon: '📐',
+    keywords: ['scale', 'converter', 'drawing', 'real', 'paper', 'metric', 'imperial', 'ratio', 'dimension', 'mode 1'],
+    shortcut: '1',
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-rescale',
+    title: 'Rescaler (Sheet A ➔ Sheet B)',
+    description: 'Convert drawing measurements between different architectural scales',
+    category: 'Navigation',
+    icon: '🔄',
+    keywords: ['rescale', 'sheet', 'transfer', 'ratio', 'sheet a', 'sheet b', 're-scale', 'mode 2'],
+    shortcut: '2',
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-detector',
+    title: 'Scale Detector',
+    description: 'Detect unknown scale ratio from paper drawing and real dimensions',
+    category: 'Navigation',
+    icon: '🔍',
+    keywords: ['detector', 'find', 'identify', 'ratio', 'unknown scale', 'calculate scale', 'mode 3'],
+    shortcut: '3',
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-areavol',
+    title: 'Area & Volume Scaler',
+    description: 'Scale 2D floor surface areas (m², sq ft) and 3D volumes (m³, cu ft)',
+    category: 'Navigation',
+    icon: '📦',
+    keywords: ['area', 'volume', 'square', 'cubic', 'm2', 'sqft', 'floor area', 'room', 'mode 4'],
+    shortcut: '4',
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-furniture',
+    title: 'Furniture & Space Planning',
+    description: 'Browse 179 standard architectural furniture pieces, clearances, and top-down blueprints',
+    category: 'Navigation',
+    icon: '🛋️',
+    keywords: ['furniture', 'fixture', 'desk', 'bed', 'door', 'chair', 'table', 'ada', 'clearance', 'catalog', 'planner', 'mode 5'],
+    shortcut: '5',
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-reference',
+    title: 'Drafting Reference Sheet',
+    description: 'Architectural scale ruler, benchmark lengths, and 100mm print calibration sheet',
+    category: 'Navigation',
+    icon: '📚',
+    keywords: ['reference', 'chart', 'ruler', 'calibration', 'print', 'sheet', 'benchmarks', 'metric', 'imperial', 'mode 6'],
+    shortcut: '6',
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-history',
+    title: 'Calculation Journal',
+    description: 'Open calculation log, restore previous math, and export CSV / Markdown',
+    category: 'Navigation',
+    icon: '📜',
+    keywords: ['history', 'journal', 'log', 'restore', 'records', 'csv', 'markdown', 'drawer'],
+    shortcut: 'H',
+    actionType: 'action',
+    available: true
+  },
+  {
+    id: 'nav-shortcuts',
+    title: 'Keyboard Shortcuts & Guide',
+    description: 'View all workstation hotkeys, supported input syntax, and drafting tips',
+    category: 'Navigation',
+    icon: '⌨️',
+    keywords: ['shortcuts', 'keys', 'hotkeys', 'help', 'guide', 'keyboard', 'tips'],
+    shortcut: '?',
+    actionType: 'action',
+    available: true
+  },
+
+  // 2. Utility & Quick Actions
+  {
+    id: 'util-copy-result',
+    title: 'Copy Active Result',
+    description: 'Copy the most recent calculation result to your clipboard',
+    category: 'Utility',
+    icon: '📋',
+    keywords: ['copy', 'clipboard', 'result', 'active', 'latest', 'value'],
+    actionType: 'action',
+    available: true
+  },
+  {
+    id: 'util-toggle-theme',
+    title: 'Cycle Studio Theme',
+    description: 'Cycle interface theme (Studio Dark ➔ Drafting Paper ➔ Blueprint Cyan)',
+    category: 'Utility',
+    icon: '🎨',
+    keywords: ['theme', 'dark', 'light', 'blueprint', 'paper', 'color', 'appearance', 'mode'],
+    actionType: 'action',
+    available: true
+  },
+  {
+    id: 'util-toggle-sound',
+    title: 'Toggle Tactile Audio Feedback',
+    description: 'Enable or mute tactile audio synthesis for button clicks and calculations',
+    category: 'Utility',
+    icon: '🔊',
+    keywords: ['sound', 'audio', 'mute', 'unmute', 'click', 'feedback', 'tactile'],
+    actionType: 'action',
+    available: true
+  },
+  {
+    id: 'util-export-csv',
+    title: 'Export Journal as CSV',
+    description: 'Download calculation journal entries as a CSV spreadsheet',
+    category: 'Utility',
+    icon: '📥',
+    keywords: ['export', 'csv', 'spreadsheet', 'download', 'history', 'journal'],
+    actionType: 'action',
+    available: true
+  },
+  {
+    id: 'util-export-md',
+    title: 'Export Journal as Markdown',
+    description: 'Copy calculation journal table formatted in GitHub Markdown to clipboard',
+    category: 'Utility',
+    icon: '📝',
+    keywords: ['export', 'markdown', 'table', 'copy', 'history', 'journal', 'md'],
+    actionType: 'action',
+    available: true
+  },
+  {
+    id: 'util-clear-history',
+    title: 'Clear Calculation Journal',
+    description: 'Wipe all saved calculations from the calculation history log',
+    category: 'Utility',
+    icon: '🗑️',
+    keywords: ['clear', 'history', 'reset', 'wipe', 'delete', 'journal'],
+    actionType: 'action',
+    available: true
+  },
+
+  // 3. Upcoming Phase 2.5 Tool Placeholders (Designed for future expansion)
+  {
+    id: 'future-dim-workspace',
+    title: 'Dimension Workspace',
+    description: 'Multi-measurement architectural workspace for simultaneous unit scaling',
+    category: 'Upcoming Tool',
+    icon: '📐',
+    keywords: ['dimension', 'workspace', 'cad', 'multi', 'phase 2.5'],
+    actionType: 'placeholder',
+    available: false,
+    badge: 'Phase 2.5'
+  },
+  {
+    id: 'future-dim-expr',
+    title: 'Dimension Expression Calculator',
+    description: 'Evaluate mixed-unit architectural math expressions (e.g. 2.4m + 180mm - 2\'-6")',
+    category: 'Upcoming Tool',
+    icon: '🧮',
+    keywords: ['expression', 'calculator', 'math', 'eval', 'mixed units', 'arithmetic', 'phase 2.5'],
+    actionType: 'placeholder',
+    available: false,
+    badge: 'Phase 2.5'
+  },
+  {
+    id: 'future-dim-chains',
+    title: 'Dimension Chains',
+    description: 'Calculate cumulative structural grid lines, interior partitions, and dimension strings',
+    category: 'Upcoming Tool',
+    icon: '🔗',
+    keywords: ['chain', 'dimension string', 'cumulative', 'running totals', 'grid', 'phase 2.5'],
+    actionType: 'placeholder',
+    available: false,
+    badge: 'Phase 2.5'
+  },
+  {
+    id: 'future-cad-clipboard',
+    title: 'CAD Clipboard & Formats',
+    description: 'Instant CAD-ready copy formatting for AutoCAD, Rhino, Revit, and SketchUp',
+    category: 'Upcoming Tool',
+    icon: '📋',
+    keywords: ['cad', 'clipboard', 'autocad', 'rhino', 'revit', 'sketchup', 'paste', 'phase 2.5'],
+    actionType: 'placeholder',
+    available: false,
+    badge: 'Phase 2.5'
+  },
+  {
+    id: 'future-batch-cad',
+    title: 'Batch CAD Dimension Converter',
+    description: 'Bulk scale conversion for tables, schedules, and raw CAD dimension lists',
+    category: 'Upcoming Tool',
+    icon: '⚡',
+    keywords: ['batch', 'cad', 'bulk', 'multi-scale', 'schedule', 'table', 'phase 2.5'],
+    actionType: 'placeholder',
+    available: false,
+    badge: 'Phase 2.5'
+  },
+  {
+    id: 'future-stair-calc',
+    title: 'Stair & Riser Calculator',
+    description: 'Calculate stair riser count, tread depths, slope angles, and building code compliance',
+    category: 'Upcoming Tool',
+    icon: '🪜',
+    keywords: ['stair', 'riser', 'tread', 'slope', 'code', 'headroom', 'phase 2.5'],
+    actionType: 'placeholder',
+    available: false,
+    badge: 'Phase 2.5'
+  },
+  {
+    id: 'future-ramp-calc',
+    title: 'ADA Ramp Slope Calculator',
+    description: 'Calculate ramp run, total rise, landings, and ADA 1:12 slope standard',
+    category: 'Upcoming Tool',
+    icon: '♿',
+    keywords: ['ramp', 'slope', 'ada', 'incline', 'gradient', 'accessibility', 'phase 2.5'],
+    actionType: 'placeholder',
+    available: false,
+    badge: 'Phase 2.5'
+  },
+  {
+    id: 'future-space-planner',
+    title: 'Interactive Space Planner',
+    description: 'Interactive top-down 2D canvas for room layout and furniture placement',
+    category: 'Upcoming Tool',
+    icon: '🏢',
+    keywords: ['planner', 'space', 'canvas', 'room', 'layout', '2d', 'phase 2.5'],
+    actionType: 'placeholder',
+    available: false,
+    badge: 'Phase 2.5'
+  }
+];
+
+class CommandRegistryClass {
+  constructor() {
+    this.commands = new Map();
+    this.initDefaultCommands();
+  }
+
+  initDefaultCommands() {
+    this.commands.clear();
+    for (const cmd of DEFAULT_COMMANDS) {
+      this.register(cmd);
+    }
+  }
+
+  register(command) {
+    if (!command || typeof command !== 'object') {
+      throw new Error('Command must be an object');
+    }
+    if (!command.id || typeof command.id !== 'string') {
+      throw new Error('Command must have a valid string id');
+    }
+    if (!command.title || typeof command.title !== 'string') {
+      throw new Error('Command must have a valid string title');
+    }
+    if (!command.category || typeof command.category !== 'string') {
+      throw new Error('Command must have a valid string category');
+    }
+
+    const entry = {
+      id: command.id,
+      title: command.title,
+      description: command.description || '',
+      category: command.category,
+      icon: command.icon || '⚡',
+      keywords: Array.isArray(command.keywords) ? [...command.keywords] : [],
+      shortcut: command.shortcut || null,
+      action: typeof command.action === 'function' ? command.action : null,
+      actionType: command.actionType || 'action',
+      available: command.available !== false,
+      badge: command.badge || null
+    };
+
+    this.commands.set(entry.id, entry);
+    return entry;
+  }
+
+  unregister(id) {
+    return this.commands.delete(id);
+  }
+
+  getCommand(id) {
+    return this.commands.get(id) || null;
+  }
+
+  getAllCommands() {
+    return Array.from(this.commands.values());
+  }
+
+  getAvailableCommands() {
+    return this.getAllCommands().filter(c => c.available);
+  }
+
+  searchCommands(query) {
+    const all = this.getAllCommands();
+    if (!query || typeof query !== 'string' || query.trim() === '') {
+      return {
+        query: '',
+        results: all,
+        favorites: this.getFavoriteCommands(),
+        recent: this.getRecentCommands(),
+        total: all.length
+      };
+    }
+
+    const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const favorites = new Set(this.getFavoriteIds());
+
+    const matched = all.filter(cmd => {
+      const titleLower = cmd.title.toLowerCase();
+      const descLower = cmd.description.toLowerCase();
+      const catLower = cmd.category.toLowerCase();
+      const idLower = cmd.id.toLowerCase();
+      const keywords = cmd.keywords.map(k => k.toLowerCase());
+
+      return tokens.every(token => {
+        return (
+          titleLower.includes(token) ||
+          descLower.includes(token) ||
+          catLower.includes(token) ||
+          idLower.includes(token) ||
+          keywords.some(k => k.includes(token))
+        );
+      });
+    });
+
+    // Sort matching results: Available first, then Favorites, then upcoming
+    matched.sort((a, b) => {
+      // 1. Available vs Upcoming
+      if (a.available && !b.available) return -1;
+      if (!a.available && b.available) return 1;
+
+      // 2. Favorites first
+      const aFav = favorites.has(a.id);
+      const bFav = favorites.has(b.id);
+      if (aFav && !bFav) return -1;
+      if (!aFav && bFav) return 1;
+
+      // 3. Exact prefix match boost
+      const queryLower = query.trim().toLowerCase();
+      const aTitleStarts = a.title.toLowerCase().startsWith(queryLower);
+      const bTitleStarts = b.title.toLowerCase().startsWith(queryLower);
+      if (aTitleStarts && !bTitleStarts) return -1;
+      if (!aTitleStarts && bTitleStarts) return 1;
+
+      return 0;
+    });
+
+    return {
+      query: query.trim(),
+      results: matched,
+      favorites: [],
+      recent: [],
+      total: matched.length
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Recent Commands Management
+  // ---------------------------------------------------------------------------
+  getRecentIds() {
+    try {
+      const raw = StorageService.getItem(RECENT_COMMANDS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(id => typeof id === 'string' && this.commands.has(id));
+        }
+      }
+    } catch (e) {
+      // Storage corrupted, fallback gracefully
+    }
+    return [];
+  }
+
+  getRecentCommands() {
+    const ids = this.getRecentIds();
+    return ids.map(id => this.getCommand(id)).filter(Boolean);
+  }
+
+  addRecentCommand(commandId) {
+    if (!commandId || !this.commands.has(commandId)) return;
+
+    let recents = this.getRecentIds();
+    // Remove if already present (to move to top)
+    recents = recents.filter(id => id !== commandId);
+    recents.unshift(commandId);
+
+    if (recents.length > MAX_RECENT_COMMANDS) {
+      recents = recents.slice(0, MAX_RECENT_COMMANDS);
+    }
+
+    try {
+      StorageService.setItem(RECENT_COMMANDS_KEY, JSON.stringify(recents));
+    } catch (e) {}
+  }
+
+  clearRecentCommands() {
+    try {
+      StorageService.removeItem(RECENT_COMMANDS_KEY);
+    } catch (e) {}
+  }
+
+  // ---------------------------------------------------------------------------
+  // Favorites Management
+  // ---------------------------------------------------------------------------
+  getFavoriteIds() {
+    try {
+      const raw = StorageService.getItem(FAVORITE_COMMANDS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(id => typeof id === 'string' && this.commands.has(id));
+        }
+      }
+    } catch (e) {
+      // Storage corrupted, fallback gracefully
+    }
+    return [];
+  }
+
+  getFavoriteCommands() {
+    const ids = this.getFavoriteIds();
+    return ids.map(id => this.getCommand(id)).filter(Boolean);
+  }
+
+  isFavorite(commandId) {
+    return this.getFavoriteIds().includes(commandId);
+  }
+
+  toggleFavorite(commandId) {
+    if (!commandId || !this.commands.has(commandId)) return false;
+
+    let favs = this.getFavoriteIds();
+    let isNowFav = false;
+
+    if (favs.includes(commandId)) {
+      favs = favs.filter(id => id !== commandId);
+      isNowFav = false;
+    } else {
+      if (favs.length >= MAX_FAVORITE_COMMANDS) {
+        favs.pop();
+      }
+      favs.unshift(commandId);
+      isNowFav = true;
+    }
+
+    try {
+      StorageService.setItem(FAVORITE_COMMANDS_KEY, JSON.stringify(favs));
+    } catch (e) {}
+
+    return isNowFav;
+  }
+}
+
+const CommandRegistry = new CommandRegistryClass();
+
+  // =========================================================================
   // MODULE: Visualizer
   // =========================================================================
 
@@ -2511,6 +2999,7 @@ function getFurniturePlanSVG(item) {
 
 
 
+
 function initializeApp() {
   const state = {
     currentMode: 'converter',
@@ -2576,6 +3065,12 @@ function initializeApp() {
     themeSelect: document.getElementById('theme-select'),
     soundToggleBtn: document.getElementById('sound-toggle-btn'),
     soundToggleLabel: document.getElementById('sound-toggle-label'),
+    commandPaletteBtn: document.getElementById('command-palette-btn'),
+    commandPaletteModal: document.getElementById('command-palette-modal'),
+    commandPaletteOverlay: document.getElementById('command-palette-overlay'),
+    commandPaletteInput: document.getElementById('command-palette-input'),
+    commandPaletteList: document.getElementById('command-palette-list'),
+    closeCommandPaletteBtn: document.getElementById('close-command-palette-btn'),
     historyToggleBtn: document.getElementById('history-toggle-btn'),
     shortcutsHelpBtn: document.getElementById('shortcuts-help-btn'),
     shortcutsModal: document.getElementById('shortcuts-modal'),
@@ -4327,6 +4822,316 @@ function initializeApp() {
   }
 
   // ---------------------------------------------------------------------------
+  // 13b. Global Architect Command Palette Controller (Ctrl+K / ⌘K)
+  // ---------------------------------------------------------------------------
+  let paletteQuery = '';
+  let paletteSelectedIndex = 0;
+  let paletteItems = [];
+  let previousActiveElement = null;
+
+  function openCommandPalette() {
+    if (!dom.commandPaletteModal || !dom.commandPaletteOverlay) return;
+    previousActiveElement = document.activeElement;
+    dom.commandPaletteModal.classList.add('open');
+    dom.commandPaletteOverlay.classList.add('open');
+    paletteQuery = '';
+    paletteSelectedIndex = 0;
+    if (dom.commandPaletteInput) {
+      dom.commandPaletteInput.value = '';
+      dom.commandPaletteInput.focus();
+    }
+    renderCommandPalette('');
+    AudioService.playTick();
+  }
+
+  function closeCommandPalette() {
+    if (!dom.commandPaletteModal || !dom.commandPaletteModal.classList.contains('open')) return;
+    dom.commandPaletteModal.classList.remove('open');
+    dom.commandPaletteOverlay?.classList.remove('open');
+    if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
+      try { previousActiveElement.focus(); } catch (e) {}
+    }
+    AudioService.playTick();
+  }
+
+  function renderCommandPalette(query) {
+    if (!dom.commandPaletteList) return;
+    const searchData = CommandRegistry.searchCommands(query);
+    paletteItems = [];
+    let html = '';
+
+    const isSearching = Boolean(query && query.trim() !== '');
+
+    if (isSearching) {
+      if (searchData.results.length === 0) {
+        html = `
+          <div class="command-palette-empty">
+            <div style="font-size: 1.4rem; margin-bottom: 0.35rem;">🔍</div>
+            <div style="font-weight: 700; color: var(--text-primary);">No commands found</div>
+            <div style="font-size: var(--font-size-xs); color: var(--text-secondary);">No tools match "${escapeHtml(query)}"</div>
+          </div>
+        `;
+      } else {
+        html += `<div class="command-section-header">MATCHING COMMANDS (${searchData.results.length})</div>`;
+        searchData.results.forEach(cmd => {
+          paletteItems.push(cmd);
+          html += renderCommandItemHTML(cmd, paletteItems.length - 1);
+        });
+      }
+    } else {
+      // 1. Favorites
+      const favs = CommandRegistry.getFavoriteCommands();
+      if (favs.length > 0) {
+        html += `<div class="command-section-header">★ FAVORITES (${favs.length})</div>`;
+        favs.forEach(cmd => {
+          paletteItems.push(cmd);
+          html += renderCommandItemHTML(cmd, paletteItems.length - 1, true);
+        });
+      }
+
+      // 2. Recent Commands
+      const recents = CommandRegistry.getRecentCommands();
+      if (recents.length > 0) {
+        html += `<div class="command-section-header">RECENTLY USED (${recents.length})</div>`;
+        recents.forEach(cmd => {
+          paletteItems.push(cmd);
+          html += renderCommandItemHTML(cmd, paletteItems.length - 1);
+        });
+      }
+
+      // 3. Navigation Tools
+      const navCmds = CommandRegistry.getAllCommands().filter(c => c.category === 'Navigation');
+      if (navCmds.length > 0) {
+        html += `<div class="command-section-header">NAVIGATION TOOLS</div>`;
+        navCmds.forEach(cmd => {
+          paletteItems.push(cmd);
+          html += renderCommandItemHTML(cmd, paletteItems.length - 1);
+        });
+      }
+
+      // 4. Utility Actions
+      const utilCmds = CommandRegistry.getAllCommands().filter(c => c.category === 'Utility');
+      if (utilCmds.length > 0) {
+        html += `<div class="command-section-header">UTILITY ACTIONS</div>`;
+        utilCmds.forEach(cmd => {
+          paletteItems.push(cmd);
+          html += renderCommandItemHTML(cmd, paletteItems.length - 1);
+        });
+      }
+
+      // 5. Upcoming Phase 2.5 Tools
+      const upcomingCmds = CommandRegistry.getAllCommands().filter(c => !c.available);
+      if (upcomingCmds.length > 0) {
+        html += `<div class="command-section-header">UPCOMING ARCHITECT TOOLS (PHASE 2.5)</div>`;
+        upcomingCmds.forEach(cmd => {
+          paletteItems.push(cmd);
+          html += renderCommandItemHTML(cmd, paletteItems.length - 1);
+        });
+      }
+    }
+
+    dom.commandPaletteList.innerHTML = html;
+
+    if (paletteSelectedIndex >= paletteItems.length) {
+      paletteSelectedIndex = Math.max(0, paletteItems.length - 1);
+    }
+
+    updatePaletteSelection(false);
+
+    // Attach Click and Favorite Listeners
+    dom.commandPaletteList.querySelectorAll('.command-item').forEach(el => {
+      const idx = parseInt(el.dataset.index, 10);
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.cmd-fav-btn')) return;
+        if (paletteItems[idx]) executeCommand(paletteItems[idx]);
+      });
+      el.addEventListener('mouseenter', () => {
+        paletteSelectedIndex = idx;
+        updatePaletteSelection(false);
+      });
+    });
+
+    dom.commandPaletteList.querySelectorAll('.cmd-fav-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cmdId = btn.dataset.id;
+        CommandRegistry.toggleFavorite(cmdId);
+        renderCommandPalette(paletteQuery);
+        AudioService.playTick();
+      });
+    });
+  }
+
+  function renderCommandItemHTML(cmd, index) {
+    const isFav = CommandRegistry.isFavorite(cmd.id);
+    const isSelected = index === paletteSelectedIndex;
+    const isUnavailable = !cmd.available;
+
+    return `
+      <div
+        class="command-item ${isSelected ? 'selected' : ''} ${isUnavailable ? 'unavailable' : ''}"
+        data-id="${cmd.id}"
+        data-index="${index}"
+        role="option"
+        aria-selected="${isSelected ? 'true' : 'false'}"
+      >
+        <div class="command-item-left">
+          <span class="command-icon">${cmd.icon || '⚡'}</span>
+          <div class="command-text-group">
+            <div class="command-title">
+              <span>${cmd.title}</span>
+              ${cmd.badge ? `<span class="command-badge ${isUnavailable ? 'badge-upcoming' : ''}">${cmd.badge}</span>` : ''}
+            </div>
+            <div class="command-desc">${cmd.description}</div>
+          </div>
+        </div>
+        <div class="command-item-right">
+          ${cmd.shortcut ? `<span class="command-shortcut-badge"><kbd>${cmd.shortcut}</kbd></span>` : ''}
+          <button
+            class="cmd-fav-btn ${isFav ? 'is-fav' : ''}"
+            data-id="${cmd.id}"
+            title="${isFav ? 'Remove from favorites' : 'Add to favorites'}"
+            aria-label="Toggle favorite"
+          >
+            ${isFav ? '★' : '☆'}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  function updatePaletteSelection(scrollIntoView = true) {
+    const items = dom.commandPaletteList?.querySelectorAll('.command-item');
+    if (!items || items.length === 0) return;
+
+    items.forEach((item, idx) => {
+      const isSel = idx === paletteSelectedIndex;
+      item.classList.toggle('selected', isSel);
+      item.setAttribute('aria-selected', isSel ? 'true' : 'false');
+      if (isSel && scrollIntoView) {
+        item.scrollIntoView({ block: 'nearest' });
+      }
+    });
+  }
+
+  function executeCommand(cmd) {
+    if (!cmd) return;
+
+    if (!cmd.available) {
+      showToast(`ℹ️ ${cmd.title} is an upcoming Phase 2.5 feature`, 'info');
+      AudioService.playKeyClick();
+      return;
+    }
+
+    CommandRegistry.addRecentCommand(cmd.id);
+    closeCommandPalette();
+
+    switch (cmd.id) {
+      case 'nav-converter':
+        switchMode('converter');
+        break;
+      case 'nav-rescale':
+        switchMode('rescale');
+        break;
+      case 'nav-detector':
+        switchMode('detector');
+        break;
+      case 'nav-areavol':
+        switchMode('area_volume');
+        break;
+      case 'nav-furniture':
+        switchMode('furniture');
+        break;
+      case 'nav-reference':
+        switchMode('reference');
+        break;
+      case 'nav-history':
+        toggleHistoryDrawer();
+        break;
+      case 'nav-shortcuts':
+        dom.shortcutsModal?.classList.add('open');
+        dom.modalBackdrop?.classList.add('open');
+        break;
+      case 'util-copy-result': {
+        let val = null;
+        let unit = '';
+        if (state.currentMode === 'converter') {
+          val = dom.converterResultVal?.textContent;
+          unit = dom.converterResultUnit?.textContent || '';
+        } else if (state.currentMode === 'rescale') {
+          val = dom.rescaleResultVal?.textContent;
+          unit = dom.rescaleResultUnit?.textContent || '';
+        } else if (state.currentMode === 'detector') {
+          val = dom.detectorRatioVal?.textContent;
+        } else if (state.currentMode === 'area_volume') {
+          val = dom.areavolResultVal?.textContent;
+          unit = dom.areavolResultUnit?.textContent || '';
+        } else if (state.currentMode === 'furniture') {
+          val = dom.customFurnResult?.textContent;
+        }
+        if (val && val !== '---') {
+          copyToClipboard(`${val} ${unit}`.trim(), 'Active Result');
+        } else {
+          showToast('No active calculation result to copy', 'warning');
+        }
+        break;
+      }
+      case 'util-toggle-theme': {
+        const themeOrder = ['dark', 'paper', 'blueprint'];
+        const currentIdx = themeOrder.indexOf(state.activeTheme);
+        const nextTheme = themeOrder[(currentIdx + 1) % themeOrder.length];
+        applyTheme(nextTheme);
+        if (dom.themeSelect) dom.themeSelect.value = nextTheme;
+        showToast(`Theme switched to ${nextTheme.toUpperCase()}`);
+        break;
+      }
+      case 'util-toggle-sound': {
+        const newState = AudioService.toggleSound();
+        updateSoundUI();
+        showToast(newState ? '🔊 Tactile sound enabled' : '🔇 Sound muted');
+        break;
+      }
+      case 'util-export-csv': {
+        const csv = HistoryService.exportCSV();
+        if (csv) {
+          downloadFile(csv, `architecture-helping-hand-${Date.now()}.csv`, 'text/csv');
+          showToast('Exported history as CSV');
+        } else {
+          showToast('History is empty', 'warning');
+        }
+        break;
+      }
+      case 'util-export-md': {
+        const md = HistoryService.exportMarkdown();
+        if (md) {
+          copyToClipboard(md, 'Markdown History Table');
+        } else {
+          showToast('History is empty', 'warning');
+        }
+        break;
+      }
+      case 'util-clear-history': {
+        HistoryService.clear();
+        renderHistoryList();
+        showToast('Calculation history cleared');
+        break;
+      }
+      default:
+        if (typeof cmd.action === 'function') {
+          cmd.action();
+        }
+        break;
+    }
+
+    AudioService.playTick();
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ---------------------------------------------------------------------------
   // 14. Event Listener Wire-up
   // ---------------------------------------------------------------------------
   function attachEventListeners() {
@@ -4345,6 +5150,43 @@ function initializeApp() {
         const newState = AudioService.toggleSound();
         updateSoundUI();
         showToast(newState ? '🔊 Tactile sound enabled' : '🔇 Sound muted');
+      });
+    }
+
+    // Command Palette Trigger & Modal Listeners
+    if (dom.commandPaletteBtn) dom.commandPaletteBtn.addEventListener('click', openCommandPalette);
+    if (dom.closeCommandPaletteBtn) dom.closeCommandPaletteBtn.addEventListener('click', closeCommandPalette);
+    if (dom.commandPaletteOverlay) dom.commandPaletteOverlay.addEventListener('click', closeCommandPalette);
+
+    if (dom.commandPaletteInput) {
+      dom.commandPaletteInput.addEventListener('input', (e) => {
+        paletteQuery = e.target.value;
+        renderCommandPalette(paletteQuery);
+      });
+
+      dom.commandPaletteInput.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (paletteItems.length > 0) {
+            paletteSelectedIndex = (paletteSelectedIndex + 1) % paletteItems.length;
+            updatePaletteSelection();
+          }
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (paletteItems.length > 0) {
+            paletteSelectedIndex = (paletteSelectedIndex - 1 + paletteItems.length) % paletteItems.length;
+            updatePaletteSelection();
+          }
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (paletteItems[paletteSelectedIndex]) {
+            executeCommand(paletteItems[paletteSelectedIndex]);
+          }
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          closeCommandPalette();
+        }
       });
     }
 
@@ -4768,8 +5610,25 @@ function initializeApp() {
       const activeEl = document.activeElement;
       const isInputFocused = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT' || activeEl.tagName === 'TEXTAREA');
 
-      // Esc closes drawers/modals
+      // Global Command Palette Shortcut: Ctrl+K or Cmd+K (Works everywhere)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if (dom.commandPaletteModal?.classList.contains('open')) {
+          closeCommandPalette();
+        } else {
+          openCommandPalette();
+        }
+        return;
+      }
+
+      // Esc closes Command Palette first, then drawers/modals
       if (e.key === 'Escape') {
+        if (dom.commandPaletteModal?.classList.contains('open')) {
+          e.preventDefault();
+          e.stopPropagation();
+          closeCommandPalette();
+          return;
+        }
         if (dom.historyDrawer?.classList.contains('open')) toggleHistoryDrawer();
         if (dom.shortcutsModal?.classList.contains('open')) {
           dom.shortcutsModal.classList.remove('open');
@@ -4779,7 +5638,7 @@ function initializeApp() {
         return;
       }
 
-      // If user is focused inside an input field, do not hijack letter shortcuts
+      // If user is focused inside an input field, do not hijack letter/number shortcuts
       if (isInputFocused) return;
 
       if (e.key === '1') { e.preventDefault(); switchMode('converter'); }

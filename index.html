@@ -52,6 +52,16 @@
         <span id="sound-toggle-label">Sound: On</span>
       </button>
 
+      <!-- Command Palette Trigger -->
+      <button id="command-palette-btn" class="control-btn command-palette-trigger" title="Command Palette (Ctrl+K / ⌘K)" aria-label="Open Command Palette">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <span class="cmd-palette-btn-text">Commands</span>
+        <span class="cmd-palette-kbd-hint"><kbd>Ctrl</kbd><kbd>K</kbd></span>
+      </button>
+
       <!-- History Drawer Toggle -->
       <button id="history-toggle-btn" class="control-btn" title="View Calculation History (H)" aria-label="View history">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1134,6 +1144,50 @@
     </div>
   </aside>
 
+  <!-- Command Palette Modal (Ctrl+K / ⌘K) -->
+  <div id="command-palette-overlay" class="command-palette-overlay" aria-hidden="true"></div>
+  <div id="command-palette-modal" class="command-palette-modal" role="dialog" aria-modal="true" aria-label="Architectural Command Palette">
+    <div class="command-palette-card">
+      <div class="command-palette-input-wrapper">
+        <span class="command-palette-search-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </span>
+        <input
+          type="text"
+          id="command-palette-input"
+          class="command-palette-input"
+          placeholder="Type a tool name, category, or keyword..."
+          autocomplete="off"
+          spellcheck="false"
+          aria-autocomplete="list"
+          aria-controls="command-palette-list"
+          aria-expanded="true"
+        />
+        <button id="close-command-palette-btn" class="command-palette-close-btn" title="Close Command Palette (Esc)" aria-label="Close palette">
+          <kbd>Esc</kbd>
+        </button>
+      </div>
+
+      <div id="command-palette-list" class="command-palette-list" role="listbox" aria-label="Commands">
+        <!-- Populated dynamically by CommandRegistry & UI -->
+      </div>
+
+      <div class="command-palette-footer">
+        <div class="command-palette-shortcuts-hint">
+          <span class="cmd-hint-item"><kbd>↑</kbd><kbd>↓</kbd> Navigate</span>
+          <span class="cmd-hint-item"><kbd>↵</kbd> Select</span>
+          <span class="cmd-hint-item"><kbd>Esc</kbd> Close</span>
+        </div>
+        <div class="command-palette-footer-brand">
+          <span class="cmd-badge">STUDIO PALETTE</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Keyboard Shortcuts Modal -->
   <div id="modal-backdrop" class="modal-overlay"></div>
   <div id="shortcuts-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -1143,6 +1197,10 @@
         <button id="close-shortcuts-btn" class="hist-btn" title="Close modal">✕</button>
       </div>
       <div class="modal-body">
+        <div class="shortcut-row">
+          <span>Global Command Palette</span>
+          <span class="kbd-badge">Ctrl + K / ⌘K</span>
+        </div>
         <div class="shortcut-row">
           <span>Run Active Tool Calculation</span>
           <span class="kbd-badge">Enter ↵</span>

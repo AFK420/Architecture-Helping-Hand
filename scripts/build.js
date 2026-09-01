@@ -35,6 +35,7 @@ export function generateBundleContent() {
     { name: 'Storage', file: path.join(srcDir, 'services', 'storage.js') },
     { name: 'Audio', file: path.join(srcDir, 'services', 'audio.js') },
     { name: 'History', file: path.join(srcDir, 'services', 'history.js') },
+    { name: 'Commands', file: path.join(srcDir, 'services', 'commands.js') },
     { name: 'Visualizer', file: path.join(srcDir, 'ui', 'visualizer.js') },
     { name: 'App', file: path.join(srcDir, 'ui', 'app.js') }
   ];

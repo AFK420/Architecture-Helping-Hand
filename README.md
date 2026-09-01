@@ -323,7 +323,8 @@ $$\text{Area} = \frac{1}{2} \left| \sum_{i=1}^{n} (x_i y_{i+1} - x_{i+1} y_i) \r
 
 | Key | Action |
 | :--- | :--- |
-| <kbd>Enter</kbd> | Run Calculation for active tool |
+| <kbd>Ctrl</kbd> + <kbd>K</kbd> / <kbd>⌘</kbd> + <kbd>K</kbd> | Open **Architect's Global Command Palette** |
+| <kbd>Enter</kbd> | Run Calculation for active tool / Execute command |
 | <kbd>S</kbd> | Swap Conversion Direction (Drawing ↔ Real World) |
 | <kbd>1</kbd> | Switch to **Scale Converter** |
 | <kbd>2</kbd> | Switch to **Rescaler (Scale A ➔ B)** |
@@ -333,7 +334,7 @@ $$\text{Area} = \frac{1}{2} \left| \sum_{i=1}^{n} (x_i y_{i+1} - x_{i+1} y_i) \r
 | <kbd>6</kbd> | Switch to **Reference Chart Sheet** |
 | <kbd>H</kbd> | Toggle Calculation History Drawer |
 | <kbd>?</kbd> | Open Keyboard Shortcuts Modal |
-| <kbd>Esc</kbd> | Close Modal / Drawer / Unfocus Inputs |
+| <kbd>Esc</kbd> | Close Palette / Modal / Drawer / Unfocus Inputs |
 
 ---
 

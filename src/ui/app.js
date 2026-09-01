@@ -25,6 +25,7 @@ import {
 import { StorageService } from '../services/storage.js';
 import { AudioService } from '../services/audio.js';
 import { HistoryService } from '../services/history.js';
+import { CommandRegistry } from '../services/commands.js';
 import { updateVisualization, getFurniturePlanSVG } from './visualizer.js';
 
 export function initializeApp() {
@@ -92,6 +93,12 @@ export function initializeApp() {
     themeSelect: document.getElementById('theme-select'),
     soundToggleBtn: document.getElementById('sound-toggle-btn'),
     soundToggleLabel: document.getElementById('sound-toggle-label'),
+    commandPaletteBtn: document.getElementById('command-palette-btn'),
+    commandPaletteModal: document.getElementById('command-palette-modal'),
+    commandPaletteOverlay: document.getElementById('command-palette-overlay'),
+    commandPaletteInput: document.getElementById('command-palette-input'),
+    commandPaletteList: document.getElementById('command-palette-list'),
+    closeCommandPaletteBtn: document.getElementById('close-command-palette-btn'),
     historyToggleBtn: document.getElementById('history-toggle-btn'),
     shortcutsHelpBtn: document.getElementById('shortcuts-help-btn'),
     shortcutsModal: document.getElementById('shortcuts-modal'),
@@ -1843,6 +1850,316 @@ export function initializeApp() {
   }
 
   // ---------------------------------------------------------------------------
+  // 13b. Global Architect Command Palette Controller (Ctrl+K / ⌘K)
+  // ---------------------------------------------------------------------------
+  let paletteQuery = '';
+  let paletteSelectedIndex = 0;
+  let paletteItems = [];
+  let previousActiveElement = null;
+
+  function openCommandPalette() {
+    if (!dom.commandPaletteModal || !dom.commandPaletteOverlay) return;
+    previousActiveElement = document.activeElement;
+    dom.commandPaletteModal.classList.add('open');
+    dom.commandPaletteOverlay.classList.add('open');
+    paletteQuery = '';
+    paletteSelectedIndex = 0;
+    if (dom.commandPaletteInput) {
+      dom.commandPaletteInput.value = '';
+      dom.commandPaletteInput.focus();
+    }
+    renderCommandPalette('');
+    AudioService.playTick();
+  }
+
+  function closeCommandPalette() {
+    if (!dom.commandPaletteModal || !dom.commandPaletteModal.classList.contains('open')) return;
+    dom.commandPaletteModal.classList.remove('open');
+    dom.commandPaletteOverlay?.classList.remove('open');
+    if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
+      try { previousActiveElement.focus(); } catch (e) {}
+    }
+    AudioService.playTick();
+  }
+
+  function renderCommandPalette(query) {
+    if (!dom.commandPaletteList) return;
+    const searchData = CommandRegistry.searchCommands(query);
+    paletteItems = [];
+    let html = '';
+
+    const isSearching = Boolean(query && query.trim() !== '');
+
+    if (isSearching) {
+      if (searchData.results.length === 0) {
+        html = `
+          <div class="command-palette-empty">
+            <div style="font-size: 1.4rem; margin-bottom: 0.35rem;">🔍</div>
+            <div style="font-weight: 700; color: var(--text-primary);">No commands found</div>
+            <div style="font-size: var(--font-size-xs); color: var(--text-secondary);">No tools match "${escapeHtml(query)}"</div>
+          </div>
+        `;
+      } else {
+        html += `<div class="command-section-header">MATCHING COMMANDS (${searchData.results.length})</div>`;
+        searchData.results.forEach(cmd => {
+          paletteItems.push(cmd);
+          html += renderCommandItemHTML(cmd, paletteItems.length - 1);
+        });
+      }
+    } else {
+      // 1. Favorites
+      const favs = CommandRegistry.getFavoriteCommands();
+      if (favs.length > 0) {
+        html += `<div class="command-section-header">★ FAVORITES (${favs.length})</div>`;
+        favs.forEach(cmd => {
+          paletteItems.push(cmd);
+          html += renderCommandItemHTML(cmd, paletteItems.length - 1, true);
+        });
+      }
+
+      // 2. Recent Commands
+      const recents = CommandRegistry.getRecentCommands();
+      if (recents.length > 0) {
+        html += `<div class="command-section-header">RECENTLY USED (${recents.length})</div>`;
+        recents.forEach(cmd => {
+          paletteItems.push(cmd);
+          html += renderCommandItemHTML(cmd, paletteItems.length - 1);
+        });
+      }
+
+      // 3. Navigation Tools
+      const navCmds = CommandRegistry.getAllCommands().filter(c => c.category === 'Navigation');
+      if (navCmds.length > 0) {
+        html += `<div class="command-section-header">NAVIGATION TOOLS</div>`;
+        navCmds.forEach(cmd => {
+          paletteItems.push(cmd);
+          html += renderCommandItemHTML(cmd, paletteItems.length - 1);
+        });
+      }
+
+      // 4. Utility Actions
+      const utilCmds = CommandRegistry.getAllCommands().filter(c => c.category === 'Utility');
+      if (utilCmds.length > 0) {
+        html += `<div class="command-section-header">UTILITY ACTIONS</div>`;
+        utilCmds.forEach(cmd => {
+          paletteItems.push(cmd);
+          html += renderCommandItemHTML(cmd, paletteItems.length - 1);
+        });
+      }
+
+      // 5. Upcoming Phase 2.5 Tools
+      const upcomingCmds = CommandRegistry.getAllCommands().filter(c => !c.available);
+      if (upcomingCmds.length > 0) {
+        html += `<div class="command-section-header">UPCOMING ARCHITECT TOOLS (PHASE 2.5)</div>`;
+        upcomingCmds.forEach(cmd => {
+          paletteItems.push(cmd);
+          html += renderCommandItemHTML(cmd, paletteItems.length - 1);
+        });
+      }
+    }
+
+    dom.commandPaletteList.innerHTML = html;
+
+    if (paletteSelectedIndex >= paletteItems.length) {
+      paletteSelectedIndex = Math.max(0, paletteItems.length - 1);
+    }
+
+    updatePaletteSelection(false);
+
+    // Attach Click and Favorite Listeners
+    dom.commandPaletteList.querySelectorAll('.command-item').forEach(el => {
+      const idx = parseInt(el.dataset.index, 10);
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.cmd-fav-btn')) return;
+        if (paletteItems[idx]) executeCommand(paletteItems[idx]);
+      });
+      el.addEventListener('mouseenter', () => {
+        paletteSelectedIndex = idx;
+        updatePaletteSelection(false);
+      });
+    });
+
+    dom.commandPaletteList.querySelectorAll('.cmd-fav-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cmdId = btn.dataset.id;
+        CommandRegistry.toggleFavorite(cmdId);
+        renderCommandPalette(paletteQuery);
+        AudioService.playTick();
+      });
+    });
+  }
+
+  function renderCommandItemHTML(cmd, index) {
+    const isFav = CommandRegistry.isFavorite(cmd.id);
+    const isSelected = index === paletteSelectedIndex;
+    const isUnavailable = !cmd.available;
+
+    return `
+      <div
+        class="command-item ${isSelected ? 'selected' : ''} ${isUnavailable ? 'unavailable' : ''}"
+        data-id="${cmd.id}"
+        data-index="${index}"
+        role="option"
+        aria-selected="${isSelected ? 'true' : 'false'}"
+      >
+        <div class="command-item-left">
+          <span class="command-icon">${cmd.icon || '⚡'}</span>
+          <div class="command-text-group">
+            <div class="command-title">
+              <span>${cmd.title}</span>
+              ${cmd.badge ? `<span class="command-badge ${isUnavailable ? 'badge-upcoming' : ''}">${cmd.badge}</span>` : ''}
+            </div>
+            <div class="command-desc">${cmd.description}</div>
+          </div>
+        </div>
+        <div class="command-item-right">
+          ${cmd.shortcut ? `<span class="command-shortcut-badge"><kbd>${cmd.shortcut}</kbd></span>` : ''}
+          <button
+            class="cmd-fav-btn ${isFav ? 'is-fav' : ''}"
+            data-id="${cmd.id}"
+            title="${isFav ? 'Remove from favorites' : 'Add to favorites'}"
+            aria-label="Toggle favorite"
+          >
+            ${isFav ? '★' : '☆'}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  function updatePaletteSelection(scrollIntoView = true) {
+    const items = dom.commandPaletteList?.querySelectorAll('.command-item');
+    if (!items || items.length === 0) return;
+
+    items.forEach((item, idx) => {
+      const isSel = idx === paletteSelectedIndex;
+      item.classList.toggle('selected', isSel);
+      item.setAttribute('aria-selected', isSel ? 'true' : 'false');
+      if (isSel && scrollIntoView) {
+        item.scrollIntoView({ block: 'nearest' });
+      }
+    });
+  }
+
+  function executeCommand(cmd) {
+    if (!cmd) return;
+
+    if (!cmd.available) {
+      showToast(`ℹ️ ${cmd.title} is an upcoming Phase 2.5 feature`, 'info');
+      AudioService.playKeyClick();
+      return;
+    }
+
+    CommandRegistry.addRecentCommand(cmd.id);
+    closeCommandPalette();
+
+    switch (cmd.id) {
+      case 'nav-converter':
+        switchMode('converter');
+        break;
+      case 'nav-rescale':
+        switchMode('rescale');
+        break;
+      case 'nav-detector':
+        switchMode('detector');
+        break;
+      case 'nav-areavol':
+        switchMode('area_volume');
+        break;
+      case 'nav-furniture':
+        switchMode('furniture');
+        break;
+      case 'nav-reference':
+        switchMode('reference');
+        break;
+      case 'nav-history':
+        toggleHistoryDrawer();
+        break;
+      case 'nav-shortcuts':
+        dom.shortcutsModal?.classList.add('open');
+        dom.modalBackdrop?.classList.add('open');
+        break;
+      case 'util-copy-result': {
+        let val = null;
+        let unit = '';
+        if (state.currentMode === 'converter') {
+          val = dom.converterResultVal?.textContent;
+          unit = dom.converterResultUnit?.textContent || '';
+        } else if (state.currentMode === 'rescale') {
+          val = dom.rescaleResultVal?.textContent;
+          unit = dom.rescaleResultUnit?.textContent || '';
+        } else if (state.currentMode === 'detector') {
+          val = dom.detectorRatioVal?.textContent;
+        } else if (state.currentMode === 'area_volume') {
+          val = dom.areavolResultVal?.textContent;
+          unit = dom.areavolResultUnit?.textContent || '';
+        } else if (state.currentMode === 'furniture') {
+          val = dom.customFurnResult?.textContent;
+        }
+        if (val && val !== '---') {
+          copyToClipboard(`${val} ${unit}`.trim(), 'Active Result');
+        } else {
+          showToast('No active calculation result to copy', 'warning');
+        }
+        break;
+      }
+      case 'util-toggle-theme': {
+        const themeOrder = ['dark', 'paper', 'blueprint'];
+        const currentIdx = themeOrder.indexOf(state.activeTheme);
+        const nextTheme = themeOrder[(currentIdx + 1) % themeOrder.length];
+        applyTheme(nextTheme);
+        if (dom.themeSelect) dom.themeSelect.value = nextTheme;
+        showToast(`Theme switched to ${nextTheme.toUpperCase()}`);
+        break;
+      }
+      case 'util-toggle-sound': {
+        const newState = AudioService.toggleSound();
+        updateSoundUI();
+        showToast(newState ? '🔊 Tactile sound enabled' : '🔇 Sound muted');
+        break;
+      }
+      case 'util-export-csv': {
+        const csv = HistoryService.exportCSV();
+        if (csv) {
+          downloadFile(csv, `architecture-helping-hand-${Date.now()}.csv`, 'text/csv');
+          showToast('Exported history as CSV');
+        } else {
+          showToast('History is empty', 'warning');
+        }
+        break;
+      }
+      case 'util-export-md': {
+        const md = HistoryService.exportMarkdown();
+        if (md) {
+          copyToClipboard(md, 'Markdown History Table');
+        } else {
+          showToast('History is empty', 'warning');
+        }
+        break;
+      }
+      case 'util-clear-history': {
+        HistoryService.clear();
+        renderHistoryList();
+        showToast('Calculation history cleared');
+        break;
+      }
+      default:
+        if (typeof cmd.action === 'function') {
+          cmd.action();
+        }
+        break;
+    }
+
+    AudioService.playTick();
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ---------------------------------------------------------------------------
   // 14. Event Listener Wire-up
   // ---------------------------------------------------------------------------
   function attachEventListeners() {
@@ -1861,6 +2178,43 @@ export function initializeApp() {
         const newState = AudioService.toggleSound();
         updateSoundUI();
         showToast(newState ? '🔊 Tactile sound enabled' : '🔇 Sound muted');
+      });
+    }
+
+    // Command Palette Trigger & Modal Listeners
+    if (dom.commandPaletteBtn) dom.commandPaletteBtn.addEventListener('click', openCommandPalette);
+    if (dom.closeCommandPaletteBtn) dom.closeCommandPaletteBtn.addEventListener('click', closeCommandPalette);
+    if (dom.commandPaletteOverlay) dom.commandPaletteOverlay.addEventListener('click', closeCommandPalette);
+
+    if (dom.commandPaletteInput) {
+      dom.commandPaletteInput.addEventListener('input', (e) => {
+        paletteQuery = e.target.value;
+        renderCommandPalette(paletteQuery);
+      });
+
+      dom.commandPaletteInput.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (paletteItems.length > 0) {
+            paletteSelectedIndex = (paletteSelectedIndex + 1) % paletteItems.length;
+            updatePaletteSelection();
+          }
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (paletteItems.length > 0) {
+            paletteSelectedIndex = (paletteSelectedIndex - 1 + paletteItems.length) % paletteItems.length;
+            updatePaletteSelection();
+          }
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (paletteItems[paletteSelectedIndex]) {
+            executeCommand(paletteItems[paletteSelectedIndex]);
+          }
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          closeCommandPalette();
+        }
       });
     }
 
@@ -2284,8 +2638,25 @@ export function initializeApp() {
       const activeEl = document.activeElement;
       const isInputFocused = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT' || activeEl.tagName === 'TEXTAREA');
 
-      // Esc closes drawers/modals
+      // Global Command Palette Shortcut: Ctrl+K or Cmd+K (Works everywhere)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if (dom.commandPaletteModal?.classList.contains('open')) {
+          closeCommandPalette();
+        } else {
+          openCommandPalette();
+        }
+        return;
+      }
+
+      // Esc closes Command Palette first, then drawers/modals
       if (e.key === 'Escape') {
+        if (dom.commandPaletteModal?.classList.contains('open')) {
+          e.preventDefault();
+          e.stopPropagation();
+          closeCommandPalette();
+          return;
+        }
         if (dom.historyDrawer?.classList.contains('open')) toggleHistoryDrawer();
         if (dom.shortcutsModal?.classList.contains('open')) {
           dom.shortcutsModal.classList.remove('open');
@@ -2295,7 +2666,7 @@ export function initializeApp() {
         return;
       }
 
-      // If user is focused inside an input field, do not hijack letter shortcuts
+      // If user is focused inside an input field, do not hijack letter/number shortcuts
       if (isInputFocused) return;
 
       if (e.key === '1') { e.preventDefault(); switchMode('converter'); }

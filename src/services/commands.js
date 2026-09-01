@@ -1,0 +1,483 @@
+/**
+ * Architecture Helping Hand - Global Command Center & Registry Service
+ * Phase 2.5: Daily Architect Toolkit — Part 1: Global Command Palette
+ */
+
+import { StorageService } from './storage.js';
+
+export const RECENT_COMMANDS_KEY = 'archiscale_recent_commands';
+export const FAVORITE_COMMANDS_KEY = 'archiscale_favorite_commands';
+const MAX_RECENT_COMMANDS = 10;
+const MAX_FAVORITE_COMMANDS = 10;
+
+/**
+ * Default Built-in Commands Definition
+ */
+const DEFAULT_COMMANDS = [
+  // 1. Navigation Commands
+  {
+    id: 'nav-converter',
+    title: 'Scale Converter',
+    description: 'Convert dimensions between paper drawing and real-world site',
+    category: 'Navigation',
+    icon: '📐',
+    keywords: ['scale', 'converter', 'drawing', 'real', 'paper', 'metric', 'imperial', 'ratio', 'dimension', 'mode 1'],
+    shortcut: '1',
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-rescale',
+    title: 'Rescaler (Sheet A ➔ Sheet B)',
+    description: 'Convert drawing measurements between different architectural scales',
+    category: 'Navigation',
+    icon: '🔄',
+    keywords: ['rescale', 'sheet', 'transfer', 'ratio', 'sheet a', 'sheet b', 're-scale', 'mode 2'],
+    shortcut: '2',
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-detector',
+    title: 'Scale Detector',
+    description: 'Detect unknown scale ratio from paper drawing and real dimensions',
+    category: 'Navigation',
+    icon: '🔍',
+    keywords: ['detector', 'find', 'identify', 'ratio', 'unknown scale', 'calculate scale', 'mode 3'],
+    shortcut: '3',
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-areavol',
+    title: 'Area & Volume Scaler',
+    description: 'Scale 2D floor surface areas (m², sq ft) and 3D volumes (m³, cu ft)',
+    category: 'Navigation',
+    icon: '📦',
+    keywords: ['area', 'volume', 'square', 'cubic', 'm2', 'sqft', 'floor area', 'room', 'mode 4'],
+    shortcut: '4',
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-furniture',
+    title: 'Furniture & Space Planning',
+    description: 'Browse 179 standard architectural furniture pieces, clearances, and top-down blueprints',
+    category: 'Navigation',
+    icon: '🛋️',
+    keywords: ['furniture', 'fixture', 'desk', 'bed', 'door', 'chair', 'table', 'ada', 'clearance', 'catalog', 'planner', 'mode 5'],
+    shortcut: '5',
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-reference',
+    title: 'Drafting Reference Sheet',
+    description: 'Architectural scale ruler, benchmark lengths, and 100mm print calibration sheet',
+    category: 'Navigation',
+    icon: '📚',
+    keywords: ['reference', 'chart', 'ruler', 'calibration', 'print', 'sheet', 'benchmarks', 'metric', 'imperial', 'mode 6'],
+    shortcut: '6',
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-history',
+    title: 'Calculation Journal',
+    description: 'Open calculation log, restore previous math, and export CSV / Markdown',
+    category: 'Navigation',
+    icon: '📜',
+    keywords: ['history', 'journal', 'log', 'restore', 'records', 'csv', 'markdown', 'drawer'],
+    shortcut: 'H',
+    actionType: 'action',
+    available: true
+  },
+  {
+    id: 'nav-shortcuts',
+    title: 'Keyboard Shortcuts & Guide',
+    description: 'View all workstation hotkeys, supported input syntax, and drafting tips',
+    category: 'Navigation',
+    icon: '⌨️',
+    keywords: ['shortcuts', 'keys', 'hotkeys', 'help', 'guide', 'keyboard', 'tips'],
+    shortcut: '?',
+    actionType: 'action',
+    available: true
+  },
+
+  // 2. Utility & Quick Actions
+  {
+    id: 'util-copy-result',
+    title: 'Copy Active Result',
+    description: 'Copy the most recent calculation result to your clipboard',
+    category: 'Utility',
+    icon: '📋',
+    keywords: ['copy', 'clipboard', 'result', 'active', 'latest', 'value'],
+    actionType: 'action',
+    available: true
+  },
+  {
+    id: 'util-toggle-theme',
+    title: 'Cycle Studio Theme',
+    description: 'Cycle interface theme (Studio Dark ➔ Drafting Paper ➔ Blueprint Cyan)',
+    category: 'Utility',
+    icon: '🎨',
+    keywords: ['theme', 'dark', 'light', 'blueprint', 'paper', 'color', 'appearance', 'mode'],
+    actionType: 'action',
+    available: true
+  },
+  {
+    id: 'util-toggle-sound',
+    title: 'Toggle Tactile Audio Feedback',
+    description: 'Enable or mute tactile audio synthesis for button clicks and calculations',
+    category: 'Utility',
+    icon: '🔊',
+    keywords: ['sound', 'audio', 'mute', 'unmute', 'click', 'feedback', 'tactile'],
+    actionType: 'action',
+    available: true
+  },
+  {
+    id: 'util-export-csv',
+    title: 'Export Journal as CSV',
+    description: 'Download calculation journal entries as a CSV spreadsheet',
+    category: 'Utility',
+    icon: '📥',
+    keywords: ['export', 'csv', 'spreadsheet', 'download', 'history', 'journal'],
+    actionType: 'action',
+    available: true
+  },
+  {
+    id: 'util-export-md',
+    title: 'Export Journal as Markdown',
+    description: 'Copy calculation journal table formatted in GitHub Markdown to clipboard',
+    category: 'Utility',
+    icon: '📝',
+    keywords: ['export', 'markdown', 'table', 'copy', 'history', 'journal', 'md'],
+    actionType: 'action',
+    available: true
+  },
+  {
+    id: 'util-clear-history',
+    title: 'Clear Calculation Journal',
+    description: 'Wipe all saved calculations from the calculation history log',
+    category: 'Utility',
+    icon: '🗑️',
+    keywords: ['clear', 'history', 'reset', 'wipe', 'delete', 'journal'],
+    actionType: 'action',
+    available: true
+  },
+
+  // 3. Upcoming Phase 2.5 Tool Placeholders (Designed for future expansion)
+  {
+    id: 'future-dim-workspace',
+    title: 'Dimension Workspace',
+    description: 'Multi-measurement architectural workspace for simultaneous unit scaling',
+    category: 'Upcoming Tool',
+    icon: '📐',
+    keywords: ['dimension', 'workspace', 'cad', 'multi', 'phase 2.5'],
+    actionType: 'placeholder',
+    available: false,
+    badge: 'Phase 2.5'
+  },
+  {
+    id: 'future-dim-expr',
+    title: 'Dimension Expression Calculator',
+    description: 'Evaluate mixed-unit architectural math expressions (e.g. 2.4m + 180mm - 2\'-6")',
+    category: 'Upcoming Tool',
+    icon: '🧮',
+    keywords: ['expression', 'calculator', 'math', 'eval', 'mixed units', 'arithmetic', 'phase 2.5'],
+    actionType: 'placeholder',
+    available: false,
+    badge: 'Phase 2.5'
+  },
+  {
+    id: 'future-dim-chains',
+    title: 'Dimension Chains',
+    description: 'Calculate cumulative structural grid lines, interior partitions, and dimension strings',
+    category: 'Upcoming Tool',
+    icon: '🔗',
+    keywords: ['chain', 'dimension string', 'cumulative', 'running totals', 'grid', 'phase 2.5'],
+    actionType: 'placeholder',
+    available: false,
+    badge: 'Phase 2.5'
+  },
+  {
+    id: 'future-cad-clipboard',
+    title: 'CAD Clipboard & Formats',
+    description: 'Instant CAD-ready copy formatting for AutoCAD, Rhino, Revit, and SketchUp',
+    category: 'Upcoming Tool',
+    icon: '📋',
+    keywords: ['cad', 'clipboard', 'autocad', 'rhino', 'revit', 'sketchup', 'paste', 'phase 2.5'],
+    actionType: 'placeholder',
+    available: false,
+    badge: 'Phase 2.5'
+  },
+  {
+    id: 'future-batch-cad',
+    title: 'Batch CAD Dimension Converter',
+    description: 'Bulk scale conversion for tables, schedules, and raw CAD dimension lists',
+    category: 'Upcoming Tool',
+    icon: '⚡',
+    keywords: ['batch', 'cad', 'bulk', 'multi-scale', 'schedule', 'table', 'phase 2.5'],
+    actionType: 'placeholder',
+    available: false,
+    badge: 'Phase 2.5'
+  },
+  {
+    id: 'future-stair-calc',
+    title: 'Stair & Riser Calculator',
+    description: 'Calculate stair riser count, tread depths, slope angles, and building code compliance',
+    category: 'Upcoming Tool',
+    icon: '🪜',
+    keywords: ['stair', 'riser', 'tread', 'slope', 'code', 'headroom', 'phase 2.5'],
+    actionType: 'placeholder',
+    available: false,
+    badge: 'Phase 2.5'
+  },
+  {
+    id: 'future-ramp-calc',
+    title: 'ADA Ramp Slope Calculator',
+    description: 'Calculate ramp run, total rise, landings, and ADA 1:12 slope standard',
+    category: 'Upcoming Tool',
+    icon: '♿',
+    keywords: ['ramp', 'slope', 'ada', 'incline', 'gradient', 'accessibility', 'phase 2.5'],
+    actionType: 'placeholder',
+    available: false,
+    badge: 'Phase 2.5'
+  },
+  {
+    id: 'future-space-planner',
+    title: 'Interactive Space Planner',
+    description: 'Interactive top-down 2D canvas for room layout and furniture placement',
+    category: 'Upcoming Tool',
+    icon: '🏢',
+    keywords: ['planner', 'space', 'canvas', 'room', 'layout', '2d', 'phase 2.5'],
+    actionType: 'placeholder',
+    available: false,
+    badge: 'Phase 2.5'
+  }
+];
+
+class CommandRegistryClass {
+  constructor() {
+    this.commands = new Map();
+    this.initDefaultCommands();
+  }
+
+  initDefaultCommands() {
+    this.commands.clear();
+    for (const cmd of DEFAULT_COMMANDS) {
+      this.register(cmd);
+    }
+  }
+
+  register(command) {
+    if (!command || typeof command !== 'object') {
+      throw new Error('Command must be an object');
+    }
+    if (!command.id || typeof command.id !== 'string') {
+      throw new Error('Command must have a valid string id');
+    }
+    if (!command.title || typeof command.title !== 'string') {
+      throw new Error('Command must have a valid string title');
+    }
+    if (!command.category || typeof command.category !== 'string') {
+      throw new Error('Command must have a valid string category');
+    }
+
+    const entry = {
+      id: command.id,
+      title: command.title,
+      description: command.description || '',
+      category: command.category,
+      icon: command.icon || '⚡',
+      keywords: Array.isArray(command.keywords) ? [...command.keywords] : [],
+      shortcut: command.shortcut || null,
+      action: typeof command.action === 'function' ? command.action : null,
+      actionType: command.actionType || 'action',
+      available: command.available !== false,
+      badge: command.badge || null
+    };
+
+    this.commands.set(entry.id, entry);
+    return entry;
+  }
+
+  unregister(id) {
+    return this.commands.delete(id);
+  }
+
+  getCommand(id) {
+    return this.commands.get(id) || null;
+  }
+
+  getAllCommands() {
+    return Array.from(this.commands.values());
+  }
+
+  getAvailableCommands() {
+    return this.getAllCommands().filter(c => c.available);
+  }
+
+  searchCommands(query) {
+    const all = this.getAllCommands();
+    if (!query || typeof query !== 'string' || query.trim() === '') {
+      return {
+        query: '',
+        results: all,
+        favorites: this.getFavoriteCommands(),
+        recent: this.getRecentCommands(),
+        total: all.length
+      };
+    }
+
+    const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const favorites = new Set(this.getFavoriteIds());
+
+    const matched = all.filter(cmd => {
+      const titleLower = cmd.title.toLowerCase();
+      const descLower = cmd.description.toLowerCase();
+      const catLower = cmd.category.toLowerCase();
+      const idLower = cmd.id.toLowerCase();
+      const keywords = cmd.keywords.map(k => k.toLowerCase());
+
+      return tokens.every(token => {
+        return (
+          titleLower.includes(token) ||
+          descLower.includes(token) ||
+          catLower.includes(token) ||
+          idLower.includes(token) ||
+          keywords.some(k => k.includes(token))
+        );
+      });
+    });
+
+    // Sort matching results: Available first, then Favorites, then upcoming
+    matched.sort((a, b) => {
+      // 1. Available vs Upcoming
+      if (a.available && !b.available) return -1;
+      if (!a.available && b.available) return 1;
+
+      // 2. Favorites first
+      const aFav = favorites.has(a.id);
+      const bFav = favorites.has(b.id);
+      if (aFav && !bFav) return -1;
+      if (!aFav && bFav) return 1;
+
+      // 3. Exact prefix match boost
+      const queryLower = query.trim().toLowerCase();
+      const aTitleStarts = a.title.toLowerCase().startsWith(queryLower);
+      const bTitleStarts = b.title.toLowerCase().startsWith(queryLower);
+      if (aTitleStarts && !bTitleStarts) return -1;
+      if (!aTitleStarts && bTitleStarts) return 1;
+
+      return 0;
+    });
+
+    return {
+      query: query.trim(),
+      results: matched,
+      favorites: [],
+      recent: [],
+      total: matched.length
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Recent Commands Management
+  // ---------------------------------------------------------------------------
+  getRecentIds() {
+    try {
+      const raw = StorageService.getItem(RECENT_COMMANDS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(id => typeof id === 'string' && this.commands.has(id));
+        }
+      }
+    } catch (e) {
+      // Storage corrupted, fallback gracefully
+    }
+    return [];
+  }
+
+  getRecentCommands() {
+    const ids = this.getRecentIds();
+    return ids.map(id => this.getCommand(id)).filter(Boolean);
+  }
+
+  addRecentCommand(commandId) {
+    if (!commandId || !this.commands.has(commandId)) return;
+
+    let recents = this.getRecentIds();
+    // Remove if already present (to move to top)
+    recents = recents.filter(id => id !== commandId);
+    recents.unshift(commandId);
+
+    if (recents.length > MAX_RECENT_COMMANDS) {
+      recents = recents.slice(0, MAX_RECENT_COMMANDS);
+    }
+
+    try {
+      StorageService.setItem(RECENT_COMMANDS_KEY, JSON.stringify(recents));
+    } catch (e) {}
+  }
+
+  clearRecentCommands() {
+    try {
+      StorageService.removeItem(RECENT_COMMANDS_KEY);
+    } catch (e) {}
+  }
+
+  // ---------------------------------------------------------------------------
+  // Favorites Management
+  // ---------------------------------------------------------------------------
+  getFavoriteIds() {
+    try {
+      const raw = StorageService.getItem(FAVORITE_COMMANDS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(id => typeof id === 'string' && this.commands.has(id));
+        }
+      }
+    } catch (e) {
+      // Storage corrupted, fallback gracefully
+    }
+    return [];
+  }
+
+  getFavoriteCommands() {
+    const ids = this.getFavoriteIds();
+    return ids.map(id => this.getCommand(id)).filter(Boolean);
+  }
+
+  isFavorite(commandId) {
+    return this.getFavoriteIds().includes(commandId);
+  }
+
+  toggleFavorite(commandId) {
+    if (!commandId || !this.commands.has(commandId)) return false;
+
+    let favs = this.getFavoriteIds();
+    let isNowFav = false;
+
+    if (favs.includes(commandId)) {
+      favs = favs.filter(id => id !== commandId);
+      isNowFav = false;
+    } else {
+      if (favs.length >= MAX_FAVORITE_COMMANDS) {
+        favs.pop();
+      }
+      favs.unshift(commandId);
+      isNowFav = true;
+    }
+
+    try {
+      StorageService.setItem(FAVORITE_COMMANDS_KEY, JSON.stringify(favs));
+    } catch (e) {}
+
+    return isNowFav;
+  }
+}
+
+export const CommandRegistry = new CommandRegistryClass();
