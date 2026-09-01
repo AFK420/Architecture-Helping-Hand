@@ -211,15 +211,15 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
-    id: 'future-cad-clipboard',
+    id: 'nav-cad-clipboard',
     title: 'CAD Clipboard & Formats',
-    description: 'Instant CAD-ready copy formatting for AutoCAD, Rhino, Revit, and SketchUp',
-    category: 'Upcoming Tool',
+    description: 'Instant CAD-ready copy formatting for AutoCAD, Rhino, Revit, SketchUp, and Spreadsheets',
+    category: 'Navigation',
     icon: '📋',
-    keywords: ['cad', 'clipboard', 'autocad', 'rhino', 'revit', 'sketchup', 'paste', 'phase 2.5'],
-    actionType: 'placeholder',
-    available: false,
-    badge: 'Phase 2.5'
+    keywords: ['cad', 'clipboard', 'autocad', 'rhino', 'revit', 'sketchup', 'paste', 'tsv', 'schedule', 'mode 11', 'c'],
+    shortcut: 'C',
+    actionType: 'navigation',
+    available: true
   },
   {
     id: 'future-batch-cad',

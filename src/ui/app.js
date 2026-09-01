@@ -72,6 +72,18 @@ import {
   CHAIN_TEMPLATES,
   CHAIN_STORAGE_KEY
 } from '../core/dimension-chains.js';
+import {
+  CAD_FORMAT_PRESETS,
+  CAD_STORAGE_KEY,
+  formatCadValue,
+  formatCadValues,
+  formatCadWorkspace,
+  formatCadChain,
+  formatCadMultiScale,
+  formatCadExpression,
+  formatManualCadInput,
+  getCadFormatSummary
+} from '../core/cad-clipboard.js';
 import { StorageService } from '../services/storage.js';
 import { AudioService } from '../services/audio.js';
 import { HistoryService } from '../services/history.js';
@@ -187,6 +199,29 @@ export function initializeApp() {
     })(),
     chainSelectedSegmentId: null,
     lastValidChain: null,
+
+    // Mode 11: CAD Clipboard
+    cadClipboard: (() => {
+      try {
+        const stored = StorageService.getItem(CAD_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && typeof parsed === 'object') return parsed;
+        }
+      } catch (e) {}
+      return {
+        source: 'workspace',
+        preset: 'generic',
+        targetValue: 'real',
+        unit: 'mm',
+        precision: 2,
+        suffix: 'none',
+        delimiter: 'space',
+        filterScope: 'all',
+        manualInput: '',
+        lastFormattedText: ''
+      };
+    })(),
 
     // Cached Previous Valid Calculations (Never wipe to empty on invalid keystroke)
     lastValidConverter: null,
@@ -492,7 +527,36 @@ export function initializeApp() {
     chainsCopyCumBtn: document.getElementById('chains-copy-cum-btn'),
     chainsCopySegsBtn: document.getElementById('chains-copy-segs-btn'),
     chainsCopyDrawBtn: document.getElementById('chains-copy-draw-btn'),
-    chainsExportTsvBtn: document.getElementById('chains-export-tsv-btn')
+    chainsExportTsvBtn: document.getElementById('chains-export-tsv-btn'),
+
+    // Mode 11: CAD Clipboard
+    cadStateBadge: document.getElementById('cad-state-badge'),
+    cadQuickChips: document.getElementById('cad-quick-chips'),
+    cadSourcePills: document.getElementById('cad-source-pills'),
+    cadSourceCountBadge: document.getElementById('cad-source-count-badge'),
+    cadManualGroup: document.getElementById('cad-manual-group'),
+    cadManualInput: document.getElementById('cad-manual-input'),
+    cadTargetSelect: document.getElementById('cad-target-select'),
+    cadUnitSelect: document.getElementById('cad-unit-select'),
+    cadPrecisionSelect: document.getElementById('cad-precision-select'),
+    cadSuffixSelect: document.getElementById('cad-suffix-select'),
+    cadDelimiterSelect: document.getElementById('cad-delimiter-select'),
+    cadScopeSelect: document.getElementById('cad-scope-select'),
+    btnRunCadClipboard: document.getElementById('btn-run-cad-clipboard'),
+    cadResultPanel: document.getElementById('cad-result-panel'),
+    cadSummaryBadge: document.getElementById('cad-summary-badge'),
+    cadPreviewBox: document.getElementById('cad-preview-box'),
+    btnCadCopyMain: document.getElementById('btn-cad-copy-main'),
+    btnCadCopyRaw: document.getElementById('btn-cad-copy-raw'),
+    btnCadCopyUnits: document.getElementById('btn-cad-copy-units'),
+    btnCadCopyTsv: document.getElementById('btn-cad-copy-tsv'),
+    btnCadExportTxt: document.getElementById('btn-cad-export-txt'),
+
+    // Cross-Mode CAD Handoff Buttons
+    wsOpenCadBtn: document.getElementById('workspace-open-cad-btn'),
+    exprCadHandoffBtn: document.getElementById('expression-cad-handoff-btn'),
+    msCadHandoffBtn: document.getElementById('multiscale-cad-handoff-btn'),
+    chainsCadHandoffBtn: document.getElementById('chains-cad-handoff-btn')
   };
 
   // ---------------------------------------------------------------------------
@@ -664,6 +728,9 @@ export function initializeApp() {
     }
     else if (targetMode === 'chains') {
       calculateAndRenderChain();
+    }
+    else if (targetMode === 'cad_clipboard') {
+      renderCadClipboard();
     }
   }
 
@@ -3035,6 +3102,9 @@ export function initializeApp() {
       case 'nav-chains':
         switchMode('chains');
         break;
+      case 'nav-cad-clipboard':
+        switchMode('cad_clipboard');
+        break;
       case 'nav-history':
         toggleHistoryDrawer();
         break;
@@ -3802,6 +3872,191 @@ export function initializeApp() {
     calculateAndRenderChain(true);
     AudioService.playTick();
     showToast(`Loaded "${tpl.name}" template`);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 13g. Mode 11: CAD Clipboard Controller
+  // ---------------------------------------------------------------------------
+  function saveCadClipboardSettings() {
+    try {
+      StorageService.setItem(CAD_STORAGE_KEY, JSON.stringify(state.cadClipboard));
+    } catch (e) {}
+  }
+
+  function applyCadPreset(presetKey) {
+    const preset = CAD_FORMAT_PRESETS[presetKey];
+    if (!preset) return;
+
+    state.cadClipboard.preset = presetKey;
+    state.cadClipboard.unit = preset.defaultUnit;
+    state.cadClipboard.precision = preset.defaultPrecision;
+    state.cadClipboard.suffix = preset.defaultSuffix;
+    state.cadClipboard.delimiter = preset.defaultDelimiter;
+    state.cadClipboard.targetValue = preset.targetValue;
+
+    // Sync UI elements
+    if (dom.cadTargetSelect) dom.cadTargetSelect.value = state.cadClipboard.targetValue;
+    if (dom.cadUnitSelect) dom.cadUnitSelect.value = state.cadClipboard.unit;
+    if (dom.cadPrecisionSelect) dom.cadPrecisionSelect.value = String(state.cadClipboard.precision);
+    if (dom.cadSuffixSelect) dom.cadSuffixSelect.value = state.cadClipboard.suffix;
+    if (dom.cadDelimiterSelect) dom.cadDelimiterSelect.value = state.cadClipboard.delimiter;
+
+    // Sync active chip
+    dom.cadQuickChips?.querySelectorAll('.cad-preset-chip').forEach(chip => {
+      chip.classList.toggle('active', chip.dataset.preset === presetKey);
+    });
+
+    renderCadClipboard(true);
+    AudioService.playTick();
+    showToast(`Loaded preset "${preset.name}"`);
+  }
+
+  function renderCadClipboard(isExplicitRun = false) {
+    const cad = state.cadClipboard;
+
+    // Sync form values into state
+    if (dom.cadTargetSelect) cad.targetValue = dom.cadTargetSelect.value || 'real';
+    if (dom.cadUnitSelect) cad.unit = dom.cadUnitSelect.value || 'mm';
+    if (dom.cadPrecisionSelect) cad.precision = parseInt(dom.cadPrecisionSelect.value, 10) || 0;
+    if (dom.cadSuffixSelect) cad.suffix = dom.cadSuffixSelect.value || 'none';
+    if (dom.cadDelimiterSelect) cad.delimiter = dom.cadDelimiterSelect.value || 'space';
+    if (dom.cadScopeSelect) cad.filterScope = dom.cadScopeSelect.value || 'all';
+
+    // Show/hide manual input group
+    if (dom.cadManualGroup) {
+      dom.cadManualGroup.style.display = cad.source === 'manual' ? 'block' : 'none';
+    }
+
+    // Sync active source pill
+    dom.cadSourcePills?.querySelectorAll('.cad-source-pill').forEach(pill => {
+      pill.classList.toggle('active', pill.dataset.source === cad.source);
+    });
+
+    // Sync active preset chip
+    dom.cadQuickChips?.querySelectorAll('.cad-preset-chip').forEach(chip => {
+      chip.classList.toggle('active', chip.dataset.preset === cad.preset);
+    });
+
+    let outputResult = { text: '', count: 0 };
+
+    if (cad.source === 'workspace') {
+      outputResult = formatCadWorkspace(state.workspace, {
+        filterScope: cad.filterScope,
+        selectedIds: state.workspaceSelectedIds,
+        targetValue: cad.targetValue,
+        format: cad.preset,
+        unit: cad.unit,
+        precision: cad.precision,
+        suffix: cad.suffix,
+        delimiter: cad.delimiter,
+        scaleRatio: state.workspace?.scaleRatio || 50
+      });
+    } else if (cad.source === 'chain') {
+      if (state.lastValidChain) {
+        outputResult = formatCadChain(state.lastValidChain, {
+          chainOutputMode: cad.preset === 'spreadsheet' ? 'table' : 'segments',
+          targetValue: cad.targetValue,
+          unit: cad.unit,
+          precision: cad.precision,
+          suffix: cad.suffix,
+          delimiter: cad.delimiter
+        });
+      }
+    } else if (cad.source === 'expression') {
+      if (state.lastValidExpression) {
+        outputResult = formatCadExpression(state.lastValidExpression, {
+          targetValue: cad.targetValue,
+          unit: cad.unit,
+          precision: cad.precision,
+          suffix: cad.suffix
+        });
+      }
+    } else if (cad.source === 'multiscale') {
+      if (state.lastValidMultiScale) {
+        outputResult = formatCadMultiScale(state.lastValidMultiScale, {
+          format: cad.preset,
+          unit: cad.unit,
+          precision: cad.precision,
+          suffix: cad.suffix,
+          delimiter: cad.delimiter
+        });
+      }
+    } else if (cad.source === 'manual') {
+      const raw = dom.cadManualInput?.value || cad.manualInput || '';
+      outputResult = formatManualCadInput(raw, {
+        unit: cad.unit,
+        precision: cad.precision,
+        suffix: cad.suffix,
+        delimiter: cad.delimiter
+      });
+    }
+
+    cad.lastFormattedText = outputResult.text;
+
+    // Update Preview Textarea
+    if (dom.cadPreviewBox) {
+      dom.cadPreviewBox.value = outputResult.text;
+    }
+
+    // Update Summary Metadata Tag
+    if (dom.cadSummaryBadge) {
+      dom.cadSummaryBadge.textContent = getCadFormatSummary(outputResult.count, {
+        targetValue: cad.targetValue,
+        unit: cad.unit,
+        precision: cad.precision,
+        suffix: cad.suffix
+      });
+    }
+
+    // Update Item Count Badge in Source Strip
+    if (dom.cadSourceCountBadge) {
+      dom.cadSourceCountBadge.textContent = `${outputResult.count} ${outputResult.count === 1 ? 'ITEM' : 'ITEMS'}`;
+    }
+
+    setUnifiedResultState({
+      toolPrefix: 'cad',
+      status: outputResult.count > 0 ? 'success' : 'ready'
+    });
+
+    saveCadClipboardSettings();
+
+    if (isExplicitRun) {
+      AudioService.playTick();
+    }
+  }
+
+  function copyCadClipboardData(optionsOverride = null) {
+    let textToCopy = state.cadClipboard.lastFormattedText;
+
+    if (optionsOverride && typeof optionsOverride === 'object') {
+      const mergedOpts = { ...state.cadClipboard, ...optionsOverride };
+      if (state.cadClipboard.source === 'workspace') {
+        textToCopy = formatCadWorkspace(state.workspace, mergedOpts).text;
+      } else if (state.cadClipboard.source === 'chain') {
+        textToCopy = formatCadChain(state.lastValidChain, mergedOpts).text;
+      } else if (state.cadClipboard.source === 'expression') {
+        textToCopy = formatCadExpression(state.lastValidExpression, mergedOpts).text;
+      } else if (state.cadClipboard.source === 'multiscale') {
+        textToCopy = formatCadMultiScale(state.lastValidMultiScale, mergedOpts).text;
+      } else if (state.cadClipboard.source === 'manual') {
+        textToCopy = formatManualCadInput(dom.cadManualInput?.value || '', mergedOpts).text;
+      }
+    }
+
+    if (!textToCopy || !textToCopy.trim()) {
+      showToast('No CAD dimension data to copy', 'warning');
+      return;
+    }
+
+    copyToClipboard(textToCopy, 'CAD Dimension Data');
+  }
+
+  function openCadClipboardWithSource(sourceKey) {
+    state.cadClipboard.source = sourceKey;
+    switchMode('cad_clipboard');
+    renderCadClipboard(true);
+    AudioService.playTick();
+    showToast(`Loaded ${sourceKey.toUpperCase()} data into CAD Clipboard`);
   }
 
   // ---------------------------------------------------------------------------
@@ -5113,10 +5368,129 @@ export function initializeApp() {
       });
     }
 
+    // Mode 11: CAD Clipboard Listeners
+    if (dom.cadQuickChips) {
+      dom.cadQuickChips.querySelectorAll('.cad-preset-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          applyCadPreset(chip.dataset.preset);
+        });
+      });
+    }
+
+    if (dom.cadSourcePills) {
+      dom.cadSourcePills.querySelectorAll('.cad-source-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+          state.cadClipboard.source = pill.dataset.source;
+          renderCadClipboard(true);
+          AudioService.playTick();
+        });
+      });
+    }
+
+    if (dom.cadManualInput) {
+      dom.cadManualInput.addEventListener('input', (e) => {
+        state.cadClipboard.manualInput = e.target.value;
+        renderCadClipboard(false);
+      });
+    }
+
+    const cadSelects = [
+      dom.cadTargetSelect,
+      dom.cadUnitSelect,
+      dom.cadPrecisionSelect,
+      dom.cadSuffixSelect,
+      dom.cadDelimiterSelect,
+      dom.cadScopeSelect
+    ];
+    cadSelects.forEach(sel => {
+      if (sel) {
+        sel.addEventListener('change', () => {
+          renderCadClipboard(true);
+          AudioService.playTick();
+        });
+      }
+    });
+
+    if (dom.btnRunCadClipboard) {
+      dom.btnRunCadClipboard.addEventListener('click', () => {
+        renderCadClipboard(true);
+      });
+    }
+
+    if (dom.btnCadCopyMain) {
+      dom.btnCadCopyMain.addEventListener('click', () => {
+        copyCadClipboardData();
+      });
+    }
+
+    if (dom.btnCadCopyRaw) {
+      dom.btnCadCopyRaw.addEventListener('click', () => {
+        copyCadClipboardData({ suffix: 'none', format: 'generic', delimiter: 'space' });
+      });
+    }
+
+    if (dom.btnCadCopyUnits) {
+      dom.btnCadCopyUnits.addEventListener('click', () => {
+        copyCadClipboardData({ suffix: 'symbol' });
+      });
+    }
+
+    if (dom.btnCadCopyTsv) {
+      dom.btnCadCopyTsv.addEventListener('click', () => {
+        copyCadClipboardData({ format: 'spreadsheet', delimiter: 'tsv' });
+      });
+    }
+
+    if (dom.btnCadExportTxt) {
+      dom.btnCadExportTxt.addEventListener('click', () => {
+        renderCadClipboard(true);
+        const text = state.cadClipboard.lastFormattedText;
+        if (text) {
+          downloadFile(text, 'CAD_Dimensions.txt', 'text/plain');
+          AudioService.playTick();
+          showToast('Exported CAD_Dimensions.txt');
+        } else {
+          showToast('No CAD dimension data to export', 'warning');
+        }
+      });
+    }
+
+    // Cross-Mode CAD Handoff Buttons
+    if (dom.wsOpenCadBtn) {
+      dom.wsOpenCadBtn.addEventListener('click', () => {
+        openCadClipboardWithSource('workspace');
+      });
+    }
+
+    if (dom.exprCadHandoffBtn) {
+      dom.exprCadHandoffBtn.addEventListener('click', () => {
+        openCadClipboardWithSource('expression');
+      });
+    }
+
+    if (dom.msCadHandoffBtn) {
+      dom.msCadHandoffBtn.addEventListener('click', () => {
+        openCadClipboardWithSource('multiscale');
+      });
+    }
+
+    if (dom.chainsCadHandoffBtn) {
+      dom.chainsCadHandoffBtn.addEventListener('click', () => {
+        openCadClipboardWithSource('chain');
+      });
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
       const isInputFocused = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT' || activeEl.tagName === 'TEXTAREA');
+
+      // Global CAD Clipboard Shortcut: Ctrl+Shift+C or Cmd+Shift+C (Works everywhere)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        switchMode('cad_clipboard');
+        return;
+      }
 
       // Global Command Palette Shortcut: Ctrl+K or Cmd+K (Works everywhere)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -5242,6 +5616,7 @@ export function initializeApp() {
       else if (e.key === '8') { e.preventDefault(); switchMode('expression'); }
       else if (e.key === '9') { e.preventDefault(); switchMode('multiscale'); }
       else if (e.key === '0') { e.preventDefault(); switchMode('chains'); }
+      else if (e.key === 'c' || e.key === 'C') { e.preventDefault(); switchMode('cad_clipboard'); }
       else if (e.key === 's' || e.key === 'S') { e.preventDefault(); swapDirection(); }
       else if (e.key === 'h' || e.key === 'H') { e.preventDefault(); toggleHistoryDrawer(); }
       else if (e.key === '?') {

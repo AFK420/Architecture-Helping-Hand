@@ -34,7 +34,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
 // 1. Verify Mode Navigation Targets in HTML
 {
-  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains'];
+  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard'];
   
   for (const mode of expectedModes) {
     const hasTab = htmlContent.includes(`data-mode="${mode}"`);
@@ -309,6 +309,35 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'chains-copy-draw-btn',
     'chains-export-tsv-btn',
 
+    // Mode 11: CAD Clipboard IDs
+    'cad-state-badge',
+    'cad-quick-chips',
+    'cad-source-pills',
+    'cad-source-count-badge',
+    'cad-manual-group',
+    'cad-manual-input',
+    'cad-target-select',
+    'cad-unit-select',
+    'cad-precision-select',
+    'cad-suffix-select',
+    'cad-delimiter-select',
+    'cad-scope-select',
+    'btn-run-cad-clipboard',
+    'cad-result-panel',
+    'cad-summary-badge',
+    'cad-preview-box',
+    'btn-cad-copy-main',
+    'btn-cad-copy-raw',
+    'btn-cad-copy-units',
+    'btn-cad-copy-tsv',
+    'btn-cad-export-txt',
+
+    // Cross-Mode CAD Handoff IDs
+    'workspace-open-cad-btn',
+    'expression-cad-handoff-btn',
+    'multiscale-cad-handoff-btn',
+    'chains-cad-handoff-btn',
+
     // Workflow Pipeline & Mathematical Explanation IDs
     'converter-math-formula',
     'converter-flow-from',
@@ -350,7 +379,8 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'btn-run-custom-furn',
     'btn-run-expression',
     'btn-run-multiscale',
-    'btn-run-chains'
+    'btn-run-chains',
+    'btn-run-cad-clipboard'
   ];
 
   for (const rBtn of runButtons) {

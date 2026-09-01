@@ -27,6 +27,7 @@
    - [9. Dimension Expression Calculator](#9-dimension-expression-calculator)
    - [10. Multi-Scale Comparison Workspace](#10-multi-scale-comparison-workspace)
    - [11. Dimension Chains (Continuous Strings)](#11-dimension-chains-continuous-strings)
+   - [12. CAD Clipboard & Drafting Handoff](#12-cad-clipboard--drafting-handoff)
 5. [📐 Architectural Scale Presets (All 28 Presets)](#-architectural-scale-presets-all-28-presets)
 6. [🛋️ Architectural Furniture & Fixtures Database (179 Items Across 9 Domains)](#️-architectural-furniture--fixtures-database-179-items-across-9-domains)
 7. [📏 Supported Measurement Units](#-supported-measurement-units)
@@ -212,6 +213,12 @@ This repository serves as:
 * **Datum Start & End Offsets**: Handles structural baseline offsets independently from segment totals ($\text{Overall} = \text{StartOffset} + \text{Segments} + \text{Allowances} + \text{EndOffset}$).
 * **Workspace & Multi-Scale Handoffs**: Transfer entire chains as named groups to Dimension Workspace or compare chain extents across scales in Mode 9.
 * **Command Palette Chain Preview**: Typing `chain 1200 1800 900` in <kbd>Ctrl+K</kbd> / <kbd>⌘K</kbd> instantly parses and previews multi-segment chains.
+
+### 12. CAD Clipboard & Drafting Handoff (Mode 11)
+* **Normalized Numerical Copy Layer**: Formats clean real or drawing dimensions for rapid entry into AutoCAD, Rhino, Revit, SketchUp, and Spreadsheets.
+* **Application Formatting Presets**: Built-in format presets for Generic CAD, AutoCAD command lines, Rhino curve distance prompts, SketchUp VCB, and Tab-separated (TSV) / CSV schedules.
+* **Non-Destructive Formatting Engine**: Pure zero-DOM formatter ensuring standard `.` decimal separators, negative number preservation, and legitimate `0` coordinate preservation without modifying source calculation state.
+* **1-Click Cross-Mode Handoffs**: Direct CAD Clipboard handoff buttons across Dimension Workspace, Chains, Expressions, and Multi-Scale Comparison.
 
 ---
 
