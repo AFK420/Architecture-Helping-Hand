@@ -12,6 +12,7 @@ const __dirname = path.dirname(__filename);
 
 const testFiles = [
   'calculator.test.js',
+  'geometry.test.js',
   'parser.test.js',
   'units.test.js',
   'formatter.test.js',

@@ -30,6 +30,7 @@ export function generateBundleContent() {
     { name: 'Formatter', file: path.join(srcDir, 'core', 'formatter.js') },
     { name: 'Parser', file: path.join(srcDir, 'core', 'parser.js') },
     { name: 'Calculator', file: path.join(srcDir, 'core', 'calculator.js') },
+    { name: 'Geometry', file: path.join(srcDir, 'core', 'geometry.js') },
     { name: 'Furniture', file: path.join(srcDir, 'core', 'furniture.js') },
     { name: 'Storage', file: path.join(srcDir, 'services', 'storage.js') },
     { name: 'Audio', file: path.join(srcDir, 'services', 'audio.js') },
