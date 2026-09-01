@@ -1,133 +1,150 @@
 # Architecture Helping Hand 📐🏛️
 
-**Architecture Helping Hand** is a modern, high-precision architectural scaling studio, furniture dimensioning reference, and multi-unit conversion suite designed for architects, interior designers, urban planners, physical model makers, civil engineers, and design students.
+> **Professional Architectural Scale, Furniture Sizing & Multi-Unit Calculation Studio**  
+> *A high-precision, zero-dependency, tactile architectural conversion tool built for architects, interior designers, urban planners, physical model makers, and design students.*
+
+[![Tests](https://img.shields.io/badge/Tests-149%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
+[![Architecture](https://img.shields.io/badge/Architecture-3--Tier%20Core%20%7C%20Frozen-10b981?style=flat-square)](ENGINEERING_RULES.md)
+[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Vanilla)-f59e0b?style=flat-square)](package.json)
+[![License](https://img.shields.io/badge/License-MIT-6366f1?style=flat-square)](package.json)
+[![Platform](https://img.shields.io/badge/Platform-Browser%20%7C%20Offline%20file%3A%2F%2F%2F%20%7C%20PWA-06b6d4?style=flat-square)](index.html)
 
 ---
 
 ## 📑 Table of Contents
-1. [Overview & Philosophy](#-overview--philosophy)
-2. [User Interface & Layout Architecture](#-user-interface--layout-architecture)
-3. [Core Tools & Calculation Modes](#-core-tools--calculation-modes)
-   - [Mode 1: Scale Converter (Drawing ↔ Real World)](#1-scale-converter-drawing--real-world)
-   - [Mode 2: Rescaler (Sheet Scale A ➔ Sheet Scale B)](#2-rescaler-sheet-scale-a--sheet-scale-b)
-   - [Mode 3: Scale Finder & Detector](#3-scale-finder--detector)
-   - [Mode 4: Area (S²) & Volume (S³) Scaler](#4-area-s²--volume-s³-scaler)
-   - [Mode 5: Furniture Scales & Fixtures Catalog](#5-furniture-scales--fixtures-catalog)
-   - [Mode 6: Multi-Length Reference Chart](#6-multi-length-reference-chart)
-4. [Complete Architectural Scale Presets](#-complete-architectural-scale-presets)
-5. [Complete Furniture & Fixtures Database (40+ Items)](#-complete-furniture--fixtures-database)
-6. [Supported Measurement Units](#-supported-measurement-units)
-7. [Mathematical Formulas & Engine](#-mathematical-formulas--engine)
-8. [Themes & Tactile Acoustic Feedback](#-themes--tactile-acoustic-feedback)
-9. [Calculation History & Export System](#-calculation-history--export-system)
-10. [Keyboard Shortcuts](#-keyboard-shortcuts)
-11. [How to Run & Technical Architecture](#-how-to-run--technical-architecture)
+1. [🎯 Why Architecture Helping Hand Was Created](#-why-architecture-helping-hand-was-created)
+2. [🚀 What Has Been Done Until Now (Development History)](#-what-has-been-done-until-now-development-history)
+3. [🌐 What This Project Does on GitHub](#-what-this-project-does-on-github)
+4. [🛠️ Core Tools & Capabilities](#️-core-tools--capabilities)
+   - [1. Bidirectional Scale Converter (Drawing ↔ Real World)](#1-bidirectional-scale-converter-drawing--real-world)
+   - [2. Rescaler (Sheet Scale A ➔ Sheet Scale B)](#2-rescaler-sheet-scale-a--sheet-scale-b)
+   - [3. Scale Finder & Detector](#3-scale-finder--detector)
+   - [4. Area (S²) & Volume (S³) Scaler](#4-area-s²--volume-s³-scaler)
+   - [5. Furniture Scales & Fixtures Catalog (with Live Search)](#5-furniture-scales--fixtures-catalog-with-live-search)
+   - [6. Multi-Length Architectural Reference Sheet](#6-multi-length-architectural-reference-sheet)
+5. [📐 Architectural Scale Presets (All 28 Presets)](#-architectural-scale-presets-all-28-presets)
+6. [🛋️ Architectural Furniture & Fixtures Database (61 Items)](#️-architectural-furniture--fixtures-database-61-items)
+7. [📏 Supported Measurement Units](#-supported-measurement-units)
+8. [🧮 Mathematical Formulas & Contracts](#-mathematical-formulas--contracts)
+9. [🎨 Visual Proportions & Tactile Audio](#-visual-proportions--tactile-audio)
+10. [💾 Calculation History & Export](#-calculation-history--export)
+11. [⌨️ Keyboard Shortcuts](#️-keyboard-shortcuts)
+12. [💻 How to Run, Build & Test](#-how-to-run-build--test)
+13. [🔮 Future Roadmap](#-future-roadmap)
 
 ---
 
-## 🌟 Overview & Philosophy
-Scaling errors on architectural drawings cause costly delays in construction, incorrect millwork fabrication, and distorted physical models. **Architecture Helping Hand** eliminates manual calculation mistakes by providing instant, two-way, mathematically verified scaling across all international metric and imperial standards with a cozy drafting interface.
+## 🎯 Why Architecture Helping Hand Was Created
+
+### The Architectural Problem
+Architects, interior designers, urbanists, and physical model makers constantly translate dimensions between **real-world site measurements** (meters, feet, kilometers) and **physical drawing/model sheets** (millimeters, centimeters, inches).
+
+Manual scale calculations often cause:
+* **Costly Site & Millwork Errors**: Misinterpreting drawing units leads to fabricated cabinetry or partitions that do not fit.
+* **Redrawing & Rescaling Friction**: Moving a scheme from a $1:50$ general arrangement plan to a $1:200$ site plan requires recalculating every drawn line.
+* **Unlabelled Drawings**: Working with imported PDF scans or historical blueprints with missing scale bars leaves architects guessing the scale.
+* **Furniture Placement Uncertainties**: Hand-drafting and CAD block sizing require looking up standard clearances and real-world dimensions across multiple reference manuals.
+
+### The Solution: Architecture Helping Hand
+**Architecture Helping Hand** eliminates manual calculation errors by providing a unified, tactile, mathematically verified studio that runs 100% client-side with **zero external dependencies**. It parses fractions (`3 1/2`), feet-inches (`12'-6 1/2"`), scales areas ($S^2$) and volumes ($S^3$), detects unknown scales, and provides an instant searchable database of 61 architectural furniture standards.
 
 ---
 
-## 🖥️ User Interface & Layout Architecture
+## 🚀 What Has Been Done Until Now (Development History)
 
-### 1. Application Header Bar
-- **Brand Title**: `Architecture Helping Hand` with technical studio badge.
-- **Theme Dropdown**: Quick selector between **📐 Studio Dark (Default)**, **📜 Drafting Paper**, and **🟦 Blueprint Cyan**.
-- **Tactile Sound Toggle**: One-click enable/mute button for synthesized mechanical keystroke and click sounds.
-- **History Drawer Toggle (<kbd>H</kbd>)**: Opens the sliding calculation log side panel.
-- **Shortcuts Guide Modal (<kbd>?</kbd>)**: Interactive reference sheet for fast workflow shortcuts.
+The codebase has evolved through rigorous engineering, auditing, and hardening phases:
 
-### 2. Navigation Tabs Bar
-6 dedicated tool modes with quick numeric switching (<kbd>1</kbd> through <kbd>6</kbd>):
-1. `Scale Converter`
-2. `Rescaler (A ➔ B)`
-3. `Scale Finder`
-4. `Area & Volume`
-5. `Furniture Scales`
-6. `Reference Chart`
-
-### 3. Drafting Visual Feedback
-- **Live Visual Scale Bar**: Precision graphic scale bar generated dynamically based on active scale.
-- **Context Silhouettes**: Visual proportion graphics against real-world items (Human figure 1.8m, Door 2.1m, Car 4.5m, House 10m, High-rise tower 120m).
-- **Toast Notifications**: Non-intrusive floating feedback for copy actions, scale changes, and export status.
+```text
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          DEVELOPMENT TIMELINE & PHASES                          │
+└─────────────────────────────────────────────────────────────────────────────────┘
+  Phase 0      • Initial MVP with Bidirectional Converter & Rescaler
+               • Cozy Studio Dark (default), Drafting Paper & Blueprint themes
+               • Web Audio API synthesized mechanical tactile clicks
+               • Visual proportional silhouette comparison & graphic scale bar
+               ─────────────────────────────────────────────────────────────
+  Phase 0.5    • Added Dedicated Furniture Scaling Catalog with 61 items
+               • Instant keystroke search bar & dynamic category filters
+               • Scaled 2D plan blueprint previews & custom dimension scaler
+               ─────────────────────────────────────────────────────────────
+  Phase 1.0    • Baseline Git Repository established on GitHub
+               • Comprehensive 24-point codebase audit (ARCHITECTURE_AUDIT.md)
+               • Refactored into a strict 3-tier modular architecture (src/core, src/services, src/ui)
+               • Built pure-Node zero-dependency bundler (scripts/build.js)
+               ─────────────────────────────────────────────────────────────
+  Phase 1.5    • Architecture Verification & Hardening
+               • Implemented strict requireUnit validation (no silent fallbacks)
+               • Added multi-suite automated test framework in tests/
+               • Fixed architectural hyphen separator parsing bug (12'-6 1/2")
+               ─────────────────────────────────────────────────────────────
+  Phase 1.75   • Foundation Freeze & Engineering Rules established (ENGINEERING_RULES.md)
+               • Verified deterministic build synchronization (scripts/build.js --check)
+               • Hardened input parser against malformed fractions & trailing letters
+               ─────────────────────────────────────────────────────────────
+  Phase 1.9    • Final Core Contract Hardening
+               • Implemented requireFiniteNumber to reject non-numeric types & strings
+               • Updated detectScale to return ratio: null on invalid dimensions
+               • Verified architectural geometry readiness (FUTURE_ARCHITECTURE.md)
+               • Reached 149 exact automated test assertions with 100% pass rate
+```
 
 ---
 
-## 🛠️ Core Tools & Calculation Modes
+## 🌐 What This Project Does on GitHub
 
-### 1. Scale Converter (Drawing ↔ Real World)
-- **Bidirectional Scaling**:
-  - **Drawing $\rightarrow$ Real World**: Enter paper measurement (e.g. `15.5 cm` at `1:50`) $\rightarrow$ instantly calculates real-world length (`7.75 m` / `25'-5 1/8"`).
-  - **Real World $\rightarrow$ Drawing**: Enter real dimension (e.g. `12.0 m` at `1:100`) $\rightarrow$ instantly calculates paper drawing length (`12.0 cm` / `120 mm`).
-  - **Direction Swap (<kbd>S</kbd>)**: Instant animated reversal of input and output with acoustic confirmation.
-- **Scale Presets Grid**: Quick category filters (*All, Architectural, Detail, Urban, Imperial*) and custom ratio input (`1 : X`).
-- **Flexible Number & Fraction Parser**:
-  - Decimals: `12.5`, `0.75`, `250`
-  - Fractions: `3 1/2`, `5/8`, `1/4`
-  - Architectural Feet/Inches: `12' 6"`, `12'-6 1/2"`, `8'4"`
-- **Equivalent Breakdown Grid**: Real-time parallel readout across all metric and imperial units simultaneously.
+This repository serves as:
+1. **An Open-Source Reference Tool**: An accessible, zero-friction architectural scaling studio for professionals, students, and educators.
+2. **Zero-Dependency Architecture**: No React, no bundler frameworks, no `node_modules` runtime requirements. Anyone can double-click `index.html` and use it immediately offline via `file:///`.
+3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **149 automated test assertions**.
+4. **An Extensible Platform**: Prepared for future architectural geometry engines, CAD vector exports (SVG/DXF), and stair/ramp calculations.
 
 ---
+
+## 🛠️ Core Tools & Capabilities
+
+### 1. Bidirectional Scale Converter (Drawing ↔ Real World)
+* **Drawing $\rightarrow$ Real World**: Convert drawing measurements (e.g. `15 cm` at `1:50`) $\rightarrow$ real world (`7.5 m` / `24'-7 1/4"`).
+* **Real World $\rightarrow$ Drawing**: Convert real dimensions (e.g. `12.0 m` at `1:100`) $\rightarrow$ paper drawing length (`12.0 cm` / `120 mm`).
+* **Direction Swap (<kbd>S</kbd>)**: Instant animated toggle with acoustic feedback.
+* **Flexible Parsing**: Accepts decimals (`12.5`), fractions (`3 1/2`, `5/8`), attached units (`15.5cm`, `2.4m`, `12in`, `6ft`), and architectural notations (`12'-6 1/2"`).
+* **Parallel Equivalents**: Real-time breakdown across Metric (`mm`, `cm`, `dm`, `m`, `km`) and Imperial (`in`, `ft`, `ft-in`, `yd`, `mi`).
 
 ### 2. Rescaler (Sheet Scale A ➔ Sheet Scale B)
-- Calculates how long a drawn element will be when transferring or redrawing between drawings of different scales.
-- **Inputs**: Original Scale A (`1:50`), Original Drawing Length (`12 cm`), Target Scale B (`1:200`), Target Unit (`cm`).
-- **Outputs**: Calculated dimension on target sheet (`3.0 cm`), Magnification/Reduction factor (`25.0% - Reduced`).
-
----
+* Recalculates drawing lengths when redrawing plans between different sheet scales (e.g., `12 cm` at `1:50` $\rightarrow$ `3.0 cm` at `1:200`).
+* Displays magnification/reduction percentages (e.g., `25.0% - Reduction`).
 
 ### 3. Scale Finder & Detector
-- Identifies the scale of an unlabelled drawing or scanned plan.
-- **Inputs**: Measured length on paper (e.g. `4.5 cm`) + Known real-world length (e.g. `9.0 m`).
-- **Outputs**:
-  - Exact scale ratio (e.g. `1 : 200`).
-  - Nearest standard architectural preset match with percentage difference.
-  - One-click **"Apply Scale to Main Converter"** button.
+* Determines the exact scale of unlabelled drawings or scanned plans from measured paper distance and known real-world length (e.g. `4.5 cm` paper vs `9.0 m` real $\rightarrow$ detects `1:200`).
+* Identifies the closest standard architectural preset with percentage deviation.
+* Includes one-click **"Apply Scale to Converter"** button.
+
+### 4. Area (S²) & Volume (S³) Scaler
+* **Area Scaling ($S^2$)**: Exponential scaling for floor plans, room zoning, and plot boundaries ($\text{cm}^2 \leftrightarrow \text{m}^2$, $\text{sq ft}$, $\text{ha}$, $\text{acres}$).
+* **Volume Scaling ($S^3$)**: Computes 3D massing, foam model block volumes, and concrete structural volumes ($\text{cm}^3 \leftrightarrow \text{m}^3$, $\text{liters}$, $\text{cu ft}$).
+
+### 5. Furniture Scales & Fixtures Catalog (with Live Search)
+* **61 Architectural Furniture & Fixture Records**: Across Living, Bedroom, Dining, Kitchen, Bathroom, Office, and Doors/Clearances.
+* **Real-Time Search Bar**: Instant keystroke filtering by keyword (e.g. `sofa`, `king bed`, `sink`, `door`, `desk`, `toilet`).
+* **Dynamic Scale Bar**: Scale all furniture dimensions simultaneously across `1:10`, `1:20`, `1:25`, `1:50`, `1:100`, `1/4"=1'`, or custom ratios with paper unit toggle (`cm`, `mm`, `in`).
+* **2D Top-Down Blueprint Visualizations**: Scaled vector diagrams showing layout proportions and clearance footprints.
+* **Custom Dimension Scaler**: Input custom $W \times D \times H$ to get exact paper drawing dimensions immediately.
+
+### 6. Multi-Length Architectural Reference Sheet
+* Print-ready reference table showing common drafting lengths (`0.1cm`, `0.5cm`, `1cm`, `2cm`, `5cm`, `10cm`, `20cm`, `50cm`, `100cm`) converted to real metric and imperial dimensions at the active scale.
+* One-click **"Print Reference Sheet"** formatted for studio drafting boards.
 
 ---
 
-### 4. Area (S²) & 3D Volume (S³) Scaler
-- **Area Scaling ($S^2$)**: Accurately scales floor plans, site boundaries, and parcel areas ($\text{cm}^2 \leftrightarrow \text{m}^2$, $\text{m}^2 \leftrightarrow \text{sq ft}$, $\text{ha}$, $\text{acres}$).
-- **Volume Scaling ($S^3$)**: Computes 3D massing, foam block model volumes, and structural material volumes ($\text{cm}^3 \leftrightarrow \text{m}^3$, $\text{liters}$, $\text{cu ft}$).
-
----
-
-### 5. Furniture Scales & Fixtures Catalog
-- **Live Search Bar**: Real-time keystroke filtering by keyword (e.g. `sofa`, `king bed`, `sink`, `door`, `desk`, `conference`, `wardrobe`) with dynamic result count.
-- **Category Filter Navigation**:
-  - `All Furniture` (40+ items)
-  - `🛋️ Living Room`
-  - `🛏️ Bedroom`
-  - `🍽️ Dining`
-  - `🍳 Kitchen & Utility`
-  - `🚿 Bathroom & Fixtures`
-  - `💼 Office & Workspace`
-  - `🚪 Doors & Clearances`
-- **Dynamic Scale Bar**: Scale all furniture pieces simultaneously across `1:10`, `1:20`, `1:25`, `1:50`, `1:100`, `1/4"=1'`, or custom ratios with unit toggle (`cm`, `mm`, `in`).
-- **2D Top-Down Blueprint Visualizations**: Architectural plan view graphic with proportion cues for each piece.
-- **Quick Custom Dimension Scaler**: Enter any custom $W \times D \times H$ to get both real-world specs and exact paper drawing size.
-- **Action Buttons**: One-click **"Copy Size"** and **"To Converter"** (transfers dimensions to the main converter).
-
----
-
-### 6. Multi-Length Reference Chart
-- Print-ready reference table showing common drawing lengths (`0.1cm`, `0.5cm`, `1cm`, `2cm`, `5cm`, `10cm`, `20cm`, `50cm`, `100cm`) converted to real-world metric and imperial measurements at the chosen scale.
-- One-click **"Print Reference Sheet"** for physical studio drafting boards.
-
----
-
-## 📐 Complete Architectural Scale Presets
+## 📐 Architectural Scale Presets (All 28 Presets)
 
 | Scale ID | Category | Ratio | Description & Standard Usage |
-| :--- | :--- | :--- | :--- |
-| **1:1** | Metric Detail | 1 | Full scale, 1:1 physical mockups & full fixtures |
-| **1:2** | Metric Detail | 2 | Half size, large architectural details |
-| **1:5** | Metric Detail | 5 | Joinery details, structural connections |
+| :--- | :--- | :---: | :--- |
+| **1:1** | Metric Detail | 1 | Full size, 1:1 physical prototypes & joinery mockups |
+| **1:2** | Metric Detail | 2 | Half size, large architectural details & fixtures |
+| **1:5** | Metric Detail | 5 | Construction details, joinery, assemblies |
 | **1:10** | Metric Detail | 10 | Cabinetry, custom millwork, interior details |
 | **1:20** | Metric Detail | 20 | Room layouts, enlarged sections, interior elevations |
-| **1:25** | Metric Detail | 25 | Structural bay layouts, detailed plans |
+| **1:25** | Metric Detail | 25 | Structural bay layouts, detailed floor plans |
 | **1:50** | Architectural | 50 | **Standard floor plans**, elevations, building sections |
 | **1:100** | Architectural | 100 | **General building plans**, residential schemes, full elevations |
 | **1:200** | Architectural | 200 | Large commercial plans, complex site layouts |
@@ -153,7 +170,7 @@ Scaling errors on architectural drawings cause costly delays in construction, in
 
 ---
 
-## 🛋️ Complete Furniture & Fixtures Database
+## 🛋️ Architectural Furniture & Fixtures Database (61 Items)
 
 | Category | Item Name | Real Dimensions ($W \times D \times H$) | Real Imperial | Scaled at 1:50 (Paper) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -224,47 +241,47 @@ Scaling errors on architectural drawings cause costly delays in construction, in
 ## 📏 Supported Measurement Units
 
 ### Length Units
-- `mm` — Millimeters ($0.001\text{ m}$)
-- `cm` — Centimeters ($0.01\text{ m}$)
-- `dm` — Decimeters ($0.1\text{ m}$)
-- `m` — Meters ($1.0\text{ m}$)
-- `km` — Kilometers ($1000.0\text{ m}$)
-- `in` — Inches ($0.0254\text{ m}$)
-- `ft` — Decimal Feet ($0.3048\text{ m}$)
-- `ft-in` — Architectural Notation ($X'\text{-}Y\text{ }Z/16"$)
-- `yd` — Yards ($0.9144\text{ m}$)
-- `mi` — Miles ($1609.344\text{ m}$)
+* `mm` — Millimeters ($0.001\text{ m}$)
+* `cm` — Centimeters ($0.01\text{ m}$)
+* `dm` — Decimeters ($0.1\text{ m}$)
+* `m` — Meters ($1.0\text{ m}$)
+* `km` — Kilometers ($1000.0\text{ m}$)
+* `in` — Inches ($0.0254\text{ m}$)
+* `ft` — Decimal Feet ($0.3048\text{ m}$)
+* `ft-in` — Architectural Notation ($X'\text{-}Y\text{ }Z/16"$)
+* `yd` — Yards ($0.9144\text{ m}$)
+* `mi` — Miles ($1609.344\text{ m}$)
 
 ### Area Units
-- `mm²` — Square Millimeters ($10^{-6}\text{ m}^2$)
-- `cm²` — Square Centimeters ($10^{-4}\text{ m}^2$)
-- `m²` — Square Meters ($1.0\text{ m}^2$)
-- `km²` — Square Kilometers ($10^6\text{ m}^2$)
-- `ha` — Hectares ($10,000\text{ m}^2$)
-- `sq in` — Square Inches ($0.00064516\text{ m}^2$)
-- `sq ft` — Square Feet ($0.09290304\text{ m}^2$)
-- `sq yd` — Square Yards ($0.83612736\text{ m}^2$)
-- `ac` — Acres ($4046.8564\text{ m}^2$)
+* `mm²` — Square Millimeters ($10^{-6}\text{ m}^2$)
+* `cm²` — Square Centimeters ($10^{-4}\text{ m}^2$)
+* `m²` — Square Meters ($1.0\text{ m}^2$)
+* `km²` — Square Kilometers ($10^6\text{ m}^2$)
+* `ha` — Hectares ($10,000\text{ m}^2$)
+* `sq in` — Square Inches ($0.00064516\text{ m}^2$)
+* `sq ft` — Square Feet ($0.09290304\text{ m}^2$)
+* `sq yd` — Square Yards ($0.83612736\text{ m}^2$)
+* `ac` — Acres ($4046.8564\text{ m}^2$)
 
 ### Volume Units
-- `mm³` — Cubic Millimeters ($10^{-9}\text{ m}^3$)
-- `cm³` — Cubic Centimeters / cc ($10^{-6}\text{ m}^3$)
-- `m³` — Cubic Meters ($1.0\text{ m}^3$)
-- `L` — Liters ($0.001\text{ m}^3$)
-- `cu in` — Cubic Inches ($1.6387 \times 10^{-5}\text{ m}^3$)
-- `cu ft` — Cubic Feet ($0.0283168\text{ m}^3$)
-- `cu yd` — Cubic Yards ($0.764554\text{ m}^3$)
+* `mm³` — Cubic Millimeters ($10^{-9}\text{ m}^3$)
+* `cm³` — Cubic Centimeters / cc ($10^{-6}\text{ m}^3$)
+* `m³` — Cubic Meters ($1.0\text{ m}^3$)
+* `L` — Liters ($0.001\text{ m}^3$)
+* `cu in` — Cubic Inches ($1.6387 \times 10^{-5}\text{ m}^3$)
+* `cu ft` — Cubic Feet ($0.0283168\text{ m}^3$)
+* `cu yd` — Cubic Yards ($0.764554\text{ m}^3$)
 
 ---
 
-## 🧮 Mathematical Formulas & Engine
+## 🧮 Mathematical Formulas & Contracts
 
 1. **Drawing to Real-World Dimension:**
-   $$\text{Real Meters} = (\text{Drawing Value} \times \text{Unit Factor}) \times \text{Scale Ratio}$$
+   $$\text{Real Meters} = (\text{Drawing Value} \times \text{Input Unit Factor}) \times \text{Scale Ratio}$$
    $$\text{Output Value} = \frac{\text{Real Meters}}{\text{Target Unit Factor}}$$
 
 2. **Real-World to Drawing Dimension:**
-   $$\text{Drawing Meters} = \frac{\text{Real Value} \times \text{Unit Factor}}{\text{Scale Ratio}}$$
+   $$\text{Drawing Meters} = \frac{\text{Real Value} \times \text{Input Unit Factor}}{\text{Scale Ratio}}$$
    $$\text{Output Value} = \frac{\text{Drawing Meters}}{\text{Target Unit Factor}}$$
 
 3. **Scale Rescaling Magnification ($A \rightarrow B$):**
@@ -281,31 +298,28 @@ Scaling errors on architectural drawings cause costly delays in construction, in
 
 ---
 
-## 🎨 Themes & Tactile Acoustic Feedback
+## 🎨 Visual Proportions & Tactile Audio
 
 ### 3 Handcrafted Themes
-1. **📐 Studio Dark (Default)**:
-   - Deep slate graphite background (`#0d1117`), blueprint cyan accents (`#38bdf8`), glowing status tags, and high-contrast numbers for drafting sessions.
-2. **📜 Drafting Paper**:
-   - Warm architectural parchment (`#f6f3eb`), sepia ink, pencil charcoal text (`#1e2229`), and bronze borders.
-3. **🟦 Blueprint Cyan**:
-   - Classic cyanotype blueprint aesthetic (`#0a2540`), stark white technical drafting outlines, electric cyan accents.
+* 📐 **Studio Dark (Default)**: Deep graphite slate (`#0d1117`), technical blueprint cyan accents (`#38bdf8`), and high-contrast numbers for extended drafting sessions.
+* 📜 **Drafting Paper**: Warm architectural parchment (`#f6f3eb`), sepia tones, pencil charcoal text (`#1e2229`), and bronze borders.
+* 🟦 **Blueprint Cyan**: Classic cyanotype blueprint aesthetic (`#0a2540`), stark white drafting outlines, and electric cyan accents.
 
 ### Synthesized Web Audio Engine
-- Built-in zero-asset audio synthesizer using HTML5 Web Audio API:
-  - Gentle mechanical keystroke clicks on numeric changes.
-  - Soft pitch slide on direction swap.
-  - Harmonized tri-tone chime on clipboard copy.
-  - Completely toggleable and persistent via `localStorage`.
+* Built-in zero-asset audio synthesizer using HTML5 Web Audio API:
+  * Gentle mechanical keystroke clicks on numeric changes.
+  * Soft pitch slide on direction swap (<kbd>S</kbd>).
+  * Harmonized tri-tone chime on clipboard copy.
+  * Completely toggleable and persistent in storage.
 
 ---
 
-## 💾 Calculation History & Export System
+## 💾 Calculation History & Export
 
-- **Automatic Logging**: Every calculation is logged with timestamp, mode, input, ratio, and output.
-- **Export CSV**: Generates a standard `.csv` spreadsheet ready for Excel, Google Sheets, or BIM schedule logs.
-- **Export Markdown**: Formats calculation logs into a GitHub Flavored Markdown table for project documentation.
-- **Persistent Storage**: Retained across browser restarts via `localStorage`.
+* **Automatic Logging**: Every calculation is logged with timestamp, mode, input, ratio, and output.
+* **Export CSV**: Generates a standard `.csv` spreadsheet ready for Excel, Google Sheets, or BIM schedule logs.
+* **Export Markdown**: Formats calculation logs into a GitHub Flavored Markdown table for project documentation.
+* **Resilient Persistence**: Safe storage layer with memory fallback.
 
 ---
 
@@ -326,30 +340,51 @@ Scaling errors on architectural drawings cause costly delays in construction, in
 
 ---
 
-## 🚀 How to Run & Technical Architecture
+## 💻 How to Run, Build & Test
 
-Architecture Helping Hand is built with **zero external dependencies** and requires no build step:
-
-### Method 1: Instant Local Launch
+### 1. Instant Local Launch (Offline)
 Simply double-click `index.html` or open it with any web browser (Chrome, Edge, Safari, Firefox, Opera, Brave).
 
-### Method 2: Local HTTP Server (Optional)
+### 2. Local HTTP Server (Optional)
 ```bash
-# Using Python
+# Using Node.js
+npm start
+
+# Or using Python
 python -m http.server 3000
-
-# Or using Node.js
-npx serve -l 3000 .
 ```
-Navigate to `http://localhost:3000` in your web browser.
 
-### Automated Test Suite
-To verify calculation formulas and unit conversions:
+### 3. Run Automated Tests
 ```bash
-node tests/converter.test.js
+npm test
+# Executes all 7 test suites (149 assertions)
 ```
-*(All 14 unit test assertions pass with zero failures).*
+
+### 4. Build Standalone Bundle
+```bash
+npm run build
+# Compiles src/ into js/app.js deterministically
+```
+
+### 5. Verify Bundle Synchronization
+```bash
+node scripts/build.js --check
+# Asserts that js/app.js is 100% in sync with src/
+```
 
 ---
 
-*Architecture Helping Hand Studio • Precision Architectural Scaling & Reference Suite*
+## 🔮 Future Roadmap
+
+* **Phase 2: Custom User Presets & CAD Vector Exports**:
+  - Custom drawing scale creator with LocalStorage persistence.
+  - Bespoke furniture dimension creator and organizer.
+  - Scaled SVG & DXF vector block export for AutoCAD, Rhino, Illustrator, and laser cutters.
+* **Phase 3: Architectural Geometry & Stair/Ramp Suite**:
+  - Blondel's rule stair riser/tread calculator ($2R + T \approx 63\text{cm}$).
+  - ADA ramp slope & gradient calculator.
+  - 2D perimeter, area, and polygon massing tools.
+
+---
+
+*Architecture Helping Hand • Built for Architects, Designers & Engineers • High-Precision Scaling Engine*
