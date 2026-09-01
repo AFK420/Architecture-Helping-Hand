@@ -146,7 +146,20 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     // Mode 6: Reference
     'ref-scale-select',
     'btn-print-ref',
-    'ref-table-body'
+    'ref-table-body',
+
+    // Workflow Pipeline & Mathematical Explanation IDs
+    'converter-math-formula',
+    'converter-flow-from',
+    'converter-flow-to',
+    'converter-secondary-readout',
+    'converter-result-stale-tag',
+    'rescale-math-formula',
+    'rescale-result-stale-tag',
+    'detector-math-formula',
+    'detector-result-stale-tag',
+    'areavol-math-formula',
+    'areavol-result-stale-tag'
   ];
 
   for (const id of requiredIds) {
