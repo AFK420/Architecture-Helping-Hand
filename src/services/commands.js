@@ -200,15 +200,15 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
-    id: 'future-dim-chains',
+    id: 'nav-chains',
     title: 'Dimension Chains',
-    description: 'Calculate cumulative structural grid lines, interior partitions, and dimension strings',
-    category: 'Upcoming Tool',
+    description: 'Evaluate ordered dimension sequences, cumulative coordinates, scale-accurate SVG drafting chains, and offsets',
+    category: 'Navigation',
     icon: '🔗',
-    keywords: ['chain', 'dimension string', 'cumulative', 'running totals', 'grid', 'phase 2.5'],
-    actionType: 'placeholder',
-    available: false,
-    badge: 'Phase 2.5'
+    keywords: ['chain', 'dimension string', 'cumulative', 'running totals', 'grid', 'sequence', 'offsets', 'mode 10', '0'],
+    shortcut: '0',
+    actionType: 'navigation',
+    available: true
   },
   {
     id: 'future-cad-clipboard',

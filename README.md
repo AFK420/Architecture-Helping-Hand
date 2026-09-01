@@ -26,6 +26,7 @@
    - [8. Dimension Workspace & Dynamic Schedule (v1.1)](#8-dimension-workspace--dynamic-schedule-v11)
    - [9. Dimension Expression Calculator](#9-dimension-expression-calculator)
    - [10. Multi-Scale Comparison Workspace](#10-multi-scale-comparison-workspace)
+   - [11. Dimension Chains (Continuous Strings)](#11-dimension-chains-continuous-strings)
 5. [📐 Architectural Scale Presets (All 28 Presets)](#-architectural-scale-presets-all-28-presets)
 6. [🛋️ Architectural Furniture & Fixtures Database (179 Items Across 9 Domains)](#️-architectural-furniture--fixtures-database-179-items-across-9-domains)
 7. [📏 Supported Measurement Units](#-supported-measurement-units)
@@ -203,6 +204,14 @@ This repository serves as:
 * **Heuristic Suggested Fit**: Optional target drawing range heuristic to highlight suggested scale options.
 * **Workspace & Expression Integration**: Insert individual scale drawing results into the active Dimension Workspace (`+ WS`) and launch multi-scale comparison directly from Mode 8.
 * **Command Palette Live Preview**: Typing `compare 2400mm` or `2400mm` in <kbd>Ctrl+K</kbd> / <kbd>⌘K</kbd> generates an instant 3-scale comparison preview.
+
+### 11. Dimension Chains (Continuous Strings) (Mode 10)
+* **Sequential Cumulative Coordinates**: Evaluates continuous measured segments end-to-end to compute running start and end positions ($0 \rightarrow 1200 \rightarrow 3000 \rightarrow 3900 \rightarrow 5400\text{ mm}$).
+* **Scale-Accurate SVG Drafting Visualizer**: Pure mathematical SVG drafting centerpiece rendering baseline axes, witness lines, architectural $45^\circ$ tick slashes, and interactive slice highlighting.
+* **Semantic Roles**: Supports `SEG` (additive segments), `REF` (non-additive annotation pins), and `ALW` (allowance/tolerance clearances).
+* **Datum Start & End Offsets**: Handles structural baseline offsets independently from segment totals ($\text{Overall} = \text{StartOffset} + \text{Segments} + \text{Allowances} + \text{EndOffset}$).
+* **Workspace & Multi-Scale Handoffs**: Transfer entire chains as named groups to Dimension Workspace or compare chain extents across scales in Mode 9.
+* **Command Palette Chain Preview**: Typing `chain 1200 1800 900` in <kbd>Ctrl+K</kbd> / <kbd>⌘K</kbd> instantly parses and previews multi-segment chains.
 
 ---
 

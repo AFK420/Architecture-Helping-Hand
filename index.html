@@ -191,6 +191,15 @@
         <span>Multi-Scale</span>
         <span class="mode-key-hint">9</span>
       </button>
+
+      <button class="mode-tab" data-mode="chains" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+        </svg>
+        <span>Dimension Chains</span>
+        <span class="mode-key-hint">0</span>
+      </button>
     </nav>
 
     <!-- ======================================================== -->
@@ -1879,6 +1888,245 @@
         </div>
       </div>
     </section>
+
+    <!-- ======================================================== -->
+    <!-- MODE 10: DIMENSION CHAINS (Continuous Dimension Strings)  -->
+    <!-- ======================================================== -->
+    <section id="mode-view-chains" class="tool-mode-view" aria-labelledby="heading-chains" hidden>
+      <div class="tool-layout">
+        <!-- Left Column / Primary Instrument Faceplate -->
+        <div class="archi-card main-calc-card">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <div class="card-header">
+            <div>
+              <span class="card-tag">MODE 10 • DIMENSION STRINGS</span>
+              <h2 id="heading-chains" class="card-title">Dimension Chains</h2>
+            </div>
+            <div class="status-indicator">
+              <span id="chains-state-badge" class="badge-status-ready">READY</span>
+            </div>
+          </div>
+
+          <!-- Chain Settings: Name, Scale, Unit -->
+          <div class="instrument-grid" style="grid-template-columns: 2fr 1fr 1fr; gap: 0.75rem; margin-bottom: 0.85rem;">
+            <div class="input-group">
+              <label for="chains-name-input" class="input-label">Chain Name</label>
+              <input type="text" id="chains-name-input" class="text-input" value="North Wall Sequence" placeholder="e.g. North Wall Grid" />
+            </div>
+
+            <div class="input-group">
+              <label for="chains-scale-select" class="input-label">Drawing Scale</label>
+              <select id="chains-scale-select" class="unit-select">
+                <option value="10">1:10 (Detail)</option>
+                <option value="20">1:20 (Interior/Detail)</option>
+                <option value="25">1:25 (Joinery/Plan)</option>
+                <option value="50" selected>1:50 (Architecture Plan)</option>
+                <option value="75">1:75 (Intermediate)</option>
+                <option value="100">1:100 (General Arrangement)</option>
+                <option value="200">1:200 (Site / Massing)</option>
+              </select>
+            </div>
+
+            <div class="input-group">
+              <label for="chains-unit-select" class="input-label">Display Unit</label>
+              <select id="chains-unit-select" class="unit-select">
+                <option value="mm" selected>Millimeters (mm)</option>
+                <option value="cm">Centimeters (cm)</option>
+                <option value="m">Meters (m)</option>
+                <option value="in">Inches (in)</option>
+                <option value="ft">Feet (ft)</option>
+                <option value="ft_in">Ft-In (Architectural)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Offsets Row -->
+          <div class="instrument-grid" style="grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.85rem;">
+            <div class="input-group">
+              <label for="chains-start-offset-input" class="input-label">Start Offset (e.g. Datum / Wall Thickness)</label>
+              <input type="text" id="chains-start-offset-input" class="text-input" placeholder="0 or 300mm" value="0" />
+            </div>
+            <div class="input-group">
+              <label for="chains-end-offset-input" class="input-label">End Offset (e.g. Return / Tolerance)</label>
+              <input type="text" id="chains-end-offset-input" class="text-input" placeholder="0 or 200mm" value="0" />
+            </div>
+          </div>
+
+          <!-- Quick Add Input Instrument -->
+          <div class="calc-instrument-panel" style="margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+              <label for="chains-quick-input" class="input-label" style="margin-bottom: 0;">Quick Add (e.g. 1200 + 1800 + 900 + 1500 or Bay 1 1200, Door 900 ref)</label>
+              <span id="chains-live-preview" class="expr-live-preview">Live: Ready</span>
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <input
+                type="text"
+                id="chains-quick-input"
+                class="text-input"
+                placeholder="1200 + 1800 + 900 + 1500"
+                autocomplete="off"
+                spellcheck="false"
+                style="font-family: var(--font-family-mono); font-size: 1rem; font-weight: 600;"
+              />
+              <button type="button" id="chains-add-btn" class="btn-calc-action primary" style="width: auto; white-space: nowrap; padding: 0 1.25rem;">
+                <span>+ Add to Chain</span>
+              </button>
+              <button type="button" id="chains-clear-input-btn" class="control-btn" title="Clear input field" style="flex-shrink: 0;">✕</button>
+            </div>
+            <div id="chains-error-msg" class="expr-error-banner" style="display: none; margin-top: 0.5rem;"></div>
+
+            <!-- Architectural Templates -->
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.65rem;">
+              <span style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Templates:</span>
+              <button type="button" class="chain-template-chip" data-template="wall_opening">🧱 Wall Openings</button>
+              <button type="button" class="chain-template-chip" data-template="grid_bays">📐 Grid Bays</button>
+              <button type="button" class="chain-template-chip" data-template="facade_rhythm">🏢 Facade Rhythm</button>
+              <button type="button" class="chain-template-chip" data-template="room_perimeter">🚪 Corridor Partitions</button>
+              <button type="button" id="chains-clear-all-btn" class="chain-template-chip danger" style="margin-left: auto;">🗑️ Clear Chain</button>
+            </div>
+          </div>
+
+          <!-- Centerpiece SVG Drafting Viewport -->
+          <div class="chain-svg-container">
+            <div class="chain-svg-header">
+              <span class="chain-svg-title">📐 SCALE-ACCURATE DRAFTING CHAIN</span>
+              <div class="chain-svg-controls">
+                <button type="button" id="chains-zoom-fit-btn" class="chain-svg-btn" title="Reset Viewport to Fit">Fit View</button>
+              </div>
+            </div>
+            <div id="chains-svg-viewport-wrapper" class="chain-svg-viewport-wrapper">
+              <!-- SVG generated dynamically by generateChainSVG -->
+            </div>
+          </div>
+
+          <!-- Selected Segment Inspector Strip -->
+          <div id="chains-selected-inspector" class="chain-selected-inspector" style="display: none;">
+            <div class="inspector-badge">SELECTED SEGMENT</div>
+            <div class="inspector-details">
+              <span id="chains-inspector-name" class="inspector-name">Bay 1</span>
+              <span id="chains-inspector-len" class="inspector-val">1,200 mm</span>
+              <span class="inspector-pos">Start: <strong id="chains-inspector-start">0 mm</strong> ➔ End: <strong id="chains-inspector-end">1,200 mm</strong></span>
+              <span class="inspector-scale">Drawing @ 1:50: <strong id="chains-inspector-draw">24 mm</strong></span>
+            </div>
+          </div>
+
+          <!-- Segment Schedule Table -->
+          <div class="workspace-table-container" style="margin-top: 1rem; max-height: 320px;">
+            <table class="workspace-table multiscale-table" id="chains-table">
+              <thead>
+                <tr>
+                  <th style="width: 45px; text-align: center;">#</th>
+                  <th style="width: 45px; text-align: center;">On</th>
+                  <th>Segment Name</th>
+                  <th style="width: 100px;">Start</th>
+                  <th style="width: 100px;">End</th>
+                  <th style="width: 110px;">Length</th>
+                  <th style="width: 80px; text-align: center;">Type</th>
+                  <th style="width: 100px;">Drawing</th>
+                  <th style="width: 90px; text-align: right;">Order</th>
+                  <th style="width: 45px; text-align: center;">Del</th>
+                </tr>
+              </thead>
+              <tbody id="chains-table-body">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Run Calculation / Recalculate Button -->
+          <div style="margin-top: 1rem;">
+            <button type="button" id="btn-run-chains" class="btn-run-calc" style="width: 100%;">
+              <span>RUN CHAIN CALCULATION</span>
+              <kbd>↵</kbd>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right Column / Results & Interoperability Card -->
+        <div class="archi-card result-panel-card">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <div class="card-header">
+            <div>
+              <span class="card-tag">CUMULATIVE METRICS</span>
+              <h3 class="card-title">Chain Summary</h3>
+            </div>
+            <span id="chains-count-badge" class="result-scale-badge">0 SEGMENTS</span>
+          </div>
+
+          <!-- Result Hero Box -->
+          <div class="result-hero-box" style="margin-bottom: 1rem;">
+            <div class="result-hero-label">Overall Chain Extent</div>
+            <div class="result-hero-value-wrap">
+              <span id="chains-overall-val" class="result-hero-value" style="font-size: 2.2rem;">0 mm</span>
+            </div>
+            <div class="result-flow-details" style="margin-top: 0.4rem;">
+              <span id="chains-drawing-overall" class="secondary-unit-readout" style="font-weight: 700; color: var(--accent-primary);">Drawing @ 1:50: 0 mm</span>
+            </div>
+          </div>
+
+          <!-- Breakdown Summary Cards -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 1rem;">
+            <div class="metric-card" style="padding: 0.65rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: 4px;">
+              <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Segment Sum (SEG)</div>
+              <div id="chains-seg-total-val" style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); font-family: var(--font-family-mono);">0 mm</div>
+            </div>
+            <div class="metric-card" style="padding: 0.65rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: 4px;">
+              <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Allowances (ALW)</div>
+              <div id="chains-alw-total-val" style="font-size: 1.1rem; font-weight: 700; color: var(--color-warning, #f59e0b); font-family: var(--font-family-mono);">0 mm</div>
+            </div>
+            <div class="metric-card" style="padding: 0.65rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: 4px;">
+              <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Start Offset</div>
+              <div id="chains-start-offset-val" style="font-size: 1.1rem; font-weight: 700; color: var(--text-secondary); font-family: var(--font-family-mono);">0 mm</div>
+            </div>
+            <div class="metric-card" style="padding: 0.65rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: 4px;">
+              <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">End Offset</div>
+              <div id="chains-end-offset-val" style="font-size: 1.1rem; font-weight: 700; color: var(--text-secondary); font-family: var(--font-family-mono);">0 mm</div>
+            </div>
+          </div>
+
+          <!-- Actions & Interoperability Strip -->
+          <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">
+            <button type="button" id="chains-compare-multiscale-btn" class="btn-calc-action secondary" style="width: 100%; justify-content: center;">
+              <span>📊 Compare Chain Across Scales</span>
+            </button>
+            <button type="button" id="chains-send-workspace-btn" class="btn-calc-action secondary" style="width: 100%; justify-content: center;">
+              <span>📐 Send Chain to Dimension Workspace</span>
+            </button>
+            <button type="button" id="chains-save-journal-btn" class="btn-calc-action secondary" style="width: 100%; justify-content: center;">
+              <span>📜 Save to Calculation Journal</span>
+            </button>
+          </div>
+
+          <!-- Multi-Stream Copy Toolbar -->
+          <div class="result-actions-strip" style="margin-top: 1rem; flex-wrap: wrap;">
+            <button type="button" id="chains-copy-table-btn" class="result-action-btn" title="Copy Markdown table">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <span>Copy Table</span>
+            </button>
+            <button type="button" id="chains-copy-cum-btn" class="result-action-btn" title="Copy running cumulative coordinates (0 1200 3000 3900 5400)">
+              <span>Copy Cumulative</span>
+            </button>
+            <button type="button" id="chains-copy-segs-btn" class="result-action-btn" title="Copy segment measurements (1200 1800 900 1500)">
+              <span>Copy Segments</span>
+            </button>
+            <button type="button" id="chains-copy-draw-btn" class="result-action-btn" title="Copy scaled drawing dimensions">
+              <span>Copy Drawing</span>
+            </button>
+            <button type="button" id="chains-export-tsv-btn" class="result-action-btn" title="Download TSV file for CAD / Excel">
+              <span>Export TSV</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- History Drawer Side Panel -->
@@ -1982,8 +2230,8 @@
           <span class="kbd-badge">S</span>
         </div>
         <div class="shortcut-row">
-          <span>Switch Tool Modes (1-9)</span>
-          <span class="kbd-badge">1 — 9</span>
+          <span>Switch Tool Modes (1-9, 0)</span>
+          <span class="kbd-badge">1 — 9, 0</span>
         </div>
         <div class="shortcut-row">
           <span>Toggle Calculation History Drawer</span>

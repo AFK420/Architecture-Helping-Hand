@@ -34,7 +34,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
 // 1. Verify Mode Navigation Targets in HTML
 {
-  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale'];
+  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains'];
   
   for (const mode of expectedModes) {
     const hasTab = htmlContent.includes(`data-mode="${mode}"`);
@@ -269,6 +269,46 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'multiscale-copy-current-btn',
     'multiscale-copy-raw-btn',
 
+    // Mode 10: Dimension Chains IDs
+    'chains-state-badge',
+    'chains-name-input',
+    'chains-scale-select',
+    'chains-unit-select',
+    'chains-start-offset-input',
+    'chains-end-offset-input',
+    'chains-quick-input',
+    'chains-live-preview',
+    'chains-add-btn',
+    'chains-clear-input-btn',
+    'chains-error-msg',
+    'chains-clear-all-btn',
+    'chains-zoom-fit-btn',
+    'chains-svg-viewport-wrapper',
+    'chains-selected-inspector',
+    'chains-inspector-name',
+    'chains-inspector-len',
+    'chains-inspector-start',
+    'chains-inspector-end',
+    'chains-inspector-draw',
+    'chains-table',
+    'chains-table-body',
+    'btn-run-chains',
+    'chains-count-badge',
+    'chains-overall-val',
+    'chains-drawing-overall',
+    'chains-seg-total-val',
+    'chains-alw-total-val',
+    'chains-start-offset-val',
+    'chains-end-offset-val',
+    'chains-compare-multiscale-btn',
+    'chains-send-workspace-btn',
+    'chains-save-journal-btn',
+    'chains-copy-table-btn',
+    'chains-copy-cum-btn',
+    'chains-copy-segs-btn',
+    'chains-copy-draw-btn',
+    'chains-export-tsv-btn',
+
     // Workflow Pipeline & Mathematical Explanation IDs
     'converter-math-formula',
     'converter-flow-from',
@@ -309,7 +349,8 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'btn-run-areavol',
     'btn-run-custom-furn',
     'btn-run-expression',
-    'btn-run-multiscale'
+    'btn-run-multiscale',
+    'btn-run-chains'
   ];
 
   for (const rBtn of runButtons) {
