@@ -10,7 +10,8 @@ import {
   detectScale,
   scaleArea,
   scaleVolume,
-  getAllUnitEquivalents
+  getAllUnitEquivalents,
+  requireFiniteNumber
 } from '../src/core/calculator.js';
 
 let passed = 0;
@@ -101,6 +102,13 @@ console.log('🧪 Running tests/calculator.test.js...');
   const r2 = detectScale({ paperVal: 10, paperUnitKey: 'cm', realVal: 5.0, realUnitKey: 'm' });
   assert(approxEqual(r2.ratio, 50), '10 cm vs 5.0 m detects scale ratio 50', r2.ratio);
   assert(r2.closestPreset?.id === '1:50', 'Closest preset identified as 1:50', r2.closestPreset?.id);
+
+  // Invalid scale detection semantic test: returns ratio: null (NOT 0)
+  const rInvalid1 = detectScale({ paperVal: 0, paperUnitKey: 'cm', realVal: 0, realUnitKey: 'm' });
+  assert(rInvalid1.ratio === null && rInvalid1.ratioString === 'N/A' && rInvalid1.closestPreset === null, 'detectScale returns ratio: null on zero dimensions', rInvalid1);
+
+  const rInvalid2 = detectScale({ paperVal: -5, paperUnitKey: 'cm', realVal: 10, realUnitKey: 'm' });
+  assert(rInvalid2.ratio === null && rInvalid2.ratioString === 'N/A', 'detectScale returns ratio: null on negative paper dimension', rInvalid2);
 }
 
 // 5. Area & Volume Scaler Tests (Bidirectional: Drawing <-> Real)
@@ -138,8 +146,53 @@ console.log('🧪 Running tests/calculator.test.js...');
   assert(approxEqual(rFloat.realValue, 0.3), 'Floating point 0.3m @ 1:1 = 0.3m', rFloat.realValue);
 }
 
-// 7. Error Handling for Invalid Inputs & Ratios
+// 7. Strict Numeric Contracts & Error Handling
 {
+  // requireFiniteNumber tests
+  assert(requireFiniteNumber(42) === 42, 'requireFiniteNumber accepts valid numbers');
+
+  let stringThrew = false;
+  try {
+    requireFiniteNumber('10');
+  } catch (e) {
+    stringThrew = e instanceof TypeError;
+  }
+  assert(stringThrew, 'requireFiniteNumber rejects string "10" with TypeError');
+
+  let nanThrew = false;
+  try {
+    requireFiniteNumber(NaN);
+  } catch (e) {
+    nanThrew = e instanceof TypeError;
+  }
+  assert(nanThrew, 'requireFiniteNumber rejects NaN with TypeError');
+
+  let infThrew = false;
+  try {
+    requireFiniteNumber(Infinity);
+  } catch (e) {
+    infThrew = e instanceof TypeError;
+  }
+  assert(infThrew, 'requireFiniteNumber rejects Infinity with TypeError');
+
+  // scaleDimension with non-numeric value
+  let scaleStringThrew = false;
+  try {
+    scaleDimension({ value: '10', unitKey: 'cm', ratio: 50 });
+  } catch (e) {
+    scaleStringThrew = e instanceof TypeError;
+  }
+  assert(scaleStringThrew, 'scaleDimension rejects numeric string "10" with TypeError');
+
+  // getAllUnitEquivalents with invalid input
+  let equivThrew = false;
+  try {
+    getAllUnitEquivalents('abc');
+  } catch (e) {
+    equivThrew = e instanceof TypeError;
+  }
+  assert(equivThrew, 'getAllUnitEquivalents rejects string input with TypeError instead of silent zero');
+
   let ratioZeroThrew = false;
   try {
     scaleDimension({ value: 10, unitKey: 'cm', ratio: 0, direction: 'drawing_to_real' });

@@ -105,6 +105,10 @@ $$\text{Scale Ratio} = \frac{\text{Real Measurement (Meters)}}{\text{Paper Measu
   - Area functions accept only `area` units (`mm2`, `cm2`, `m2`, `km2`, `ha`, `sq_in`, `sq_ft`, `sq_yd`, `acre`).
   - Volume functions accept only `volume` units (`mm3`, `cm3`, `m3`, `liters`, `cu_in`, `cu_ft`, `cu_yd`).
 
+### 4.1 Consistent Error Handling Policy
+* **Invalid Programmer / API Input**: Core functions must throw an explicit `TypeError` or `Error` (e.g. `requireFiniteNumber` throws `TypeError` for non-numbers/NaN/strings, `requireUnit` throws `Error` for unknown unit strings). Never silently coerce invalid types or return fake success values.
+* **Invalid User-Entered Text**: The parser (`parseInput`) must return `{ isValid: false, error: '...' }` so the UI can gracefully show validation feedback without throwing unhandled exceptions.
+
 ---
 
 ## 5. Precision & Rounding Policy

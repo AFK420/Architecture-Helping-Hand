@@ -329,6 +329,9 @@ export function initializeApp() {
     if (res.closestPreset && dom.closestPresetName && dom.closestPresetDiff) {
       dom.closestPresetName.textContent = res.closestPreset.name;
       dom.closestPresetDiff.textContent = res.isExactMatch ? 'Exact match' : `Δ ${res.closestPreset.percentDiff}%`;
+    } else {
+      if (dom.closestPresetName) dom.closestPresetName.textContent = 'Enter measurements';
+      if (dom.closestPresetDiff) dom.closestPresetDiff.textContent = '';
     }
   }
 
@@ -890,12 +893,14 @@ export function initializeApp() {
         realVal: state.detectRealVal,
         realUnitKey: state.detectRealUnit
       });
-      if (res.ratio > 0) {
+      if (res.ratio !== null && res.ratio > 0) {
         state.scaleRatio = res.ratio;
         if (dom.customRatioInput) dom.customRatioInput.value = res.ratio;
         switchMode('converter');
         calculateConverter();
         showToast(`Applied scale 1:${res.ratio.toFixed(2)} to Converter`);
+      } else {
+        showToast('Please enter valid positive measurements to detect scale');
       }
     });
   }
