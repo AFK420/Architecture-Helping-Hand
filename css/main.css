@@ -1,6 +1,7 @@
 /**
  * Architecture Helping Hand - Modern Architectural Studio UI Stylesheet
- * High-legibility typography, comfortable font hierarchy, and accessible contrast.
+ * High-legibility typography, comfortable font hierarchy, distinct button borders,
+ * and spacious 3-column furniture card drafting grid.
  */
 
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap');
@@ -14,6 +15,27 @@
   padding: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Architectural Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) var(--bg-surface-elevated);
+}
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+*::-webkit-scrollbar-track {
+  background: var(--bg-surface-elevated);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-primary);
 }
 
 body {
@@ -62,7 +84,7 @@ body {
   background: var(--bg-surface-translucent);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1.5px solid var(--border-subtle);
   box-shadow: var(--shadow-sm);
 }
 
@@ -73,14 +95,14 @@ body {
 }
 
 .brand-logo-icon {
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--accent-primary-subtle);
   color: var(--accent-primary);
-  border: 1.5px solid var(--accent-primary);
+  border: 2px solid var(--accent-primary);
   border-radius: 9px;
   box-shadow: 0 0 14px var(--accent-primary-subtle);
 }
@@ -104,7 +126,7 @@ body {
   border-radius: 5px;
   background: var(--accent-primary-subtle);
   color: var(--accent-primary);
-  border: 1px solid var(--accent-primary);
+  border: 1.5px solid var(--accent-primary);
 }
 
 .brand-subtitle {
@@ -122,10 +144,10 @@ body {
 
 .control-btn {
   background: var(--bg-chip);
-  border: 1px solid var(--border-medium);
+  border: 1.5px solid var(--border-medium);
   color: var(--text-primary);
   padding: 0.55rem 0.95rem;
-  border-radius: 7px;
+  border-radius: 8px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -138,21 +160,23 @@ body {
 
 .control-btn:hover {
   background: var(--bg-chip-hover);
-  border-color: var(--border-strong);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 8px var(--accent-primary-subtle);
 }
 
 .control-btn.active {
   background: var(--accent-primary-subtle);
   color: var(--accent-primary);
   border-color: var(--accent-primary);
+  border-width: 1.5px;
 }
 
 .theme-dropdown {
   background: var(--bg-chip);
-  border: 1px solid var(--border-medium);
+  border: 1.5px solid var(--border-medium);
   color: var(--text-primary);
   padding: 0.55rem 0.85rem;
-  border-radius: 7px;
+  border-radius: 8px;
   font-size: 0.88rem;
   font-weight: 600;
   font-family: var(--font-sans);
@@ -163,6 +187,7 @@ body {
 .theme-dropdown:focus, .control-btn:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
+  border-color: var(--accent-primary);
 }
 
 /* ==========================================================================
@@ -172,20 +197,20 @@ body {
   position: relative;
   z-index: 10;
   flex: 1;
-  max-width: 1400px;
+  max-width: 1450px;
   width: 100%;
   margin: 0 auto;
-  padding: 1.4rem 2rem 3rem 2rem;
+  padding: 1.4rem 2rem 3.5rem 2rem;
 }
 
 .modes-nav {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.6rem;
   background: var(--bg-surface-elevated);
-  padding: 0.45rem;
+  padding: 0.55rem;
   border-radius: 12px;
-  border: 1px solid var(--border-subtle);
-  margin-bottom: 1.4rem;
+  border: 1.5px solid var(--border-subtle);
+  margin-bottom: 1.5rem;
   overflow-x: auto;
   box-shadow: var(--shadow-sm);
 }
@@ -197,8 +222,8 @@ body {
   justify-content: center;
   gap: 0.6rem;
   padding: 0.75rem 1.1rem;
-  background: transparent;
-  border: 1px solid transparent;
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border-medium);
   color: var(--text-secondary);
   border-radius: 8px;
   font-size: 0.95rem;
@@ -218,28 +243,29 @@ body {
 .mode-tab:hover {
   color: var(--text-primary);
   background: var(--bg-chip-hover);
+  border-color: var(--border-strong);
 }
 
 .mode-tab.active {
   background: var(--bg-surface);
   color: var(--accent-primary);
-  border-color: var(--border-medium);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+  border: 2px solid var(--accent-primary);
+  box-shadow: 0 0 12px var(--accent-primary-subtle);
 }
 
 .mode-key-hint {
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   font-family: var(--font-mono);
   background: var(--bg-chip);
-  padding: 0.12rem 0.45rem;
+  padding: 0.12rem 0.48rem;
   border-radius: 4px;
   color: var(--text-muted);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-medium);
 }
 
 .mode-tab.active .mode-key-hint {
   color: var(--accent-primary);
-  border-color: var(--accent-primary-subtle);
+  border-color: var(--accent-primary);
 }
 
 /* ==========================================================================
@@ -262,14 +288,14 @@ body {
 .tool-layout {
   display: grid;
   grid-template-columns: 1.15fr 0.85fr;
-  gap: 1.5rem;
+  gap: 1.6rem;
   align-items: start;
 }
 
 .visual-column {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.6rem;
 }
 
 /* ==========================================================================
@@ -278,14 +304,14 @@ body {
 .archi-card {
   position: relative;
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  border: 1.5px solid var(--border-subtle);
   border-radius: 14px;
   padding: 1.6rem 1.8rem;
   box-shadow: var(--shadow-sm);
 }
 
 .single-tool-card {
-  max-width: 880px;
+  max-width: 900px;
   margin: 0 auto;
 }
 
@@ -308,16 +334,16 @@ body {
   justify-content: space-between;
   margin-bottom: 1.4rem;
   padding-bottom: 0.85rem;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1.5px solid var(--border-subtle);
 }
 
 .card-title-row h2 {
-  font-size: 1.2rem;
+  font-size: 1.25rem;
   font-weight: 800;
   letter-spacing: -0.01em;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.65rem;
   color: var(--text-primary);
 }
 
@@ -327,11 +353,11 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  padding: 0.25rem 0.6rem;
-  border-radius: 5px;
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
   background: var(--bg-surface-elevated);
   color: var(--text-secondary);
-  border: 1px solid var(--border-subtle);
+  border: 1.5px solid var(--border-medium);
 }
 
 .tool-description {
@@ -347,7 +373,7 @@ body {
 .form-input, .form-select {
   width: 100%;
   background: var(--bg-input);
-  border: 1px solid var(--border-medium);
+  border: 1.5px solid var(--border-medium);
   color: var(--text-primary);
   padding: 0.75rem 1rem;
   border-radius: 8px;
@@ -392,7 +418,7 @@ body {
   border-radius: 5px;
   background: var(--bg-chip);
   color: var(--text-secondary);
-  border: 1px solid var(--border-subtle);
+  border: 1.5px solid var(--border-medium);
 }
 
 .field-badge.highlight {
@@ -404,7 +430,7 @@ body {
 /* Presets Selector */
 .scale-selector-block {
   background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-subtle);
+  border: 1.5px solid var(--border-subtle);
   border-radius: 12px;
   padding: 1.1rem;
   margin-bottom: 1.4rem;
@@ -412,18 +438,18 @@ body {
 
 .preset-category-pills {
   display: flex;
-  gap: 0.45rem;
+  gap: 0.5rem;
   margin-bottom: 0.85rem;
   flex-wrap: wrap;
 }
 
 .preset-pill-btn {
   background: var(--bg-chip);
-  border: 1px solid var(--border-medium);
+  border: 1.5px solid var(--border-medium);
   color: var(--text-secondary);
-  padding: 0.35rem 0.75rem;
+  padding: 0.4rem 0.85rem;
   border-radius: 7px;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -432,53 +458,34 @@ body {
 .preset-pill-btn:hover {
   background: var(--bg-chip-hover);
   color: var(--text-primary);
+  border-color: var(--border-strong);
 }
 
 .preset-pill-btn.active {
   background: var(--accent-primary);
   color: var(--text-inverse);
   border-color: var(--accent-primary);
-}
-
-/* Custom Architectural Scrollbars across entire app */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-strong) var(--bg-surface-elevated);
-}
-*::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-*::-webkit-scrollbar-track {
-  background: var(--bg-surface-elevated);
-  border-radius: 4px;
-}
-*::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 4px;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-primary);
+  box-shadow: 0 0 10px var(--accent-primary-subtle);
 }
 
 .presets-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
-  gap: 0.55rem;
-  max-height: 155px;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.6rem;
+  max-height: 160px;
   overflow-y: auto;
-  padding: 0.45rem;
+  padding: 0.5rem;
   margin-bottom: 0.85rem;
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  border: 1.5px solid var(--border-subtle);
   border-radius: 8px;
 }
 
 .preset-chip {
   background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-medium);
+  border: 1.5px solid var(--border-medium);
   color: var(--text-primary);
-  padding: 0.55rem 0.5rem;
+  padding: 0.6rem 0.5rem;
   border-radius: 7px;
   font-family: var(--font-mono);
   font-size: 0.88rem;
@@ -501,9 +508,9 @@ body {
 
 .preset-chip.active {
   background: var(--accent-primary-subtle);
-  border-color: var(--accent-primary);
+  border: 2px solid var(--accent-primary);
   color: var(--accent-primary);
-  box-shadow: 0 0 10px var(--accent-primary-subtle);
+  box-shadow: 0 0 12px var(--accent-primary-subtle);
 }
 
 .preset-chip .preset-sub {
@@ -522,7 +529,7 @@ body {
   align-items: center;
   gap: 0.75rem;
   padding-top: 0.75rem;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1.5px solid var(--border-subtle);
 }
 
 .custom-scale-prefix {
@@ -547,7 +554,7 @@ body {
 
 .input-block-card {
   background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-subtle);
+  border: 1.5px solid var(--border-subtle);
   border-radius: 11px;
   padding: 1rem 1.15rem;
 }
@@ -588,7 +595,7 @@ body {
   position: absolute;
   left: 0;
   right: 0;
-  height: 1px;
+  height: 1.5px;
   background: var(--border-medium);
 }
 
@@ -616,17 +623,11 @@ body {
   box-shadow: 0 4px 16px var(--accent-primary-subtle);
 }
 
-.swap-action-btn:hover {
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-  transform: rotate(180deg) scale(1.1);
-}
-
 /* ==========================================================================
    8. RUN CALCULATION Action Button
    ========================================================================== */
 .run-action-box {
-  margin: 0.5rem 0;
+  margin: 0.6rem 0;
 }
 
 .btn-primary-action {
@@ -637,7 +638,7 @@ body {
   gap: 0.75rem;
   background: var(--accent-primary);
   color: var(--text-inverse);
-  border: 1px solid transparent;
+  border: 2px solid rgba(255, 255, 255, 0.3);
   padding: 0.95rem 1.4rem;
   border-radius: 10px;
   font-size: 1.05rem;
@@ -650,6 +651,7 @@ body {
 
 .btn-primary-action:hover {
   background: var(--accent-primary-hover);
+  border-color: #ffffff;
   transform: translateY(-1px);
 }
 
@@ -661,6 +663,7 @@ body {
   width: auto;
   padding: 0.65rem 1.1rem;
   font-size: 0.88rem;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
 }
 
 .btn-primary-action[data-state="running"] {
@@ -682,7 +685,8 @@ body {
   font-size: 0.78rem;
   font-family: var(--font-mono);
   opacity: 0.85;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   padding: 0.18rem 0.5rem;
   border-radius: 4px;
 }
@@ -707,7 +711,7 @@ body {
 .result-hero-panel {
   background: var(--bg-surface-elevated);
   border: 1.5px solid var(--border-medium);
-  border-left: 5px solid var(--accent-primary);
+  border-left: 6px solid var(--accent-primary);
   border-radius: 12px;
   padding: 1.3rem 1.6rem;
   box-shadow: var(--shadow-sm);
@@ -759,15 +763,15 @@ body {
   gap: 0.75rem;
   margin-top: 1rem;
   padding-top: 0.85rem;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1.5px solid var(--border-subtle);
 }
 
 .action-tool-btn {
   background: var(--bg-chip);
-  border: 1px solid var(--border-medium);
+  border: 1.5px solid var(--border-strong);
   color: var(--text-primary);
   padding: 0.55rem 0.95rem;
-  border-radius: 7px;
+  border-radius: 8px;
   font-size: 0.88rem;
   font-weight: 700;
   cursor: pointer;
@@ -779,18 +783,21 @@ body {
 
 .action-tool-btn:hover {
   background: var(--bg-chip-hover);
-  border-color: var(--border-strong);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  box-shadow: 0 0 8px var(--accent-primary-subtle);
 }
 
 .action-tool-btn.primary {
   background: var(--accent-primary-subtle);
   color: var(--accent-primary);
-  border-color: var(--accent-primary);
+  border: 1.5px solid var(--accent-primary);
 }
 
 .action-tool-btn.compact {
-  padding: 0.4rem 0.75rem;
-  font-size: 0.82rem;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.84rem;
+  border: 1.5px solid var(--border-medium);
 }
 
 /* ==========================================================================
@@ -815,7 +822,7 @@ body {
   color: var(--text-muted);
   margin-bottom: 0.55rem;
   padding-bottom: 0.35rem;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1.5px solid var(--border-subtle);
 }
 
 .equiv-grid {
@@ -828,9 +835,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.45rem 0.65rem;
+  padding: 0.5rem 0.75rem;
   background: var(--bg-surface-elevated);
-  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
   font-size: 0.88rem;
 }
 
@@ -858,7 +866,7 @@ body {
   display: inline-block;
   background: var(--accent-primary-subtle);
   color: var(--accent-primary);
-  border: 1px solid var(--accent-primary);
+  border: 1.5px solid var(--accent-primary);
   padding: 0.45rem 1rem;
   border-radius: 20px;
   font-size: 0.92rem;
@@ -874,7 +882,7 @@ body {
   background: var(--bg-surface-elevated);
   padding: 0.75rem 1rem;
   border-radius: 10px;
-  border: 1px solid var(--border-subtle);
+  border: 1.5px solid var(--border-subtle);
   margin-bottom: 1.2rem;
   flex-wrap: wrap;
 }
@@ -894,7 +902,7 @@ body {
 
 .areavol-type-btn, .areavol-dir-btn {
   background: var(--bg-chip);
-  border: 1px solid var(--border-medium);
+  border: 1.5px solid var(--border-medium);
   color: var(--text-secondary);
   padding: 0.45rem 0.85rem;
   border-radius: 7px;
@@ -907,22 +915,24 @@ body {
 .areavol-type-btn:hover, .areavol-dir-btn:hover {
   background: var(--bg-chip-hover);
   color: var(--text-primary);
+  border-color: var(--border-strong);
 }
 
 .areavol-type-btn.active, .areavol-dir-btn.active {
   background: var(--accent-primary);
   color: var(--text-inverse);
-  border-color: var(--accent-primary);
+  border: 1.5px solid var(--accent-primary);
+  box-shadow: 0 0 10px var(--accent-primary-subtle);
 }
 
 /* ==========================================================================
-   12. Furniture Scaling Catalog & Cards
+   12. Furniture Scaling Catalog & Cards (Spacious 3-Column Layout)
    ========================================================================== */
 .furniture-toolbar {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  margin-bottom: 1.4rem;
+  gap: 1.1rem;
+  margin-bottom: 1.6rem;
 }
 
 .furniture-search-row {
@@ -938,7 +948,7 @@ body {
 
 .search-icon-inside {
   position: absolute;
-  left: 14px;
+  left: 15px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-muted);
@@ -950,9 +960,9 @@ body {
   background: var(--bg-input);
   border: 1.5px solid var(--border-medium);
   color: var(--text-primary);
-  padding: 0.85rem 2.75rem 0.85rem 2.6rem;
-  border-radius: 9px;
-  font-size: 1.02rem;
+  padding: 0.9rem 2.85rem 0.9rem 2.75rem;
+  border-radius: 10px;
+  font-size: 1.05rem;
   font-family: var(--font-sans);
   outline: none;
   transition: all 0.15s ease;
@@ -961,7 +971,7 @@ body {
 .furniture-search-input:focus {
   border-color: var(--accent-primary);
   background: var(--bg-input-focus);
-  box-shadow: 0 0 12px var(--accent-primary-subtle);
+  box-shadow: 0 0 14px var(--accent-primary-subtle);
 }
 
 .clear-search-btn {
@@ -969,20 +979,26 @@ body {
   right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  background: transparent;
-  border: none;
+  background: var(--bg-chip);
+  border: 1px solid var(--border-medium);
+  border-radius: 50%;
   color: var(--text-muted);
-  font-size: 1.1rem;
+  font-size: 0.95rem;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  padding: 4px;
 }
 
 .clear-search-btn:hover {
   color: var(--text-primary);
+  border-color: var(--accent-primary);
 }
 
 .furniture-count-badge {
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   font-family: var(--font-mono);
   font-weight: 700;
   color: var(--text-secondary);
@@ -994,32 +1010,32 @@ body {
   align-items: center;
   justify-content: space-between;
   background: var(--bg-surface-elevated);
-  padding: 0.75rem 1.1rem;
-  border-radius: 9px;
-  border: 1px solid var(--border-subtle);
+  padding: 0.85rem 1.25rem;
+  border-radius: 10px;
+  border: 1.5px solid var(--border-subtle);
   flex-wrap: wrap;
-  gap: 0.85rem;
+  gap: 0.95rem;
 }
 
 .furniture-scale-controls {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.65rem;
   flex-wrap: wrap;
 }
 
 .furniture-presets-pills {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.4rem;
 }
 
 .furn-scale-chip {
   background: var(--bg-chip);
-  border: 1px solid var(--border-medium);
+  border: 1.5px solid var(--border-medium);
   color: var(--text-primary);
-  padding: 0.35rem 0.7rem;
-  border-radius: 6px;
-  font-size: 0.85rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 7px;
+  font-size: 0.88rem;
   font-family: var(--font-mono);
   font-weight: 700;
   cursor: pointer;
@@ -1028,12 +1044,14 @@ body {
 
 .furn-scale-chip:hover {
   background: var(--bg-chip-hover);
+  border-color: var(--border-strong);
 }
 
 .furn-scale-chip.active {
   background: var(--accent-primary-subtle);
   color: var(--accent-primary);
-  border-color: var(--accent-primary);
+  border: 1.5px solid var(--accent-primary);
+  box-shadow: 0 0 8px var(--accent-primary-subtle);
 }
 
 .furn-custom-ratio-box {
@@ -1043,69 +1061,72 @@ body {
 }
 
 .furn-ratio-label {
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   font-family: var(--font-mono);
   color: var(--text-secondary);
   font-weight: 700;
 }
 
 .furn-custom-ratio-box .form-input {
-  width: 75px;
-  padding: 0.35rem 0.55rem;
-  font-size: 0.88rem;
+  width: 80px;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.92rem;
 }
 
 .furn-unit-box {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.55rem;
 }
 
 .furn-unit-box .form-select {
-  padding: 0.4rem 0.75rem;
-  font-size: 0.88rem;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.92rem;
 }
 
 .furniture-category-nav {
   display: flex;
-  gap: 0.45rem;
+  gap: 0.5rem;
   overflow-x: auto;
-  padding-bottom: 0.35rem;
+  padding-bottom: 0.45rem;
 }
 
 .furn-cat-pill {
   background: var(--bg-chip);
-  border: 1px solid var(--border-medium);
+  border: 1.5px solid var(--border-medium);
   color: var(--text-secondary);
-  padding: 0.45rem 0.85rem;
+  padding: 0.5rem 0.95rem;
   border-radius: 20px;
-  font-size: 0.86rem;
+  font-size: 0.88rem;
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.45rem;
   transition: all 0.15s ease;
 }
 
 .furn-cat-pill:hover {
   background: var(--bg-chip-hover);
   color: var(--text-primary);
+  border-color: var(--border-strong);
 }
 
 .furn-cat-pill.active {
   background: var(--accent-primary);
   color: var(--text-inverse);
-  border-color: var(--accent-primary);
+  border: 1.5px solid var(--accent-primary);
+  box-shadow: 0 0 10px var(--accent-primary-subtle);
 }
 
 .furn-cat-count {
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   font-family: var(--font-mono);
   font-weight: 800;
-  background: rgba(0, 0, 0, 0.2);
-  padding: 0.1rem 0.4rem;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.12rem 0.45rem;
   border-radius: 10px;
 }
 
@@ -1113,138 +1134,142 @@ body {
 .custom-furn-box {
   background: var(--bg-surface-elevated);
   border: 1.5px dashed var(--border-strong);
-  border-radius: 11px;
-  padding: 1.1rem 1.3rem;
-  margin-bottom: 1.4rem;
+  border-radius: 12px;
+  padding: 1.2rem 1.4rem;
+  margin-bottom: 1.6rem;
 }
 
 .custom-furn-title {
-  font-size: 0.88rem;
+  font-size: 0.92rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--accent-primary);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  gap: 0.55rem;
+  margin-bottom: 0.85rem;
 }
 
 .custom-furn-inputs-row {
   display: flex;
-  gap: 0.6rem;
+  gap: 0.75rem;
   align-items: center;
   flex-wrap: wrap;
 }
 
 .custom-furn-inputs-row .form-input {
-  font-size: 0.92rem;
-  padding: 0.55rem 0.75rem;
+  font-size: 0.95rem;
+  padding: 0.6rem 0.85rem;
 }
 
 .custom-furn-result-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 0.75rem;
-  padding-top: 0.65rem;
-  border-top: 1px solid var(--border-subtle);
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1.5px solid var(--border-subtle);
   flex-wrap: wrap;
-  gap: 0.65rem;
+  gap: 0.75rem;
 }
 
 .custom-furn-result-badge {
   font-family: var(--font-mono);
-  font-size: 0.98rem;
+  font-size: 1.05rem;
   font-weight: 800;
   color: var(--text-primary);
 }
 
 .custom-furn-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.55rem;
 }
 
-/* Furniture Cards Grid */
+/* ==========================================================================
+   Spacious 3-Column Furniture Drafting Cards Grid
+   ========================================================================== */
 .furniture-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-  gap: 1.25rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
 }
 
 .furniture-card {
   background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  padding: 1.2rem;
+  border: 1.5px solid var(--border-medium);
+  border-radius: 14px;
+  padding: 1.4rem 1.5rem;
   display: flex;
   flex-direction: column;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
 }
 
 .furniture-card:hover {
-  border-color: var(--border-medium);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
+  border-color: var(--accent-primary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 14px var(--accent-primary-subtle);
+  transform: translateY(-3px);
 }
 
 .furn-card-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.85rem;
 }
 
 .furn-name {
-  font-size: 1.05rem;
+  font-size: 1.15rem;
   font-weight: 800;
   color: var(--text-primary);
+  line-height: 1.25;
 }
 
 .furn-category-tag {
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   font-family: var(--font-mono);
   font-weight: 700;
   color: var(--text-muted);
   letter-spacing: 0.05em;
-  margin-top: 0.15rem;
+  margin-top: 0.2rem;
 }
 
 .furn-dim-badge {
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-family: var(--font-mono);
   font-weight: 800;
   background: var(--accent-primary-subtle);
   color: var(--accent-primary);
-  padding: 0.2rem 0.5rem;
-  border-radius: 5px;
-  border: 1px solid var(--accent-primary-subtle);
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  border: 1.5px solid var(--accent-primary);
 }
 
 .furn-plan-preview-box {
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  border: 1.5px solid var(--border-subtle);
   border-radius: 10px;
-  padding: 0.75rem;
-  margin-bottom: 0.75rem;
-  height: 100px;
+  padding: 0.85rem;
+  margin-bottom: 0.85rem;
+  height: 135px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--accent-primary);
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.25);
-  background-image: radial-gradient(var(--grid-cross-color) 1px, transparent 1px);
-  background-size: 16px 16px;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.35);
+  background-image: radial-gradient(var(--grid-cross-color) 1.2px, transparent 1.2px);
+  background-size: 18px 18px;
   position: relative;
   overflow: hidden;
 }
 
 .furn-plan-svg {
   max-width: 100%;
-  max-height: 82px;
+  max-height: 112px;
   width: auto;
   height: auto;
-  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.35));
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -1253,25 +1278,25 @@ body {
 }
 
 .furn-item-desc {
-  font-size: 0.86rem;
+  font-size: 0.88rem;
   color: var(--text-secondary);
   line-height: 1.45;
-  margin-bottom: 0.85rem;
-  min-height: 2.5em;
+  margin-bottom: 0.95rem;
+  min-height: 2.6em;
 }
 
 .furn-specs-grid {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  margin-bottom: 0.95rem;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 .furn-spec-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.88rem;
+  font-size: 0.92rem;
 }
 
 .furn-spec-lbl {
@@ -1290,41 +1315,42 @@ body {
 
 .furn-spec-val.paper-result {
   color: var(--accent-primary);
+  font-size: 1.02rem;
   font-weight: 800;
 }
 
 .furn-card-footer {
   display: flex;
-  gap: 0.6rem;
+  gap: 0.65rem;
   margin-top: auto;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--border-subtle);
+  padding-top: 0.85rem;
+  border-top: 1.5px solid var(--border-subtle);
 }
 
 .empty-furn-state {
   grid-column: 1 / -1;
   text-align: center;
-  padding: 3.5rem 1rem;
+  padding: 4rem 1rem;
   background: var(--bg-surface-elevated);
-  border-radius: 12px;
-  border: 1px dashed var(--border-medium);
+  border-radius: 14px;
+  border: 1.5px dashed var(--border-medium);
 }
 
 .empty-furn-icon {
-  font-size: 2.5rem;
-  margin-bottom: 0.75rem;
+  font-size: 2.75rem;
+  margin-bottom: 0.85rem;
 }
 
 .empty-furn-title {
-  font-size: 1.15rem;
+  font-size: 1.25rem;
   font-weight: 800;
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.45rem;
 }
 
 .empty-furn-desc {
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   color: var(--text-secondary);
-  max-width: 500px;
+  max-width: 520px;
   margin: 0 auto;
 }
 
@@ -1348,7 +1374,7 @@ body {
 
 .table-scroll-container {
   overflow-x: auto;
-  border: 1px solid var(--border-medium);
+  border: 1.5px solid var(--border-medium);
   border-radius: 10px;
 }
 
@@ -1367,7 +1393,7 @@ body {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-bottom: 1.5px solid var(--border-medium);
+  border-bottom: 2px solid var(--border-medium);
 }
 
 .ref-data-table td {
@@ -1399,8 +1425,8 @@ body {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(5px);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
@@ -1415,12 +1441,12 @@ body {
 .history-drawer {
   position: fixed;
   top: 0;
-  right: -440px;
-  width: 440px;
+  right: -450px;
+  width: 450px;
   max-width: 90vw;
   height: 100vh;
   background: var(--bg-surface);
-  border-left: 1px solid var(--border-subtle);
+  border-left: 1.5px solid var(--border-medium);
   box-shadow: var(--shadow-lg);
   z-index: 60;
   display: flex;
@@ -1434,7 +1460,7 @@ body {
 
 .drawer-header {
   padding: 1.3rem 1.5rem;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1.5px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1450,16 +1476,16 @@ body {
 
 .drawer-actions {
   display: flex;
-  gap: 0.45rem;
+  gap: 0.5rem;
 }
 
 .hist-btn {
   background: var(--bg-chip);
-  border: 1px solid var(--border-medium);
+  border: 1.5px solid var(--border-medium);
   color: var(--text-primary);
-  padding: 0.35rem 0.65rem;
-  border-radius: 6px;
-  font-size: 0.82rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 7px;
+  font-size: 0.84rem;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -1467,33 +1493,34 @@ body {
 
 .hist-btn:hover {
   background: var(--bg-chip-hover);
-  border-color: var(--border-strong);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
 }
 
 .history-list-container {
   flex: 1;
   overflow-y: auto;
-  padding: 1.15rem;
+  padding: 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.95rem;
 }
 
 .history-item-card {
   background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-subtle);
+  border: 1.5px solid var(--border-medium);
   border-radius: 10px;
-  padding: 1rem;
+  padding: 1.05rem;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.6rem;
 }
 
 .hist-card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
 }
 
 .hist-mode-tag {
@@ -1504,7 +1531,8 @@ body {
 .hist-scale-tag {
   font-family: var(--font-mono);
   background: var(--bg-chip);
-  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--border-medium);
+  padding: 0.15rem 0.5rem;
   border-radius: 4px;
   font-weight: 700;
 }
@@ -1516,9 +1544,9 @@ body {
 .hist-formula-row {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.65rem;
   font-family: var(--font-mono);
-  font-size: 0.95rem;
+  font-size: 0.98rem;
   font-weight: 700;
 }
 
@@ -1528,10 +1556,10 @@ body {
 
 .hist-card-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.55rem;
   justify-content: flex-end;
-  padding-top: 0.45rem;
-  border-top: 1px solid var(--border-subtle);
+  padding-top: 0.5rem;
+  border-top: 1.5px solid var(--border-subtle);
 }
 
 .empty-history-box {
@@ -1547,7 +1575,7 @@ body {
   left: 50%;
   transform: translate(-50%, -50%) scale(0.95);
   background: var(--bg-surface);
-  border: 1.5px solid var(--border-medium);
+  border: 2px solid var(--border-medium);
   border-radius: 14px;
   padding: 1.8rem;
   max-width: 550px;
@@ -1566,7 +1594,7 @@ body {
   justify-content: space-between;
   margin-bottom: 1.4rem;
   padding-bottom: 0.85rem;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1.5px solid var(--border-subtle);
 }
 
 .modal-body {
@@ -1579,8 +1607,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.6rem 0.8rem;
+  padding: 0.65rem 0.85rem;
   background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   font-size: 0.92rem;
   font-weight: 500;
@@ -1588,11 +1617,11 @@ body {
 
 .kbd-badge {
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   font-weight: 800;
   background: var(--bg-chip);
   color: var(--accent-primary);
-  border: 1px solid var(--border-medium);
+  border: 1.5px solid var(--border-medium);
   padding: 0.25rem 0.65rem;
   border-radius: 6px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
@@ -1607,7 +1636,7 @@ body {
   right: 24px;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.65rem;
   z-index: 100;
 }
 
@@ -1615,7 +1644,7 @@ body {
   background: var(--bg-surface-elevated);
   color: var(--text-primary);
   border: 1.5px solid var(--border-medium);
-  border-left: 5px solid var(--accent-primary);
+  border-left: 6px solid var(--accent-primary);
   padding: 0.85rem 1.25rem;
   border-radius: 9px;
   font-size: 0.92rem;
@@ -1654,13 +1683,19 @@ body {
   font-size: 0.85rem;
   font-weight: 500;
   color: var(--text-muted);
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1.5px solid var(--border-subtle);
   background: var(--bg-surface-translucent);
 }
 
 /* ==========================================================================
    17. Responsive Layout Breakpoints
    ========================================================================== */
+@media (max-width: 1200px) {
+  .furniture-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 1024px) {
   .tool-layout {
     grid-template-columns: 1fr;
