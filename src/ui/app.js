@@ -25,7 +25,7 @@ import {
 import { StorageService } from '../services/storage.js';
 import { AudioService } from '../services/audio.js';
 import { HistoryService } from '../services/history.js';
-import { updateVisualization } from './visualizer.js';
+import { updateVisualization, getFurniturePlanSVG } from './visualizer.js';
 
 export function initializeApp() {
   const state = {
@@ -771,8 +771,9 @@ export function initializeApp() {
 
           <div class="furn-card-body">
             <div class="furn-plan-preview-box">
-              <div class="furn-plan-desc">${item.desc}</div>
+              ${getFurniturePlanSVG(item)}
             </div>
+            <div class="furn-item-desc">${item.desc}</div>
 
             <div class="furn-specs-grid">
               <div class="furn-spec-row">

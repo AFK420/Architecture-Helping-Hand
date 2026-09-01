@@ -440,21 +440,45 @@ body {
   border-color: var(--accent-primary);
 }
 
+/* Custom Architectural Scrollbars across entire app */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) var(--bg-surface-elevated);
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: var(--bg-surface-elevated);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-primary);
+}
+
 .presets-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
   gap: 0.55rem;
-  max-height: 150px;
+  max-height: 155px;
   overflow-y: auto;
-  padding-right: 0.35rem;
+  padding: 0.45rem;
   margin-bottom: 0.85rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
 }
 
 .preset-chip {
-  background: var(--bg-chip);
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-medium);
   color: var(--text-primary);
-  padding: 0.55rem 0.6rem;
+  padding: 0.55rem 0.5rem;
   border-radius: 7px;
   font-family: var(--font-mono);
   font-size: 0.88rem;
@@ -465,12 +489,14 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  transition: all 0.12s ease;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .preset-chip:hover {
   background: var(--bg-chip-hover);
-  border-color: var(--border-strong);
+  border-color: var(--accent-primary);
+  transform: translateY(-1px);
 }
 
 .preset-chip.active {
@@ -554,7 +580,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: -0.15rem 0;
+  margin: -0.25rem 0;
+  z-index: 5;
 }
 
 .swap-line {
@@ -568,18 +595,25 @@ body {
 .swap-action-btn {
   position: relative;
   z-index: 2;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: var(--bg-surface);
-  border: 1.5px solid var(--border-strong);
-  color: var(--text-primary);
+  background: var(--bg-surface-elevated);
+  border: 2px solid var(--accent-primary);
+  color: var(--accent-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4), 0 0 12px var(--accent-primary-subtle);
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.swap-action-btn:hover {
+  background: var(--accent-primary);
+  color: var(--text-inverse);
+  transform: rotate(180deg) scale(1.1);
+  box-shadow: 0 4px 16px var(--accent-primary-subtle);
 }
 
 .swap-action-btn:hover {
@@ -1190,15 +1224,40 @@ body {
 .furn-plan-preview-box {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 0.75rem;
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.75rem;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.25);
+  background-image: radial-gradient(var(--grid-cross-color) 1px, transparent 1px);
+  background-size: 16px 16px;
+  position: relative;
+  overflow: hidden;
 }
 
-.furn-plan-desc {
-  font-size: 0.88rem;
+.furn-plan-svg {
+  max-width: 100%;
+  max-height: 82px;
+  width: auto;
+  height: auto;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.35));
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.furniture-card:hover .furn-plan-svg {
+  transform: scale(1.08);
+}
+
+.furn-item-desc {
+  font-size: 0.86rem;
   color: var(--text-secondary);
   line-height: 1.45;
+  margin-bottom: 0.85rem;
+  min-height: 2.5em;
 }
 
 .furn-specs-grid {
