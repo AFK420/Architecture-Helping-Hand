@@ -314,8 +314,8 @@ function parseInput(input, options = {}) {
     return { value: 0, detectedUnit: null, isValid: false, error: 'Input is empty' };
   }
 
-  // 1. Check for attached unit suffix (e.g. "15.5cm", "2.4m", "100mm", "12in", "6ft")
-  const unitSuffixMatch = trimmed.match(/^([+-]?\d+(?:\.\d+)?|\d+\s+\d+\/\d+|\d+\/\d+)\s*([a-zA-Z²³_]+)$/);
+  // 1. Check for attached unit suffix (e.g. "15.5cm", "2.4m", "100mm", "12in", "6ft", "12abc")
+  const unitSuffixMatch = trimmed.match(/^([+-]?(?:\d+(?:\.\d+)?|\d+\s+\d+\/\d+|\d+\/\d+))\s*([a-zA-Z²³_]+)$/);
   let rawNumericPart = trimmed;
   let detectedUnit = null;
 
@@ -324,6 +324,8 @@ function parseInput(input, options = {}) {
     if (UNITS[candidateUnit]) {
       rawNumericPart = unitSuffixMatch[1];
       detectedUnit = candidateUnit;
+    } else {
+      return { value: 0, detectedUnit: null, isValid: false, error: `Unknown unit suffix: "${unitSuffixMatch[2]}"` };
     }
   }
 
@@ -336,7 +338,11 @@ function parseInput(input, options = {}) {
     const feet = Math.abs(isNaN(feetRaw) ? 0 : feetRaw);
     let inches = 0;
     if (feetInchesMatch[2]) {
-      inches = Math.abs(parseFraction(feetInchesMatch[2])) || 0;
+      const parsedInch = parseFraction(feetInchesMatch[2]);
+      if (isNaN(parsedInch)) {
+        return { value: 0, detectedUnit: 'in', isValid: false, error: `Invalid inch fraction: "${feetInchesMatch[2]}"` };
+      }
+      inches = Math.abs(parsedInch);
     }
     const totalInches = (feet * 12 + inches) * (isNegative ? -1 : 1);
 
@@ -347,7 +353,7 @@ function parseInput(input, options = {}) {
   }
 
   // 3. Standalone inch pattern: e.g. 6 1/2" or 12"
-  const onlyInchesMatch = rawNumericPart.match(/^([+-]?\d+(?:\.\d+)?|[+-]?\d+\s+\d+\/\d+|\d+\/\d+)\s*["″]$/);
+  const onlyInchesMatch = rawNumericPart.match(/^([+-]?(?:\d+(?:\.\d+)?|\d+\s+\d+\/\d+|\d+\/\d+))\s*["″]$/);
   if (onlyInchesMatch) {
     const inches = parseFraction(onlyInchesMatch[1]);
     if (isNaN(inches)) {
@@ -375,18 +381,29 @@ function parseInput(input, options = {}) {
 
 /**
  * Parses fractional strings like "3 1/2", "5/8", "0.75"
+ * Returns NaN if input is malformed or invalid.
  */
 function parseFraction(str) {
-  if (typeof str === 'number') return str;
-  if (!str) return 0;
+  if (typeof str === 'number') return isFinite(str) ? str : NaN;
+  if (!str || typeof str !== 'string') return NaN;
 
   const clean = str.trim();
+  if (!clean) return NaN;
+
+  // Reject strings containing multiple slashes (e.g. 1/2/3) or invalid characters
+  const slashCount = (clean.match(/\//g) || []).length;
+  if (slashCount > 1) return NaN;
+
   const parts = clean.split(/\s+/);
 
   if (parts.length === 2) {
+    // Check whole number: must be purely numeric (e.g. "3")
+    if (!/^[+-]?\d+(?:\.\d+)?$/.test(parts[0])) return NaN;
     const whole = parseFloat(parts[0]);
     if (isNaN(whole)) return NaN;
 
+    // Check fraction part (e.g. "1/2")
+    if (!/^\d+\/\d+$/.test(parts[1])) return NaN;
     const fracParts = parts[1].split('/');
     if (fracParts.length === 2) {
       const num = parseFloat(fracParts[0]);
@@ -396,13 +413,19 @@ function parseFraction(str) {
     }
     return NaN;
   } else if (parts.length === 1) {
-    const fracParts = parts[0].split('/');
-    if (fracParts.length === 2) {
-      const num = parseFloat(fracParts[0]);
-      const den = parseFloat(fracParts[1]);
-      if (isNaN(num) || isNaN(den) || den === 0) return NaN;
-      return num / den;
+    if (parts[0].includes('/')) {
+      if (!/^[+-]?\d+\/\d+$/.test(parts[0])) return NaN;
+      const fracParts = parts[0].split('/');
+      if (fracParts.length === 2) {
+        const num = parseFloat(fracParts[0]);
+        const den = parseFloat(fracParts[1]);
+        if (isNaN(num) || isNaN(den) || den === 0) return NaN;
+        return num / den;
+      }
+      return NaN;
     }
+    // Pure decimal/integer test (reject e.g. "12abc" or "15..5")
+    if (!/^[+-]?\d+(?:\.\d+)?$/.test(parts[0])) return NaN;
     const val = parseFloat(parts[0]);
     return isNaN(val) ? NaN : val;
   }

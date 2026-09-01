@@ -91,18 +91,18 @@ Scaling formulas operate strictly on these normalized values:
 
 ## 4. Automated Testing & Verification Matrix
 
-The test suite consists of **7 automated test suites** containing **132 exact assertions**, all passing with zero failures:
+The test suite consists of **7 automated test suites** containing **141 exact assertions**, all passing with zero failures:
 
 | Test Suite File | Focus Area | Assertions | Result |
 | :--- | :--- | :---: | :---: |
 | `tests/calculator.test.js` | Scaling (1:1 to 1:10000), round-trips, rescaling, detector, area $S^2$, volume $S^3$, zero/bounds, error handling | 32 | ✅ PASS |
-| `tests/parser.test.js` | Decimals, fractions (`3 1/2`, `5/8`, `15 3/16`), feet-inches (`12'`, `12' 6"`, `12'-6 1/2"`), attached units, garbage, NaN, Infinity, negative rejection | 29 | ✅ PASS |
+| `tests/parser.test.js` | Decimals, fractions (`3 1/2`, `5/8`, `15 3/16`), feet-inches (`12'`, `12' 6"`, `12'-6 1/2"`), attached units (`12in`, `6ft`), garbage, NaN, Infinity, negative rejection | 38 | ✅ PASS |
 | `tests/units.test.js` | Metric (mm, cm, dm, m, km), imperial (in, ft, yd, mi), area & volume factors, round-trips, strict invalid unit rejection | 26 | ✅ PASS |
 | `tests/formatter.test.js` | Decimal precision rounding, epsilon stabilization, trailing zero elimination, scientific notation, feet-inches notation | 12 | ✅ PASS |
 | `tests/furniture.test.js` | Catalog integrity, 61 items validation, scaled drawing dimensions, search and category filtering | 9 | ✅ PASS |
 | `tests/services.test.js` | StorageService (read, write, remove, clear), HistoryService (add, remove, clear, CSV export, Markdown export, corrupt JSON recovery), AudioService safety | 15 | ✅ PASS |
 | `tests/data-integrity.test.js`| 28 scale presets uniqueness & ratio validity, 61 furniture records positive dimensions & unique IDs, reference ranges continuity | 9 | ✅ PASS |
-| **Total** | **7 Comprehensive Test Suites** | **132 Assertions** | **100% Passing (0 Failures)** |
+| **Total** | **7 Comprehensive Test Suites** | **141 Assertions** | **100% Passing (0 Failures)** |
 
 ---
 

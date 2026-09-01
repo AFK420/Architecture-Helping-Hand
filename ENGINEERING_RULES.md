@@ -1,0 +1,166 @@
+# Architecture Helping Hand — Engineering Rules & Architecture Freeze
+
+**Version**: 1.0 (Foundation Freeze)  
+**Status**: ACTIVE & ENFORCED  
+**Applies To**: All future feature development in Architecture Helping Hand
+
+---
+
+## 1. Architectural Layers & Separation of Responsibilities
+
+The codebase is organized into three strictly decoupled layers:
+
+```text
+src/
+├── core/         # Domain math, units, parser, formatter, presets, furniture
+├── services/     # Persistence, history, browser APIs, audio synthesis, side effects
+└── ui/           # DOM rendering, user events, UI state, visual components
+```
+
+### 1.1 Core Layer (`src/core/`)
+* **Role**: Pure calculation engine, input parsing, formatting, and domain data.
+* **Rules**:
+  - MUST NOT import or reference DOM objects (`window`, `document`, `HTMLElement`, `localStorage`, `AudioContext`).
+  - MUST be 100% testable in headless Node.js.
+  - MUST contain all mathematical formulas and scaling algorithms.
+  - MUST NOT perform ad-hoc rounding on intermediate calculations.
+
+### 1.2 Services Layer (`src/services/`)
+* **Role**: Side-effect management, client storage, audio feedback, history export.
+* **Rules**:
+  - MUST be resilient: gracefully handle disabled `localStorage`, sandboxed iframe restrictions, and unavailable browser audio.
+  - MUST isolate external state mutations.
+
+### 1.3 UI Layer (`src/ui/`)
+* **Role**: Presentation, visual components, user interaction, DOM event binding.
+* **Rules**:
+  - MUST NOT contain direct mathematical calculations.
+  - MUST delegate all math, conversions, and parsing to `src/core/`.
+  - MUST call `src/services/` for persistence and logging.
+
+---
+
+## 2. Input Parser Contract
+
+The input parser (`src/core/parser.js`) evaluates user inputs and returns a structured object:
+
+```javascript
+{
+  value: number,          // Parsed numeric value in detected or caller unit
+  detectedUnit: string|null, // Explicit unit key if present (e.g. 'cm', 'm', 'in', 'ft')
+  isValid: boolean,       // True if parsed into a finite valid number
+  error: string|null      // Diagnostic error message if invalid
+}
+```
+
+### Supported Formats
+* **Decimals & Integers**: `12`, `12.5`, `0.75`, `-5` (when `allowNegative: true`).
+* **Fractions**: `3 1/2`, `5/8`, `1/4`, `15 3/16`.
+* **Attached Units**: `12cm`, `2.5m`, `100mm`, `12in`, `6ft`.
+* **Architectural Feet & Inches**: `12'`, `12' 6"`, `12'-6"`, `12'-6 1/2"`, `6 1/2"`, `5/8"`.
+
+### Rejected Inputs (`isValid: false`)
+* Empty or whitespace-only strings (`""`, `"   "`).
+* Non-numeric strings and invalid suffixes (`"abc"`, `"12abc"`, `"15.5foobar"`).
+* Malformed fractions or multiple slashes (`"3/0"`, `"1/0"`, `"1/2/3"`, `"/5"`, `"3/"`).
+* Non-finite values (`NaN`, `Infinity`).
+* Negative dimensions when `allowNegative` is false.
+
+---
+
+## 3. Mathematical Contracts
+
+All calculations normalize inputs to base SI units (**Meters**, **Square Meters**, **Cubic Meters**) before scaling.
+
+### 3.1 Linear Scaling
+* **Drawing $\rightarrow$ Real**:
+  $$\text{Real Meters} = (\text{Drawing Value} \times \text{Input Unit Factor}) \times S$$
+  $$\text{Output Value} = \frac{\text{Real Meters}}{\text{Target Unit Factor}}$$
+* **Real $\rightarrow$ Drawing**:
+  $$\text{Drawing Meters} = \frac{\text{Real Value} \times \text{Input Unit Factor}}{S}$$
+  $$\text{Output Value} = \frac{\text{Drawing Meters}}{\text{Target Unit Factor}}$$
+
+### 3.2 Rescaling ($A \rightarrow B$)
+$$\text{Target Value} = \text{Original Value} \times \left(\frac{S_A}{S_B}\right) \times \left(\frac{\text{UnitFactor}_A}{\text{UnitFactor}_B}\right)$$
+
+### 3.3 Area Scaling ($S^2$)
+* Drawing $\rightarrow$ Real: $\text{Real Area} = \text{Drawing Area} \times S^2$
+* Real $\rightarrow$ Drawing: $\text{Drawing Area} = \frac{\text{Real Area}}{S^2}$
+
+### 3.4 Volume Scaling ($S^3$)
+* Drawing $\rightarrow$ Real: $\text{Real Volume} = \text{Drawing Volume} \times S^3$
+* Real $\rightarrow$ Drawing: $\text{Drawing Volume} = \frac{\text{Real Volume}}{S^3}$
+
+### 3.5 Scale Ratio Detection
+$$\text{Scale Ratio} = \frac{\text{Real Measurement (Meters)}}{\text{Paper Measurement (Meters)}}$$
+
+---
+
+## 4. Unit Validation & Dimension Compatibility
+
+* **Strict Lookup**: All unit lookups MUST use `requireUnit(unitKey, expectedDimension)`.
+* **No Silent Coercion**: An unknown unit string (e.g. `'xyz'`, `'foobar'`, `null`) MUST throw an explicit `Error`.
+* **Dimension Cross-Checking**:
+  - Length functions accept only `length` units (`mm`, `cm`, `dm`, `m`, `km`, `in`, `ft`, `yd`, `mi`).
+  - Area functions accept only `area` units (`mm2`, `cm2`, `m2`, `km2`, `ha`, `sq_in`, `sq_ft`, `sq_yd`, `acre`).
+  - Volume functions accept only `volume` units (`mm3`, `cm3`, `m3`, `liters`, `cu_in`, `cu_ft`, `cu_yd`).
+
+---
+
+## 5. Precision & Rounding Policy
+
+1. **Internal Arithmetic**: Calculations run in native IEEE 754 64-bit floating point. Do NOT round intermediate results.
+2. **Output Display Rounding**: Formatting is applied exclusively at the presentation layer using `formatNumber(val, decimals)` with epsilon stabilization (`(val + Number.EPSILON)`).
+3. **Architectural Fractions**: Formatted to the nearest $1/16$ inch and reduced to lowest terms (e.g. `6.5"` $\rightarrow$ `6 1/2"`, `0.75"` $\rightarrow$ `3/4"`).
+4. **Test Equality Tolerance**: Automated equality assertions use $\varepsilon = 10^{-6}$ (`Math.abs(a - b) < 0.000001`).
+
+---
+
+## 6. Build System & Standalone Deployment
+
+* **Source of Truth**: `src/` is the authoritative source for all code.
+* **Deterministic Bundler**: `node scripts/build.js` concatenates `src/` modules in deterministic dependency order into `js/app.js`.
+* **Bundle Check**: `node scripts/build.js --check` verifies that `js/app.js` is identical to the compiled `src/`.
+* **Rule**: NEVER edit `js/app.js` manually.
+
+---
+
+## 7. Testing & Regression Workflow
+
+Every bug fix or feature addition must follow this test-driven cycle:
+
+```text
+Bug Reported or Feature Planned
+               │
+               ▼
+Write Failing Automated Test Case in tests/
+               │
+               ▼
+Implement Code in src/
+               │
+               ▼
+Run Test Runner (npm test) ➔ Verify 100% Passing
+               │
+               ▼
+Rebuild Bundle (node scripts/build.js)
+```
+
+---
+
+## 8. Feature Development Checklist
+
+Before writing code for a new feature, answer:
+1. **Does it introduce new mathematical logic?** $\rightarrow$ Put in `src/core/`.
+2. **Does it need persistence or browser APIs?** $\rightarrow$ Put in `src/services/`.
+3. **Is it purely visual presentation or DOM events?** $\rightarrow$ Put in `src/ui/`.
+4. **Does it introduce new architectural reference data?** $\rightarrow$ Put in structured constants in `src/core/presets.js` or `src/core/furniture.js`.
+5. **Are all unit tests passing?** $\rightarrow$ `npm test` must report 0 failures.
+
+---
+
+## 9. Simplicity Directive
+
+To preserve lightweight, zero-dependency, and offline compatibility:
+* Do NOT introduce UI frameworks (React, Vue, Angular).
+* Do NOT add runtime NPM dependencies unless technically unavoidable.
+* Keep the application directly runnable via double-clicking `index.html` (`file:///`) and local servers (`http://`).
