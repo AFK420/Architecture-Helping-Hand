@@ -742,16 +742,20 @@
                 <circle cx="11" cy="11" r="8"></circle>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
               </svg>
-              <input type="text" id="furniture-search-input" class="furniture-search-input" placeholder="Search furniture or fixtures (e.g. Sofa, King Bed, Dining Table, Sink, Door, Desk, Patio, Gym)..." aria-label="Search furniture catalog">
+              <input type="text" id="furniture-search-input" class="furniture-search-input" placeholder="Search by name, category, or dimension (e.g. 'sofa 220', 'king 200', 'dining 6', 'ada', 'desk 160', '90x190')..." aria-label="Search furniture catalog">
               <button id="clear-furniture-search-btn" class="clear-search-btn" title="Clear search" aria-label="Clear search">✕</button>
             </div>
             <div id="furniture-results-count" class="furniture-count-badge">
-              175+ items
+              179 items
             </div>
           </div>
+          <div class="furn-search-hint">
+            💡 Instant space-planning search: Type dimensions (e.g. <code>200</code>, <code>200x200</code>, <code>60cm</code>) or keywords (e.g. <code>ada</code>, <code>island</code>, <code>bunk</code>, <code>sectional</code>)
+          </div>
 
-          <!-- Scale Selector Bar for Furniture -->
+          <!-- Space-Planning Controls Bar: Scale + Paper Unit + Sort + Density -->
           <div class="furniture-scale-bar">
+            <!-- Scale Presets -->
             <div class="furniture-scale-controls">
               <span class="section-label" style="margin: 0; margin-right: 0.25rem;">Drawing Scale:</span>
               <div class="furniture-presets-pills" id="furn-scale-presets">
@@ -777,19 +781,44 @@
                 <option value="in">Inches (in)</option>
               </select>
             </div>
+
+            <!-- Architectural Sort Control -->
+            <div class="furn-sort-box">
+              <span class="section-label" style="margin: 0;">Sort By:</span>
+              <select id="furn-sort-select" class="form-select" aria-label="Sort furniture items">
+                <option value="default">Standards Order</option>
+                <option value="name_asc">Name (A ➔ Z)</option>
+                <option value="name_desc">Name (Z ➔ A)</option>
+                <option value="width_desc">Width (Largest ➔ Smallest)</option>
+                <option value="width_asc">Width (Smallest ➔ Largest)</option>
+                <option value="depth_desc">Depth (Deepest ➔ Shallowest)</option>
+                <option value="area_desc">Footprint Area (Largest)</option>
+                <option value="area_asc">Footprint Area (Smallest)</option>
+                <option value="category">Category</option>
+              </select>
+            </div>
+
+            <!-- Density Mode Toggle -->
+            <div class="furn-density-toggle">
+              <span class="section-label" style="margin: 0;">Density:</span>
+              <div class="density-btn-group">
+                <button class="furn-density-btn active" data-density="comfortable" title="Comfortable Grid View">⊞ Grid</button>
+                <button class="furn-density-btn" data-density="compact" title="Compact High-Density Comparison List">≡ List</button>
+              </div>
+            </div>
           </div>
 
           <!-- Category Navigation Pills -->
           <div class="furniture-category-nav" id="furn-category-nav">
-            <button class="furn-cat-pill active" data-cat="all">All Standards <span class="furn-cat-count" id="count-all">175</span></button>
+            <button class="furn-cat-pill active" data-cat="all">All Standards <span class="furn-cat-count" id="count-all">179</span></button>
             <button class="furn-cat-pill" data-cat="living">🛋️ Living & Lounge <span class="furn-cat-count" id="count-living">23</span></button>
             <button class="furn-cat-pill" data-cat="bedroom">🛏️ Bedroom & Wardrobe <span class="furn-cat-count" id="count-bedroom">20</span></button>
             <button class="furn-cat-pill" data-cat="dining">🍽️ Dining & Bar <span class="furn-cat-count" id="count-dining">18</span></button>
             <button class="furn-cat-pill" data-cat="kitchen">🍳 Kitchen & Utility <span class="furn-cat-count" id="count-kitchen">22</span></button>
             <button class="furn-cat-pill" data-cat="bathroom">🚿 Bathroom & Spa <span class="furn-cat-count" id="count-bathroom">20</span></button>
-            <button class="furn-cat-pill" data-cat="office">💼 Office & Studio <span class="furn-cat-count" id="count-office">22</span></button>
+            <button class="furn-cat-pill" data-cat="office">💼 Office & Workplace <span class="furn-cat-count" id="count-office">22</span></button>
             <button class="furn-cat-pill" data-cat="doors">🚪 Doors & Circulation <span class="furn-cat-count" id="count-doors">22</span></button>
-            <button class="furn-cat-pill" data-cat="outdoor">🌳 Outdoor & Parking <span class="furn-cat-count" id="count-outdoor">16</span></button>
+            <button class="furn-cat-pill" data-cat="outdoor">🌳 Outdoor & Site <span class="furn-cat-count" id="count-outdoor">16</span></button>
             <button class="furn-cat-pill" data-cat="commercial">🏪 Retail & Fitness <span class="furn-cat-count" id="count-commercial">16</span></button>
           </div>
         </div>
@@ -801,10 +830,10 @@
               <path d="M12 20h9"></path>
               <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
             </svg>
-            Quick Custom Dimension Scaler
+            Custom Piece Architectural Scaler & Space Footprint
           </div>
           <div class="custom-furn-inputs-row">
-            <input type="text" id="custom-furn-name" class="form-input" placeholder="Item name (e.g. Custom Cabinet)" value="Custom Piece" aria-label="Custom item name">
+            <input type="text" id="custom-furn-name" class="form-input" placeholder="Item name (e.g. Custom Millwork)" value="Custom Piece" aria-label="Custom item name">
             <input type="number" id="custom-furn-w" class="form-input" placeholder="Width" value="240" min="0.1" step="any" aria-label="Custom item width">
             <input type="number" id="custom-furn-d" class="form-input" placeholder="Depth" value="100" min="0.1" step="any" aria-label="Custom item depth">
             <select id="custom-furn-unit" class="form-select" aria-label="Custom item dimension unit">
@@ -815,15 +844,16 @@
             </select>
             <button id="btn-run-custom-furn" class="btn-primary-action compact" aria-label="Scale custom piece">
               <span class="btn-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg></span>
-              <span class="btn-text">SCALE</span>
+              <span class="btn-text">CALCULATE SIZE</span>
             </button>
           </div>
           <div class="custom-furn-result-row">
             <div id="custom-furn-result" class="custom-furn-result-badge">
-              Paper @ 1:50: 4.80 × 2.00 cm
+              Paper @ 1:50: 4.80 × 2.00 cm | Footprint: 2.40 m² (25.8 sq ft)
             </div>
             <div class="custom-furn-actions">
-              <button id="btn-copy-custom-furn" class="action-tool-btn compact">Copy</button>
+              <button id="btn-planner-custom-furn" class="action-tool-btn compact primary" title="Add custom piece to Room Planner">+ Use in Planner</button>
+              <button id="btn-copy-custom-furn" class="action-tool-btn compact">Copy Size</button>
               <button id="btn-send-custom-furn" class="action-tool-btn compact">To Converter</button>
             </div>
           </div>

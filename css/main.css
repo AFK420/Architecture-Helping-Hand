@@ -1353,6 +1353,24 @@ body {
   white-space: nowrap;
 }
 
+.furn-search-hint {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  margin-top: -0.5rem;
+  margin-bottom: var(--space-xs);
+  line-height: 1.4;
+}
+
+.furn-search-hint code {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  background: var(--bg-surface);
+  color: var(--accent-primary);
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-subtle);
+}
+
 .furniture-scale-bar {
   display: flex;
   align-items: center;
@@ -1422,16 +1440,45 @@ body {
   font-size: var(--font-size-sm);
 }
 
-.furn-unit-box {
+.furn-unit-box,
+.furn-sort-box,
+.furn-density-toggle {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
 }
 
-.furn-unit-box .form-select {
+.furn-unit-box .form-select,
+.furn-sort-box .form-select {
   height: var(--control-height-sm);
   padding: 0 var(--space-sm);
   font-size: var(--font-size-xs);
+}
+
+.density-btn-group {
+  display: flex;
+  border: 1.5px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.furn-density-btn {
+  height: var(--control-height-sm);
+  padding: 0 var(--space-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.furn-density-btn.active {
+  background: var(--accent-primary);
+  color: #000;
+  font-weight: 800;
 }
 
 .furniture-category-nav {
@@ -1532,12 +1579,18 @@ body {
 }
 
 /* ==========================================================================
-   Spacious 3-Column Furniture Grid
+   Spacious 3-Column Furniture Grid / Compact Comparison List
    ========================================================================== */
 .furniture-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-lg);
+  transition: all 0.2s ease;
+}
+
+.furniture-grid.compact-mode {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
 }
 
 .furniture-card {
@@ -1549,6 +1602,7 @@ body {
   flex-direction: column;
   transition: all 0.15s ease;
   box-shadow: var(--shadow-sm);
+  position: relative;
 }
 
 .furniture-card:hover {
@@ -1562,6 +1616,14 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   margin-bottom: var(--space-sm);
+  gap: var(--space-xs);
+}
+
+.furn-title-area {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
 }
 
 .furn-name {
@@ -1571,13 +1633,38 @@ body {
   line-height: 1.25;
 }
 
+.furn-header-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  margin-top: 0.15rem;
+}
+
 .furn-category-tag {
   font-size: var(--font-size-2xs);
   font-family: var(--font-mono);
   font-weight: 700;
   color: var(--text-muted);
   letter-spacing: 0.05em;
-  margin-top: var(--space-2xs);
+}
+
+.furn-std-badge {
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-xs);
+  background: rgba(56, 189, 248, 0.1);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  white-space: nowrap;
+}
+
+.furn-std-badge.ada-badge {
+  background: rgba(52, 211, 153, 0.12);
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.3);
 }
 
 .furn-dim-badge {
@@ -1589,29 +1676,58 @@ body {
   padding: 0.2rem 0.5rem;
   border-radius: var(--radius-xs);
   border: 1px solid var(--accent-primary-border);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
+/* Blueprint Drafting Box */
 .furn-plan-preview-box {
   background: var(--bg-surface);
   border: 1.5px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: var(--space-sm);
   margin-bottom: var(--space-sm);
-  height: 125px;
+  height: 145px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--accent-primary);
   box-shadow: var(--shadow-inset);
-  background-image: radial-gradient(var(--grid-cross-color) 1.2px, transparent 1.2px);
+  background-image: 
+    linear-gradient(to right, rgba(56, 189, 248, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(56, 189, 248, 0.05) 1px, transparent 1px);
   background-size: 16px 16px;
   position: relative;
   overflow: hidden;
 }
 
+.furn-plan-preview-box::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-top: 1.5px solid var(--border-medium);
+  border-right: 1.5px solid var(--border-medium);
+  pointer-events: none;
+}
+
+.furn-plan-preview-box::before {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  width: 6px;
+  height: 6px;
+  border-bottom: 1.5px solid var(--border-medium);
+  border-left: 1.5px solid var(--border-medium);
+  pointer-events: none;
+}
+
 .furn-plan-svg {
   max-width: 100%;
-  max-height: 105px;
+  max-height: 125px;
   width: auto;
   height: auto;
   filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.35));
@@ -1622,11 +1738,41 @@ body {
   transform: scale(1.06);
 }
 
+/* Space-Planning Footprint Bar */
+.furn-footprint-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.65rem;
+  background: var(--bg-surface);
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-xs);
+  font-size: var(--font-size-xs);
+}
+
+.footprint-label {
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+
+.footprint-val {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.footprint-imperial {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  margin-left: 0.25rem;
+}
+
 .furn-item-desc {
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
   line-height: 1.45;
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--space-sm);
   min-height: 2.5em;
 }
 
@@ -1665,14 +1811,60 @@ body {
   font-weight: 800;
 }
 
+.std-type-tag {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
 .furn-card-footer {
   display: flex;
   gap: var(--space-xs);
   margin-top: auto;
   padding-top: var(--space-sm);
   border-top: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
 }
 
+.btn-furn-planner {
+  background: var(--accent-primary-subtle) !important;
+  color: var(--accent-primary) !important;
+  border: 1px solid var(--accent-primary-border) !important;
+  font-weight: 700 !important;
+}
+
+.btn-furn-planner:hover {
+  background: var(--accent-primary) !important;
+  color: #000 !important;
+}
+
+/* Compact Density Card Styles */
+.compact-card {
+  padding: var(--space-md);
+}
+
+.compact-card .furn-plan-preview-box {
+  height: 80px;
+  margin-bottom: var(--space-2xs);
+}
+
+.compact-card .furn-plan-svg {
+  max-height: 65px;
+}
+
+.compact-card .furn-item-desc {
+  display: none;
+}
+
+.compact-card .furn-specs-grid {
+  margin-bottom: var(--space-xs);
+}
+
+.compact-card .furn-card-footer {
+  padding-top: var(--space-xs);
+}
+
+/* Empty State */
 .empty-furn-state {
   grid-column: 1 / -1;
   text-align: center;
@@ -1698,6 +1890,33 @@ body {
   color: var(--text-secondary);
   max-width: 480px;
   margin: 0 auto;
+}
+
+.empty-furn-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.empty-suggest-chip {
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-medium);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.empty-suggest-chip:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--accent-primary-subtle);
 }
 
 /* ==========================================================================

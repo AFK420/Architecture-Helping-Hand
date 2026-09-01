@@ -249,6 +249,35 @@ export function getScaledFurnitureDimensions(item, ratio = 50, paperUnitKey = 'c
 
   const impW = formatFeetInches(wRes.realMeters / UNITS.in.toMeters);
   const impD = formatFeetInches(dRes.realMeters / UNITS.in.toMeters);
+  const impH = item.hCm ? formatFeetInches((item.hCm / 100) / UNITS.in.toMeters) : null;
+
+  // Real Footprint Area
+  const areaM2 = (item.wCm * item.dCm) / 10000;
+  const areaSqFt = areaM2 * 10.7639;
+
+  // Paper Footprint Area
+  const paperArea = wRes.value * dRes.value;
+
+  // Classification Tag
+  let standardTag = 'Architectural Standard (Neufert)';
+  let dimensionType = 'Typical Architectural Standard';
+  
+  if (item.id.includes('ada') || (item.desc && item.desc.toLowerCase().includes('ada')) || item.name.toLowerCase().includes('ada')) {
+    standardTag = 'ADA / Universal Accessible Standard';
+    dimensionType = 'Code Mandated Clearance';
+  } else if (item.id.includes('bed-') || item.category === 'bedroom') {
+    standardTag = 'Standard Mattress Specification';
+    dimensionType = 'Exact Standard Size';
+  } else if (item.category === 'kitchen' && (item.wCm === 60 || item.wCm === 90 || item.dCm === 60)) {
+    standardTag = 'Modular Millwork Standard (600mm)';
+    dimensionType = 'Modular System Standard';
+  } else if (item.category === 'doors') {
+    standardTag = 'Building Code Opening Standard';
+    dimensionType = 'Clearance & Egress Standard';
+  } else if (item.category === 'living' || item.category === 'dining') {
+    standardTag = 'Typical Residential Furniture Range';
+    dimensionType = 'Typical Dimension (Allow ±5cm)';
+  }
 
   return {
     item: item,
@@ -258,27 +287,85 @@ export function getScaledFurnitureDimensions(item, ratio = 50, paperUnitKey = 'c
     paperDepth: dRes.value,
     paperFormatted: `${formatNumber(wRes.value, 2)} × ${formatNumber(dRes.value, 2)} ${paperUnit.symbol}`,
     realFormattedMetric: item.hCm ? `${item.wCm} × ${item.dCm} × ${item.hCm} cm` : `${item.wCm} × ${item.dCm} cm`,
-    realFormattedImperial: `${impW} × ${impD}`
+    realFormattedImperial: impH ? `${impW} × ${impD} × ${impH}` : `${impW} × ${impD}`,
+    footprintM2: formatNumber(areaM2, 2),
+    footprintSqFt: formatNumber(areaSqFt, 1),
+    paperAreaFormatted: `${formatNumber(paperArea, 2)} ${paperUnit.symbol}²`,
+    standardTag: standardTag,
+    dimensionType: dimensionType
   };
 }
 
 /**
- * Filter furniture catalog by search term and category
+ * Filter furniture catalog by search term, category, and sort order
+ * Supports multi-token search by name, category, type, description, and dimensions (e.g. "200", "90x190")
  */
-export function filterFurnitureCatalog(catalog, searchQuery = '', category = 'all') {
+export function filterFurnitureCatalog(catalog, searchQuery = '', category = 'all', sortKey = 'default') {
   const query = searchQuery ? searchQuery.trim().toLowerCase() : '';
+  const tokens = query.split(/\s+/).filter(t => t.length > 0);
 
-  return catalog.filter(item => {
+  let filtered = catalog.filter(item => {
     const matchesCategory = category === 'all' || item.category === category;
     if (!matchesCategory) return false;
 
-    if (!query) return true;
+    if (tokens.length === 0) return true;
 
-    const nameMatch = item.name.toLowerCase().includes(query);
-    const descMatch = item.desc.toLowerCase().includes(query);
-    const catMatch = item.category.toLowerCase().includes(query);
-    const typeMatch = item.type ? item.type.toLowerCase().includes(query) : false;
+    // Build searchable haystack
+    const name = (item.name || '').toLowerCase();
+    const desc = (item.desc || '').toLowerCase();
+    const cat = (item.category || '').toLowerCase();
+    const type = (item.type || '').toLowerCase();
+    const dimW = `${item.wCm}`;
+    const dimD = `${item.dCm}`;
+    const dimH = `${item.hCm || ''}`;
+    const dimCombo = `${item.wCm}x${item.dCm} ${item.wCm}*${item.dCm} ${item.wCm}×${item.dCm} ${item.wCm}cm ${item.dCm}cm`;
 
-    return nameMatch || descMatch || catMatch || typeMatch;
+    const haystack = `${name} ${desc} ${cat} ${type} ${dimW} ${dimD} ${dimH} ${dimCombo}`;
+
+    // Every token must match somewhere in the haystack (multi-word tokenized search)
+    return tokens.every(token => {
+      // Direct substring match
+      if (haystack.includes(token)) return true;
+
+      // Handle dimension patterns like 200x200 or 90x190
+      if (token.includes('x') || token.includes('*')) {
+        const parts = token.split(/[x*]/).filter(Boolean);
+        if (parts.length === 2 && parts.every(p => haystack.includes(p))) {
+          return true;
+        }
+      }
+
+      return false;
+    });
   });
+
+  // Apply sorting
+  if (sortKey && sortKey !== 'default') {
+    filtered = [...filtered].sort((a, b) => {
+      switch (sortKey) {
+        case 'name_asc':
+          return a.name.localeCompare(b.name);
+        case 'name_desc':
+          return b.name.localeCompare(a.name);
+        case 'width_desc':
+          return b.wCm - a.wCm;
+        case 'width_asc':
+          return a.wCm - b.wCm;
+        case 'depth_desc':
+          return b.dCm - a.dCm;
+        case 'depth_asc':
+          return a.dCm - b.dCm;
+        case 'area_desc':
+          return (b.wCm * b.dCm) - (a.wCm * a.dCm);
+        case 'area_asc':
+          return (a.wCm * a.dCm) - (b.wCm * b.dCm);
+        case 'category':
+          return a.category.localeCompare(b.category) || a.name.localeCompare(b.name);
+        default:
+          return 0;
+      }
+    });
+  }
+
+  return filtered;
 }

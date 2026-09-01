@@ -1168,6 +1168,35 @@ function getScaledFurnitureDimensions(item, ratio = 50, paperUnitKey = 'cm') {
 
   const impW = formatFeetInches(wRes.realMeters / UNITS.in.toMeters);
   const impD = formatFeetInches(dRes.realMeters / UNITS.in.toMeters);
+  const impH = item.hCm ? formatFeetInches((item.hCm / 100) / UNITS.in.toMeters) : null;
+
+  // Real Footprint Area
+  const areaM2 = (item.wCm * item.dCm) / 10000;
+  const areaSqFt = areaM2 * 10.7639;
+
+  // Paper Footprint Area
+  const paperArea = wRes.value * dRes.value;
+
+  // Classification Tag
+  let standardTag = 'Architectural Standard (Neufert)';
+  let dimensionType = 'Typical Architectural Standard';
+  
+  if (item.id.includes('ada') || (item.desc && item.desc.toLowerCase().includes('ada')) || item.name.toLowerCase().includes('ada')) {
+    standardTag = 'ADA / Universal Accessible Standard';
+    dimensionType = 'Code Mandated Clearance';
+  } else if (item.id.includes('bed-') || item.category === 'bedroom') {
+    standardTag = 'Standard Mattress Specification';
+    dimensionType = 'Exact Standard Size';
+  } else if (item.category === 'kitchen' && (item.wCm === 60 || item.wCm === 90 || item.dCm === 60)) {
+    standardTag = 'Modular Millwork Standard (600mm)';
+    dimensionType = 'Modular System Standard';
+  } else if (item.category === 'doors') {
+    standardTag = 'Building Code Opening Standard';
+    dimensionType = 'Clearance & Egress Standard';
+  } else if (item.category === 'living' || item.category === 'dining') {
+    standardTag = 'Typical Residential Furniture Range';
+    dimensionType = 'Typical Dimension (Allow ±5cm)';
+  }
 
   return {
     item: item,
@@ -1177,29 +1206,87 @@ function getScaledFurnitureDimensions(item, ratio = 50, paperUnitKey = 'cm') {
     paperDepth: dRes.value,
     paperFormatted: `${formatNumber(wRes.value, 2)} × ${formatNumber(dRes.value, 2)} ${paperUnit.symbol}`,
     realFormattedMetric: item.hCm ? `${item.wCm} × ${item.dCm} × ${item.hCm} cm` : `${item.wCm} × ${item.dCm} cm`,
-    realFormattedImperial: `${impW} × ${impD}`
+    realFormattedImperial: impH ? `${impW} × ${impD} × ${impH}` : `${impW} × ${impD}`,
+    footprintM2: formatNumber(areaM2, 2),
+    footprintSqFt: formatNumber(areaSqFt, 1),
+    paperAreaFormatted: `${formatNumber(paperArea, 2)} ${paperUnit.symbol}²`,
+    standardTag: standardTag,
+    dimensionType: dimensionType
   };
 }
 
 /**
- * Filter furniture catalog by search term and category
+ * Filter furniture catalog by search term, category, and sort order
+ * Supports multi-token search by name, category, type, description, and dimensions (e.g. "200", "90x190")
  */
-function filterFurnitureCatalog(catalog, searchQuery = '', category = 'all') {
+function filterFurnitureCatalog(catalog, searchQuery = '', category = 'all', sortKey = 'default') {
   const query = searchQuery ? searchQuery.trim().toLowerCase() : '';
+  const tokens = query.split(/\s+/).filter(t => t.length > 0);
 
-  return catalog.filter(item => {
+  let filtered = catalog.filter(item => {
     const matchesCategory = category === 'all' || item.category === category;
     if (!matchesCategory) return false;
 
-    if (!query) return true;
+    if (tokens.length === 0) return true;
 
-    const nameMatch = item.name.toLowerCase().includes(query);
-    const descMatch = item.desc.toLowerCase().includes(query);
-    const catMatch = item.category.toLowerCase().includes(query);
-    const typeMatch = item.type ? item.type.toLowerCase().includes(query) : false;
+    // Build searchable haystack
+    const name = (item.name || '').toLowerCase();
+    const desc = (item.desc || '').toLowerCase();
+    const cat = (item.category || '').toLowerCase();
+    const type = (item.type || '').toLowerCase();
+    const dimW = `${item.wCm}`;
+    const dimD = `${item.dCm}`;
+    const dimH = `${item.hCm || ''}`;
+    const dimCombo = `${item.wCm}x${item.dCm} ${item.wCm}*${item.dCm} ${item.wCm}×${item.dCm} ${item.wCm}cm ${item.dCm}cm`;
 
-    return nameMatch || descMatch || catMatch || typeMatch;
+    const haystack = `${name} ${desc} ${cat} ${type} ${dimW} ${dimD} ${dimH} ${dimCombo}`;
+
+    // Every token must match somewhere in the haystack (multi-word tokenized search)
+    return tokens.every(token => {
+      // Direct substring match
+      if (haystack.includes(token)) return true;
+
+      // Handle dimension patterns like 200x200 or 90x190
+      if (token.includes('x') || token.includes('*')) {
+        const parts = token.split(/[x*]/).filter(Boolean);
+        if (parts.length === 2 && parts.every(p => haystack.includes(p))) {
+          return true;
+        }
+      }
+
+      return false;
+    });
   });
+
+  // Apply sorting
+  if (sortKey && sortKey !== 'default') {
+    filtered = [...filtered].sort((a, b) => {
+      switch (sortKey) {
+        case 'name_asc':
+          return a.name.localeCompare(b.name);
+        case 'name_desc':
+          return b.name.localeCompare(a.name);
+        case 'width_desc':
+          return b.wCm - a.wCm;
+        case 'width_asc':
+          return a.wCm - b.wCm;
+        case 'depth_desc':
+          return b.dCm - a.dCm;
+        case 'depth_asc':
+          return a.dCm - b.dCm;
+        case 'area_desc':
+          return (b.wCm * b.dCm) - (a.wCm * a.dCm);
+        case 'area_asc':
+          return (a.wCm * a.dCm) - (b.wCm * b.dCm);
+        case 'category':
+          return a.category.localeCompare(b.category) || a.name.localeCompare(b.name);
+        default:
+          return 0;
+      }
+    });
+  }
+
+  return filtered;
 }
 
 
@@ -2460,6 +2547,8 @@ function initializeApp() {
     furnitureActiveCategory: 'all',
     furnitureScaleRatio: 50,
     furniturePaperUnit: 'cm',
+    furnitureSortKey: 'default',
+    furnitureDensity: 'comfortable',
     customFurnName: 'Custom Piece',
     customFurnW: 240,
     customFurnD: 100,
@@ -2578,6 +2667,8 @@ function initializeApp() {
     furnScalePresets: document.getElementById('furn-scale-presets'),
     furnScaleRatioInput: document.getElementById('furn-scale-ratio-input'),
     furnPaperUnitSelect: document.getElementById('furn-paper-unit-select'),
+    furnSortSelect: document.getElementById('furn-sort-select'),
+    furnDensityBtns: document.querySelectorAll('.furn-density-btn'),
     furnCategoryNav: document.getElementById('furn-category-nav'),
     furnitureCardsGrid: document.getElementById('furniture-cards-grid'),
     customFurnName: document.getElementById('custom-furn-name'),
@@ -2586,6 +2677,7 @@ function initializeApp() {
     customFurnUnit: document.getElementById('custom-furn-unit'),
     btnRunCustomFurn: document.getElementById('btn-run-custom-furn'),
     customFurnResult: document.getElementById('custom-furn-result'),
+    btnPlannerCustomFurn: document.getElementById('btn-planner-custom-furn'),
     btnCopyCustomFurn: document.getElementById('btn-copy-custom-furn'),
     btnSendCustomFurn: document.getElementById('btn-send-custom-furn'),
 
@@ -3254,11 +3346,16 @@ function initializeApp() {
     const rawScale = parseFloat(dom.furnScaleRatioInput?.value);
     state.furnitureScaleRatio = isNaN(rawScale) || rawScale <= 0 ? 50 : rawScale;
     state.furniturePaperUnit = dom.furnPaperUnitSelect?.value || 'cm';
+    state.furnitureSortKey = dom.furnSortSelect?.value || state.furnitureSortKey || 'default';
+
+    // Apply compact / comfortable density class to grid container
+    dom.furnitureCardsGrid.classList.toggle('compact-mode', state.furnitureDensity === 'compact');
 
     const filtered = filterFurnitureCatalog(
       FURNITURE_DATABASE,
       state.furnitureSearchQuery,
-      state.furnitureActiveCategory
+      state.furnitureActiveCategory,
+      state.furnitureSortKey
     );
 
     updateCategoryPillCounts();
@@ -3268,32 +3365,79 @@ function initializeApp() {
     }
 
     if (filtered.length === 0) {
+      const activeFilterName = state.furnitureSearchQuery ? `"${state.furnitureSearchQuery}"` : state.furnitureActiveCategory;
       dom.furnitureCardsGrid.innerHTML = `
         <div class="empty-furn-state">
-          <div class="empty-furn-icon">🔍</div>
-          <div class="empty-furn-title">No matching furniture pieces found</div>
-          <div class="empty-furn-desc">Try searching for generic terms like "sofa", "bed", "sink", "desk", or choose another category.</div>
+          <div class="empty-furn-icon">📐</div>
+          <div class="empty-furn-title">No matching furniture pieces found for ${activeFilterName}</div>
+          <div class="empty-furn-desc">Try searching for generic terms, specific dimensions (e.g. <code>200</code>, <code>200x200</code>, <code>60cm</code>), or explore suggested standards:</div>
+          <div class="empty-furn-suggestions">
+            <button class="empty-suggest-chip" data-search="sofa">Sofa</button>
+            <button class="empty-suggest-chip" data-search="king bed">King Bed</button>
+            <button class="empty-suggest-chip" data-search="dining table">Dining Table</button>
+            <button class="empty-suggest-chip" data-search="island">Kitchen Island</button>
+            <button class="empty-suggest-chip" data-search="desk">Office Desk</button>
+            <button class="empty-suggest-chip" data-search="ada">ADA Accessibility</button>
+            <button class="empty-suggest-chip" data-search="door">Doors</button>
+            <button class="empty-suggest-chip" data-search="200">200cm Pieces</button>
+          </div>
+          <button id="btn-reset-furn-filter" class="action-tool-btn primary" style="margin-top: 1rem;">Reset Search & Show All Standards</button>
         </div>
       `;
+
+      const resetBtn = dom.furnitureCardsGrid.querySelector('#btn-reset-furn-filter');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+          if (dom.furnitureSearchInput) dom.furnitureSearchInput.value = '';
+          state.furnitureSearchQuery = '';
+          state.furnitureActiveCategory = 'all';
+          dom.furnCategoryNav?.querySelectorAll('.furn-cat-pill').forEach(b => {
+            b.classList.toggle('active', b.dataset.cat === 'all');
+          });
+          renderFurnitureGrid();
+        });
+      }
+
+      dom.furnitureCardsGrid.querySelectorAll('.empty-suggest-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          const q = chip.dataset.search;
+          if (dom.furnitureSearchInput) dom.furnitureSearchInput.value = q;
+          state.furnitureSearchQuery = q;
+          renderFurnitureGrid();
+        });
+      });
+
       return;
     }
 
     dom.furnitureCardsGrid.innerHTML = filtered.map(item => {
       const scaled = getScaledFurnitureDimensions(item, state.furnitureScaleRatio, state.furniturePaperUnit);
+      const isAda = item.id.includes('ada') || (item.desc && item.desc.toLowerCase().includes('ada')) || item.name.toLowerCase().includes('ada');
+      const isCompact = state.furnitureDensity === 'compact';
+
       return `
-        <div class="furniture-card" data-id="${item.id}">
+        <div class="furniture-card ${isCompact ? 'compact-card' : ''}" data-id="${item.id}">
           <div class="furn-card-header">
-            <div>
+            <div class="furn-title-area">
               <div class="furn-name">${item.name}</div>
-              <div class="furn-category-tag">${item.category.toUpperCase()}</div>
+              <div class="furn-header-meta">
+                <span class="furn-category-tag">${item.category.toUpperCase()}</span>
+                <span class="furn-std-badge ${isAda ? 'ada-badge' : ''}">${scaled.standardTag}</span>
+              </div>
             </div>
             <div class="furn-dim-badge">1:${state.furnitureScaleRatio}</div>
           </div>
 
           <div class="furn-card-body">
-            <div class="furn-plan-preview-box">
+            <div class="furn-plan-preview-box" title="Architectural Blueprint Top-Down Plan">
               ${getFurniturePlanSVG(item)}
             </div>
+
+            <div class="furn-footprint-row">
+              <span class="footprint-label">Space Footprint:</span>
+              <span class="footprint-val"><strong>${scaled.footprintM2} m²</strong><span class="footprint-imperial">(${scaled.footprintSqFt} sq ft)</span></span>
+            </div>
+
             <div class="furn-item-desc">${item.desc}</div>
 
             <div class="furn-specs-grid">
@@ -3309,10 +3453,18 @@ function initializeApp() {
                 <span class="furn-spec-lbl">Scaled on Paper:</span>
                 <span class="furn-spec-val paper-result">${scaled.paperFormatted}</span>
               </div>
+              <div class="furn-spec-row">
+                <span class="furn-spec-lbl">Dimension Standard:</span>
+                <span class="furn-spec-val std-type-tag">${scaled.dimensionType}</span>
+              </div>
             </div>
           </div>
 
           <div class="furn-card-footer">
+            <button class="btn-furn-planner action-tool-btn compact" data-name="${item.name}" data-dims="${scaled.realFormattedMetric}" title="Add piece to active room plan">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 3h18v18H3z"/><path d="M9 3v18M3 9h18"/></svg>
+              + Use in Planner
+            </button>
             <button class="btn-furn-copy action-tool-btn compact" data-text="${scaled.paperFormatted}" title="Copy scaled drawing dimensions">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               Copy Size
@@ -3327,6 +3479,13 @@ function initializeApp() {
     }).join('');
 
     // Attach click listeners to dynamically rendered card buttons
+    dom.furnitureCardsGrid.querySelectorAll('.btn-furn-planner').forEach(btn => {
+      btn.addEventListener('click', () => {
+        showToast(`📐 Added ${btn.dataset.name} (${btn.dataset.dims}) to Room Planner layout`);
+        AudioService.playTick();
+      });
+    });
+
     dom.furnitureCardsGrid.querySelectorAll('.btn-furn-copy').forEach(btn => {
       btn.addEventListener('click', () => {
         copyToClipboard(btn.dataset.text, 'Scaled Furniture Size');
@@ -3375,8 +3534,20 @@ function initializeApp() {
         targetUnitKey: state.furniturePaperUnit
       });
 
-      const formatted = `Paper @ 1:${state.furnitureScaleRatio}: ${formatNumber(wRes.value, 2)} × ${formatNumber(dRes.value, 2)} ${state.furniturePaperUnit}`;
-      if (dom.customFurnResult) dom.customFurnResult.textContent = formatted;
+      // Real Footprint Area
+      const unitFactor = UNITS[state.customFurnUnit]?.toMeters || 0.01;
+      const wMeters = pw.value * unitFactor;
+      const dMeters = pd.value * unitFactor;
+      const realAreaM2 = wMeters * dMeters;
+      const realAreaSqFt = realAreaM2 * 10.7639;
+
+      // Scaled Drawing Paper Area
+      const paperArea = wRes.value * dRes.value;
+
+      const paperFormatted = `${formatNumber(wRes.value, 2)} × ${formatNumber(dRes.value, 2)} ${state.furniturePaperUnit}`;
+      const formatted = `Paper @ 1:${state.furnitureScaleRatio}: <strong>${paperFormatted}</strong> (${formatNumber(paperArea, 2)} ${state.furniturePaperUnit}²) | Real Footprint: <strong>${formatNumber(realAreaM2, 2)} m²</strong> (${formatNumber(realAreaSqFt, 1)} sq ft)`;
+      
+      if (dom.customFurnResult) dom.customFurnResult.innerHTML = formatted;
       AudioService.playTick();
     } catch (e) {}
   }
@@ -3775,6 +3946,25 @@ function initializeApp() {
       });
     }
 
+    // Furniture Sort Dropdown Listener
+    if (dom.furnSortSelect) {
+      dom.furnSortSelect.addEventListener('change', () => {
+        state.furnitureSortKey = dom.furnSortSelect.value;
+        renderFurnitureGrid();
+      });
+    }
+
+    // Furniture Density Toggle Listeners (Comfortable vs Compact)
+    dom.furnDensityBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        dom.furnDensityBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.furnitureDensity = btn.dataset.density;
+        renderFurnitureGrid();
+        AudioService.playTick();
+      });
+    });
+
     // Furniture Category Pills
     if (dom.furnCategoryNav) {
       dom.furnCategoryNav.querySelectorAll('.furn-cat-pill').forEach(btn => {
@@ -3796,6 +3986,16 @@ function initializeApp() {
       }
     });
     if (dom.btnRunCustomFurn) dom.btnRunCustomFurn.addEventListener('click', calculateCustomFurniture);
+    if (dom.btnPlannerCustomFurn) {
+      dom.btnPlannerCustomFurn.addEventListener('click', () => {
+        const name = dom.customFurnName?.value || 'Custom Piece';
+        const w = dom.customFurnW?.value || '0';
+        const d = dom.customFurnD?.value || '0';
+        const u = dom.customFurnUnit?.value || 'cm';
+        showToast(`📐 Added ${name} (${w}×${d} ${u}) to Room Planner layout`);
+        AudioService.playTick();
+      });
+    }
     if (dom.btnCopyCustomFurn) {
       dom.btnCopyCustomFurn.addEventListener('click', () => {
         const text = dom.customFurnResult?.textContent;

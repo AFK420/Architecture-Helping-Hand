@@ -132,6 +132,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'furn-scale-presets',
     'furn-scale-ratio-input',
     'furn-paper-unit-select',
+    'furn-sort-select',
     'furn-category-nav',
     'furniture-cards-grid',
     'custom-furn-name',
@@ -140,6 +141,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'custom-furn-unit',
     'btn-run-custom-furn',
     'custom-furn-result',
+    'btn-planner-custom-furn',
     'btn-copy-custom-furn',
     'btn-send-custom-furn',
 
