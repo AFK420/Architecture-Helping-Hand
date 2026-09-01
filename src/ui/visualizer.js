@@ -43,10 +43,8 @@ export function getReferenceSilhouette(iconType) {
       return `
         <svg viewBox="0 0 140 80" class="silhouette-svg" fill="currentColor">
           <path d="M15,50 L25,32 C28,26 35,24 45,24 L85,24 C95,24 105,30 115,38 L128,45 C133,48 135,52 135,56 L135,62 L15,62 Z" fill-opacity="0.2" stroke="currentColor" stroke-width="2"/>
-          <circle cx="40" cy="62" r="11" fill="var(--bg-card)" stroke="currentColor" stroke-width="3"/>
-          <circle cx="40" cy="62" r="4" fill="currentColor"/>
-          <circle cx="105" cy="62" r="11" fill="var(--bg-card)" stroke="currentColor" stroke-width="3"/>
-          <circle cx="105" cy="62" r="4" fill="currentColor"/>
+          <circle cx="40" cy="62" r="11" fill="currentColor" fill-opacity="0.2" stroke="currentColor" stroke-width="2.5"/>
+          <circle cx="105" cy="62" r="11" fill="currentColor" fill-opacity="0.2" stroke="currentColor" stroke-width="2.5"/>
           <path d="M48,28 L80,28 L80,44 L38,44 Z" fill-opacity="0.3"/>
           <path d="M85,28 L108,38 L108,44 L85,44 Z" fill-opacity="0.3"/>
         </svg>
@@ -95,7 +93,7 @@ export function getReferenceSilhouette(iconType) {
   }
 }
 
-export function renderGraphicScaleBar(scaleRatio, realMeters) {
+export function renderGraphicScaleBar(scaleRatio, realMeters = 5) {
   let divisionMeters = 1;
   if (scaleRatio <= 10) divisionMeters = 0.1;
   else if (scaleRatio <= 25) divisionMeters = 0.5;
@@ -114,30 +112,44 @@ export function renderGraphicScaleBar(scaleRatio, realMeters) {
 
   return `
     <div class="scale-bar-wrapper">
-      <div class="scale-bar-labels">
+      <div class="scale-bar-labels" style="display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
         <span>0</span>
         <span>${formatNumber(divisionMeters, 1)}m</span>
         <span>${formatNumber(divisionMeters * 2, 1)}m</span>
         <span>${formatNumber(divisionMeters * 3, 1)}m</span>
         <span>${formatNumber(totalLengthM, 1)}m</span>
       </div>
-      <div class="scale-bar-track">
+      <div class="scale-bar-track" style="display: flex; height: 10px; border: 1px solid var(--border-medium); border-radius: 2px; overflow: hidden; background: var(--bg-surface-elevated);">
         ${segments.map(s => `
-          <div class="scale-bar-segment ${s.filled ? 'filled' : 'empty'}"></div>
+          <div style="flex: 1; background: ${s.filled ? 'var(--accent-primary)' : 'transparent'}; border-right: 1px solid var(--border-subtle);"></div>
         `).join('')}
       </div>
-      <div class="scale-bar-caption">Graphic Architectural Scale Bar @ 1:${scaleRatio}</div>
+      <div style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); text-align: center; margin-top: 0.35rem;">
+        Graphic Architectural Scale Bar @ 1:${scaleRatio}
+      </div>
     </div>
   `;
 }
 
-export function updateVisualization({ containerElement, drawingVal, drawingUnit, realVal, realUnit, realMeters, scaleRatio }) {
+export function updateVisualization(params = {}) {
+  const {
+    containerId = 'visualizer-container',
+    containerElement = document.getElementById(containerId),
+    realMeters = 5,
+    scaleRatio = 50,
+    drawingMeters = 0.1
+  } = params;
+
   if (!containerElement) return;
 
-  const ref = REAL_WORLD_REFERENCES.find(r => realMeters >= r.minMeters && realMeters < r.maxMeters) 
+  const safeRealMeters = typeof realMeters === 'number' && !isNaN(realMeters) && isFinite(realMeters) && realMeters > 0
+    ? realMeters
+    : 5;
+
+  const ref = REAL_WORLD_REFERENCES.find(r => safeRealMeters >= r.minMeters && safeRealMeters < r.maxMeters) 
     || REAL_WORLD_REFERENCES[REAL_WORLD_REFERENCES.length - 1];
 
-  const refRatio = realMeters / ref.defaultLength;
+  const refRatio = safeRealMeters / ref.defaultLength;
   let comparisonText = '';
   if (refRatio < 0.9) {
     comparisonText = `About ${(refRatio * 100).toFixed(0)}% the size of a ${ref.name}`;
@@ -148,34 +160,32 @@ export function updateVisualization({ containerElement, drawingVal, drawingUnit,
   }
 
   const refSvg = getReferenceSilhouette(ref.icon);
-  const scaleBarHtml = renderGraphicScaleBar(scaleRatio, realMeters);
+  const scaleBarHtml = renderGraphicScaleBar(scaleRatio, safeRealMeters);
 
   containerElement.innerHTML = `
-    <div class="visual-panel-inner">
-      <div class="visual-header">
-        <div class="visual-badge">
-          <span class="visual-dot"></span>
-          <span class="visual-label">Scale Proportions (1:${scaleRatio})</span>
+    <div style="display: flex; flex-direction: column; gap: 1rem;">
+      <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-subtle);">
+        <div style="display: flex; align-items: center; gap: 0.4rem;">
+          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-primary);"></span>
+          <span style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);">Scale Proportions (1:${scaleRatio})</span>
         </div>
-        <div class="visual-context-tag">${ref.name}</div>
+        <span style="font-size: 0.74rem; font-family: var(--font-mono); padding: 0.15rem 0.45rem; border-radius: 4px; background: var(--bg-chip); color: var(--accent-primary);">${ref.name}</span>
       </div>
 
-      <div class="visual-scene">
-        <div class="scene-dimension-box">
-          <div class="scene-dim-line">
-            <div class="dim-tick start"></div>
-            <div class="dim-label">${drawingVal} ${drawingUnit} on paper = ${formatNumber(realVal, 2)} ${realUnit}</div>
-            <div class="dim-tick end"></div>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.85rem; background: var(--bg-surface-elevated); border-radius: 8px; border: 1px solid var(--border-subtle);">
+        <div style="flex: 1;">
+          <div style="font-size: 0.88rem; font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); margin-bottom: 0.25rem;">
+            ${formatNumber(safeRealMeters, 3)} m Site Dimension
           </div>
-          <div class="scene-comparison-text">${comparisonText}</div>
+          <div style="font-size: 0.8rem; color: var(--text-secondary);">${comparisonText}</div>
         </div>
 
-        <div class="scene-silhouette-box">
+        <div style="width: 70px; height: 70px; display: flex; align-items: center; justify-content: center; color: var(--accent-primary); flex-shrink: 0;">
           ${refSvg}
         </div>
       </div>
 
-      <div class="visual-scale-bar-container">
+      <div style="padding-top: 0.25rem;">
         ${scaleBarHtml}
       </div>
     </div>

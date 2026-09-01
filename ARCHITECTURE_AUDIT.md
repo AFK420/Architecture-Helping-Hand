@@ -91,10 +91,11 @@ Scaling formulas operate strictly on these normalized values:
 
 ## 4. Automated Testing & Verification Matrix
 
-The test suite consists of **8 automated test suites** containing **189 exact assertions**, all passing with zero failures:
+The test suite consists of **9 automated test suites** containing **295 exact assertions**, all passing with zero failures:
 
 | Test Suite File | Focus Area | Assertions | Result |
 | :--- | :--- | :---: | :---: |
+| `tests/ui-contracts.test.js` | Full DOM ID verification, mode switching targets, Run buttons presence, script inclusions | 106 | ✅ PASS |
 | `tests/calculator.test.js` | Scaling (1:1 to 1:10000), round-trips, rescaling, detector, area $S^2$, volume $S^3$, zero/bounds, strict numeric contracts, TypeError tests | 40 | ✅ PASS |
 | `tests/geometry.test.js` | Rectangle, Circle, Triangle (Heron's), Polygon (Shoelace), CW/CCW, degenerate & collinear checks, invalid type tests | 40 | ✅ PASS |
 | `tests/parser.test.js` | Decimals, fractions (`3 1/2`, `5/8`, `15 3/16`), feet-inches (`12'`, `12' 6"`, `12'-6 1/2"`), attached units (`12in`, `6ft`), garbage, NaN, Infinity, negative rejection | 38 | ✅ PASS |
@@ -103,7 +104,7 @@ The test suite consists of **8 automated test suites** containing **189 exact as
 | `tests/furniture.test.js` | Catalog integrity, 61 items validation, scaled drawing dimensions, search and category filtering | 9 | ✅ PASS |
 | `tests/services.test.js` | StorageService (read, write, remove, clear), HistoryService (add, remove, clear, CSV export, Markdown export, corrupt JSON recovery), AudioService safety | 15 | ✅ PASS |
 | `tests/data-integrity.test.js`| 28 scale presets uniqueness & ratio validity, 61 furniture records positive dimensions & unique IDs, reference ranges continuity | 9 | ✅ PASS |
-| **Total** | **8 Comprehensive Test Suites** | **189 Assertions** | **100% Passing (0 Failures)** |
+| **Total** | **9 Comprehensive Test Suites** | **295 Assertions** | **100% Passing (0 Failures)** |
 
 ---
 

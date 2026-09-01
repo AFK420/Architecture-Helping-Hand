@@ -18,7 +18,8 @@ const testFiles = [
   'formatter.test.js',
   'furniture.test.js',
   'services.test.js',
-  'data-integrity.test.js'
+  'data-integrity.test.js',
+  'ui-contracts.test.js'
 ];
 
 console.log('=================================================================');

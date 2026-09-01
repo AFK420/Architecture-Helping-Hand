@@ -1395,10 +1395,8 @@ function getReferenceSilhouette(iconType) {
       return `
         <svg viewBox="0 0 140 80" class="silhouette-svg" fill="currentColor">
           <path d="M15,50 L25,32 C28,26 35,24 45,24 L85,24 C95,24 105,30 115,38 L128,45 C133,48 135,52 135,56 L135,62 L15,62 Z" fill-opacity="0.2" stroke="currentColor" stroke-width="2"/>
-          <circle cx="40" cy="62" r="11" fill="var(--bg-card)" stroke="currentColor" stroke-width="3"/>
-          <circle cx="40" cy="62" r="4" fill="currentColor"/>
-          <circle cx="105" cy="62" r="11" fill="var(--bg-card)" stroke="currentColor" stroke-width="3"/>
-          <circle cx="105" cy="62" r="4" fill="currentColor"/>
+          <circle cx="40" cy="62" r="11" fill="currentColor" fill-opacity="0.2" stroke="currentColor" stroke-width="2.5"/>
+          <circle cx="105" cy="62" r="11" fill="currentColor" fill-opacity="0.2" stroke="currentColor" stroke-width="2.5"/>
           <path d="M48,28 L80,28 L80,44 L38,44 Z" fill-opacity="0.3"/>
           <path d="M85,28 L108,38 L108,44 L85,44 Z" fill-opacity="0.3"/>
         </svg>
@@ -1446,7 +1444,7 @@ function getReferenceSilhouette(iconType) {
       `;
   }
 }
-function renderGraphicScaleBar(scaleRatio, realMeters) {
+function renderGraphicScaleBar(scaleRatio, realMeters = 5) {
   let divisionMeters = 1;
   if (scaleRatio <= 10) divisionMeters = 0.1;
   else if (scaleRatio <= 25) divisionMeters = 0.5;
@@ -1465,29 +1463,43 @@ function renderGraphicScaleBar(scaleRatio, realMeters) {
 
   return `
     <div class="scale-bar-wrapper">
-      <div class="scale-bar-labels">
+      <div class="scale-bar-labels" style="display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
         <span>0</span>
         <span>${formatNumber(divisionMeters, 1)}m</span>
         <span>${formatNumber(divisionMeters * 2, 1)}m</span>
         <span>${formatNumber(divisionMeters * 3, 1)}m</span>
         <span>${formatNumber(totalLengthM, 1)}m</span>
       </div>
-      <div class="scale-bar-track">
+      <div class="scale-bar-track" style="display: flex; height: 10px; border: 1px solid var(--border-medium); border-radius: 2px; overflow: hidden; background: var(--bg-surface-elevated);">
         ${segments.map(s => `
-          <div class="scale-bar-segment ${s.filled ? 'filled' : 'empty'}"></div>
+          <div style="flex: 1; background: ${s.filled ? 'var(--accent-primary)' : 'transparent'}; border-right: 1px solid var(--border-subtle);"></div>
         `).join('')}
       </div>
-      <div class="scale-bar-caption">Graphic Architectural Scale Bar @ 1:${scaleRatio}</div>
+      <div style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); text-align: center; margin-top: 0.35rem;">
+        Graphic Architectural Scale Bar @ 1:${scaleRatio}
+      </div>
     </div>
   `;
 }
-function updateVisualization({ containerElement, drawingVal, drawingUnit, realVal, realUnit, realMeters, scaleRatio }) {
+function updateVisualization(params = {}) {
+  const {
+    containerId = 'visualizer-container',
+    containerElement = document.getElementById(containerId),
+    realMeters = 5,
+    scaleRatio = 50,
+    drawingMeters = 0.1
+  } = params;
+
   if (!containerElement) return;
 
-  const ref = REAL_WORLD_REFERENCES.find(r => realMeters >= r.minMeters && realMeters < r.maxMeters) 
+  const safeRealMeters = typeof realMeters === 'number' && !isNaN(realMeters) && isFinite(realMeters) && realMeters > 0
+    ? realMeters
+    : 5;
+
+  const ref = REAL_WORLD_REFERENCES.find(r => safeRealMeters >= r.minMeters && safeRealMeters < r.maxMeters) 
     || REAL_WORLD_REFERENCES[REAL_WORLD_REFERENCES.length - 1];
 
-  const refRatio = realMeters / ref.defaultLength;
+  const refRatio = safeRealMeters / ref.defaultLength;
   let comparisonText = '';
   if (refRatio < 0.9) {
     comparisonText = `About ${(refRatio * 100).toFixed(0)}% the size of a ${ref.name}`;
@@ -1498,34 +1510,32 @@ function updateVisualization({ containerElement, drawingVal, drawingUnit, realVa
   }
 
   const refSvg = getReferenceSilhouette(ref.icon);
-  const scaleBarHtml = renderGraphicScaleBar(scaleRatio, realMeters);
+  const scaleBarHtml = renderGraphicScaleBar(scaleRatio, safeRealMeters);
 
   containerElement.innerHTML = `
-    <div class="visual-panel-inner">
-      <div class="visual-header">
-        <div class="visual-badge">
-          <span class="visual-dot"></span>
-          <span class="visual-label">Scale Proportions (1:${scaleRatio})</span>
+    <div style="display: flex; flex-direction: column; gap: 1rem;">
+      <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-subtle);">
+        <div style="display: flex; align-items: center; gap: 0.4rem;">
+          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-primary);"></span>
+          <span style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);">Scale Proportions (1:${scaleRatio})</span>
         </div>
-        <div class="visual-context-tag">${ref.name}</div>
+        <span style="font-size: 0.74rem; font-family: var(--font-mono); padding: 0.15rem 0.45rem; border-radius: 4px; background: var(--bg-chip); color: var(--accent-primary);">${ref.name}</span>
       </div>
 
-      <div class="visual-scene">
-        <div class="scene-dimension-box">
-          <div class="scene-dim-line">
-            <div class="dim-tick start"></div>
-            <div class="dim-label">${drawingVal} ${drawingUnit} on paper = ${formatNumber(realVal, 2)} ${realUnit}</div>
-            <div class="dim-tick end"></div>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.85rem; background: var(--bg-surface-elevated); border-radius: 8px; border: 1px solid var(--border-subtle);">
+        <div style="flex: 1;">
+          <div style="font-size: 0.88rem; font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); margin-bottom: 0.25rem;">
+            ${formatNumber(safeRealMeters, 3)} m Site Dimension
           </div>
-          <div class="scene-comparison-text">${comparisonText}</div>
+          <div style="font-size: 0.8rem; color: var(--text-secondary);">${comparisonText}</div>
         </div>
 
-        <div class="scene-silhouette-box">
+        <div style="width: 70px; height: 70px; display: flex; align-items: center; justify-content: center; color: var(--accent-primary); flex-shrink: 0;">
           ${refSvg}
         </div>
       </div>
 
-      <div class="visual-scale-bar-container">
+      <div style="padding-top: 0.25rem;">
         ${scaleBarHtml}
       </div>
     </div>
@@ -1539,6 +1549,7 @@ function updateVisualization({ containerElement, drawingVal, drawingUnit, realVa
 
 /**
  * Architecture Helping Hand - Main Application UI Controller
+ * High-precision, zero-dependency, tactile architectural scaling studio.
  */
 
 
@@ -1562,61 +1573,60 @@ import {
 function initializeApp() {
   const state = {
     currentMode: 'converter',
-    activeTheme: 'dark',
+    activeTheme: StorageService.getItem('archi_theme') || 'dark',
     precision: 3,
 
-    // Mode 1: Main Converter
+    // Mode 1: Converter
     direction: 'drawing_to_real',
     scaleRatio: 50,
     selectedPresetId: '1:50',
-    drawingVal: 10,
-    drawingUnit: 'cm',
-    realVal: 5,
-    realUnit: 'm',
+    selectedCategory: 'all',
+    converterInputVal: '10',
+    converterInputUnit: 'cm',
+    converterOutputUnit: 'm',
 
     // Mode 2: Rescale
-    rescaleOrigVal: 12,
-    rescaleOrigUnit: 'cm',
     rescaleOrigRatio: 50,
+    rescaleOrigVal: '12',
+    rescaleOrigUnit: 'cm',
     rescaleTargetRatio: 200,
     rescaleTargetUnit: 'cm',
 
     // Mode 3: Detector
-    detectPaperVal: 4.5,
+    detectPaperVal: '4.5',
     detectPaperUnit: 'cm',
-    detectRealVal: 9.0,
+    detectRealVal: '9',
     detectRealUnit: 'm',
+    lastDetectedRatio: null,
 
     // Mode 4: Area & Volume
-    calcType: 'area',
-    calcDirection: 'drawing_to_real',
-    areaVal: 4,
-    areaInputUnit: 'cm2',
-    areaRatio: 100,
-    areaOutputUnit: 'm2',
-    volumeVal: 1000,
-    volumeInputUnit: 'cm3',
-    volumeRatio: 50,
-    volumeOutputUnit: 'm3',
+    calcType: 'area', // 'area' | 'volume'
+    calcDirection: 'drawing_to_real', // 'drawing_to_real' | 'real_to_drawing'
+    areavolRatio: 100,
+    areavolInputVal: '4',
+    areavolInputUnit: 'cm2',
+    areavolOutputUnit: 'm2',
 
     // Mode 5: Furniture
     furnitureSearchQuery: '',
     furnitureActiveCategory: 'all',
     furnitureScaleRatio: 50,
     furniturePaperUnit: 'cm',
+    customFurnName: 'Custom Piece',
     customFurnW: 240,
     customFurnD: 100,
-    customFurnH: 75,
     customFurnUnit: 'cm',
 
     // Mode 6: Reference
     refScaleRatio: 50
   };
 
-  // DOM Elements Cache
+  // DOM Elements Cache (Strictly normalized with index.html)
   const dom = {
+    // Header & Global Modals
     themeSelect: document.getElementById('theme-select'),
     soundToggleBtn: document.getElementById('sound-toggle-btn'),
+    soundToggleLabel: document.getElementById('sound-toggle-label'),
     historyToggleBtn: document.getElementById('history-toggle-btn'),
     shortcutsHelpBtn: document.getElementById('shortcuts-help-btn'),
     shortcutsModal: document.getElementById('shortcuts-modal'),
@@ -1630,197 +1640,470 @@ function initializeApp() {
     exportMdBtn: document.getElementById('export-md-btn'),
     historyList: document.getElementById('history-list'),
     toastContainer: document.getElementById('toast-container'),
-    navTabs: document.querySelectorAll('.nav-tab'),
-    toolContainers: document.querySelectorAll('.tool-container'),
+    modeTabs: document.querySelectorAll('.mode-tab'),
+    modeViews: document.querySelectorAll('.tool-mode-view'),
 
-    // Mode 1 Elements
-    inputDrawingVal: document.getElementById('input-drawing-val'),
-    selectDrawingUnit: document.getElementById('select-drawing-unit'),
-    inputRealVal: document.getElementById('input-real-val'),
-    selectRealUnit: document.getElementById('select-real-unit'),
-    swapDirectionBtn: document.getElementById('swap-direction-btn'),
-    customRatioInput: document.getElementById('custom-ratio-input'),
-    scalePresetPills: document.getElementById('scale-preset-pills'),
-    presetCategoryTabs: document.querySelectorAll('.preset-cat-btn'),
+    // Mode 1: Converter Elements
     activeScaleBadge: document.getElementById('active-scale-badge'),
+    presetCategoryPills: document.getElementById('preset-category-pills'),
+    presetPillBtns: document.querySelectorAll('.preset-pill-btn'),
+    presetsGrid: document.getElementById('presets-grid'),
+    scaleRatioInput: document.getElementById('scale-ratio-input'),
+    converterInputVal: document.getElementById('converter-input-val'),
+    converterInputUnit: document.getElementById('converter-input-unit'),
+    converterInputBadge: document.getElementById('converter-input-badge'),
+    swapDirectionBtn: document.getElementById('swap-direction-btn'),
+    converterOutputUnit: document.getElementById('converter-output-unit'),
+    converterOutputBadge: document.getElementById('converter-output-badge'),
+    btnRunConverter: document.getElementById('btn-run-converter'),
+    converterErrorMsg: document.getElementById('converter-error-msg'),
+    converterResultVal: document.getElementById('converter-result-val'),
+    converterResultUnit: document.getElementById('converter-result-unit'),
+    btnCopyResult: document.getElementById('btn-copy-result'),
+    btnSaveHistory: document.getElementById('btn-save-history'),
     visualizerContainer: document.getElementById('visualizer-container'),
     metricBreakdownList: document.getElementById('metric-breakdown-list'),
     imperialBreakdownList: document.getElementById('imperial-breakdown-list'),
-    btnCopyResult: document.getElementById('btn-copy-result'),
 
-    // Mode 2 Elements
-    rescaleOrigInput: document.getElementById('rescale-orig-val'),
+    // Mode 2: Rescaler Elements
+    rescaleOrigRatio: document.getElementById('rescale-orig-ratio'),
+    rescaleOrigVal: document.getElementById('rescale-orig-val'),
     rescaleOrigUnit: document.getElementById('rescale-orig-unit'),
-    rescaleOrigRatioSelect: document.getElementById('rescale-orig-ratio-select'),
-    rescaleTargetRatioSelect: document.getElementById('rescale-target-ratio-select'),
+    rescaleTargetRatio: document.getElementById('rescale-target-ratio'),
     rescaleTargetUnit: document.getElementById('rescale-target-unit'),
+    btnRunRescale: document.getElementById('btn-run-rescale'),
+    rescaleErrorMsg: document.getElementById('rescale-error-msg'),
     rescaleResultVal: document.getElementById('rescale-result-val'),
-    rescaleResultUnitBadge: document.getElementById('rescale-result-unit-badge'),
+    rescaleResultUnit: document.getElementById('rescale-result-unit'),
     rescaleFactorBadge: document.getElementById('rescale-factor-badge'),
     rescaleRealSpan: document.getElementById('rescale-real-span'),
     btnCopyRescale: document.getElementById('btn-copy-rescale'),
 
-    // Mode 3 Elements
-    detectPaperInput: document.getElementById('detect-paper-val'),
-    detectPaperUnit: document.getElementById('detect-paper-unit'),
-    detectRealInput: document.getElementById('detect-real-val'),
-    detectRealUnit: document.getElementById('detect-real-unit'),
-    detectedRatioBadge: document.getElementById('detected-ratio-badge'),
-    closestPresetName: document.getElementById('closest-preset-name'),
-    closestPresetDiff: document.getElementById('closest-preset-diff'),
+    // Mode 3: Detector Elements
+    detectorPaperVal: document.getElementById('detector-paper-val'),
+    detectorPaperUnit: document.getElementById('detector-paper-unit'),
+    detectorRealVal: document.getElementById('detector-real-val'),
+    detectorRealUnit: document.getElementById('detector-real-unit'),
+    btnRunDetector: document.getElementById('btn-run-detector'),
+    detectorErrorMsg: document.getElementById('detector-error-msg'),
+    detectorRatioVal: document.getElementById('detector-ratio-val'),
+    detectorPresetBadge: document.getElementById('detector-preset-badge'),
     btnApplyDetected: document.getElementById('btn-apply-detected'),
 
-    // Mode 4 Elements
-    areaVolTypeTabs: document.querySelectorAll('.type-subtab'),
-    areaVolDirTabs: document.querySelectorAll('.dir-subtab'),
-    areaSection: document.getElementById('area-section'),
-    volumeSection: document.getElementById('volume-section'),
-    areaInputVal: document.getElementById('area-input-val'),
-    areaInputUnit: document.getElementById('area-input-unit'),
-    areaRatioSelect: document.getElementById('area-ratio-select'),
-    areaOutputUnit: document.getElementById('area-output-unit'),
-    areaResultVal: document.getElementById('area-result-val'),
-    areaResultUnitBadge: document.getElementById('area-result-unit-badge'),
-    btnCopyArea: document.getElementById('btn-copy-area'),
-    volumeInputVal: document.getElementById('volume-input-val'),
-    volumeInputUnit: document.getElementById('volume-input-unit'),
-    volumeRatioSelect: document.getElementById('volume-ratio-select'),
-    volumeOutputUnit: document.getElementById('volume-output-unit'),
-    volumeResultVal: document.getElementById('volume-result-val'),
-    volumeResultUnitBadge: document.getElementById('volume-result-unit-badge'),
-    btnCopyVolume: document.getElementById('btn-copy-volume'),
+    // Mode 4: Area & Volume Elements
+    areavolTypeBtns: document.querySelectorAll('.areavol-type-btn'),
+    areavolDirBtns: document.querySelectorAll('.areavol-dir-btn'),
+    areavolRatioInput: document.getElementById('areavol-ratio-input'),
+    areavolInputVal: document.getElementById('areavol-input-val'),
+    areavolInputUnit: document.getElementById('areavol-input-unit'),
+    areavolOutputUnit: document.getElementById('areavol-output-unit'),
+    areavolInputBadge: document.getElementById('areavol-input-badge'),
+    areavolOutputBadge: document.getElementById('areavol-output-badge'),
+    btnRunAreavol: document.getElementById('btn-run-areavol'),
+    areavolErrorMsg: document.getElementById('areavol-error-msg'),
+    areavolResultVal: document.getElementById('areavol-result-val'),
+    areavolResultUnit: document.getElementById('areavol-result-unit'),
+    areavolFactorBadge: document.getElementById('areavol-factor-badge'),
+    btnCopyAreavol: document.getElementById('btn-copy-areavol'),
 
-    // Mode 5 Elements (Furniture)
+    // Mode 5: Furniture Elements
     furnitureSearchInput: document.getElementById('furniture-search-input'),
-    furnitureSearchClear: document.getElementById('furniture-search-clear'),
-    furnitureCountBadge: document.getElementById('furniture-count-badge'),
-    furnitureCategoryTabs: document.querySelectorAll('.furn-cat-btn'),
-    furnitureScaleSelect: document.getElementById('furniture-scale-select'),
-    furniturePaperUnitSelect: document.getElementById('furniture-paper-unit-select'),
-    furnitureGrid: document.getElementById('furniture-grid'),
-    customFurnWInput: document.getElementById('custom-furn-w'),
-    customFurnDInput: document.getElementById('custom-furn-d'),
-    customFurnHInput: document.getElementById('custom-furn-h'),
-    customFurnUnitSelect: document.getElementById('custom-furn-unit'),
-    customFurnPaperW: document.getElementById('custom-furn-paper-w'),
-    customFurnPaperD: document.getElementById('custom-furn-paper-d'),
+    clearFurnitureSearchBtn: document.getElementById('clear-furniture-search-btn'),
+    furnitureResultsCount: document.getElementById('furniture-results-count'),
+    furnScalePresets: document.getElementById('furn-scale-presets'),
+    furnScaleRatioInput: document.getElementById('furn-scale-ratio-input'),
+    furnPaperUnitSelect: document.getElementById('furn-paper-unit-select'),
+    furnCategoryNav: document.getElementById('furn-category-nav'),
+    furnitureCardsGrid: document.getElementById('furniture-cards-grid'),
+    customFurnName: document.getElementById('custom-furn-name'),
+    customFurnW: document.getElementById('custom-furn-w'),
+    customFurnD: document.getElementById('custom-furn-d'),
+    customFurnUnit: document.getElementById('custom-furn-unit'),
+    btnRunCustomFurn: document.getElementById('btn-run-custom-furn'),
+    customFurnResult: document.getElementById('custom-furn-result'),
     btnCopyCustomFurn: document.getElementById('btn-copy-custom-furn'),
     btnSendCustomFurn: document.getElementById('btn-send-custom-furn'),
 
-    // Mode 6 Elements
-    refChartScaleSelect: document.getElementById('ref-chart-scale-select'),
-    refChartTbody: document.getElementById('ref-chart-tbody'),
-    btnPrintChart: document.getElementById('btn-print-chart')
+    // Mode 6: Reference Elements
+    refScaleSelect: document.getElementById('ref-scale-select'),
+    btnPrintRef: document.getElementById('btn-print-ref'),
+    refTableBody: document.getElementById('ref-table-body')
   };
 
-  // 1. Theme Initialization
-  const savedTheme = StorageService.getItem('archiscale_theme') || 'dark';
-  state.activeTheme = savedTheme;
-  document.documentElement.setAttribute('data-theme', savedTheme);
-  if (dom.themeSelect) dom.themeSelect.value = savedTheme;
+  // ---------------------------------------------------------------------------
+  // 1. Toast Notification System
+  // ---------------------------------------------------------------------------
+  function showToast(message, type = 'info') {
+    if (!dom.toastContainer) return;
+    const toast = document.createElement('div');
+    toast.className = `toast-message toast-${type}`;
+    toast.textContent = message;
+    dom.toastContainer.appendChild(toast);
 
-  // 2. Audio button status
-  updateSoundButtonUI();
+    setTimeout(() => {
+      toast.classList.add('fade-out');
+      setTimeout(() => toast.remove(), 250);
+    }, 2500);
+  }
 
-  // 3. Render Presets & Dropdowns
-  populatePresetPills('architectural');
-  populateSelectOptions();
-  renderHistoryList();
-
-  // 4. Initial Computations
-  calculateConverter();
-  calculateRescaler();
-  calculateDetector();
-  calculateAreaVolume();
-  renderFurnitureGrid();
-  calculateCustomFurniture();
-  renderReferenceChart();
-
-  // =========================================================================
-  // CALCULATIONS & EVENT HANDLERS
-  // =========================================================================
-
-  function calculateConverter() {
-    let rawInput = state.direction === 'drawing_to_real'
-      ? dom.inputDrawingVal?.value
-      : dom.inputRealVal?.value;
-
-    const parseResult = parseInput(rawInput, { allowNegative: false });
-    const numericVal = parseResult.isValid ? parseResult.value : 0;
-
-    let res;
-    if (state.direction === 'drawing_to_real') {
-      state.drawingVal = numericVal;
-      res = drawingToReal({
-        drawingVal: state.drawingVal,
-        drawingUnitKey: state.drawingUnit,
-        scaleRatio: state.scaleRatio,
-        realUnitKey: state.realUnit
-      });
-      state.realVal = res.realValue;
-      if (dom.inputRealVal) dom.inputRealVal.value = formatNumber(res.realValue, state.precision);
+  function copyToClipboard(text, label = 'Copied to clipboard') {
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          AudioService.playCopySuccess();
+          showToast(`📋 ${label}: ${text}`);
+        })
+        .catch(() => fallbackCopy(text, label));
     } else {
-      state.realVal = numericVal;
-      res = realToDrawing({
-        realVal: state.realVal,
-        realUnitKey: state.realUnit,
-        scaleRatio: state.scaleRatio,
-        drawingUnitKey: state.drawingUnit
-      });
-      state.drawingVal = res.drawingValue;
-      if (dom.inputDrawingVal) dom.inputDrawingVal.value = formatNumber(res.drawingValue, state.precision);
+      fallbackCopy(text, label);
     }
+  }
 
-    if (dom.activeScaleBadge) {
-      dom.activeScaleBadge.textContent = `1:${state.scaleRatio}`;
+  function fallbackCopy(text, label) {
+    const el = document.createElement('textarea');
+    el.value = text;
+    el.setAttribute('readonly', '');
+    el.style.position = 'absolute';
+    el.style.left = '-9999px';
+    document.body.appendChild(el);
+    el.select();
+    try {
+      document.execCommand('copy');
+      AudioService.playCopySuccess();
+      showToast(`📋 ${label}: ${text}`);
+    } catch (err) {
+      showToast('Could not copy to clipboard', 'error');
     }
+    document.body.removeChild(el);
+  }
 
-    updateVisualization({
-      containerElement: dom.visualizerContainer,
-      drawingVal: formatNumber(state.drawingVal, state.precision),
-      drawingUnit: state.drawingUnit,
-      realVal: state.realVal,
-      realUnit: state.realUnit,
-      realMeters: res.realMeters,
-      scaleRatio: state.scaleRatio
+  // ---------------------------------------------------------------------------
+  // 2. Theme & Sound Management
+  // ---------------------------------------------------------------------------
+  function applyTheme(themeName) {
+    state.activeTheme = themeName;
+    document.documentElement.setAttribute('data-theme', themeName);
+    StorageService.setItem('archi_theme', themeName);
+    if (dom.themeSelect) dom.themeSelect.value = themeName;
+  }
+
+  function updateSoundUI() {
+    const isEnabled = AudioService.isEnabled();
+    if (dom.soundToggleBtn) {
+      dom.soundToggleBtn.classList.toggle('active', isEnabled);
+      if (dom.soundToggleLabel) {
+        dom.soundToggleLabel.textContent = isEnabled ? 'Sound: On' : 'Sound: Muted';
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 3. Mode Navigation Switching
+  // ---------------------------------------------------------------------------
+  function switchMode(targetMode) {
+    state.currentMode = targetMode;
+
+    // Update Mode Tabs
+    dom.modeTabs.forEach(tab => {
+      const mode = tab.dataset.mode;
+      const isActive = mode === targetMode;
+      tab.classList.toggle('active', isActive);
+      tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
     });
 
-    renderEquivalents(res.realMeters);
+    // Update Tool Views
+    dom.modeViews.forEach(view => {
+      const expectedId = `mode-view-${targetMode}`;
+      const isTarget = view.id === expectedId;
+      view.classList.toggle('active', isTarget);
+      if (isTarget) {
+        view.removeAttribute('hidden');
+      } else {
+        view.setAttribute('hidden', '');
+      }
+    });
+
+    AudioService.playTick();
+
+    // Trigger calculation refresh for active mode
+    if (targetMode === 'converter') calculateConverter();
+    else if (targetMode === 'rescale') calculateRescaler();
+    else if (targetMode === 'detector') calculateDetector();
+    else if (targetMode === 'area_volume') calculateAreaVolume();
+    else if (targetMode === 'furniture') renderFurnitureGrid();
+    else if (targetMode === 'reference') renderReferenceChart();
   }
 
-  function renderEquivalents(realMeters) {
-    const { metric, imperial } = getAllUnitEquivalents(realMeters);
+  // ---------------------------------------------------------------------------
+  // 4. Run Button State Controller
+  // ---------------------------------------------------------------------------
+  function setRunButtonState(btn, status, errorMsg = '') {
+    if (!btn) return;
+    btn.dataset.state = status;
+    const btnText = btn.querySelector('.btn-text');
 
-    if (dom.metricBreakdownList) {
-      dom.metricBreakdownList.innerHTML = metric.map(u => `
-        <div class="equiv-item ${u.key === state.realUnit && state.direction === 'drawing_to_real' ? 'active' : ''}">
-          <span class="equiv-label">${u.label}</span>
-          <span class="equiv-val">${formatNumber(u.val, state.precision)} <small>${u.symbol}</small></span>
-        </div>
-      `).join('');
-    }
-
-    if (dom.imperialBreakdownList) {
-      dom.imperialBreakdownList.innerHTML = imperial.map(u => `
-        <div class="equiv-item ${u.key === state.realUnit && state.direction === 'drawing_to_real' ? 'active' : ''}">
-          <span class="equiv-label">${u.label}</span>
-          <span class="equiv-val">${typeof u.val === 'number' ? formatNumber(u.val, state.precision) : u.val} <small>${u.symbol}</small></span>
-        </div>
-      `).join('');
+    if (status === 'running') {
+      if (btnText) btnText.textContent = 'CALCULATING...';
+      btn.disabled = true;
+    } else if (status === 'success') {
+      if (btnText) btnText.textContent = 'CALCULATED ✓';
+      btn.disabled = false;
+      setTimeout(() => {
+        if (btn.dataset.state === 'success' && btnText) {
+          btnText.textContent = 'RUN CALCULATION';
+          btn.dataset.state = 'ready';
+        }
+      }, 1200);
+    } else if (status === 'error') {
+      if (btnText) btnText.textContent = 'CHECK INPUTS ⚠';
+      btn.disabled = false;
+    } else {
+      if (btnText) btnText.textContent = 'RUN CALCULATION';
+      btn.disabled = false;
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // 5. Populate Dropdowns (Units, Scales)
+  // ---------------------------------------------------------------------------
+  function populateUnitSelects() {
+    const lengthEntries = Object.entries(UNITS);
+    const areaEntries = Object.entries(AREA_UNITS);
+    const volumeEntries = Object.entries(VOLUME_UNITS);
+
+    const lengthOptions = lengthEntries.map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
+    
+    // Converter unit selects
+    if (dom.converterInputUnit) dom.converterInputUnit.innerHTML = lengthOptions;
+    if (dom.converterOutputUnit) dom.converterOutputUnit.innerHTML = lengthOptions;
+    if (dom.rescaleOrigUnit) dom.rescaleOrigUnit.innerHTML = lengthOptions;
+    if (dom.rescaleTargetUnit) dom.rescaleTargetUnit.innerHTML = lengthOptions;
+    if (dom.detectorPaperUnit) dom.detectorPaperUnit.innerHTML = lengthOptions;
+    if (dom.detectorRealUnit) dom.detectorRealUnit.innerHTML = lengthOptions;
+
+    // Set initial values
+    if (dom.converterInputUnit) dom.converterInputUnit.value = state.converterInputUnit;
+    if (dom.converterOutputUnit) dom.converterOutputUnit.value = state.converterOutputUnit;
+    if (dom.rescaleOrigUnit) dom.rescaleOrigUnit.value = state.rescaleOrigUnit;
+    if (dom.rescaleTargetUnit) dom.rescaleTargetUnit.value = state.rescaleTargetUnit;
+    if (dom.detectorPaperUnit) dom.detectorPaperUnit.value = state.detectPaperUnit;
+    if (dom.detectorRealUnit) dom.detectorRealUnit.value = state.detectRealUnit;
+
+    // Reference Scale Select
+    if (dom.refScaleSelect) {
+      dom.refScaleSelect.innerHTML = SCALE_PRESETS.map(p => `<option value="${p.ratio}">${p.name} — ${p.desc}</option>`).join('');
+      dom.refScaleSelect.value = state.refScaleRatio;
+    }
+
+    updateAreaVolumeUnitSelects();
+  }
+
+  function updateAreaVolumeUnitSelects() {
+    if (!dom.areavolInputUnit || !dom.areavolOutputUnit) return;
+    if (state.calcType === 'area') {
+      const opts = Object.entries(AREA_UNITS).map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
+      dom.areavolInputUnit.innerHTML = opts;
+      dom.areavolOutputUnit.innerHTML = opts;
+      dom.areavolInputUnit.value = 'cm2';
+      dom.areavolOutputUnit.value = 'm2';
+    } else {
+      const opts = Object.entries(VOLUME_UNITS).map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
+      dom.areavolInputUnit.innerHTML = opts;
+      dom.areavolOutputUnit.innerHTML = opts;
+      dom.areavolInputUnit.value = 'cm3';
+      dom.areavolOutputUnit.value = 'm3';
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 6. Scale Preset Chips Renderer
+  // ---------------------------------------------------------------------------
+  function renderPresetChips(category = 'all') {
+    if (!dom.presetsGrid) return;
+    state.selectedCategory = category;
+
+    const filtered = category === 'all'
+      ? SCALE_PRESETS
+      : SCALE_PRESETS.filter(p => p.category === category);
+
+    dom.presetsGrid.innerHTML = filtered.map(preset => {
+      const isSelected = preset.ratio === state.scaleRatio;
+      return `
+        <button class="preset-chip ${isSelected ? 'active' : ''}" data-ratio="${preset.ratio}" data-id="${preset.id}" title="${preset.desc}">
+          <span class="preset-name">${preset.name}</span>
+          <span class="preset-sub">${preset.category}</span>
+        </button>
+      `;
+    }).join('');
+
+    // Attach click listeners to preset chips
+    dom.presetsGrid.querySelectorAll('.preset-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ratio = parseFloat(btn.dataset.ratio);
+        state.scaleRatio = ratio;
+        state.selectedPresetId = btn.dataset.id;
+        if (dom.scaleRatioInput) dom.scaleRatioInput.value = ratio;
+        if (dom.activeScaleBadge) dom.activeScaleBadge.textContent = `SCALE 1:${ratio}`;
+        renderPresetChips(state.selectedCategory);
+        AudioService.playTick();
+        calculateConverter();
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 7. Mode 1: Scale Converter Engine
+  // ---------------------------------------------------------------------------
+  function calculateConverter() {
+    const rawRatio = parseFloat(dom.scaleRatioInput?.value);
+    const parsedRatio = isNaN(rawRatio) || rawRatio <= 0 ? 50 : rawRatio;
+    state.scaleRatio = parsedRatio;
+
+    const rawInput = dom.converterInputVal?.value || '';
+    state.converterInputVal = rawInput;
+    state.converterInputUnit = dom.converterInputUnit?.value || 'cm';
+    state.converterOutputUnit = dom.converterOutputUnit?.value || 'm';
+
+    const parseRes = parseInput(rawInput, { allowNegative: false });
+
+    // Handle Unit Suffix extraction if user typed e.g. "15.5cm"
+    if (parseRes.isValid && parseRes.detectedUnit) {
+      state.converterInputUnit = parseRes.detectedUnit;
+      if (dom.converterInputUnit) dom.converterInputUnit.value = parseRes.detectedUnit;
+    }
+
+    if (!parseRes.isValid) {
+      if (dom.converterErrorMsg) {
+        dom.converterErrorMsg.textContent = `⚠️ Invalid input: ${parseRes.error || 'Please enter a positive numeric measurement'}`;
+        dom.converterErrorMsg.style.display = 'block';
+      }
+      if (dom.converterInputVal) dom.converterInputVal.classList.add('input-error');
+      if (dom.converterResultVal) dom.converterResultVal.textContent = '---';
+      setRunButtonState(dom.btnRunConverter, 'error');
+      return;
+    }
+
+    // Clear error state
+    if (dom.converterErrorMsg) dom.converterErrorMsg.style.display = 'none';
+    if (dom.converterInputVal) dom.converterInputVal.classList.remove('input-error');
+
+    try {
+      const calcRes = scaleDimension({
+        value: parseRes.value,
+        unitKey: state.converterInputUnit,
+        ratio: state.scaleRatio,
+        direction: state.direction,
+        targetUnitKey: state.converterOutputUnit
+      });
+
+      // Update Result Display
+      if (dom.converterResultVal) {
+        dom.converterResultVal.textContent = formatNumber(calcRes.value, state.precision);
+      }
+      if (dom.converterResultUnit) {
+        dom.converterResultUnit.textContent = state.converterOutputUnit;
+      }
+
+      // Update Breakdown Equivalents Table
+      renderEquivalentsBreakdown(calcRes.realMeters);
+
+      // Update Visual Scale Bar & Silhouette
+      updateVisualization({
+        realMeters: calcRes.realMeters,
+        scaleRatio: state.scaleRatio,
+        drawingMeters: calcRes.drawingMeters,
+        containerId: 'visualizer-container'
+      });
+
+      setRunButtonState(dom.btnRunConverter, 'success');
+    } catch (err) {
+      if (dom.converterErrorMsg) {
+        dom.converterErrorMsg.textContent = `⚠️ Calculation error: ${err.message}`;
+        dom.converterErrorMsg.style.display = 'block';
+      }
+      setRunButtonState(dom.btnRunConverter, 'error');
+    }
+  }
+
+  function renderEquivalentsBreakdown(realMeters) {
+    if (!dom.metricBreakdownList || !dom.imperialBreakdownList) return;
+    try {
+      const equivalents = getAllUnitEquivalents(realMeters);
+
+      dom.metricBreakdownList.innerHTML = equivalents.metric.map(item => `
+        <div class="equiv-row">
+          <span class="equiv-name">${item.label}</span>
+          <span class="equiv-val">${formatNumber(item.val, 3)} ${item.symbol}</span>
+        </div>
+      `).join('');
+
+      dom.imperialBreakdownList.innerHTML = equivalents.imperial.map(item => `
+        <div class="equiv-row">
+          <span class="equiv-name">${item.label}</span>
+          <span class="equiv-val">${item.key === 'ft_in' ? item.val : `${formatNumber(item.val, 3)} ${item.symbol}`}</span>
+        </div>
+      `).join('');
+    } catch (e) {
+      // Guard against non-finite breakdown
+    }
+  }
+
+  function swapDirection() {
+    state.direction = state.direction === 'drawing_to_real' ? 'real_to_drawing' : 'drawing_to_real';
+
+    // Swap input/output unit selections
+    const prevInUnit = dom.converterInputUnit?.value || 'cm';
+    const prevOutUnit = dom.converterOutputUnit?.value || 'm';
+    
+    if (dom.converterInputUnit) dom.converterInputUnit.value = prevOutUnit;
+    if (dom.converterOutputUnit) dom.converterOutputUnit.value = prevInUnit;
+
+    state.converterInputUnit = prevOutUnit;
+    state.converterOutputUnit = prevInUnit;
+
+    if (state.direction === 'drawing_to_real') {
+      if (dom.converterInputBadge) dom.converterInputBadge.textContent = 'Drawing Measurement (Paper)';
+      if (dom.converterOutputBadge) dom.converterOutputBadge.textContent = 'Real-World Dimension';
+    } else {
+      if (dom.converterInputBadge) dom.converterInputBadge.textContent = 'Real-World Dimension';
+      if (dom.converterOutputBadge) dom.converterOutputBadge.textContent = 'Drawing Measurement (Paper)';
+    }
+
+    AudioService.playSwapSound();
+    calculateConverter();
+  }
+
+  // ---------------------------------------------------------------------------
+  // 8. Mode 2: Rescaler Engine (Scale A -> Scale B)
+  // ---------------------------------------------------------------------------
   function calculateRescaler() {
-    const parsed = parseInput(dom.rescaleOrigInput?.value, { allowNegative: false });
-    state.rescaleOrigVal = parsed.isValid ? parsed.value : 0;
-    state.rescaleOrigRatio = parseFloat(dom.rescaleOrigRatioSelect?.value) || 50;
-    state.rescaleTargetRatio = parseFloat(dom.rescaleTargetRatioSelect?.value) || 200;
+    const origRatio = parseFloat(dom.rescaleOrigRatio?.value);
+    const targetRatio = parseFloat(dom.rescaleTargetRatio?.value);
+    const rawVal = dom.rescaleOrigVal?.value || '';
+
+    state.rescaleOrigRatio = isNaN(origRatio) || origRatio <= 0 ? 50 : origRatio;
+    state.rescaleTargetRatio = isNaN(targetRatio) || targetRatio <= 0 ? 200 : targetRatio;
     state.rescaleOrigUnit = dom.rescaleOrigUnit?.value || 'cm';
     state.rescaleTargetUnit = dom.rescaleTargetUnit?.value || 'cm';
 
+    const parsed = parseInput(rawVal, { allowNegative: false });
+
+    if (!parsed.isValid) {
+      if (dom.rescaleErrorMsg) {
+        dom.rescaleErrorMsg.textContent = `⚠️ Invalid dimension: ${parsed.error || 'Enter a positive drawing measurement'}`;
+        dom.rescaleErrorMsg.style.display = 'block';
+      }
+      if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = '---';
+      setRunButtonState(dom.btnRunRescale, 'error');
+      return;
+    }
+
+    if (dom.rescaleErrorMsg) dom.rescaleErrorMsg.style.display = 'none';
+
     try {
       const res = rescaleDrawing({
-        originalVal: state.rescaleOrigVal,
+        originalVal: parsed.value,
         originalUnitKey: state.rescaleOrigUnit,
         originalRatio: state.rescaleOrigRatio,
         targetRatio: state.rescaleTargetRatio,
@@ -1828,93 +2111,159 @@ function initializeApp() {
       });
 
       if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = formatNumber(res.targetValue, state.precision);
-      if (dom.rescaleResultUnitBadge) dom.rescaleResultUnitBadge.textContent = state.rescaleTargetUnit;
+      if (dom.rescaleResultUnit) dom.rescaleResultUnit.textContent = state.rescaleTargetUnit;
       if (dom.rescaleFactorBadge) {
         const pct = (res.factor * 100).toFixed(1);
-        dom.rescaleFactorBadge.textContent = `${pct}% (${res.factor < 1 ? 'Reduction' : res.factor > 1 ? 'Magnification' : '1:1'})`;
+        const tag = res.factor > 1 ? 'Enlarged' : res.factor < 1 ? 'Reduced' : 'Same';
+        dom.rescaleFactorBadge.textContent = `${pct}% (${tag})`;
       }
       if (dom.rescaleRealSpan) {
-        dom.rescaleRealSpan.textContent = `${formatNumber(res.realMeters, 2)} m`;
+        dom.rescaleRealSpan.textContent = `${formatNumber(res.realMeters, 3)} m`;
       }
-    } catch (e) {}
+
+      setRunButtonState(dom.btnRunRescale, 'success');
+    } catch (err) {
+      if (dom.rescaleErrorMsg) {
+        dom.rescaleErrorMsg.textContent = `⚠️ Rescale error: ${err.message}`;
+        dom.rescaleErrorMsg.style.display = 'block';
+      }
+      setRunButtonState(dom.btnRunRescale, 'error');
+    }
   }
 
+  // ---------------------------------------------------------------------------
+  // 9. Mode 3: Scale Detector / Finder Engine
+  // ---------------------------------------------------------------------------
   function calculateDetector() {
-    const paperP = parseInput(dom.detectPaperInput?.value, { allowNegative: false });
-    const realP = parseInput(dom.detectRealInput?.value, { allowNegative: false });
+    const paperP = parseInput(dom.detectorPaperVal?.value, { allowNegative: false });
+    const realP = parseInput(dom.detectorRealVal?.value, { allowNegative: false });
 
-    state.detectPaperVal = paperP.isValid ? paperP.value : 0;
-    state.detectPaperUnit = dom.detectPaperUnit?.value || 'cm';
-    state.detectRealVal = realP.isValid ? realP.value : 0;
-    state.detectRealUnit = dom.detectRealUnit?.value || 'm';
+    state.detectPaperUnit = dom.detectorPaperUnit?.value || 'cm';
+    state.detectRealUnit = dom.detectorRealUnit?.value || 'm';
 
-    const res = detectScale({
-      paperVal: state.detectPaperVal,
-      paperUnitKey: state.detectPaperUnit,
-      realVal: state.detectRealVal,
-      realUnitKey: state.detectRealUnit
-    });
-
-    if (dom.detectedRatioBadge) {
-      dom.detectedRatioBadge.textContent = res.ratioString;
+    if (!paperP.isValid || !realP.isValid) {
+      if (dom.detectorErrorMsg) {
+        dom.detectorErrorMsg.textContent = '⚠️ Please enter valid positive measurements for both paper and real-world dimensions';
+        dom.detectorErrorMsg.style.display = 'block';
+      }
+      if (dom.detectorRatioVal) dom.detectorRatioVal.textContent = '1 : ---';
+      if (dom.detectorPresetBadge) dom.detectorPresetBadge.textContent = 'Enter measurements above';
+      setRunButtonState(dom.btnRunDetector, 'error');
+      return;
     }
 
-    if (res.closestPreset && dom.closestPresetName && dom.closestPresetDiff) {
-      dom.closestPresetName.textContent = res.closestPreset.name;
-      dom.closestPresetDiff.textContent = res.isExactMatch ? 'Exact match' : `Δ ${res.closestPreset.percentDiff}%`;
-    } else {
-      if (dom.closestPresetName) dom.closestPresetName.textContent = 'Enter measurements';
-      if (dom.closestPresetDiff) dom.closestPresetDiff.textContent = '';
+    if (dom.detectorErrorMsg) dom.detectorErrorMsg.style.display = 'none';
+
+    try {
+      const res = detectScale({
+        paperVal: paperP.value,
+        paperUnitKey: state.detectPaperUnit,
+        realVal: realP.value,
+        realUnitKey: state.detectRealUnit
+      });
+
+      if (res.ratio === null) {
+        if (dom.detectorRatioVal) dom.detectorRatioVal.textContent = '1 : ---';
+        if (dom.detectorPresetBadge) dom.detectorPresetBadge.textContent = 'Measurements must be > 0';
+        setRunButtonState(dom.btnRunDetector, 'error');
+        return;
+      }
+
+      state.lastDetectedRatio = res.ratio;
+
+      if (dom.detectorRatioVal) dom.detectorRatioVal.textContent = res.ratioString;
+      if (dom.detectorPresetBadge) {
+        if (res.closestPreset) {
+          const matchLabel = res.isExactMatch ? 'Exact Match' : `Closest: Δ ${res.closestPreset.percentDiff}%`;
+          dom.detectorPresetBadge.innerHTML = `${matchLabel}: <strong>${res.closestPreset.name} (${res.closestPreset.desc})</strong>`;
+        } else {
+          dom.detectorPresetBadge.textContent = 'Custom Ratio (No standard preset match)';
+        }
+      }
+
+      setRunButtonState(dom.btnRunDetector, 'success');
+    } catch (err) {
+      if (dom.detectorErrorMsg) {
+        dom.detectorErrorMsg.textContent = `⚠️ Error: ${err.message}`;
+        dom.detectorErrorMsg.style.display = 'block';
+      }
+      setRunButtonState(dom.btnRunDetector, 'error');
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // 10. Mode 4: Area & Volume Scaler Engine
+  // ---------------------------------------------------------------------------
   function calculateAreaVolume() {
-    if (state.calcType === 'area') {
-      const parsed = parseInput(dom.areaInputVal?.value, { allowNegative: false });
-      state.areaVal = parsed.isValid ? parsed.value : 0;
-      state.areaInputUnit = dom.areaInputUnit?.value || 'cm2';
-      state.areaRatio = parseFloat(dom.areaRatioSelect?.value) || 100;
-      state.areaOutputUnit = dom.areaOutputUnit?.value || 'm2';
+    const rawRatio = parseFloat(dom.areavolRatioInput?.value);
+    state.areavolRatio = isNaN(rawRatio) || rawRatio <= 0 ? 100 : rawRatio;
+    state.areavolInputUnit = dom.areavolInputUnit?.value || (state.calcType === 'area' ? 'cm2' : 'cm3');
+    state.areavolOutputUnit = dom.areavolOutputUnit?.value || (state.calcType === 'area' ? 'm2' : 'm3');
 
-      try {
-        const res = scaleArea({
-          areaVal: state.areaVal,
-          inputUnitKey: state.areaInputUnit,
-          scaleRatio: state.areaRatio,
-          outputUnitKey: state.areaOutputUnit,
-          isDrawingToReal: state.calcDirection === 'drawing_to_real'
+    const parsed = parseInput(dom.areavolInputVal?.value, { allowNegative: false });
+
+    if (!parsed.isValid) {
+      if (dom.areavolErrorMsg) {
+        dom.areavolErrorMsg.textContent = `⚠️ Invalid measurement: ${parsed.error || 'Enter a valid positive number'}`;
+        dom.areavolErrorMsg.style.display = 'block';
+      }
+      if (dom.areavolResultVal) dom.areavolResultVal.textContent = '---';
+      setRunButtonState(dom.btnRunAreavol, 'error');
+      return;
+    }
+
+    if (dom.areavolErrorMsg) dom.areavolErrorMsg.style.display = 'none';
+
+    try {
+      const isDrawingToReal = state.calcDirection === 'drawing_to_real';
+      let res;
+
+      if (state.calcType === 'area') {
+        res = scaleArea({
+          areaVal: parsed.value,
+          inputUnitKey: state.areavolInputUnit,
+          scaleRatio: state.areavolRatio,
+          outputUnitKey: state.areavolOutputUnit,
+          isDrawingToReal: isDrawingToReal
         });
-
-        if (dom.areaResultVal) dom.areaResultVal.textContent = formatNumber(res.resultValue, state.precision);
-        if (dom.areaResultUnitBadge) dom.areaResultUnitBadge.textContent = state.areaOutputUnit;
-      } catch (e) {}
-    } else {
-      const parsed = parseInput(dom.volumeInputVal?.value, { allowNegative: false });
-      state.volumeVal = parsed.isValid ? parsed.value : 0;
-      state.volumeInputUnit = dom.volumeInputUnit?.value || 'cm3';
-      state.volumeRatio = parseFloat(dom.volumeRatioSelect?.value) || 50;
-      state.volumeOutputUnit = dom.volumeOutputUnit?.value || 'm3';
-
-      try {
-        const res = scaleVolume({
-          volumeVal: state.volumeVal,
-          inputUnitKey: state.volumeInputUnit,
-          scaleRatio: state.volumeRatio,
-          outputUnitKey: state.volumeOutputUnit,
-          isDrawingToReal: state.calcDirection === 'drawing_to_real'
+        if (dom.areavolFactorBadge) {
+          dom.areavolFactorBadge.textContent = `× ${formatNumber(res.factor, 0)} (${state.areavolRatio}²)`;
+        }
+      } else {
+        res = scaleVolume({
+          volumeVal: parsed.value,
+          inputUnitKey: state.areavolInputUnit,
+          scaleRatio: state.areavolRatio,
+          outputUnitKey: state.areavolOutputUnit,
+          isDrawingToReal: isDrawingToReal
         });
+        if (dom.areavolFactorBadge) {
+          dom.areavolFactorBadge.textContent = `× ${formatNumber(res.factor, 0)} (${state.areavolRatio}³)`;
+        }
+      }
 
-        if (dom.volumeResultVal) dom.volumeResultVal.textContent = formatNumber(res.resultValue, state.precision);
-        if (dom.volumeResultUnitBadge) dom.volumeResultUnitBadge.textContent = state.volumeOutputUnit;
-      } catch (e) {}
+      if (dom.areavolResultVal) dom.areavolResultVal.textContent = formatNumber(res.resultValue, state.precision);
+      if (dom.areavolResultUnit) dom.areavolResultUnit.textContent = state.areavolOutputUnit;
+
+      setRunButtonState(dom.btnRunAreavol, 'success');
+    } catch (err) {
+      if (dom.areavolErrorMsg) {
+        dom.areavolErrorMsg.textContent = `⚠️ Scaling error: ${err.message}`;
+        dom.areavolErrorMsg.style.display = 'block';
+      }
+      setRunButtonState(dom.btnRunAreavol, 'error');
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // 11. Mode 5: Furniture Database & Catalog
+  // ---------------------------------------------------------------------------
   function renderFurnitureGrid() {
-    if (!dom.furnitureGrid) return;
+    if (!dom.furnitureCardsGrid) return;
 
-    state.furnitureScaleRatio = parseFloat(dom.furnitureScaleSelect?.value) || 50;
-    state.furniturePaperUnit = dom.furniturePaperUnitSelect?.value || 'cm';
+    const rawScale = parseFloat(dom.furnScaleRatioInput?.value);
+    state.furnitureScaleRatio = isNaN(rawScale) || rawScale <= 0 ? 50 : rawScale;
+    state.furniturePaperUnit = dom.furnPaperUnitSelect?.value || 'cm';
 
     const filtered = filterFurnitureCatalog(
       FURNITURE_DATABASE,
@@ -1922,12 +2271,12 @@ function initializeApp() {
       state.furnitureActiveCategory
     );
 
-    if (dom.furnitureCountBadge) {
-      dom.furnitureCountBadge.textContent = `Showing ${filtered.length} of ${FURNITURE_DATABASE.length} items`;
+    if (dom.furnitureResultsCount) {
+      dom.furnitureResultsCount.textContent = `Showing ${filtered.length} of ${FURNITURE_DATABASE.length} items`;
     }
 
     if (filtered.length === 0) {
-      dom.furnitureGrid.innerHTML = `
+      dom.furnitureCardsGrid.innerHTML = `
         <div class="empty-furn-state">
           <div class="empty-furn-icon">🔍</div>
           <div class="empty-furn-title">No matching furniture pieces found</div>
@@ -1937,7 +2286,7 @@ function initializeApp() {
       return;
     }
 
-    dom.furnitureGrid.innerHTML = filtered.map(item => {
+    dom.furnitureCardsGrid.innerHTML = filtered.map(item => {
       const scaled = getScaledFurnitureDimensions(item, state.furnitureScaleRatio, state.furniturePaperUnit);
       return `
         <div class="furniture-card" data-id="${item.id}">
@@ -1971,12 +2320,12 @@ function initializeApp() {
           </div>
 
           <div class="furn-card-footer">
-            <button class="btn-furn-copy" data-text="${scaled.paperFormatted}">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <button class="btn-furn-copy action-tool-btn compact" data-text="${scaled.paperFormatted}" title="Copy scaled drawing dimensions">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               Copy Size
             </button>
-            <button class="btn-furn-send" data-w="${item.wCm}" data-d="${item.dCm}">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            <button class="btn-furn-send action-tool-btn compact" data-w="${item.wCm}" title="Send width to Converter">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
               To Converter
             </button>
           </div>
@@ -1984,58 +2333,71 @@ function initializeApp() {
       `;
     }).join('');
 
-    // Attach card event listeners
-    dom.furnitureGrid.querySelectorAll('.btn-furn-copy').forEach(btn => {
+    // Attach click listeners to dynamically rendered card buttons
+    dom.furnitureCardsGrid.querySelectorAll('.btn-furn-copy').forEach(btn => {
       btn.addEventListener('click', () => {
-        copyToClipboard(btn.dataset.text);
+        copyToClipboard(btn.dataset.text, 'Scaled Furniture Size');
       });
     });
 
-    dom.furnitureGrid.querySelectorAll('.btn-furn-send').forEach(btn => {
+    dom.furnitureCardsGrid.querySelectorAll('.btn-furn-send').forEach(btn => {
       btn.addEventListener('click', () => {
-        const w = parseFloat(btn.dataset.w) || 0;
-        sendDimensionToConverter(w, 'cm');
+        const w = btn.dataset.w;
+        if (dom.converterInputVal) dom.converterInputVal.value = w;
+        if (dom.converterInputUnit) dom.converterInputUnit.value = 'cm';
+        state.direction = 'real_to_drawing';
+        switchMode('converter');
+        showToast(`Sent dimension ${w} cm to Converter`);
       });
     });
   }
 
   function calculateCustomFurniture() {
-    const pw = parseInput(dom.customFurnWInput?.value, { allowNegative: false });
-    const pd = parseInput(dom.customFurnDInput?.value, { allowNegative: false });
+    const pw = parseInput(dom.customFurnW?.value, { allowNegative: false });
+    const pd = parseInput(dom.customFurnD?.value, { allowNegative: false });
 
-    state.customFurnW = pw.isValid ? pw.value : 0;
-    state.customFurnD = pd.isValid ? pd.value : 0;
-    state.customFurnUnit = dom.customFurnUnitSelect?.value || 'cm';
-    state.furnitureScaleRatio = parseFloat(dom.furnitureScaleSelect?.value) || 50;
-    state.furniturePaperUnit = dom.furniturePaperUnitSelect?.value || 'cm';
+    state.customFurnUnit = dom.customFurnUnit?.value || 'cm';
+    state.furnitureScaleRatio = parseFloat(dom.furnScaleRatioInput?.value) || 50;
+    state.furniturePaperUnit = dom.furnPaperUnitSelect?.value || 'cm';
 
-    const wRes = scaleDimension({
-      value: state.customFurnW,
-      unitKey: state.customFurnUnit,
-      ratio: state.furnitureScaleRatio,
-      direction: 'real_to_drawing',
-      targetUnitKey: state.furniturePaperUnit
-    });
+    if (!pw.isValid || !pd.isValid) {
+      if (dom.customFurnResult) dom.customFurnResult.textContent = 'Invalid dimensions';
+      return;
+    }
 
-    const dRes = scaleDimension({
-      value: state.customFurnD,
-      unitKey: state.customFurnUnit,
-      ratio: state.furnitureScaleRatio,
-      direction: 'real_to_drawing',
-      targetUnitKey: state.furniturePaperUnit
-    });
+    try {
+      const wRes = scaleDimension({
+        value: pw.value,
+        unitKey: state.customFurnUnit,
+        ratio: state.furnitureScaleRatio,
+        direction: 'real_to_drawing',
+        targetUnitKey: state.furniturePaperUnit
+      });
 
-    if (dom.customFurnPaperW) dom.customFurnPaperW.textContent = `${formatNumber(wRes.value, 2)} ${state.furniturePaperUnit}`;
-    if (dom.customFurnPaperD) dom.customFurnPaperD.textContent = `${formatNumber(dRes.value, 2)} ${state.furniturePaperUnit}`;
+      const dRes = scaleDimension({
+        value: pd.value,
+        unitKey: state.customFurnUnit,
+        ratio: state.furnitureScaleRatio,
+        direction: 'real_to_drawing',
+        targetUnitKey: state.furniturePaperUnit
+      });
+
+      const formatted = `Paper @ 1:${state.furnitureScaleRatio}: ${formatNumber(wRes.value, 2)} × ${formatNumber(dRes.value, 2)} ${state.furniturePaperUnit}`;
+      if (dom.customFurnResult) dom.customFurnResult.textContent = formatted;
+      AudioService.playTick();
+    } catch (e) {}
   }
 
+  // ---------------------------------------------------------------------------
+  // 12. Mode 6: Reference Scale Chart
+  // ---------------------------------------------------------------------------
   function renderReferenceChart() {
-    if (!dom.refChartTbody) return;
-    state.refScaleRatio = parseFloat(dom.refChartScaleSelect?.value) || 50;
+    if (!dom.refTableBody) return;
+    state.refScaleRatio = parseFloat(dom.refScaleSelect?.value) || 50;
 
     const lengthsCm = [0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0];
 
-    dom.refChartTbody.innerHTML = lengthsCm.map(cm => {
+    dom.refTableBody.innerHTML = lengthsCm.map(cm => {
       const realMeters = (cm * 0.01) * state.refScaleRatio;
       const realMm = realMeters * 1000;
       const realCm = realMeters * 100;
@@ -2044,549 +2406,483 @@ function initializeApp() {
 
       return `
         <tr>
-          <td class="col-paper"><strong>${cm} cm</strong> <small>(${cm * 10} mm)</small></td>
+          <td class="col-paper"><strong>${cm} cm</strong> <span style="font-size: 0.75rem; color: var(--text-muted);">(${cm * 10} mm)</span></td>
           <td class="col-real-m">${formatNumber(realMeters, 3)} m</td>
           <td class="col-real-cm">${formatNumber(realCm, 1)} cm</td>
           <td class="col-real-mm">${formatNumber(realMm, 0)} mm</td>
-          <td class="col-real-ft">${formatFeetInches(realMeters / 0.0254)}</td>
+          <td class="col-real-ft">${realFtIn}</td>
           <td class="col-real-dec-ft">${formatNumber(realFt, 2)} ft</td>
         </tr>
       `;
     }).join('');
   }
 
-  function sendDimensionToConverter(val, unitKey) {
-    state.direction = 'real_to_drawing';
-    state.realVal = val;
-    state.realUnit = unitKey;
-    state.drawingUnit = state.furniturePaperUnit || 'cm';
-    state.scaleRatio = state.furnitureScaleRatio || 50;
-
-    switchMode('converter');
-    if (dom.inputRealVal) dom.inputRealVal.value = val;
-    if (dom.selectRealUnit) dom.selectRealUnit.value = unitKey;
-    if (dom.selectDrawingUnit) dom.selectDrawingUnit.value = state.drawingUnit;
-    if (dom.customRatioInput) dom.customRatioInput.value = state.scaleRatio;
-
-    calculateConverter();
-    showToast(`Transferred ${val} ${unitKey} to Converter`);
-  }
-
-  function switchMode(modeKey) {
-    state.currentMode = modeKey;
-    dom.navTabs.forEach(tab => {
-      tab.classList.toggle('active', tab.dataset.mode === modeKey);
-    });
-    dom.toolContainers.forEach(container => {
-      container.classList.toggle('active', container.id === `tool-${modeKey}`);
-    });
-    AudioService.playTick();
-  }
-
-  function populatePresetPills(category = 'all') {
-    if (!dom.scalePresetPills) return;
-    const filtered = category === 'all' 
-      ? SCALE_PRESETS 
-      : SCALE_PRESETS.filter(p => p.category === category);
-
-    dom.scalePresetPills.innerHTML = filtered.map(preset => `
-      <button type="button" class="preset-pill ${preset.ratio === state.scaleRatio ? 'active' : ''}" data-ratio="${preset.ratio}" data-id="${preset.id}" title="${preset.description}">
-        ${preset.name}
-      </button>
-    `).join('');
-
-    dom.scalePresetPills.querySelectorAll('.preset-pill').forEach(btn => {
-      btn.addEventListener('click', () => {
-        state.scaleRatio = parseFloat(btn.dataset.ratio) || 50;
-        state.selectedPresetId = btn.dataset.id;
-        if (dom.customRatioInput) dom.customRatioInput.value = state.scaleRatio;
-        dom.scalePresetPills.querySelectorAll('.preset-pill').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        AudioService.playTick();
-        calculateConverter();
-      });
-    });
-  }
-
-  function populateSelectOptions() {
-    const scaleOptionsHtml = SCALE_PRESETS.map(p => `<option value="${p.ratio}">${p.name}</option>`).join('');
-
-    if (dom.rescaleOrigRatioSelect) dom.rescaleOrigRatioSelect.innerHTML = scaleOptionsHtml;
-    if (dom.rescaleTargetRatioSelect) dom.rescaleTargetRatioSelect.innerHTML = scaleOptionsHtml;
-    if (dom.areaRatioSelect) dom.areaRatioSelect.innerHTML = scaleOptionsHtml;
-    if (dom.volumeRatioSelect) dom.volumeRatioSelect.innerHTML = scaleOptionsHtml;
-    if (dom.furnitureScaleSelect) dom.furnitureScaleSelect.innerHTML = scaleOptionsHtml;
-    if (dom.refChartScaleSelect) dom.refChartScaleSelect.innerHTML = scaleOptionsHtml;
-
-    if (dom.rescaleOrigRatioSelect) dom.rescaleOrigRatioSelect.value = "50";
-    if (dom.rescaleTargetRatioSelect) dom.rescaleTargetRatioSelect.value = "200";
-    if (dom.areaRatioSelect) dom.areaRatioSelect.value = "100";
-    if (dom.volumeRatioSelect) dom.volumeRatioSelect.value = "50";
-    if (dom.furnitureScaleSelect) dom.furnitureScaleSelect.value = "50";
-    if (dom.refChartScaleSelect) dom.refChartScaleSelect.value = "50";
-  }
-
+  // ---------------------------------------------------------------------------
+  // 13. History Drawer Manager
+  // ---------------------------------------------------------------------------
   function renderHistoryList() {
     if (!dom.historyList) return;
     const history = HistoryService.getHistory();
 
     if (history.length === 0) {
       dom.historyList.innerHTML = `
-        <div class="empty-history">
-          <div class="empty-icon">📐</div>
-          <p>No calculation history yet.<br>Your conversions will be logged here automatically.</p>
+        <div class="empty-history-box">
+          <div style="font-size: 1.8rem; margin-bottom: 0.5rem;">📜</div>
+          <div style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.25rem;">No History Recorded</div>
+          <div style="font-size: 0.78rem; color: var(--text-secondary);">Calculations and conversions will be logged here.</div>
         </div>
       `;
       return;
     }
 
     dom.historyList.innerHTML = history.map(item => `
-      <div class="history-item" data-id="${item.id}">
-        <div class="history-item-header">
-          <span class="history-mode-tag">${item.mode || 'Scale'}</span>
-          <span class="history-time">${item.timestamp}</span>
+      <div class="history-item-card" data-id="${item.id}">
+        <div class="hist-card-top">
+          <span class="hist-mode-tag">${item.mode || 'Converter'}</span>
+          <span class="hist-scale-tag">${item.scaleStr || ''}</span>
+          <span class="hist-time-tag">${item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : ''}</span>
         </div>
-        <div class="history-item-body">
-          <div class="history-scale">Scale: <strong>1:${item.scaleRatio || '-'}</strong></div>
-          <div class="history-calc">${item.inputStr} ➔ <strong class="history-res">${item.outputStr}</strong></div>
+        <div class="hist-formula-row">
+          <span class="hist-input">${item.inputStr}</span>
+          <span class="hist-arrow">➔</span>
+          <span class="hist-output">${item.outputStr}</span>
         </div>
-        <div class="history-item-actions">
-          <button class="hist-btn-copy" title="Copy Result">Copy</button>
-          <button class="delete-hist-btn" title="Delete">✕</button>
+        <div class="hist-card-actions">
+          <button class="hist-btn-copy action-tool-btn compact" data-text="${item.outputStr}">Copy</button>
+          <button class="hist-btn-del action-tool-btn compact" data-id="${item.id}" title="Delete entry">✕</button>
         </div>
       </div>
     `).join('');
 
-    dom.historyList.querySelectorAll('.hist-btn-copy').forEach((btn, index) => {
+    dom.historyList.querySelectorAll('.hist-btn-copy').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const item = history[index];
-        if (item) copyToClipboard(item.outputStr);
+        copyToClipboard(btn.dataset.text, 'History Result');
       });
     });
 
-    dom.historyList.querySelectorAll('.delete-hist-btn').forEach((btn, index) => {
+    dom.historyList.querySelectorAll('.hist-btn-del').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const item = history[index];
-        if (item) {
-          HistoryService.removeEntry(item.id);
-          renderHistoryList();
-        }
+        HistoryService.removeEntry(btn.dataset.id);
+        renderHistoryList();
+        showToast('Entry removed from history');
       });
     });
   }
 
   function toggleHistoryDrawer() {
+    if (!dom.historyDrawer || !dom.historyOverlay) return;
     const isOpen = dom.historyDrawer.classList.contains('open');
     dom.historyDrawer.classList.toggle('open', !isOpen);
     dom.historyOverlay.classList.toggle('open', !isOpen);
     AudioService.playTick();
+    if (!isOpen) renderHistoryList();
   }
 
-  function handleExportCSV() {
-    const csv = HistoryService.exportCSV();
-    if (!csv) {
-      showToast('History is empty');
-      return;
+  // ---------------------------------------------------------------------------
+  // 14. Event Listener Wire-up
+  // ---------------------------------------------------------------------------
+  function attachEventListeners() {
+    // Theme Selector
+    if (dom.themeSelect) {
+      dom.themeSelect.addEventListener('change', (e) => {
+        applyTheme(e.target.value);
+        AudioService.playTick();
+        showToast(`Theme set to ${e.target.options[e.target.selectedIndex].text}`);
+      });
     }
-    downloadFile(csv, `architecture-helping-hand-history-${Date.now()}.csv`, 'text/csv');
-    showToast('Exported history as CSV');
-  }
 
-  function handleExportMarkdown() {
-    const md = HistoryService.exportMarkdown();
-    if (!md) {
-      showToast('History is empty');
-      return;
+    // Sound Toggle
+    if (dom.soundToggleBtn) {
+      dom.soundToggleBtn.addEventListener('click', () => {
+        const newState = AudioService.toggleSound();
+        updateSoundUI();
+        showToast(newState ? '🔊 Tactile sound enabled' : '🔇 Sound muted');
+      });
     }
-    downloadFile(md, `architecture-helping-hand-history-${Date.now()}.md`, 'text/markdown');
-    showToast('Exported history as Markdown');
-  }
 
-  function downloadFile(content, fileName, mimeType) {
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
+    // History Toggle & Actions
+    if (dom.historyToggleBtn) dom.historyToggleBtn.addEventListener('click', toggleHistoryDrawer);
+    if (dom.closeHistoryBtn) dom.closeHistoryBtn.addEventListener('click', toggleHistoryDrawer);
+    if (dom.historyOverlay) dom.historyOverlay.addEventListener('click', toggleHistoryDrawer);
 
-  function copyToClipboard(text) {
-    if (!navigator.clipboard) {
-      showToast(`Value: ${text}`);
-      return;
+    if (dom.clearHistoryBtn) {
+      dom.clearHistoryBtn.addEventListener('click', () => {
+        HistoryService.clear();
+        renderHistoryList();
+        showToast('Calculation history cleared');
+      });
     }
-    navigator.clipboard.writeText(text).then(() => {
-      AudioService.playCopySuccess();
-      showToast(`Copied "${text}" to clipboard`);
-    }).catch(() => {
-      showToast(`Selected: ${text}`);
+
+    if (dom.exportCsvBtn) {
+      dom.exportCsvBtn.addEventListener('click', () => {
+        const csv = HistoryService.exportCSV();
+        if (!csv) {
+          showToast('History is empty', 'warning');
+          return;
+        }
+        downloadFile(csv, `architecture-helping-hand-${Date.now()}.csv`, 'text/csv');
+        showToast('Exported history as CSV');
+      });
+    }
+
+    if (dom.exportMdBtn) {
+      dom.exportMdBtn.addEventListener('click', () => {
+        const md = HistoryService.exportMarkdown();
+        if (!md) {
+          showToast('History is empty', 'warning');
+          return;
+        }
+        copyToClipboard(md, 'Markdown History Table');
+      });
+    }
+
+    // Shortcuts Modal
+    if (dom.shortcutsHelpBtn) {
+      dom.shortcutsHelpBtn.addEventListener('click', () => {
+        dom.shortcutsModal?.classList.add('open');
+        dom.modalBackdrop?.classList.add('open');
+        AudioService.playTick();
+      });
+    }
+
+    if (dom.closeShortcutsBtn) {
+      dom.closeShortcutsBtn.addEventListener('click', () => {
+        dom.shortcutsModal?.classList.remove('open');
+        dom.modalBackdrop?.classList.remove('open');
+      });
+    }
+
+    if (dom.modalBackdrop) {
+      dom.modalBackdrop.addEventListener('click', () => {
+        dom.shortcutsModal?.classList.remove('open');
+        dom.modalBackdrop?.classList.remove('open');
+      });
+    }
+
+    // Mode Navigation Tabs
+    dom.modeTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const targetMode = tab.dataset.mode;
+        if (targetMode) switchMode(targetMode);
+      });
     });
-  }
 
-  function showToast(message) {
-    if (!dom.toastContainer) return;
-    const toast = document.createElement('div');
-    toast.className = 'toast-notification';
-    toast.textContent = message;
-    dom.toastContainer.appendChild(toast);
-
-    setTimeout(() => {
-      toast.classList.add('visible');
-    }, 10);
-
-    setTimeout(() => {
-      toast.classList.remove('visible');
-      setTimeout(() => toast.remove(), 300);
-    }, 2800);
-  }
-
-  function updateSoundButtonUI() {
-    if (!dom.soundToggleBtn) return;
-    const enabled = AudioService.isEnabled();
-    dom.soundToggleBtn.classList.toggle('muted', !enabled);
-    dom.soundToggleBtn.title = enabled ? 'Mute Drafting Clicks' : 'Enable Drafting Clicks';
-  }
-
-  // =========================================================================
-  // ATTACH GLOBAL EVENT LISTENERS
-  // =========================================================================
-
-  // Mode Tabs
-  dom.navTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      switchMode(tab.dataset.mode);
+    // Preset Category Pills
+    dom.presetPillBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        dom.presetPillBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderPresetChips(btn.dataset.category);
+        AudioService.playTick();
+      });
     });
-  });
 
-  // Theme selector
-  if (dom.themeSelect) {
-    dom.themeSelect.addEventListener('change', (e) => {
-      const theme = e.target.value;
-      state.activeTheme = theme;
-      document.documentElement.setAttribute('data-theme', theme);
-      StorageService.setItem('archiscale_theme', theme);
-      AudioService.playTick();
-    });
-  }
+    // Custom Scale Ratio Input
+    if (dom.scaleRatioInput) {
+      dom.scaleRatioInput.addEventListener('input', () => {
+        const r = parseFloat(dom.scaleRatioInput.value);
+        if (!isNaN(r) && r > 0) {
+          state.scaleRatio = r;
+          if (dom.activeScaleBadge) dom.activeScaleBadge.textContent = `SCALE 1:${r}`;
+          calculateConverter();
+        }
+      });
+    }
 
-  // Sound toggle
-  if (dom.soundToggleBtn) {
-    dom.soundToggleBtn.addEventListener('click', () => {
-      AudioService.toggleSound();
-      updateSoundButtonUI();
-    });
-  }
-
-  // History Drawer
-  if (dom.historyToggleBtn) dom.historyToggleBtn.addEventListener('click', toggleHistoryDrawer);
-  if (dom.closeHistoryBtn) dom.closeHistoryBtn.addEventListener('click', toggleHistoryDrawer);
-  if (dom.historyOverlay) dom.historyOverlay.addEventListener('click', toggleHistoryDrawer);
-
-  if (dom.clearHistoryBtn) {
-    dom.clearHistoryBtn.addEventListener('click', () => {
-      HistoryService.clear();
-      renderHistoryList();
-      showToast('Calculation history cleared');
-    });
-  }
-
-  if (dom.exportCsvBtn) dom.exportCsvBtn.addEventListener('click', handleExportCSV);
-  if (dom.exportMdBtn) dom.exportMdBtn.addEventListener('click', handleExportMarkdown);
-
-  // Shortcuts Modal
-  if (dom.shortcutsHelpBtn) {
-    dom.shortcutsHelpBtn.addEventListener('click', () => {
-      dom.shortcutsModal.classList.add('open');
-      dom.modalBackdrop.classList.add('open');
-      AudioService.playTick();
-    });
-  }
-  if (dom.closeShortcutsBtn) {
-    dom.closeShortcutsBtn.addEventListener('click', () => {
-      dom.shortcutsModal.classList.remove('open');
-      dom.modalBackdrop.classList.remove('open');
-    });
-  }
-  if (dom.modalBackdrop) {
-    dom.modalBackdrop.addEventListener('click', () => {
-      dom.shortcutsModal.classList.remove('open');
-      dom.modalBackdrop.classList.remove('open');
-    });
-  }
-
-  // Converter inputs & direction swap
-  if (dom.inputDrawingVal) {
-    dom.inputDrawingVal.addEventListener('input', () => {
-      state.direction = 'drawing_to_real';
-      calculateConverter();
-    });
-  }
-  if (dom.inputRealVal) {
-    dom.inputRealVal.addEventListener('input', () => {
-      state.direction = 'real_to_drawing';
-      calculateConverter();
-    });
-  }
-  if (dom.selectDrawingUnit) {
-    dom.selectDrawingUnit.addEventListener('change', (e) => {
-      state.drawingUnit = e.target.value;
-      calculateConverter();
-    });
-  }
-  if (dom.selectRealUnit) {
-    dom.selectRealUnit.addEventListener('change', (e) => {
-      state.realUnit = e.target.value;
-      calculateConverter();
-    });
-  }
-  if (dom.customRatioInput) {
-    dom.customRatioInput.addEventListener('input', (e) => {
-      const val = parseFloat(e.target.value);
-      if (val > 0) {
-        state.scaleRatio = val;
+    // Converter Inputs & Run Action
+    if (dom.converterInputVal) {
+      dom.converterInputVal.addEventListener('input', () => {
         calculateConverter();
+      });
+      dom.converterInputVal.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') calculateConverter();
+      });
+    }
+
+    if (dom.converterInputUnit) dom.converterInputUnit.addEventListener('change', calculateConverter);
+    if (dom.converterOutputUnit) dom.converterOutputUnit.addEventListener('change', calculateConverter);
+    if (dom.swapDirectionBtn) dom.swapDirectionBtn.addEventListener('click', swapDirection);
+    if (dom.btnRunConverter) dom.btnRunConverter.addEventListener('click', calculateConverter);
+
+    // Copy Result & Save Log
+    if (dom.btnCopyResult) {
+      dom.btnCopyResult.addEventListener('click', () => {
+        const val = dom.converterResultVal?.textContent;
+        const unit = dom.converterResultUnit?.textContent;
+        if (val && val !== '---') {
+          copyToClipboard(`${val} ${unit}`);
+        }
+      });
+    }
+
+    if (dom.btnSaveHistory) {
+      dom.btnSaveHistory.addEventListener('click', () => {
+        const val = dom.converterResultVal?.textContent;
+        const unit = dom.converterResultUnit?.textContent;
+        if (val && val !== '---') {
+          HistoryService.addEntry({
+            mode: 'Scale Converter',
+            scaleRatio: state.scaleRatio,
+            scaleStr: `1:${state.scaleRatio}`,
+            inputStr: `${dom.converterInputVal?.value} ${state.converterInputUnit}`,
+            outputStr: `${val} ${unit}`
+          });
+          showToast('Saved conversion to calculation log');
+          AudioService.playTick();
+        }
+      });
+    }
+
+    // Rescaler Listeners
+    [dom.rescaleOrigRatio, dom.rescaleOrigVal, dom.rescaleOrigUnit, dom.rescaleTargetRatio, dom.rescaleTargetUnit].forEach(el => {
+      if (el) {
+        el.addEventListener('input', calculateRescaler);
+        el.addEventListener('change', calculateRescaler);
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') calculateRescaler();
+        });
       }
     });
-  }
-
-  if (dom.swapDirectionBtn) {
-    dom.swapDirectionBtn.addEventListener('click', () => {
-      state.direction = state.direction === 'drawing_to_real' ? 'real_to_drawing' : 'drawing_to_real';
-      AudioService.playSwapSound();
-      calculateConverter();
-    });
-  }
-
-  // Preset category filter tabs
-  dom.presetCategoryTabs.forEach(btn => {
-    btn.addEventListener('click', () => {
-      dom.presetCategoryTabs.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      populatePresetPills(btn.dataset.category);
-      AudioService.playTick();
-    });
-  });
-
-  // Copy buttons
-  if (dom.btnCopyResult) {
-    dom.btnCopyResult.addEventListener('click', () => {
-      const outputVal = state.direction === 'drawing_to_real' ? dom.inputRealVal?.value : dom.inputDrawingVal?.value;
-      const outputUnit = state.direction === 'drawing_to_real' ? state.realUnit : state.drawingUnit;
-      const text = `${outputVal} ${outputUnit}`;
-      copyToClipboard(text);
-
-      HistoryService.addEntry({
-        mode: 'Scale Converter',
-        scaleRatio: state.scaleRatio,
-        scaleStr: `1:${state.scaleRatio}`,
-        inputStr: `${state.direction === 'drawing_to_real' ? state.drawingVal : state.realVal} ${state.direction === 'drawing_to_real' ? state.drawingUnit : state.realUnit}`,
-        outputStr: text
+    if (dom.btnRunRescale) dom.btnRunRescale.addEventListener('click', calculateRescaler);
+    if (dom.btnCopyRescale) {
+      dom.btnCopyRescale.addEventListener('click', () => {
+        const val = dom.rescaleResultVal?.textContent;
+        const unit = dom.rescaleResultUnit?.textContent;
+        if (val && val !== '---') copyToClipboard(`${val} ${unit}`, 'Rescaled Dimension');
       });
-      renderHistoryList();
+    }
+
+    // Scale Detector Listeners
+    [dom.detectorPaperVal, dom.detectorPaperUnit, dom.detectorRealVal, dom.detectorRealUnit].forEach(el => {
+      if (el) {
+        el.addEventListener('input', calculateDetector);
+        el.addEventListener('change', calculateDetector);
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') calculateDetector();
+        });
+      }
     });
-  }
-
-  // Rescaler inputs
-  [dom.rescaleOrigInput, dom.rescaleOrigUnit, dom.rescaleOrigRatioSelect, dom.rescaleTargetRatioSelect, dom.rescaleTargetUnit].forEach(el => {
-    if (el) el.addEventListener('input', calculateRescaler);
-    if (el) el.addEventListener('change', calculateRescaler);
-  });
-
-  if (dom.btnCopyRescale) {
-    dom.btnCopyRescale.addEventListener('click', () => {
-      const text = `${dom.rescaleResultVal?.textContent} ${state.rescaleTargetUnit}`;
-      copyToClipboard(text);
-      HistoryService.addEntry({
-        mode: 'Rescaler',
-        scaleStr: `1:${state.rescaleOrigRatio} ➔ 1:${state.rescaleTargetRatio}`,
-        inputStr: `${state.rescaleOrigVal} ${state.rescaleOrigUnit}`,
-        outputStr: text
+    if (dom.btnRunDetector) dom.btnRunDetector.addEventListener('click', calculateDetector);
+    if (dom.btnApplyDetected) {
+      dom.btnApplyDetected.addEventListener('click', () => {
+        if (state.lastDetectedRatio !== null && state.lastDetectedRatio > 0) {
+          state.scaleRatio = state.lastDetectedRatio;
+          if (dom.scaleRatioInput) dom.scaleRatioInput.value = state.lastDetectedRatio;
+          if (dom.activeScaleBadge) dom.activeScaleBadge.textContent = `SCALE 1:${state.lastDetectedRatio.toFixed(1)}`;
+          switchMode('converter');
+          showToast(`Applied detected scale 1:${state.lastDetectedRatio.toFixed(2)} to Converter`);
+        } else {
+          showToast('Please enter valid measurements to detect scale', 'warning');
+        }
       });
-      renderHistoryList();
+    }
+
+    // Area & Volume Listeners
+    dom.areavolTypeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        dom.areavolTypeBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.calcType = btn.dataset.type;
+        updateAreaVolumeUnitSelects();
+        calculateAreaVolume();
+        AudioService.playTick();
+      });
     });
-  }
 
-  // Detector inputs
-  [dom.detectPaperInput, dom.detectPaperUnit, dom.detectRealInput, dom.detectRealUnit].forEach(el => {
-    if (el) el.addEventListener('input', calculateDetector);
-    if (el) el.addEventListener('change', calculateDetector);
-  });
-
-  if (dom.btnApplyDetected) {
-    dom.btnApplyDetected.addEventListener('click', () => {
-      const res = detectScale({
-        paperVal: state.detectPaperVal,
-        paperUnitKey: state.detectPaperUnit,
-        realVal: state.detectRealVal,
-        realUnitKey: state.detectRealUnit
+    dom.areavolDirBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        dom.areavolDirBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.calcDirection = btn.dataset.dir;
+        if (state.calcDirection === 'drawing_to_real') {
+          if (dom.areavolInputBadge) dom.areavolInputBadge.textContent = 'Drawing Area/Volume';
+          if (dom.areavolOutputBadge) dom.areavolOutputBadge.textContent = 'Real-World Unit';
+        } else {
+          if (dom.areavolInputBadge) dom.areavolInputBadge.textContent = 'Real-World Dimension';
+          if (dom.areavolOutputBadge) dom.areavolOutputBadge.textContent = 'Drawing Unit on Paper';
+        }
+        calculateAreaVolume();
+        AudioService.playTick();
       });
-      if (res.ratio !== null && res.ratio > 0) {
-        state.scaleRatio = res.ratio;
-        if (dom.customRatioInput) dom.customRatioInput.value = res.ratio;
+    });
+
+    [dom.areavolRatioInput, dom.areavolInputVal, dom.areavolInputUnit, dom.areavolOutputUnit].forEach(el => {
+      if (el) {
+        el.addEventListener('input', calculateAreaVolume);
+        el.addEventListener('change', calculateAreaVolume);
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') calculateAreaVolume();
+        });
+      }
+    });
+    if (dom.btnRunAreavol) dom.btnRunAreavol.addEventListener('click', calculateAreaVolume);
+    if (dom.btnCopyAreavol) {
+      dom.btnCopyAreavol.addEventListener('click', () => {
+        const val = dom.areavolResultVal?.textContent;
+        const unit = dom.areavolResultUnit?.textContent;
+        if (val && val !== '---') copyToClipboard(`${val} ${unit}`, 'Area/Volume Result');
+      });
+    }
+
+    // Furniture Database Listeners
+    if (dom.furnitureSearchInput) {
+      dom.furnitureSearchInput.addEventListener('input', (e) => {
+        state.furnitureSearchQuery = e.target.value;
+        renderFurnitureGrid();
+      });
+    }
+
+    if (dom.clearFurnitureSearchBtn) {
+      dom.clearFurnitureSearchBtn.addEventListener('click', () => {
+        if (dom.furnitureSearchInput) dom.furnitureSearchInput.value = '';
+        state.furnitureSearchQuery = '';
+        renderFurnitureGrid();
+      });
+    }
+
+    // Furniture Scale Chips
+    if (dom.furnScalePresets) {
+      dom.furnScalePresets.querySelectorAll('.furn-scale-chip').forEach(btn => {
+        btn.addEventListener('click', () => {
+          dom.furnScalePresets.querySelectorAll('.furn-scale-chip').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const ratio = parseFloat(btn.dataset.ratio);
+          state.furnitureScaleRatio = ratio;
+          if (dom.furnScaleRatioInput) dom.furnScaleRatioInput.value = ratio;
+          renderFurnitureGrid();
+          calculateCustomFurniture();
+          AudioService.playTick();
+        });
+      });
+    }
+
+    if (dom.furnScaleRatioInput) {
+      dom.furnScaleRatioInput.addEventListener('input', () => {
+        const r = parseFloat(dom.furnScaleRatioInput.value);
+        if (!isNaN(r) && r > 0) {
+          state.furnitureScaleRatio = r;
+          renderFurnitureGrid();
+          calculateCustomFurniture();
+        }
+      });
+    }
+
+    if (dom.furnPaperUnitSelect) {
+      dom.furnPaperUnitSelect.addEventListener('change', () => {
+        state.furniturePaperUnit = dom.furnPaperUnitSelect.value;
+        renderFurnitureGrid();
+        calculateCustomFurniture();
+      });
+    }
+
+    // Furniture Category Pills
+    if (dom.furnCategoryNav) {
+      dom.furnCategoryNav.querySelectorAll('.furn-cat-pill').forEach(btn => {
+        btn.addEventListener('click', () => {
+          dom.furnCategoryNav.querySelectorAll('.furn-cat-pill').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.furnitureActiveCategory = btn.dataset.cat;
+          renderFurnitureGrid();
+          AudioService.playTick();
+        });
+      });
+    }
+
+    // Custom Furniture Scaler
+    [dom.customFurnW, dom.customFurnD, dom.customFurnUnit].forEach(el => {
+      if (el) {
+        el.addEventListener('input', calculateCustomFurniture);
+        el.addEventListener('change', calculateCustomFurniture);
+      }
+    });
+    if (dom.btnRunCustomFurn) dom.btnRunCustomFurn.addEventListener('click', calculateCustomFurniture);
+    if (dom.btnCopyCustomFurn) {
+      dom.btnCopyCustomFurn.addEventListener('click', () => {
+        const text = dom.customFurnResult?.textContent;
+        if (text) copyToClipboard(text, 'Custom Furniture Size');
+      });
+    }
+    if (dom.btnSendCustomFurn) {
+      dom.btnSendCustomFurn.addEventListener('click', () => {
+        const w = dom.customFurnW?.value || '240';
+        if (dom.converterInputVal) dom.converterInputVal.value = w;
+        if (dom.converterInputUnit) dom.converterInputUnit.value = dom.customFurnUnit?.value || 'cm';
+        state.direction = 'real_to_drawing';
         switchMode('converter');
-        calculateConverter();
-        showToast(`Applied scale 1:${res.ratio.toFixed(2)} to Converter`);
-      } else {
-        showToast('Please enter valid positive measurements to detect scale');
-      }
-    });
-  }
+        showToast(`Sent custom width ${w} to Converter`);
+      });
+    }
 
-  // Area / Volume Subtabs & Inputs
-  dom.areaVolTypeTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      dom.areaVolTypeTabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      state.calcType = tab.dataset.type;
-      if (dom.areaSection) dom.areaSection.classList.toggle('active', state.calcType === 'area');
-      if (dom.volumeSection) dom.volumeSection.classList.toggle('active', state.calcType === 'volume');
-      AudioService.playTick();
-      calculateAreaVolume();
-    });
-  });
+    // Reference Chart
+    if (dom.refScaleSelect) {
+      dom.refScaleSelect.addEventListener('change', (e) => {
+        state.refScaleRatio = parseFloat(e.target.value) || 50;
+        renderReferenceChart();
+        AudioService.playTick();
+      });
+    }
 
-  dom.areaVolDirTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      dom.areaVolDirTabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      state.calcDirection = tab.dataset.dir;
-      AudioService.playTick();
-      calculateAreaVolume();
-    });
-  });
+    if (dom.btnPrintRef) {
+      dom.btnPrintRef.addEventListener('click', () => {
+        window.print();
+      });
+    }
 
-  [dom.areaInputVal, dom.areaInputUnit, dom.areaRatioSelect, dom.areaOutputUnit,
-   dom.volumeInputVal, dom.volumeInputUnit, dom.volumeRatioSelect, dom.volumeOutputUnit].forEach(el => {
-    if (el) el.addEventListener('input', calculateAreaVolume);
-    if (el) el.addEventListener('change', calculateAreaVolume);
-  });
+    // Keyboard Global Shortcuts
+    document.addEventListener('keydown', (e) => {
+      const activeEl = document.activeElement;
+      const isInputFocused = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT' || activeEl.tagName === 'TEXTAREA');
 
-  if (dom.btnCopyArea) {
-    dom.btnCopyArea.addEventListener('click', () => {
-      const text = `${dom.areaResultVal?.textContent} ${state.areaOutputUnit}`;
-      copyToClipboard(text);
-    });
-  }
-  if (dom.btnCopyVolume) {
-    dom.btnCopyVolume.addEventListener('click', () => {
-      const text = `${dom.volumeResultVal?.textContent} ${state.volumeOutputUnit}`;
-      copyToClipboard(text);
-    });
-  }
-
-  // Furniture Scaling Search & Categories
-  if (dom.furnitureSearchInput) {
-    dom.furnitureSearchInput.addEventListener('input', (e) => {
-      state.furnitureSearchQuery = e.target.value;
-      if (dom.furnitureSearchClear) {
-        dom.furnitureSearchClear.style.display = state.furnitureSearchQuery ? 'block' : 'none';
-      }
-      renderFurnitureGrid();
-    });
-  }
-
-  if (dom.furnitureSearchClear) {
-    dom.furnitureSearchClear.addEventListener('click', () => {
-      if (dom.furnitureSearchInput) dom.furnitureSearchInput.value = '';
-      state.furnitureSearchQuery = '';
-      dom.furnitureSearchClear.style.display = 'none';
-      renderFurnitureGrid();
-    });
-  }
-
-  dom.furnitureCategoryTabs.forEach(btn => {
-    btn.addEventListener('click', () => {
-      dom.furnitureCategoryTabs.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      state.furnitureActiveCategory = btn.dataset.category;
-      AudioService.playTick();
-      renderFurnitureGrid();
-    });
-  });
-
-  if (dom.furnitureScaleSelect) {
-    dom.furnitureScaleSelect.addEventListener('change', () => {
-      renderFurnitureGrid();
-      calculateCustomFurniture();
-    });
-  }
-  if (dom.furniturePaperUnitSelect) {
-    dom.furniturePaperUnitSelect.addEventListener('change', () => {
-      renderFurnitureGrid();
-      calculateCustomFurniture();
-    });
-  }
-
-  // Custom Furniture Inputs
-  [dom.customFurnWInput, dom.customFurnDInput, dom.customFurnHInput, dom.customFurnUnitSelect].forEach(el => {
-    if (el) el.addEventListener('input', calculateCustomFurniture);
-    if (el) el.addEventListener('change', calculateCustomFurniture);
-  });
-
-  if (dom.btnCopyCustomFurn) {
-    dom.btnCopyCustomFurn.addEventListener('click', () => {
-      const text = `${dom.customFurnPaperW?.textContent} × ${dom.customFurnPaperD?.textContent}`;
-      copyToClipboard(text);
-    });
-  }
-
-  if (dom.btnSendCustomFurn) {
-    dom.btnSendCustomFurn.addEventListener('click', () => {
-      sendDimensionToConverter(state.customFurnW, state.customFurnUnit);
-    });
-  }
-
-  // Reference Chart
-  if (dom.refChartScaleSelect) {
-    dom.refChartScaleSelect.addEventListener('change', renderReferenceChart);
-  }
-  if (dom.btnPrintChart) {
-    dom.btnPrintChart.addEventListener('click', () => {
-      window.print();
-    });
-  }
-
-  // Keyboard Shortcuts
-  window.addEventListener('keydown', (e) => {
-    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+      // Esc closes drawers/modals
       if (e.key === 'Escape') {
-        document.activeElement.blur();
+        if (dom.historyDrawer?.classList.contains('open')) toggleHistoryDrawer();
+        if (dom.shortcutsModal?.classList.contains('open')) {
+          dom.shortcutsModal.classList.remove('open');
+          dom.modalBackdrop?.classList.remove('open');
+        }
+        if (activeEl && activeEl.blur) activeEl.blur();
+        return;
       }
-      return;
-    }
 
-    if (e.key.toLowerCase() === 's') {
-      e.preventDefault();
-      if (dom.swapDirectionBtn) dom.swapDirectionBtn.click();
-    } else if (e.key === '1') {
-      switchMode('converter');
-    } else if (e.key === '2') {
-      switchMode('rescale');
-    } else if (e.key === '3') {
-      switchMode('detect');
-    } else if (e.key === '4') {
-      switchMode('area-volume');
-    } else if (e.key === '5') {
-      switchMode('furniture');
-    } else if (e.key === '6') {
-      switchMode('reference');
-    } else if (e.key.toLowerCase() === 'h') {
-      toggleHistoryDrawer();
-    } else if (e.key === '?') {
-      if (dom.shortcutsHelpBtn) dom.shortcutsHelpBtn.click();
-    } else if (e.key === 'Escape') {
-      if (dom.shortcutsModal) dom.shortcutsModal.classList.remove('open');
-      if (dom.modalBackdrop) dom.modalBackdrop.classList.remove('open');
-      if (dom.historyDrawer) dom.historyDrawer.classList.remove('open');
-      if (dom.historyOverlay) dom.historyOverlay.classList.remove('open');
-    }
-  });
+      // If user is focused inside an input field, do not hijack letter shortcuts
+      if (isInputFocused) return;
+
+      if (e.key === '1') { e.preventDefault(); switchMode('converter'); }
+      else if (e.key === '2') { e.preventDefault(); switchMode('rescale'); }
+      else if (e.key === '3') { e.preventDefault(); switchMode('detector'); }
+      else if (e.key === '4') { e.preventDefault(); switchMode('area_volume'); }
+      else if (e.key === '5') { e.preventDefault(); switchMode('furniture'); }
+      else if (e.key === '6') { e.preventDefault(); switchMode('reference'); }
+      else if (e.key === 's' || e.key === 'S') { e.preventDefault(); swapDirection(); }
+      else if (e.key === 'h' || e.key === 'H') { e.preventDefault(); toggleHistoryDrawer(); }
+      else if (e.key === '?') {
+        e.preventDefault();
+        dom.shortcutsModal?.classList.add('open');
+        dom.modalBackdrop?.classList.add('open');
+      }
+    });
+  }
+
+  function downloadFile(content, fileName, contentType) {
+    const a = document.createElement('a');
+    const file = new Blob([content], { type: contentType });
+    a.href = URL.createObjectURL(file);
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 15. Initial Bootstrapping
+  // ---------------------------------------------------------------------------
+  applyTheme(state.activeTheme);
+  updateSoundUI();
+  populateUnitSelects();
+  renderPresetChips(state.selectedCategory);
+  attachEventListeners();
+  switchMode(state.currentMode);
 }
 
 
