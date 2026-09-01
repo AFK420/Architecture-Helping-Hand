@@ -7,7 +7,7 @@
   "scripts": {
     "build": "node scripts/build.js",
     "test": "node tests/run-all.js",
-    "start": "npx serve -l 3000 ."
+    "start": "npx serve -l 3500 ."
   },
   "keywords": [
     "architecture",

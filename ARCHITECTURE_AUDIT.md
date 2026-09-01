@@ -112,7 +112,7 @@ The test suite consists of **9 automated test suites** containing **295 exact as
 
 The application is verified to run out of the box in modern web browsers under both protocols:
 1. **Local File Protocol (`file:///e:/Scaler/index.html`)**: Fully functional with zero web server requirement.
-2. **HTTP Server (`http://localhost:3000`)**: Fully functional.
+2. **HTTP Server (`http://localhost:3500`)**: Fully functional.
 
 ---
 

@@ -351,7 +351,7 @@ Simply double-click `index.html` or open it with any web browser (Chrome, Edge, 
 npm start
 
 # Or using Python
-python -m http.server 3000
+python -m http.server 3500
 ```
 
 ### 3. Run Automated Tests
