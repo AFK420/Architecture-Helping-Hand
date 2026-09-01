@@ -5,7 +5,8 @@
   "type": "module",
   "main": "index.html",
   "scripts": {
-    "test": "node tests/converter.test.js",
+    "build": "node scripts/build.js",
+    "test": "node tests/run-all.js",
     "start": "npx serve -l 3000 ."
   },
   "keywords": [

@@ -1,0 +1,82 @@
+/**
+ * Architecture Helping Hand - Zero-Dependency Build Script
+ * Compiles modular ES6 files in src/ into the standalone browser bundle js/app.js.
+ */
+
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootDir = path.resolve(__dirname, '..');
+
+const srcDir = path.join(rootDir, 'src');
+const distFile = path.join(rootDir, 'js', 'app.js');
+
+function stripImportsAndExports(code) {
+  return code
+    .replace(/^\s*import\s+.*?from\s+['"].*?['"];?\s*$/gm, '')
+    .replace(/^\s*import\s+['"].*?['"];?\s*$/gm, '')
+    .replace(/^\s*export\s+default\s+/gm, '')
+    .replace(/^\s*export\s+(const|let|var|function|class)\s+/gm, '$1 ')
+    .replace(/^\s*export\s*\{[^}]*\};?\s*$/gm, '');
+}
+
+function build() {
+  console.log('📦 Building Architecture Helping Hand standalone bundle...');
+
+  const modules = [
+    { name: 'Units', file: path.join(srcDir, 'core', 'units.js') },
+    { name: 'Presets', file: path.join(srcDir, 'core', 'presets.js') },
+    { name: 'Formatter', file: path.join(srcDir, 'core', 'formatter.js') },
+    { name: 'Parser', file: path.join(srcDir, 'core', 'parser.js') },
+    { name: 'Calculator', file: path.join(srcDir, 'core', 'calculator.js') },
+    { name: 'Furniture', file: path.join(srcDir, 'core', 'furniture.js') },
+    { name: 'Storage', file: path.join(srcDir, 'services', 'storage.js') },
+    { name: 'Audio', file: path.join(srcDir, 'services', 'audio.js') },
+    { name: 'History', file: path.join(srcDir, 'services', 'history.js') },
+    { name: 'Visualizer', file: path.join(srcDir, 'ui', 'visualizer.js') },
+    { name: 'App', file: path.join(srcDir, 'ui', 'app.js') }
+  ];
+
+  let bundleContent = `/**
+ * Architecture Helping Hand - Standalone Bundle v2.0.0
+ * Compiled automatically from src/ modules. Works with file:/// and http:// protocols.
+ * Generated on: ${new Date().toISOString()}
+ */
+
+(function() {
+  'use strict';
+
+`;
+
+  for (const mod of modules) {
+    if (!fs.existsSync(mod.file)) {
+      throw new Error(`Missing source file: ${mod.file}`);
+    }
+    const raw = fs.readFileSync(mod.file, 'utf-8');
+    const cleaned = stripImportsAndExports(raw);
+    bundleContent += `  // =========================================================================\n`;
+    bundleContent += `  // MODULE: ${mod.name}\n`;
+    bundleContent += `  // =========================================================================\n\n`;
+    bundleContent += cleaned + '\n\n';
+  }
+
+  bundleContent += `
+  // Auto-initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeApp);
+  } else {
+    initializeApp();
+  }
+
+})();
+`;
+
+  fs.mkdirSync(path.dirname(distFile), { recursive: true });
+  fs.writeFileSync(distFile, bundleContent, 'utf-8');
+  console.log(`✅ Built successfully to ${distFile} (${(bundleContent.length / 1024).toFixed(1)} KB)`);
+}
+
+build();
