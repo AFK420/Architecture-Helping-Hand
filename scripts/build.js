@@ -16,11 +16,11 @@ const distFile = path.join(rootDir, 'js', 'app.js');
 
 export function stripImportsAndExports(code) {
   return code
-    .replace(/^\s*import\s+.*?from\s+['"].*?['"];?\s*$/gm, '')
-    .replace(/^\s*import\s+['"].*?['"];?\s*$/gm, '')
-    .replace(/^\s*export\s+default\s+/gm, '')
-    .replace(/^\s*export\s+(const|let|var|function|class)\s+/gm, '$1 ')
-    .replace(/^\s*export\s*\{[^}]*\};?\s*$/gm, '');
+    .replace(/import\s+[\s\S]*?from\s+['"][^'"]+['"];?/g, '')
+    .replace(/import\s+['"][^'"]+['"];?/g, '')
+    .replace(/export\s+default\s+/g, '')
+    .replace(/export\s+(const|let|var|function|class)\s+/g, '$1 ')
+    .replace(/export\s*\{[\s\S]*?\};?/g, '');
 }
 
 export function generateBundleContent() {

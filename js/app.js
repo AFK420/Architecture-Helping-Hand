@@ -14,6 +14,7 @@
  * Architecture Helping Hand - Canonical Unit System Definitions
  * Standard conversion factors normalized to base SI units (Meters, Square Meters, Cubic Meters).
  */
+
 const UNITS = Object.freeze({
   // Metric Length Units (Base: Meters)
   mm: Object.freeze({ key: 'mm', name: 'Millimeters (mm)', symbol: 'mm', toMeters: 0.001, type: 'metric', dimension: 'length' }),
@@ -28,6 +29,7 @@ const UNITS = Object.freeze({
   yd: Object.freeze({ key: 'yd', name: 'Yards (yd)', symbol: 'yd', toMeters: 0.9144, type: 'imperial', dimension: 'length' }),
   mi: Object.freeze({ key: 'mi', name: 'Miles (mi)', symbol: 'mi', toMeters: 1609.344, type: 'imperial', dimension: 'length' })
 });
+
 const AREA_UNITS = Object.freeze({
   mm2:   Object.freeze({ key: 'mm2',   name: 'Square Millimeters (mm²)', symbol: 'mm²', toSqMeters: 0.000001, type: 'metric', dimension: 'area' }),
   cm2:   Object.freeze({ key: 'cm2',   name: 'Square Centimeters (cm²)', symbol: 'cm²', toSqMeters: 0.0001, type: 'metric', dimension: 'area' }),
@@ -39,6 +41,7 @@ const AREA_UNITS = Object.freeze({
   sq_yd: Object.freeze({ key: 'sq_yd', name: 'Square Yards (sq yd)', symbol: 'sq yd', toSqMeters: 0.83612736, type: 'imperial', dimension: 'area' }),
   acre:  Object.freeze({ key: 'acre',  name: 'Acres (ac)', symbol: 'ac', toSqMeters: 4046.8564224, type: 'imperial', dimension: 'area' })
 });
+
 const VOLUME_UNITS = Object.freeze({
   mm3:    Object.freeze({ key: 'mm3',    name: 'Cubic Millimeters (mm³)', symbol: 'mm³', toCuMeters: 1e-9, type: 'metric', dimension: 'volume' }),
   cm3:    Object.freeze({ key: 'cm3',    name: 'Cubic Centimeters (cm³ / cc)', symbol: 'cm³', toCuMeters: 1e-6, type: 'metric', dimension: 'volume' }),
@@ -118,6 +121,7 @@ function convertUnit(value, fromKey, toKey) {
 /**
  * Architecture Helping Hand - Scale Presets & Real-World Reference Standards
  */
+
 const SCALE_PRESETS = Object.freeze([
   // Metric Detail Scales
   { id: '1:1', name: '1:1 (Full Size)', category: 'detail', ratio: 1, type: 'metric', description: 'True size, 1:1 prototypes and components' },
@@ -155,6 +159,7 @@ const SCALE_PRESETS = Object.freeze([
   { id: '1-1/2"=1\'', name: '1-1/2" = 1\'-0" (1:8)', category: 'imperial', ratio: 8, type: 'imperial', description: 'Window, door, and millwork details' },
   { id: '3"=1\'', name: '3" = 1\'-0" (1:4)', category: 'imperial', ratio: 4, type: 'imperial', description: 'Full architectural detail drawings' }
 ]);
+
 const REAL_WORLD_REFERENCES = Object.freeze([
   { minMeters: 0.0, maxMeters: 0.25, name: 'Architectural Pen / Brick', icon: 'pen', defaultLength: 0.21, description: 'Standard drawing instrument or brick thickness (~215mm)' },
   { minMeters: 0.25, maxMeters: 0.75, name: 'Desk Chair / T-Square', icon: 'chair', defaultLength: 0.60, description: 'Standard desk chair width or drawing ruler (~60cm)' },
@@ -275,6 +280,8 @@ function formatFeetInches(totalInches, precision = 16) {
  * Architecture Helping Hand - Unified Input Parser
  * Robust parsing of architectural notations, fractions, feet-inches, decimals, and attached units.
  */
+
+
 
 /**
  * Normalized Parse Result Structure
@@ -450,6 +457,8 @@ function parseArchitecturalInput(inputStr) {
  * Architecture Helping Hand - Centralized Calculation Engine
  * Pure mathematical scaling, rescaling, scale detection, area, and volume algorithms.
  */
+
+
 
 
 
@@ -754,6 +763,8 @@ function getAllUnitEquivalents(meters) {
  */
 
 
+
+
 /**
  * Calculate geometric properties of an architectural rectangle (room, wall, floor slab)
  * @param {Object} params
@@ -909,6 +920,11 @@ function calcPolygon({ vertices, unitKey = 'm' } = {}) {
 /**
  * Architecture Helping Hand - Furniture & Fixtures Database & Visualizer
  */
+
+
+
+
+
 const FURNITURE_DATABASE = Object.freeze([
   // LIVING ROOM
   { id: 'sofa-3p', name: '3-Seater Sofa', category: 'living', wCm: 220, dCm: 90, hCm: 85, desc: 'Standard 3-person living room sofa', type: 'sofa' },
@@ -1050,6 +1066,7 @@ function filterFurnitureCatalog(items, query = '', category = 'all') {
  */
 
 const memoryStore = new Map();
+
 const StorageService = {
   getItem(key) {
     try {
@@ -1102,6 +1119,8 @@ const StorageService = {
  * Zero-asset synthesized acoustic feedback using the HTML5 Web Audio API.
  */
 
+
+
 let audioCtx = null;
 let isSoundEnabled = true;
 
@@ -1127,6 +1146,7 @@ function getAudioContext() {
   }
   return audioCtx;
 }
+
 const AudioService = {
   isEnabled() {
     return isSoundEnabled;
@@ -1255,6 +1275,9 @@ const AudioService = {
 /**
  * Architecture Helping Hand - History & Logging Service
  */
+
+
+
 const HISTORY_STORAGE_KEY = 'archiscale_calculation_history';
 let historyList = [];
 
@@ -1275,6 +1298,7 @@ function loadHistoryFromStorage() {
 }
 
 historyList = loadHistoryFromStorage();
+
 const HistoryService = {
   getHistory() {
     return [...historyList];
@@ -1357,6 +1381,10 @@ const HistoryService = {
 /**
  * Architecture Helping Hand - Proportional Visualizer & Graphic Scale Bar Renderer
  */
+
+
+
+
 function getReferenceSilhouette(iconType) {
   switch (iconType) {
     case 'pen':
@@ -1444,6 +1472,7 @@ function getReferenceSilhouette(iconType) {
       `;
   }
 }
+
 function renderGraphicScaleBar(scaleRatio, realMeters = 5) {
   let divisionMeters = 1;
   if (scaleRatio <= 10) divisionMeters = 0.1;
@@ -1481,6 +1510,7 @@ function renderGraphicScaleBar(scaleRatio, realMeters = 5) {
     </div>
   `;
 }
+
 function updateVisualization(params = {}) {
   const {
     containerId = 'visualizer-container',
@@ -1555,21 +1585,14 @@ function updateVisualization(params = {}) {
 
 
 
-import {
-  scaleDimension,
-  drawingToReal,
-  realToDrawing,
-  rescaleDrawing,
-  detectScale,
-  scaleArea,
-  scaleVolume,
-  getAllUnitEquivalents
-} from '../core/calculator.js';
-import {
-  FURNITURE_DATABASE,
-  getScaledFurnitureDimensions,
-  filterFurnitureCatalog
-} from '../core/furniture.js';
+
+
+
+
+
+
+
+
 function initializeApp() {
   const state = {
     currentMode: 'converter',

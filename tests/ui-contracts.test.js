@@ -172,10 +172,26 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
   }
 }
 
-// 4. Verify Script Bundle Inclusions
+// 4. Verify Script Bundle Inclusions & Cleanliness
 {
-  assert(htmlContent.includes('<script src="js/app.js"></script>'), 'index.html includes compiled js/app.js');
+  assert(htmlContent.includes('src="js/app.js'), 'index.html includes compiled js/app.js');
   assert(!htmlContent.includes('react') && !htmlContent.includes('vue'), 'index.html is 100% zero-framework vanilla HTML');
+
+  const bundlePath = path.join(rootDir, 'js', 'app.js');
+  assert(fs.existsSync(bundlePath), 'js/app.js bundle exists');
+
+  const bundleCode = fs.readFileSync(bundlePath, 'utf-8');
+  assert(!/^\s*import\s+/m.test(bundleCode), 'js/app.js contains no unstripped import statements');
+  assert(!/^\s*export\s+/m.test(bundleCode), 'js/app.js contains no unstripped export statements');
+
+  let syntaxValid = false;
+  try {
+    new Function('window', 'document', 'navigator', 'localStorage', bundleCode);
+    syntaxValid = true;
+  } catch (err) {
+    console.error(`Syntax Error in bundle: ${err.message}`);
+  }
+  assert(syntaxValid, 'js/app.js parses with zero syntax errors');
 }
 
 console.log(`Summary: ${passed} passed, ${failed} failed.\n`);
