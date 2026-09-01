@@ -222,15 +222,15 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
-    id: 'future-batch-cad',
+    id: 'nav-batch-cad',
     title: 'Batch CAD Dimension Converter',
-    description: 'Bulk scale conversion for tables, schedules, and raw CAD dimension lists',
-    category: 'Upcoming Tool',
+    description: 'Bulk scale & unit conversion for tables, schedules, and raw CAD dimension lists',
+    category: 'Navigation',
     icon: '⚡',
-    keywords: ['batch', 'cad', 'bulk', 'multi-scale', 'schedule', 'table', 'phase 2.5'],
-    actionType: 'placeholder',
-    available: false,
-    badge: 'Phase 2.5'
+    keywords: ['batch', 'cad', 'bulk', 'multi-scale', 'schedule', 'table', 'mode 12', 'b'],
+    shortcut: 'B',
+    actionType: 'navigation',
+    available: true
   },
   {
     id: 'future-stair-calc',

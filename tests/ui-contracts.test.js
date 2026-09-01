@@ -34,7 +34,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
 // 1. Verify Mode Navigation Targets in HTML
 {
-  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard'];
+  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad'];
   
   for (const mode of expectedModes) {
     const hasTab = htmlContent.includes(`data-mode="${mode}"`);
@@ -338,6 +338,46 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'multiscale-cad-handoff-btn',
     'chains-cad-handoff-btn',
 
+    // Mode 12: Batch CAD Conversion IDs
+    'batch-state-badge',
+    'batch-quick-chips',
+    'batch-delimiter-badge',
+    'batch-paste-input',
+    'batch-mode-select',
+    'batch-source-scale-group',
+    'batch-source-scale-select',
+    'batch-target-scale-group',
+    'batch-target-scale-select',
+    'batch-source-unit-select',
+    'batch-target-unit-select',
+    'batch-precision-select',
+    'batch-delimiter-select',
+    'btn-run-batch-cad',
+    'batch-result-panel',
+    'batch-metric-total',
+    'batch-metric-valid',
+    'batch-metric-invalid',
+    'batch-filter-pills',
+    'filter-count-all',
+    'filter-count-valid',
+    'filter-count-invalid',
+    'filter-count-selected',
+    'batch-select-all-btn',
+    'batch-clear-selection-btn',
+    'batch-table',
+    'batch-table-body',
+    'batch-master-checkbox',
+    'batch-empty-state',
+    'batch-load-sample-btn',
+    'batch-copy-results-btn',
+    'batch-copy-raw-btn',
+    'batch-copy-tsv-btn',
+    'batch-open-cad-btn',
+    'batch-send-workspace-btn',
+    'batch-compare-multiscale-btn',
+    'batch-create-chain-btn',
+    'batch-save-journal-btn',
+
     // Workflow Pipeline & Mathematical Explanation IDs
     'converter-math-formula',
     'converter-flow-from',
@@ -380,7 +420,8 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'btn-run-expression',
     'btn-run-multiscale',
     'btn-run-chains',
-    'btn-run-cad-clipboard'
+    'btn-run-cad-clipboard',
+    'btn-run-batch-cad'
   ];
 
   for (const rBtn of runButtons) {

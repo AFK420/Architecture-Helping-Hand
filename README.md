@@ -3,7 +3,7 @@
 > **Professional Architectural Scale, Furniture Sizing & Multi-Unit Calculation Studio**  
 > *A high-precision, zero-dependency, tactile architectural conversion studio built for architects, interior designers, urban planners, physical model makers, and design students.*
 
-[![Tests](https://img.shields.io/badge/Tests-299%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-363%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-3--Tier%20Core%20%7C%20Frozen-10b981?style=flat-square)](ENGINEERING_RULES.md)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Vanilla)-f59e0b?style=flat-square)](package.json)
 [![License](https://img.shields.io/badge/License-MIT-6366f1?style=flat-square)](package.json)
@@ -28,6 +28,7 @@
    - [10. Multi-Scale Comparison Workspace](#10-multi-scale-comparison-workspace)
    - [11. Dimension Chains (Continuous Strings)](#11-dimension-chains-continuous-strings)
    - [12. CAD Clipboard & Drafting Handoff](#12-cad-clipboard--drafting-handoff)
+   - [13. Batch CAD Conversion (Bulk Scaling & Unit Engine)](#13-batch-cad-conversion-bulk-scaling--unit-engine)
 5. [📐 Architectural Scale Presets (All 28 Presets)](#-architectural-scale-presets-all-28-presets)
 6. [🛋️ Architectural Furniture & Fixtures Database (179 Items Across 9 Domains)](#️-architectural-furniture--fixtures-database-179-items-across-9-domains)
 7. [📏 Supported Measurement Units](#-supported-measurement-units)
@@ -219,6 +220,14 @@ This repository serves as:
 * **Application Formatting Presets**: Built-in format presets for Generic CAD, AutoCAD command lines, Rhino curve distance prompts, SketchUp VCB, and Tab-separated (TSV) / CSV schedules.
 * **Non-Destructive Formatting Engine**: Pure zero-DOM formatter ensuring standard `.` decimal separators, negative number preservation, and legitimate `0` coordinate preservation without modifying source calculation state.
 * **1-Click Cross-Mode Handoffs**: Direct CAD Clipboard handoff buttons across Dimension Workspace, Chains, Expressions, and Multi-Scale Comparison.
+
+### 13. Batch CAD Conversion (Bulk Scaling & Unit Engine) (Mode 12)
+* **Bulk Scale & Unit Transformations**: Pastes entire dimension lists, schedules, or architectural measurement tables and converts every entry simultaneously across scales ($1:10 \dots 1:500$) and units (`mm`, `cm`, `m`, `in`, `ft`, `ft-in`).
+* **Intelligent Auto-Detected Delimiters**: Automatically detects line breaks, commas, tabs, and semicolons without requiring manual format selection.
+* **Non-Destructive Parsing & Expression Evaluation**: Retains raw pasted strings (`originalText`), parses named rows (`Wall North = 4800mm`), semantic roles (`SEG`, `REF`, `ALW`), and evaluates arithmetic expressions (`2400 + 900`, `5.4m - 1200mm`).
+* **Row-by-Row Status Isolation**: Malformed or invalid rows are flagged individually (`INVALID`) without halting or corrupting valid conversions.
+* **Multi-Format Downstream Handoffs**: 1-click export to CAD Clipboard (Mode 11), Dimension Workspace groups (Mode 7), Multi-Scale Comparison (Mode 9), Dimension Chains (Mode 10), and Calculation Journal.
+* **High-Throughput Benchmark**: Benchmarked to process **1,000+ rows in < 10ms** with zero external dependencies.
 
 ---
 

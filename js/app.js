@@ -2491,15 +2491,15 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
-    id: 'future-batch-cad',
+    id: 'nav-batch-cad',
     title: 'Batch CAD Dimension Converter',
-    description: 'Bulk scale conversion for tables, schedules, and raw CAD dimension lists',
-    category: 'Upcoming Tool',
+    description: 'Bulk scale & unit conversion for tables, schedules, and raw CAD dimension lists',
+    category: 'Navigation',
     icon: '⚡',
-    keywords: ['batch', 'cad', 'bulk', 'multi-scale', 'schedule', 'table', 'phase 2.5'],
-    actionType: 'placeholder',
-    available: false,
-    badge: 'Phase 2.5'
+    keywords: ['batch', 'cad', 'bulk', 'multi-scale', 'schedule', 'table', 'mode 12', 'b'],
+    shortcut: 'B',
+    actionType: 'navigation',
+    available: true
   },
   {
     id: 'future-stair-calc',
@@ -3664,6 +3664,7 @@ function getFurniturePlanSVG(item) {
 
 
 
+
 function initializeApp() {
   const state = {
     currentMode: 'converter',
@@ -3794,6 +3795,37 @@ function initializeApp() {
         filterScope: 'all',
         manualInput: '',
         lastFormattedText: ''
+      };
+    })(),
+
+    // Mode 12: Batch CAD Conversion
+    batchCad: (() => {
+      try {
+        const stored = StorageService.getItem(BATCH_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && typeof parsed === 'object') {
+            if (Array.isArray(parsed.selectedIds)) {
+              parsed.selectedIds = new Set(parsed.selectedIds);
+            } else {
+              parsed.selectedIds = new Set();
+            }
+            return parsed;
+          }
+        }
+      } catch (e) {}
+      return {
+        rawInput: 'Wall North = 4800mm\nSEG Wall South = 3200mm\nWindow 1 = 1800 + 300\nALW Tolerance = 20mm\nDoor Entrance = 900\n2.4m\n7\' 6"',
+        mode: 'real_to_drawing',
+        sourceUnit: 'mm',
+        sourceScale: 1,
+        targetUnit: 'mm',
+        targetScale: 50,
+        precision: 2,
+        delimiter: 'auto',
+        activeFilter: 'all',
+        selectedIds: new Set(),
+        lastResult: null
       };
     })(),
 
@@ -4130,7 +4162,47 @@ function initializeApp() {
     wsOpenCadBtn: document.getElementById('workspace-open-cad-btn'),
     exprCadHandoffBtn: document.getElementById('expression-cad-handoff-btn'),
     msCadHandoffBtn: document.getElementById('multiscale-cad-handoff-btn'),
-    chainsCadHandoffBtn: document.getElementById('chains-cad-handoff-btn')
+    chainsCadHandoffBtn: document.getElementById('chains-cad-handoff-btn'),
+
+    // Mode 12: Batch CAD Conversion
+    batchStateBadge: document.getElementById('batch-state-badge'),
+    batchQuickChips: document.getElementById('batch-quick-chips'),
+    batchDelimiterBadge: document.getElementById('batch-delimiter-badge'),
+    batchPasteInput: document.getElementById('batch-paste-input'),
+    batchModeSelect: document.getElementById('batch-mode-select'),
+    batchSourceScaleGroup: document.getElementById('batch-source-scale-group'),
+    batchSourceScaleSelect: document.getElementById('batch-source-scale-select'),
+    batchTargetScaleGroup: document.getElementById('batch-target-scale-group'),
+    batchTargetScaleSelect: document.getElementById('batch-target-scale-select'),
+    batchSourceUnitSelect: document.getElementById('batch-source-unit-select'),
+    batchTargetUnitSelect: document.getElementById('batch-target-unit-select'),
+    batchPrecisionSelect: document.getElementById('batch-precision-select'),
+    batchDelimiterSelect: document.getElementById('batch-delimiter-select'),
+    btnRunBatchCad: document.getElementById('btn-run-batch-cad'),
+    batchResultPanel: document.getElementById('batch-result-panel'),
+    batchMetricTotal: document.getElementById('batch-metric-total'),
+    batchMetricValid: document.getElementById('batch-metric-valid'),
+    batchMetricInvalid: document.getElementById('batch-metric-invalid'),
+    batchFilterPills: document.getElementById('batch-filter-pills'),
+    filterCountAll: document.getElementById('filter-count-all'),
+    filterCountValid: document.getElementById('filter-count-valid'),
+    filterCountInvalid: document.getElementById('filter-count-invalid'),
+    filterCountSelected: document.getElementById('filter-count-selected'),
+    batchSelectAllBtn: document.getElementById('batch-select-all-btn'),
+    batchClearSelectionBtn: document.getElementById('batch-clear-selection-btn'),
+    batchTable: document.getElementById('batch-table'),
+    batchTableBody: document.getElementById('batch-table-body'),
+    batchMasterCheckbox: document.getElementById('batch-master-checkbox'),
+    batchEmptyState: document.getElementById('batch-empty-state'),
+    batchLoadSampleBtn: document.getElementById('batch-load-sample-btn'),
+    batchCopyResultsBtn: document.getElementById('batch-copy-results-btn'),
+    batchCopyRawBtn: document.getElementById('batch-copy-raw-btn'),
+    batchCopyTsvBtn: document.getElementById('batch-copy-tsv-btn'),
+    batchOpenCadBtn: document.getElementById('batch-open-cad-btn'),
+    batchSendWorkspaceBtn: document.getElementById('batch-send-workspace-btn'),
+    batchCompareMultiscaleBtn: document.getElementById('batch-compare-multiscale-btn'),
+    batchCreateChainBtn: document.getElementById('batch-create-chain-btn'),
+    batchSaveJournalBtn: document.getElementById('batch-save-journal-btn')
   };
 
   // ---------------------------------------------------------------------------
@@ -4305,6 +4377,9 @@ function initializeApp() {
     }
     else if (targetMode === 'cad_clipboard') {
       renderCadClipboard();
+    }
+    else if (targetMode === 'batch_cad') {
+      parseAndConvertBatch();
     }
   }
 
@@ -6679,6 +6754,9 @@ function initializeApp() {
       case 'nav-cad-clipboard':
         switchMode('cad_clipboard');
         break;
+      case 'nav-batch-cad':
+        switchMode('batch_cad');
+        break;
       case 'nav-history':
         toggleHistoryDrawer();
         break;
@@ -7631,6 +7709,378 @@ function initializeApp() {
     renderCadClipboard(true);
     AudioService.playTick();
     showToast(`Loaded ${sourceKey.toUpperCase()} data into CAD Clipboard`);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 13h. Mode 12: Batch CAD Conversion Controller
+  // ---------------------------------------------------------------------------
+  function saveBatchCadSettings() {
+    try {
+      const serializable = {
+        ...state.batchCad,
+        selectedIds: Array.from(state.batchCad.selectedIds)
+      };
+      StorageService.setItem(BATCH_STORAGE_KEY, JSON.stringify(serializable));
+    } catch (e) {}
+  }
+
+  function updateBatchModeVisibility() {
+    const mode = dom.batchModeSelect?.value || state.batchCad.mode;
+    if (dom.batchSourceScaleGroup) {
+      dom.batchSourceScaleGroup.style.display = (mode === 'drawing_to_real' || mode === 'scale_to_scale') ? 'block' : 'none';
+    }
+    if (dom.batchTargetScaleGroup) {
+      dom.batchTargetScaleGroup.style.display = (mode === 'real_to_drawing' || mode === 'scale_to_scale') ? 'block' : 'none';
+    }
+  }
+
+  function applyBatchPreset(presetKey) {
+    const preset = BATCH_PRESETS[presetKey];
+    if (!preset) return;
+
+    state.batchCad.mode = preset.mode;
+    state.batchCad.sourceUnit = preset.sourceUnit;
+    state.batchCad.sourceScale = preset.sourceScale;
+    state.batchCad.targetUnit = preset.targetUnit;
+    state.batchCad.targetScale = preset.targetScale;
+    state.batchCad.precision = preset.precision;
+
+    // Sync dropdowns
+    if (dom.batchModeSelect) dom.batchModeSelect.value = preset.mode;
+    if (dom.batchSourceUnitSelect) dom.batchSourceUnitSelect.value = preset.sourceUnit;
+    if (dom.batchSourceScaleSelect) dom.batchSourceScaleSelect.value = String(preset.sourceScale);
+    if (dom.batchTargetUnitSelect) dom.batchTargetUnitSelect.value = preset.targetUnit;
+    if (dom.batchTargetScaleSelect) dom.batchTargetScaleSelect.value = String(preset.targetScale);
+    if (dom.batchPrecisionSelect) dom.batchPrecisionSelect.value = String(preset.precision);
+
+    // Sync active chip
+    dom.batchQuickChips?.querySelectorAll('.cad-preset-chip').forEach(chip => {
+      chip.classList.toggle('active', chip.dataset.preset === presetKey);
+    });
+
+    updateBatchModeVisibility();
+    parseAndConvertBatch(true);
+    AudioService.playTick();
+    showToast(`Loaded preset "${preset.name}"`);
+  }
+
+  function parseAndConvertBatch(isExplicitRun = false) {
+    const batch = state.batchCad;
+
+    // Sync parameters from DOM
+    if (dom.batchPasteInput) batch.rawInput = dom.batchPasteInput.value;
+    if (dom.batchModeSelect) batch.mode = dom.batchModeSelect.value || 'real_to_drawing';
+    if (dom.batchSourceUnitSelect) batch.sourceUnit = dom.batchSourceUnitSelect.value || 'mm';
+    if (dom.batchSourceScaleSelect) batch.sourceScale = parseInt(dom.batchSourceScaleSelect.value, 10) || 50;
+    if (dom.batchTargetUnitSelect) batch.targetUnit = dom.batchTargetUnitSelect.value || 'mm';
+    if (dom.batchTargetScaleSelect) batch.targetScale = parseInt(dom.batchTargetScaleSelect.value, 10) || 50;
+    if (dom.batchPrecisionSelect) batch.precision = parseInt(dom.batchPrecisionSelect.value, 10) || 2;
+    if (dom.batchDelimiterSelect) batch.delimiter = dom.batchDelimiterSelect.value || 'auto';
+
+    updateBatchModeVisibility();
+
+    const raw = (batch.rawInput || '').trim();
+    if (!raw) {
+      batch.lastResult = { rows: [], summary: { totalRows: 0, validRows: 0, invalidRows: 0, convertedRows: 0 } };
+      renderBatchResults();
+      setUnifiedResultState({ toolPrefix: 'batch', status: 'ready' });
+      return;
+    }
+
+    const detected = detectBatchDelimiter(raw);
+    if (dom.batchDelimiterBadge) {
+      dom.batchDelimiterBadge.textContent = `FORMAT: ${detected.toUpperCase()}`;
+    }
+
+    const parsed = parseBatchInput(raw, {
+      delimiter: batch.delimiter,
+      defaultUnit: batch.sourceUnit,
+      defaultScale: batch.sourceScale
+    });
+
+    const converted = convertBatch(parsed.rows, {
+      mode: batch.mode,
+      sourceUnit: batch.sourceUnit,
+      sourceScale: batch.sourceScale,
+      targetUnit: batch.targetUnit,
+      targetScale: batch.targetScale,
+      precision: batch.precision
+    });
+
+    batch.lastResult = converted;
+
+    renderBatchResults();
+
+    setUnifiedResultState({
+      toolPrefix: 'batch',
+      status: converted.summary.invalidRows > 0 ? (converted.summary.validRows > 0 ? 'success' : 'error') : 'success'
+    });
+
+    saveBatchCadSettings();
+
+    if (isExplicitRun) {
+      AudioService.playTick();
+      showToast(`Batch converted ${converted.summary.validRows} of ${converted.summary.totalRows} rows`);
+    }
+  }
+
+  function renderBatchResults() {
+    const batch = state.batchCad;
+    const result = batch.lastResult || { rows: [], summary: { totalRows: 0, validRows: 0, invalidRows: 0, convertedRows: 0 } };
+    const rows = result.rows || [];
+    const summary = result.summary || { totalRows: 0, validRows: 0, invalidRows: 0, convertedRows: 0 };
+
+    // Update Summary Metrics
+    if (dom.batchMetricTotal) dom.batchMetricTotal.textContent = `${summary.totalRows} ${summary.totalRows === 1 ? 'ROW' : 'ROWS'}`;
+    if (dom.batchMetricValid) dom.batchMetricValid.textContent = `${summary.validRows} VALID`;
+    if (dom.batchMetricInvalid) {
+      dom.batchMetricInvalid.textContent = `${summary.invalidRows} INVALID`;
+      dom.batchMetricInvalid.style.display = summary.invalidRows > 0 ? 'inline-flex' : 'none';
+    }
+
+    // Update Filter Counts
+    const validCount = rows.filter(r => r.valid).length;
+    const invalidCount = rows.filter(r => !r.valid).length;
+    const selectedCount = rows.filter(r => batch.selectedIds.has(r.id)).length;
+
+    if (dom.filterCountAll) dom.filterCountAll.textContent = String(rows.length);
+    if (dom.filterCountValid) dom.filterCountValid.textContent = String(validCount);
+    if (dom.filterCountInvalid) dom.filterCountInvalid.textContent = String(invalidCount);
+    if (dom.filterCountSelected) dom.filterCountSelected.textContent = String(selectedCount);
+
+    // Empty State vs Table
+    if (rows.length === 0) {
+      if (dom.batchTable) dom.batchTable.style.display = 'none';
+      if (dom.batchEmptyState) dom.batchEmptyState.style.display = 'block';
+      if (dom.batchTableBody) dom.batchTableBody.innerHTML = '';
+      return;
+    }
+
+    if (dom.batchTable) dom.batchTable.style.display = 'table';
+    if (dom.batchEmptyState) dom.batchEmptyState.style.display = 'none';
+
+    // Filter Rows
+    const filteredRows = filterBatchRows(rows, batch.activeFilter, batch.selectedIds);
+
+    // Master Checkbox State
+    if (dom.batchMasterCheckbox) {
+      dom.batchMasterCheckbox.checked = rows.length > 0 && selectedCount === rows.length;
+      dom.batchMasterCheckbox.indeterminate = selectedCount > 0 && selectedCount < rows.length;
+    }
+
+    // Render Table Body via DocumentFragment for High Performance
+    if (dom.batchTableBody) {
+      const fragment = document.createDocumentFragment();
+
+      filteredRows.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.className = `batch-row ${row.valid ? '' : 'is-invalid'} ${batch.selectedIds.has(row.id) ? 'is-selected' : ''}`;
+        tr.dataset.id = row.id;
+
+        const roleTag = row.semanticRole === 'segment' ? 'SEG' : (row.semanticRole === 'allowance' ? 'ALW' : 'REF');
+        const roleBadgeClass = row.semanticRole === 'segment' ? 'badge-seg' : (row.semanticRole === 'allowance' ? 'badge-alw' : 'badge-ref');
+
+        tr.innerHTML = `
+          <td style="text-align: center;">
+            <input type="checkbox" class="batch-row-checkbox" data-id="${row.id}" ${batch.selectedIds.has(row.id) ? 'checked' : ''} aria-label="Select row ${row.index}" />
+          </td>
+          <td style="font-family: var(--font-family-mono); font-size: 0.75rem; color: var(--text-muted);">${row.index}</td>
+          <td style="font-weight: 600; color: var(--text-primary);">${escapeHTML(row.name)}</td>
+          <td><span class="type-badge ${roleBadgeClass}" style="font-size: 0.65rem;">${roleTag}</span></td>
+          <td style="font-family: var(--font-family-mono); font-size: 0.8rem; color: var(--text-secondary);">${escapeHTML(row.sourceFormatted)}</td>
+          <td style="font-family: var(--font-family-mono); font-size: 0.85rem; font-weight: 700; color: ${row.valid ? 'var(--accent-primary)' : 'var(--color-error, #ef4444)'};">${escapeHTML(row.targetFormatted)}</td>
+          <td style="text-align: center;">
+            <span class="batch-status-pill ${row.valid ? (row.status === 'UNCHANGED' ? 'unchanged' : 'valid') : 'invalid'}">
+              ${row.valid ? (row.status === 'UNCHANGED' ? 'UNCHANGED' : '✓ VALID') : '⚠ INVALID'}
+            </span>
+          </td>
+          <td style="text-align: right;">
+            <button type="button" class="chain-row-del-btn batch-delete-row-btn" data-id="${row.id}" title="Remove row">✕</button>
+          </td>
+        `;
+
+        fragment.appendChild(tr);
+      });
+
+      dom.batchTableBody.innerHTML = '';
+      dom.batchTableBody.appendChild(fragment);
+
+      // Attach row event listeners
+      dom.batchTableBody.querySelectorAll('.batch-row-checkbox').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+          e.stopPropagation();
+          const id = cb.dataset.id;
+          if (cb.checked) batch.selectedIds.add(id);
+          else batch.selectedIds.delete(id);
+          renderBatchResults();
+        });
+      });
+
+      dom.batchTableBody.querySelectorAll('.batch-delete-row-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.id;
+          deleteBatchRow(id);
+        });
+      });
+    }
+  }
+
+  function deleteBatchRow(id) {
+    if (!state.batchCad.lastResult || !Array.isArray(state.batchCad.lastResult.rows)) return;
+    state.batchCad.lastResult.rows = state.batchCad.lastResult.rows.filter(r => r.id !== id);
+    state.batchCad.selectedIds.delete(id);
+    // Re-index
+    state.batchCad.lastResult.rows.forEach((r, idx) => { r.index = idx + 1; });
+    // Recalculate summary
+    const rows = state.batchCad.lastResult.rows;
+    state.batchCad.lastResult.summary = {
+      totalRows: rows.length,
+      validRows: rows.filter(r => r.valid).length,
+      invalidRows: rows.filter(r => !r.valid).length,
+      convertedRows: rows.filter(r => r.status === 'CONVERTED').length,
+      unchangedRows: rows.filter(r => r.status === 'UNCHANGED').length,
+      totalCanonicalMeters: rows.filter(r => r.valid).reduce((acc, r) => acc + r.canonicalMeters, 0),
+      totalTargetValue: rows.filter(r => r.valid).reduce((acc, r) => acc + (r.targetValue || 0), 0)
+    };
+    renderBatchResults();
+    AudioService.playTick();
+    showToast('Removed row');
+  }
+
+  function copyBatchData(formatKey = 'results_only') {
+    const result = state.batchCad.lastResult;
+    if (!result || !result.rows || result.rows.length === 0) {
+      showToast('No batch conversion results to copy', 'warning');
+      return;
+    }
+
+    const hasSelected = state.batchCad.selectedIds.size > 0;
+    const text = formatBatchResults(result, {
+      format: formatKey,
+      selectedOnly: hasSelected,
+      selectedIds: state.batchCad.selectedIds
+    });
+
+    if (!text || !text.trim()) {
+      showToast('No valid dimension data to copy', 'warning');
+      return;
+    }
+
+    const label = hasSelected ? `${state.batchCad.selectedIds.size} Selected Results` : 'Batch Conversion Results';
+    copyToClipboard(text, label);
+  }
+
+  function sendBatchToWorkspace() {
+    const result = state.batchCad.lastResult;
+    if (!result || !result.rows || result.rows.length === 0) {
+      showToast('No batch conversion results to send', 'warning');
+      return;
+    }
+
+    const hasSelected = state.batchCad.selectedIds.size > 0;
+    const payload = convertBatchToWorkspaceGroup(result, {
+      groupName: `Batch (${result.config?.mode || 'Conversion'})`,
+      selectedOnly: hasSelected,
+      selectedIds: state.batchCad.selectedIds
+    });
+
+    if (payload.entries.length === 0) {
+      showToast('No valid rows to add to Dimension Workspace', 'warning');
+      return;
+    }
+
+    if (!Array.isArray(state.workspace.groups)) state.workspace.groups = [];
+    if (!Array.isArray(state.workspace.entries)) state.workspace.entries = [];
+
+    state.workspace.groups.push(payload.group);
+    state.workspace.entries.push(...payload.entries);
+
+    saveWorkspace();
+    switchMode('workspace');
+    renderWorkspace();
+    AudioService.playTick();
+    showToast(`Added ${payload.entries.length} rows to Dimension Workspace`);
+  }
+
+  function sendBatchToMultiScale() {
+    const result = state.batchCad.lastResult;
+    if (!result || !result.rows || result.rows.length === 0) {
+      showToast('No batch rows to compare', 'warning');
+      return;
+    }
+
+    const validRows = result.rows.filter(r => r.valid);
+    if (validRows.length === 0) {
+      showToast('No valid rows to compare', 'warning');
+      return;
+    }
+
+    // Use first valid row or selected row
+    const targetRow = (state.batchCad.selectedIds.size > 0
+      ? validRows.find(r => state.batchCad.selectedIds.has(r.id))
+      : validRows[0]) || validRows[0];
+
+    state.multiScale.dimensionInput = `${targetRow.targetValue || targetRow.parsedValue} ${result.config?.targetUnit || 'mm'}`;
+    if (dom.msDimensionInput) dom.msDimensionInput.value = state.multiScale.dimensionInput;
+
+    switchMode('multiscale');
+    calculateMultiScale();
+    AudioService.playTick();
+    showToast(`Comparing "${targetRow.name}" across multiple scales`);
+  }
+
+  function sendBatchToChains() {
+    const result = state.batchCad.lastResult;
+    if (!result || !result.rows || result.rows.length === 0) {
+      showToast('No batch rows to convert to chain', 'warning');
+      return;
+    }
+
+    const hasSelected = state.batchCad.selectedIds.size > 0;
+    const chain = convertBatchToDimensionChain(result, {
+      chainName: `Batch Chain (${result.config?.targetUnit || 'mm'})`,
+      selectedOnly: hasSelected,
+      selectedIds: state.batchCad.selectedIds
+    });
+
+    if (!chain.segments || chain.segments.length === 0) {
+      showToast('No valid rows for dimension chain', 'warning');
+      return;
+    }
+
+    state.activeChain = chain;
+    if (dom.chainsNameInput) dom.chainsNameInput.value = chain.name;
+    if (dom.chainsUnitSelect) dom.chainsUnitSelect.value = chain.defaultUnit;
+
+    switchMode('chains');
+    calculateAndRenderChain(true);
+    AudioService.playTick();
+    showToast(`Created Dimension Chain with ${chain.segments.length} segments`);
+  }
+
+  function sendBatchToCadClipboard() {
+    const result = state.batchCad.lastResult;
+    if (!result || !result.rows || result.rows.length === 0) {
+      showToast('No batch rows to format for CAD', 'warning');
+      return;
+    }
+
+    // Set CAD Clipboard source to manual with raw text
+    const rawNumbers = formatBatchResults(result, {
+      format: 'raw_numbers',
+      selectedOnly: state.batchCad.selectedIds.size > 0,
+      selectedIds: state.batchCad.selectedIds
+    });
+
+    state.cadClipboard.source = 'manual';
+    state.cadClipboard.manualInput = rawNumbers;
+    if (dom.cadManualInput) dom.cadManualInput.value = rawNumbers;
+
+    switchMode('cad_clipboard');
+    renderCadClipboard(true);
+    AudioService.playTick();
+    showToast('Loaded batch numbers into CAD Clipboard');
   }
 
   // ---------------------------------------------------------------------------
@@ -9054,6 +9504,211 @@ function initializeApp() {
       });
     }
 
+    // Mode 12: Batch CAD Conversion Listeners
+    if (dom.batchQuickChips) {
+      dom.batchQuickChips.querySelectorAll('.cad-preset-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          applyBatchPreset(chip.dataset.preset);
+        });
+      });
+    }
+
+    if (dom.batchPasteInput) {
+      dom.batchPasteInput.addEventListener('input', () => {
+        const val = dom.batchPasteInput.value;
+        const detected = detectBatchDelimiter(val);
+        if (dom.batchDelimiterBadge) {
+          dom.batchDelimiterBadge.textContent = `FORMAT: ${detected.toUpperCase()}`;
+        }
+      });
+
+      dom.batchPasteInput.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+          e.preventDefault();
+          parseAndConvertBatch(true);
+        }
+      });
+    }
+
+    if (dom.batchModeSelect) {
+      dom.batchModeSelect.addEventListener('change', () => {
+        state.batchCad.mode = dom.batchModeSelect.value;
+        updateBatchModeVisibility();
+        parseAndConvertBatch(false);
+      });
+    }
+
+    if (dom.batchSourceScaleSelect) {
+      dom.batchSourceScaleSelect.addEventListener('change', () => {
+        state.batchCad.sourceScale = parseInt(dom.batchSourceScaleSelect.value, 10) || 50;
+        parseAndConvertBatch(false);
+      });
+    }
+
+    if (dom.batchTargetScaleSelect) {
+      dom.batchTargetScaleSelect.addEventListener('change', () => {
+        state.batchCad.targetScale = parseInt(dom.batchTargetScaleSelect.value, 10) || 50;
+        parseAndConvertBatch(false);
+      });
+    }
+
+    if (dom.batchSourceUnitSelect) {
+      dom.batchSourceUnitSelect.addEventListener('change', () => {
+        state.batchCad.sourceUnit = dom.batchSourceUnitSelect.value;
+        parseAndConvertBatch(false);
+      });
+    }
+
+    if (dom.batchTargetUnitSelect) {
+      dom.batchTargetUnitSelect.addEventListener('change', () => {
+        state.batchCad.targetUnit = dom.batchTargetUnitSelect.value;
+        parseAndConvertBatch(false);
+      });
+    }
+
+    if (dom.batchPrecisionSelect) {
+      dom.batchPrecisionSelect.addEventListener('change', () => {
+        state.batchCad.precision = parseInt(dom.batchPrecisionSelect.value, 10) || 2;
+        parseAndConvertBatch(false);
+      });
+    }
+
+    if (dom.batchDelimiterSelect) {
+      dom.batchDelimiterSelect.addEventListener('change', () => {
+        state.batchCad.delimiter = dom.batchDelimiterSelect.value;
+        parseAndConvertBatch(false);
+      });
+    }
+
+    if (dom.btnRunBatchCad) {
+      dom.btnRunBatchCad.addEventListener('click', () => {
+        parseAndConvertBatch(true);
+      });
+    }
+
+    if (dom.batchFilterPills) {
+      dom.batchFilterPills.querySelectorAll('.cad-preset-chip').forEach(pill => {
+        pill.addEventListener('click', () => {
+          state.batchCad.activeFilter = pill.dataset.filter;
+          dom.batchFilterPills.querySelectorAll('.cad-preset-chip').forEach(p => {
+            p.classList.toggle('active', p === pill);
+          });
+          renderBatchResults();
+          AudioService.playTick();
+        });
+      });
+    }
+
+    if (dom.batchSelectAllBtn) {
+      dom.batchSelectAllBtn.addEventListener('click', () => {
+        if (state.batchCad.lastResult && state.batchCad.lastResult.rows) {
+          state.batchCad.lastResult.rows.forEach(r => state.batchCad.selectedIds.add(r.id));
+          renderBatchResults();
+          AudioService.playTick();
+        }
+      });
+    }
+
+    if (dom.batchClearSelectionBtn) {
+      dom.batchClearSelectionBtn.addEventListener('click', () => {
+        state.batchCad.selectedIds.clear();
+        renderBatchResults();
+        AudioService.playTick();
+      });
+    }
+
+    if (dom.batchMasterCheckbox) {
+      dom.batchMasterCheckbox.addEventListener('change', (e) => {
+        const checked = e.target.checked;
+        if (state.batchCad.lastResult && state.batchCad.lastResult.rows) {
+          if (checked) {
+            state.batchCad.lastResult.rows.forEach(r => state.batchCad.selectedIds.add(r.id));
+          } else {
+            state.batchCad.selectedIds.clear();
+          }
+          renderBatchResults();
+          AudioService.playTick();
+        }
+      });
+    }
+
+    if (dom.batchLoadSampleBtn) {
+      dom.batchLoadSampleBtn.addEventListener('click', () => {
+        const sample = `Wall North = 4800mm\nSEG Wall South = 3200mm\nWindow 1 = 1800 + 300\nALW Tolerance = 20mm\nDoor Entrance = 900\n2.4m\n7' 6"`;
+        if (dom.batchPasteInput) dom.batchPasteInput.value = sample;
+        state.batchCad.rawInput = sample;
+        parseAndConvertBatch(true);
+      });
+    }
+
+    // Export & Action toolbar buttons
+    if (dom.batchCopyResultsBtn) {
+      dom.batchCopyResultsBtn.addEventListener('click', () => {
+        copyBatchData('results_only');
+      });
+    }
+
+    if (dom.batchCopyRawBtn) {
+      dom.batchCopyRawBtn.addEventListener('click', () => {
+        copyBatchData('raw_numbers');
+      });
+    }
+
+    if (dom.batchCopyTsvBtn) {
+      dom.batchCopyTsvBtn.addEventListener('click', () => {
+        copyBatchData('tsv_schedule');
+      });
+    }
+
+    if (dom.batchOpenCadBtn) {
+      dom.batchOpenCadBtn.addEventListener('click', () => {
+        sendBatchToCadClipboard();
+      });
+    }
+
+    if (dom.batchSendWorkspaceBtn) {
+      dom.batchSendWorkspaceBtn.addEventListener('click', () => {
+        sendBatchToWorkspace();
+      });
+    }
+
+    if (dom.batchCompareMultiscaleBtn) {
+      dom.batchCompareMultiscaleBtn.addEventListener('click', () => {
+        sendBatchToMultiScale();
+      });
+    }
+
+    if (dom.batchCreateChainBtn) {
+      dom.batchCreateChainBtn.addEventListener('click', () => {
+        sendBatchToChains();
+      });
+    }
+
+    if (dom.batchSaveJournalBtn) {
+      dom.batchSaveJournalBtn.addEventListener('click', () => {
+        const result = state.batchCad.lastResult;
+        if (!result || !result.rows || result.rows.length === 0) {
+          showToast('No batch conversion to save', 'warning');
+          return;
+        }
+        HistoryService.addEntry({
+          toolMode: 'batch_cad',
+          title: `Batch CAD (${result.summary?.validRows || 0} rows)`,
+          inputString: `${result.config?.mode || 'Batch'} (${result.config?.sourceUnit || 'mm'} ➔ ${result.config?.targetUnit || 'mm'})`,
+          resultString: `${result.summary?.validRows || 0} valid / ${result.summary?.totalRows || 0} total`,
+          metadata: {
+            mode: result.config?.mode,
+            totalRows: result.summary?.totalRows,
+            validRows: result.summary?.validRows,
+            totalCanonicalMeters: result.summary?.totalCanonicalMeters
+          }
+        });
+        renderHistoryList();
+        AudioService.playTick();
+        showToast('Saved batch conversion to calculation journal');
+      });
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -9191,6 +9846,7 @@ function initializeApp() {
       else if (e.key === '9') { e.preventDefault(); switchMode('multiscale'); }
       else if (e.key === '0') { e.preventDefault(); switchMode('chains'); }
       else if (e.key === 'c' || e.key === 'C') { e.preventDefault(); switchMode('cad_clipboard'); }
+      else if (e.key === 'b' || e.key === 'B') { e.preventDefault(); switchMode('batch_cad'); }
       else if (e.key === 's' || e.key === 'S') { e.preventDefault(); swapDirection(); }
       else if (e.key === 'h' || e.key === 'H') { e.preventDefault(); toggleHistoryDrawer(); }
       else if (e.key === '?') {

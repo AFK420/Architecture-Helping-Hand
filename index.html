@@ -210,6 +210,14 @@
         <span>CAD Clipboard</span>
         <span class="mode-key-hint">C</span>
       </button>
+
+      <button class="mode-tab" data-mode="batch_cad" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+        <span>Batch CAD</span>
+        <span class="mode-key-hint">B</span>
+      </button>
     </nav>
 
     <!-- ======================================================== -->
@@ -2339,6 +2347,252 @@
         </div>
       </div>
     </section>
+
+    <!-- ======================================================== -->
+    <!-- MODE 12: BATCH CAD CONVERSION                           -->
+    <!-- ======================================================== -->
+    <section id="mode-view-batch_cad" class="tool-mode-view" aria-labelledby="heading-batch-cad" hidden>
+      <div class="tool-layout">
+        <!-- Left Column: Paste Area & Conversion Configuration -->
+        <div class="archi-card main-calc-card">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <div class="card-header">
+            <div>
+              <span class="card-tag">MODE 12 • BULK SCALING</span>
+              <h2 id="heading-batch-cad" class="card-title">Batch CAD Conversion</h2>
+            </div>
+            <div class="status-indicator">
+              <span id="batch-state-badge" class="badge-status-ready">READY</span>
+            </div>
+          </div>
+
+          <p class="tool-description">
+            Paste dimension lists, schedules, or architectural math expressions to convert across scales and units in bulk with non-destructive parsing and row-by-row isolation.
+          </p>
+
+          <!-- Quick Preset Chips -->
+          <div class="batch-quick-chips-wrapper" style="margin-bottom: 1.25rem;">
+            <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.35rem; display: block;">Quick Conversion Presets</span>
+            <div id="batch-quick-chips" class="batch-quick-chips" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button type="button" class="cad-preset-chip active" data-preset="real_to_1_50_mm" title="Real mm ➔ Drawing @ 1:50 mm">⚡ Real ➔ 1:50</button>
+              <button type="button" class="cad-preset-chip" data-preset="real_to_1_100_mm" title="Real mm ➔ Drawing @ 1:100 mm">Real ➔ 1:100</button>
+              <button type="button" class="cad-preset-chip" data-preset="scale_1_50_to_1_100" title="Rescale 1:50 ➔ 1:100">1:50 ➔ 1:100</button>
+              <button type="button" class="cad-preset-chip" data-preset="mm_to_m" title="Millimeters ➔ Meters">mm ➔ m</button>
+              <button type="button" class="cad-preset-chip" data-preset="m_to_mm" title="Meters ➔ Millimeters">m ➔ mm</button>
+              <button type="button" class="cad-preset-chip" data-preset="in_to_ft_in" title="Inches ➔ Feet-Inches">in ➔ ft-in</button>
+            </div>
+          </div>
+
+          <!-- Large Paste Input Textarea -->
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+              <label for="batch-paste-input" class="input-label" style="font-size: 0.75rem;">Paste Dimensions / Schedule Lines</label>
+              <span id="batch-delimiter-badge" class="unit-system-tag" style="font-size: 0.7rem;">FORMAT: ONE PER LINE</span>
+            </div>
+            <textarea id="batch-paste-input" class="text-input" placeholder="e.g.&#10;Wall North = 4800mm&#10;Window 1 = 1800 + 300&#10;Door Entrance = 900&#10;2.4m&#10;7' 6&quot;" style="width: 100%; min-height: 140px; font-family: var(--font-family-mono); font-size: 0.85rem; line-height: 1.5; resize: vertical;"></textarea>
+          </div>
+
+          <!-- Conversion Parameters Grid -->
+          <div class="batch-params-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem;">
+            <!-- Mode Selector -->
+            <div class="input-group">
+              <label for="batch-mode-select" class="input-label" style="font-size: 0.75rem;">Conversion Mode</label>
+              <select id="batch-mode-select" class="calc-select" style="font-size: 0.82rem;">
+                <option value="real_to_drawing" selected>Real ➔ Drawing @ Scale</option>
+                <option value="drawing_to_real">Drawing @ Scale ➔ Real</option>
+                <option value="scale_to_scale">Scale ➔ Scale (Rescale)</option>
+                <option value="unit_to_unit">Unit ➔ Unit</option>
+              </select>
+            </div>
+
+            <!-- Source Scale (for drawing_to_real and scale_to_scale) -->
+            <div class="input-group" id="batch-source-scale-group" style="display: none;">
+              <label for="batch-source-scale-select" class="input-label" style="font-size: 0.75rem;">Source Scale</label>
+              <select id="batch-source-scale-select" class="calc-select" style="font-size: 0.82rem;">
+                <option value="10">1:10</option>
+                <option value="20">1:20</option>
+                <option value="25">1:25</option>
+                <option value="50" selected>1:50</option>
+                <option value="75">1:75</option>
+                <option value="100">1:100</option>
+                <option value="200">1:200</option>
+              </select>
+            </div>
+
+            <!-- Target Scale (for real_to_drawing and scale_to_scale) -->
+            <div class="input-group" id="batch-target-scale-group">
+              <label for="batch-target-scale-select" class="input-label" style="font-size: 0.75rem;">Target Scale</label>
+              <select id="batch-target-scale-select" class="calc-select" style="font-size: 0.82rem;">
+                <option value="10">1:10</option>
+                <option value="20">1:20</option>
+                <option value="25">1:25</option>
+                <option value="50" selected>1:50</option>
+                <option value="75">1:75</option>
+                <option value="100">1:100</option>
+                <option value="200">1:200</option>
+              </select>
+            </div>
+
+            <!-- Default Source Unit -->
+            <div class="input-group">
+              <label for="batch-source-unit-select" class="input-label" style="font-size: 0.75rem;">Default Input Unit</label>
+              <select id="batch-source-unit-select" class="calc-select" style="font-size: 0.82rem;">
+                <option value="mm" selected>Millimeters (mm)</option>
+                <option value="cm">Centimeters (cm)</option>
+                <option value="m">Meters (m)</option>
+                <option value="in">Inches (in)</option>
+                <option value="ft">Feet (ft)</option>
+              </select>
+            </div>
+
+            <!-- Target Output Unit -->
+            <div class="input-group">
+              <label for="batch-target-unit-select" class="input-label" style="font-size: 0.75rem;">Target Output Unit</label>
+              <select id="batch-target-unit-select" class="calc-select" style="font-size: 0.82rem;">
+                <option value="mm" selected>Millimeters (mm)</option>
+                <option value="cm">Centimeters (cm)</option>
+                <option value="m">Meters (m)</option>
+                <option value="in">Inches (in)</option>
+                <option value="ft">Feet (ft)</option>
+                <option value="ft-in">Feet-Inches (7'-6")</option>
+              </select>
+            </div>
+
+            <!-- Precision -->
+            <div class="input-group">
+              <label for="batch-precision-select" class="input-label" style="font-size: 0.75rem;">Precision</label>
+              <select id="batch-precision-select" class="calc-select" style="font-size: 0.82rem;">
+                <option value="0">0 decimals (48)</option>
+                <option value="1">1 decimal (48.0)</option>
+                <option value="2" selected>2 decimals (48.00)</option>
+                <option value="3">3 decimals (48.000)</option>
+                <option value="4">4 decimals (48.0000)</option>
+              </select>
+            </div>
+
+            <!-- Delimiter Override -->
+            <div class="input-group">
+              <label for="batch-delimiter-select" class="input-label" style="font-size: 0.75rem;">Delimiter</label>
+              <select id="batch-delimiter-select" class="calc-select" style="font-size: 0.82rem;">
+                <option value="auto" selected>Auto-Detect</option>
+                <option value="newline">Newline (Line-by-Line)</option>
+                <option value="comma">Comma (,)</option>
+                <option value="tab">Tab (\t)</option>
+                <option value="semicolon">Semicolon (;)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Run Button -->
+          <div class="calc-actions-row" style="margin-top: 1rem;">
+            <button type="button" id="btn-run-batch-cad" class="btn-calc-primary" style="width: 100%;">
+              <span>⚡ PARSE & CONVERT BATCH</span>
+              <kbd class="kbd-badge">↵</kbd>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right Column: Summary Metric Indicators & Results Schedule -->
+        <div class="archi-card result-panel" id="batch-result-panel" data-state="ready">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <div class="result-header">
+            <span class="result-label">BATCH CONVERSION RESULTS</span>
+            <div class="batch-metrics-strip" style="display: flex; gap: 0.5rem; align-items: center;">
+              <span id="batch-metric-total" class="unit-system-tag">0 ROWS</span>
+              <span id="batch-metric-valid" class="tool-state-badge badge-ready" style="font-size: 0.7rem;">0 VALID</span>
+              <span id="batch-metric-invalid" class="tool-state-badge badge-error" style="font-size: 0.7rem; display: none;">0 INVALID</span>
+            </div>
+          </div>
+
+          <!-- Filter Toolbar -->
+          <div class="batch-filter-strip" style="display: flex; justify-content: space-between; align-items: center; margin: 0.75rem 0; flex-wrap: wrap; gap: 0.5rem;">
+            <div id="batch-filter-pills" class="batch-filter-pills" style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+              <button type="button" class="cad-preset-chip active" data-filter="all">All (<span id="filter-count-all">0</span>)</button>
+              <button type="button" class="cad-preset-chip" data-filter="valid">Valid (<span id="filter-count-valid">0</span>)</button>
+              <button type="button" class="cad-preset-chip" data-filter="invalid">Invalid (<span id="filter-count-invalid">0</span>)</button>
+              <button type="button" class="cad-preset-chip" data-filter="selected">Selected (<span id="filter-count-selected">0</span>)</button>
+              <button type="button" class="cad-preset-chip" data-filter="seg">SEG</button>
+              <button type="button" class="cad-preset-chip" data-filter="ref">REF</button>
+              <button type="button" class="cad-preset-chip" data-filter="alw">ALW</button>
+            </div>
+            <div>
+              <button type="button" id="batch-select-all-btn" class="hist-btn" style="font-size: 0.75rem; padding: 3px 8px;">Select All</button>
+              <button type="button" id="batch-clear-selection-btn" class="hist-btn" style="font-size: 0.75rem; padding: 3px 8px;">Deselect</button>
+            </div>
+          </div>
+
+          <!-- Results Table Container -->
+          <div class="table-scroll-container" style="max-height: 380px; margin-bottom: 0.75rem;">
+            <table id="batch-table" class="ref-data-table compact-table" style="width: 100%;">
+              <thead>
+                <tr>
+                  <th style="width: 36px; text-align: center;"><input type="checkbox" id="batch-master-checkbox" aria-label="Select all rows" /></th>
+                  <th style="width: 36px;">#</th>
+                  <th>NAME</th>
+                  <th style="width: 60px;">TYPE</th>
+                  <th>INPUT</th>
+                  <th>RESULT</th>
+                  <th style="width: 80px; text-align: center;">STATUS</th>
+                  <th style="width: 44px; text-align: right;">ACTION</th>
+                </tr>
+              </thead>
+              <tbody id="batch-table-body">
+                <!-- Dynamically populated rows -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Empty State -->
+          <div id="batch-empty-state" class="workspace-empty-state" style="padding: 2rem; text-align: center;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">⚡</div>
+            <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem;">Batch CAD Conversion</h4>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+              Paste multiple dimensions or schedule lines above to convert in bulk.
+            </p>
+            <button type="button" id="batch-load-sample-btn" class="btn-calc-action secondary" style="display: inline-flex; width: auto; margin: 0 auto;">
+              <span>Load Sample Batch</span>
+            </button>
+          </div>
+
+          <!-- Bottom Multi-Stream Export Toolbar -->
+          <div class="result-actions-strip" style="flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
+            <button type="button" id="batch-copy-results-btn" class="result-action-btn" title="Copy converted numbers">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+              <span>Copy Results</span>
+            </button>
+            <button type="button" id="batch-copy-raw-btn" class="result-action-btn" title="Copy raw space-delimited numbers">
+              <span>Copy Raw</span>
+            </button>
+            <button type="button" id="batch-copy-tsv-btn" class="result-action-btn" title="Copy TSV schedule table">
+              <span>Copy TSV</span>
+            </button>
+            <button type="button" id="batch-open-cad-btn" class="result-action-btn" title="Open in CAD Clipboard (Mode 11)">
+              <span>📋 CAD Clipboard</span>
+            </button>
+            <button type="button" id="batch-send-workspace-btn" class="result-action-btn" title="Add rows to Dimension Workspace">
+              <span>📐 Add to Workspace</span>
+            </button>
+            <button type="button" id="batch-compare-multiscale-btn" class="result-action-btn" title="Compare in Multi-Scale (Mode 9)">
+              <span>📊 Multi-Scale</span>
+            </button>
+            <button type="button" id="batch-create-chain-btn" class="result-action-btn" title="Create Dimension Chain (Mode 10)">
+              <span>🔗 Create Chain</span>
+            </button>
+            <button type="button" id="batch-save-journal-btn" class="result-action-btn" title="Save batch summary to calculation journal">
+              <span>📜 Save Journal</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- History Drawer Side Panel -->
@@ -2442,12 +2696,16 @@
           <span class="kbd-badge">S</span>
         </div>
         <div class="shortcut-row">
-          <span>Switch Tool Modes (1-9, 0, C)</span>
-          <span class="kbd-badge">1 — 9, 0, C</span>
+          <span>Switch Tool Modes (1-9, 0, C, B)</span>
+          <span class="kbd-badge">1 — 9, 0, C, B</span>
         </div>
         <div class="shortcut-row">
           <span>Open CAD Clipboard</span>
           <span class="kbd-badge">C / Ctrl+Shift+C</span>
+        </div>
+        <div class="shortcut-row">
+          <span>Open Batch CAD Converter</span>
+          <span class="kbd-badge">B</span>
         </div>
         <div class="shortcut-row">
           <span>Toggle Calculation History Drawer</span>
