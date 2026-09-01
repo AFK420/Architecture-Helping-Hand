@@ -189,6 +189,17 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
+    id: 'nav-multiscale',
+    title: 'Multi-Scale Comparison',
+    description: 'Compare a real-world dimension or math expression across multiple architectural scales simultaneously',
+    category: 'Navigation',
+    icon: '📊',
+    keywords: ['multi-scale', 'compare', 'comparison', 'scales', 'drawing size', 'fit', 'paper', 'proportions', 'mode 9', 'batch scale'],
+    shortcut: '9',
+    actionType: 'navigation',
+    available: true
+  },
+  {
     id: 'future-dim-chains',
     title: 'Dimension Chains',
     description: 'Calculate cumulative structural grid lines, interior partitions, and dimension strings',

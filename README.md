@@ -25,6 +25,7 @@
    - [7. Architectural Geometry Engine (Core Math)](#7-architectural-geometry-engine-core-math)
    - [8. Dimension Workspace & Dynamic Schedule (v1.1)](#8-dimension-workspace--dynamic-schedule-v11)
    - [9. Dimension Expression Calculator](#9-dimension-expression-calculator)
+   - [10. Multi-Scale Comparison Workspace](#10-multi-scale-comparison-workspace)
 5. [📐 Architectural Scale Presets (All 28 Presets)](#-architectural-scale-presets-all-28-presets)
 6. [🛋️ Architectural Furniture & Fixtures Database (179 Items Across 9 Domains)](#️-architectural-furniture--fixtures-database-179-items-across-9-domains)
 7. [📏 Supported Measurement Units](#-supported-measurement-units)
@@ -194,6 +195,14 @@ This repository serves as:
 * **Live Scaled Drawing Output**: Computes the exact scaled drawing dimensions on paper alongside unit equivalents ($m$, $cm$, $mm$, $ft\text{-}in$).
 * **Workspace Insertion Pipeline**: Directly send evaluated expressions into the active Dimension Workspace schedule with custom role selector (<kbd>Shift+Enter</kbd>).
 * **Command Palette Math Detection**: Type math expressions directly in <kbd>Ctrl+K</kbd> / <kbd>⌘K</kbd> for instant live evaluation preview.
+
+### 10. Multi-Scale Comparison Workspace (Mode 9)
+* **Simultaneous Multi-Scale Evaluation**: Evaluates a single real-world dimension or math expression across multiple architectural scales simultaneously ($1:10$, $1:20$, $1:25$, $1:50$, $1:75$, $1:100$, $1:200$, $1:500$, and custom ratios).
+* **Proportional Visual Drafting Bars**: Displays true physical length proportions relative to the largest scale in the set.
+* **Paper-Size Usable Width Checks**: Instant context checks for standard sheet sizes (A4, A3, A2, A1, A0) to determine if a dimension fits on paper.
+* **Heuristic Suggested Fit**: Optional target drawing range heuristic to highlight suggested scale options.
+* **Workspace & Expression Integration**: Insert individual scale drawing results into the active Dimension Workspace (`+ WS`) and launch multi-scale comparison directly from Mode 8.
+* **Command Palette Live Preview**: Typing `compare 2400mm` or `2400mm` in <kbd>Ctrl+K</kbd> / <kbd>⌘K</kbd> generates an instant 3-scale comparison preview.
 
 ---
 

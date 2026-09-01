@@ -34,7 +34,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
 // 1. Verify Mode Navigation Targets in HTML
 {
-  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression'];
+  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale'];
   
   for (const mode of expectedModes) {
     const hasTab = htmlContent.includes(`data-mode="${mode}"`);
@@ -239,6 +239,35 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'expression-save-journal-btn',
     'expression-recent-list',
     'expression-clear-recent-btn',
+    'expression-compare-btn',
+
+    // Mode 9: Multi-Scale Comparison IDs
+    'multiscale-state-badge',
+    'multiscale-input',
+    'multiscale-live-preview',
+    'multiscale-clear-input-btn',
+    'multiscale-error-msg',
+    'multiscale-default-unit',
+    'multiscale-display-unit',
+    'multiscale-custom-scale-input',
+    'multiscale-add-scale-btn',
+    'multiscale-sort-select',
+    'multiscale-paper-select',
+    'multiscale-fit-min',
+    'multiscale-fit-max',
+    'btn-run-multiscale',
+    'multiscale-count-badge',
+    'multiscale-real-label',
+    'multiscale-real-val',
+    'multiscale-table-container',
+    'multiscale-table',
+    'multiscale-table-body',
+    'multiscale-empty-state',
+    'multiscale-load-sample-btn',
+    'multiscale-copy-table-btn',
+    'multiscale-copy-all-btn',
+    'multiscale-copy-current-btn',
+    'multiscale-copy-raw-btn',
 
     // Workflow Pipeline & Mathematical Explanation IDs
     'converter-math-formula',
@@ -279,7 +308,8 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'btn-run-detector',
     'btn-run-areavol',
     'btn-run-custom-furn',
-    'btn-run-expression'
+    'btn-run-expression',
+    'btn-run-multiscale'
   ];
 
   for (const rBtn of runButtons) {

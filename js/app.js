@@ -2458,6 +2458,17 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
+    id: 'nav-multiscale',
+    title: 'Multi-Scale Comparison',
+    description: 'Compare a real-world dimension or math expression across multiple architectural scales simultaneously',
+    category: 'Navigation',
+    icon: '📊',
+    keywords: ['multi-scale', 'compare', 'comparison', 'scales', 'drawing size', 'fit', 'paper', 'proportions', 'mode 9', 'batch scale'],
+    shortcut: '9',
+    actionType: 'navigation',
+    available: true
+  },
+  {
     id: 'future-dim-chains',
     title: 'Dimension Chains',
     description: 'Calculate cumulative structural grid lines, interior partitions, and dimension strings',
@@ -3650,6 +3661,7 @@ function getFurniturePlanSVG(item) {
 
 
 
+
 function initializeApp() {
   const state = {
     currentMode: 'converter',
@@ -3682,15 +3694,24 @@ function initializeApp() {
     // Mode 4: Area & Volume
     calcType: 'area', // 'area' | 'volume'
     calcDirection: 'drawing_to_real', // 'drawing_to_real' | 'real_to_drawing'
-    areavolRatio: 100,
-    areavolInputVal: '4',
-    areavolInputUnit: 'cm2',
-    areavolOutputUnit: 'm2',
+    areaOrigVal: '25',
+    areaOrigUnit: 'sq_m',
+    areaRatio: 50,
+    areaTargetUnit: 'sq_cm',
+    volOrigVal: '100',
+    volOrigUnit: 'cu_m',
+    volRatio: 50,
+    volTargetUnit: 'cu_cm',
 
     // Mode 5: Furniture
     furnitureSearchQuery: '',
     furnitureActiveCategory: 'all',
+    selectedCategory: 'all',
     furnitureScaleRatio: 50,
+    furnitureDisplayUnit: 'cm',
+    furnitureCustomWidth: '',
+    furnitureCustomDepth: '',
+    furnitureCustomHeight: '',
     furniturePaperUnit: 'cm',
     furnitureSortKey: 'default',
     furnitureDensity: 'comfortable',
@@ -3701,6 +3722,7 @@ function initializeApp() {
 
     // Mode 6: Reference
     refScaleRatio: 50,
+    refSheetDensity: 'standard', // 'standard' | 'compact'
 
     // Mode 7: Dimension Workspace
     workspace: deserializeWorkspace(StorageService.getItem(WORKSPACE_STORAGE_KEY)),
@@ -3710,6 +3732,26 @@ function initializeApp() {
     // Mode 8: Dimension Expression
     lastValidExpression: null,
     recentExpressions: [],
+
+    // Mode 9: Multi-Scale Comparison
+    multiscaleInput: '2400',
+    multiscaleDefaultUnit: 'mm',
+    multiscaleDisplayUnit: 'mm',
+    multiscaleGroup: 'all',
+    multiscaleCustomScales: [],
+    multiscaleSortOrder: 'ratio_asc',
+    multiscalePaperSize: 'none',
+    multiscaleFitMin: null,
+    multiscaleFitMax: null,
+    multiscaleFavorites: (() => {
+      try {
+        const stored = StorageService.getItem('archiscale_multiscale_favs');
+        return stored ? JSON.parse(stored) : [20, 50, 100];
+      } catch (e) {
+        return [20, 50, 100];
+      }
+    })(),
+    lastValidMultiScale: null,
 
     // Cached Previous Valid Calculations (Never wipe to empty on invalid keystroke)
     lastValidConverter: null,
@@ -3946,7 +3988,36 @@ function initializeApp() {
     expressionAddWorkspaceBtn: document.getElementById('expression-add-workspace-btn'),
     expressionSaveJournalBtn: document.getElementById('expression-save-journal-btn'),
     expressionRecentList: document.getElementById('expression-recent-list'),
-    expressionClearRecentBtn: document.getElementById('expression-clear-recent-btn')
+    expressionClearRecentBtn: document.getElementById('expression-clear-recent-btn'),
+    expressionCompareBtn: document.getElementById('expression-compare-btn'),
+
+    // Mode 9: Multi-Scale Comparison
+    multiscaleStateBadge: document.getElementById('multiscale-state-badge'),
+    multiscaleInput: document.getElementById('multiscale-input'),
+    multiscaleLivePreview: document.getElementById('multiscale-live-preview'),
+    multiscaleClearInputBtn: document.getElementById('multiscale-clear-input-btn'),
+    multiscaleErrorMsg: document.getElementById('multiscale-error-msg'),
+    multiscaleDefaultUnit: document.getElementById('multiscale-default-unit'),
+    multiscaleDisplayUnit: document.getElementById('multiscale-display-unit'),
+    multiscaleCustomScaleInput: document.getElementById('multiscale-custom-scale-input'),
+    multiscaleAddScaleBtn: document.getElementById('multiscale-add-scale-btn'),
+    multiscaleSortSelect: document.getElementById('multiscale-sort-select'),
+    multiscalePaperSelect: document.getElementById('multiscale-paper-select'),
+    multiscaleFitMin: document.getElementById('multiscale-fit-min'),
+    multiscaleFitMax: document.getElementById('multiscale-fit-max'),
+    btnRunMultiscale: document.getElementById('btn-run-multiscale'),
+    multiscaleCountBadge: document.getElementById('multiscale-count-badge'),
+    multiscaleRealLabel: document.getElementById('multiscale-real-label'),
+    multiscaleRealVal: document.getElementById('multiscale-real-val'),
+    multiscaleTableContainer: document.getElementById('multiscale-table-container'),
+    multiscaleTable: document.getElementById('multiscale-table'),
+    multiscaleTableBody: document.getElementById('multiscale-table-body'),
+    multiscaleEmptyState: document.getElementById('multiscale-empty-state'),
+    multiscaleLoadSampleBtn: document.getElementById('multiscale-load-sample-btn'),
+    multiscaleCopyTableBtn: document.getElementById('multiscale-copy-table-btn'),
+    multiscaleCopyAllBtn: document.getElementById('multiscale-copy-all-btn'),
+    multiscaleCopyCurrentBtn: document.getElementById('multiscale-copy-current-btn'),
+    multiscaleCopyRawBtn: document.getElementById('multiscale-copy-raw-btn')
   };
 
   // ---------------------------------------------------------------------------
@@ -4112,6 +4183,9 @@ function initializeApp() {
     else if (targetMode === 'expression') {
       calculateExpression();
       renderRecentExpressions();
+    }
+    else if (targetMode === 'multiscale') {
+      calculateMultiScale();
     }
   }
 
@@ -6155,7 +6229,45 @@ function initializeApp() {
     const isSearching = Boolean(query && query.trim() !== '');
 
     if (isSearching) {
-      // 0. Live Expression Detection Preview in Command Palette
+      // 0a. Live Multi-Scale Command Detection (e.g. "compare 2400mm" or "2400mm")
+      let compQuery = query.trim();
+      const isCompareCommand = compQuery.toLowerCase().startsWith('compare ') || compQuery.toLowerCase().startsWith('scales ');
+      if (isCompareCommand) {
+        compQuery = compQuery.replace(/^(compare|scales)\s+/i, '').trim();
+      }
+
+      if (compQuery) {
+        const parsedComp = parseMultiScaleInput(compQuery, {
+          defaultUnit: state.workspace?.displayUnit || 'mm',
+          precision: 2
+        });
+        if (parsedComp.isValid) {
+          const s20 = calculateAtScale(parsedComp.canonicalMeters, 20, { displayUnit: parsedComp.displayUnit });
+          const s50 = calculateAtScale(parsedComp.canonicalMeters, 50, { displayUnit: parsedComp.displayUnit });
+          const s100 = calculateAtScale(parsedComp.canonicalMeters, 100, { displayUnit: parsedComp.displayUnit });
+          const compItem = {
+            id: 'multiscale-live-preview',
+            title: `Compare scales: ${parsedComp.rawInput}`,
+            description: `1:20 ➔ ${s20.formatted} | 1:50 ➔ ${s50.formatted} | 1:100 ➔ ${s100.formatted} • Open comparison →`,
+            icon: '📊',
+            shortcut: '↵ Open',
+            available: true,
+            isLiveMultiScale: true,
+            action: () => {
+              switchMode('multiscale');
+              if (dom.multiscaleInput) {
+                dom.multiscaleInput.value = compQuery;
+                calculateMultiScale(true);
+              }
+            }
+          };
+          paletteItems.push(compItem);
+          html += `<div class="command-section-header">📊 MULTI-SCALE COMPARISON PREVIEW</div>`;
+          html += renderCommandItemHTML(compItem, paletteItems.length - 1);
+        }
+      }
+
+      // 0b. Live Expression Detection Preview in Command Palette
       if (isExpressionLike(query)) {
         const liveCalc = evaluateExpressionSafe(query, {
           defaultUnit: state.workspace?.displayUnit || 'mm',
@@ -6375,6 +6487,9 @@ function initializeApp() {
       case 'nav-expression':
         switchMode('expression');
         break;
+      case 'nav-multiscale':
+        switchMode('multiscale');
+        break;
       case 'nav-history':
         toggleHistoryDrawer();
         break;
@@ -6404,6 +6519,11 @@ function initializeApp() {
         } else if (state.currentMode === 'expression') {
           val = dom.expressionResultVal?.textContent;
           unit = dom.expressionResultUnit?.textContent || '';
+        } else if (state.currentMode === 'multiscale') {
+          if (state.lastValidMultiScale) {
+            val = formatScaleComparison(state.lastValidMultiScale, 'table');
+            unit = '';
+          }
         }
         if (val && val !== '---') {
           copyToClipboard(`${val} ${unit}`.trim(), 'Active Result');
@@ -6604,6 +6724,226 @@ function initializeApp() {
         }
       });
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 13e. Mode 9: Multi-Scale Comparison Controller
+  // ---------------------------------------------------------------------------
+  function calculateMultiScale(isExplicitRun = false) {
+    if (!dom.multiscaleInput) return;
+
+    const rawInput = dom.multiscaleInput.value.trim();
+    const defaultUnit = dom.multiscaleDefaultUnit?.value || 'mm';
+    const displayUnit = dom.multiscaleDisplayUnit?.value || 'mm';
+    const sortOrder = dom.multiscaleSortSelect?.value || 'ratio_asc';
+    const paperSize = dom.multiscalePaperSelect?.value === 'none' ? null : dom.multiscalePaperSelect?.value;
+    const minFit = dom.multiscaleFitMin?.value ? parseFloat(dom.multiscaleFitMin.value) : null;
+    const maxFit = dom.multiscaleFitMax?.value ? parseFloat(dom.multiscaleFitMax.value) : null;
+
+    // Determine scale ratios to compare
+    let baseRatios = [];
+    if (state.multiscaleGroup === 'favorites') {
+      baseRatios = state.multiscaleFavorites && state.multiscaleFavorites.length > 0
+        ? [...state.multiscaleFavorites]
+        : [20, 50, 100];
+    } else if (SCALE_PRESET_GROUPS[state.multiscaleGroup]) {
+      baseRatios = [...SCALE_PRESET_GROUPS[state.multiscaleGroup]];
+    } else {
+      baseRatios = getDefaultComparisonScales();
+    }
+
+    // Merge custom scale ratios
+    if (Array.isArray(state.multiscaleCustomScales)) {
+      for (const cr of state.multiscaleCustomScales) {
+        if (!baseRatios.includes(cr)) baseRatios.push(cr);
+      }
+    }
+
+    // Empty input check
+    if (rawInput === '') {
+      if (dom.multiscaleLivePreview) {
+        dom.multiscaleLivePreview.textContent = 'Live: Ready';
+        dom.multiscaleLivePreview.style.color = 'var(--text-muted)';
+      }
+      if (dom.multiscaleErrorMsg) dom.multiscaleErrorMsg.style.display = 'none';
+      if (dom.multiscaleRealVal) dom.multiscaleRealVal.textContent = `0 ${displayUnit}`;
+      if (dom.multiscaleCountBadge) dom.multiscaleCountBadge.textContent = '0 SCALES';
+      if (dom.multiscaleTableBody) dom.multiscaleTableBody.innerHTML = '';
+      if (dom.multiscaleEmptyState) dom.multiscaleEmptyState.style.display = 'block';
+      if (dom.multiscaleTableContainer) dom.multiscaleTableContainer.style.display = 'none';
+      setUnifiedResultState({ toolPrefix: 'multiscale', status: 'ready' });
+      return;
+    }
+
+    const comparison = compareAcrossScales(rawInput, baseRatios, {
+      defaultUnit,
+      displayUnit,
+      currentScaleRatio: state.scaleRatio || 50,
+      sortOrder,
+      paperSize,
+      targetFitMinMm: minFit,
+      targetFitMaxMm: maxFit,
+      favoriteRatios: state.multiscaleFavorites,
+      precision: state.precision
+    });
+
+    if (comparison.isValid) {
+      state.lastValidMultiScale = comparison;
+
+      if (dom.multiscaleLivePreview) {
+        dom.multiscaleLivePreview.textContent = `Live: = ${comparison.input.formattedReal}`;
+        dom.multiscaleLivePreview.style.color = 'var(--text-accent)';
+      }
+      if (dom.multiscaleErrorMsg) dom.multiscaleErrorMsg.style.display = 'none';
+      if (dom.multiscaleRealVal) dom.multiscaleRealVal.textContent = comparison.input.formattedReal;
+      if (dom.multiscaleRealLabel) {
+        dom.multiscaleRealLabel.textContent = comparison.input.isExpression
+          ? `Evaluated: ${comparison.input.raw}`
+          : `Real Dimension (${comparison.input.displayUnit})`;
+      }
+      if (dom.multiscaleCountBadge) {
+        dom.multiscaleCountBadge.textContent = `${comparison.count} SCALES`;
+      }
+
+      renderMultiScaleTable(comparison);
+      setUnifiedResultState({ toolPrefix: 'multiscale', status: 'success' });
+
+      if (isExplicitRun) {
+        AudioService.playTick();
+      }
+    } else {
+      if (dom.multiscaleLivePreview) {
+        dom.multiscaleLivePreview.textContent = `Live: Incomplete`;
+        dom.multiscaleLivePreview.style.color = 'var(--color-error)';
+      }
+      if (dom.multiscaleErrorMsg) {
+        dom.multiscaleErrorMsg.textContent = `⚠️ ${comparison.errorMessage}`;
+        dom.multiscaleErrorMsg.style.display = 'block';
+      }
+      setUnifiedResultState({
+        toolPrefix: 'multiscale',
+        status: 'error',
+        errorText: `⚠️ ${comparison.errorMessage}`
+      });
+    }
+  }
+
+  function renderMultiScaleTable(comparison) {
+    if (!dom.multiscaleTableBody) return;
+
+    if (!comparison || !comparison.isValid || comparison.scales.length === 0) {
+      if (dom.multiscaleEmptyState) dom.multiscaleEmptyState.style.display = 'block';
+      if (dom.multiscaleTableContainer) dom.multiscaleTableContainer.style.display = 'none';
+      dom.multiscaleTableBody.innerHTML = '';
+      return;
+    }
+
+    if (dom.multiscaleEmptyState) dom.multiscaleEmptyState.style.display = 'none';
+    if (dom.multiscaleTableContainer) dom.multiscaleTableContainer.style.display = 'block';
+
+    dom.multiscaleTableBody.innerHTML = comparison.scales.map(s => {
+      const isFav = state.multiscaleFavorites && state.multiscaleFavorites.includes(s.ratio);
+      let statusHtml = '';
+      if (s.isCurrent) {
+        statusHtml += `<span class="badge-current-scale">★ CURRENT</span> `;
+      }
+      if (s.fitStatus === 'suggested') {
+        statusHtml += `<span class="badge-suggested-fit">✓ FIT</span> `;
+      }
+      if (s.fitsPaper === false) {
+        statusHtml += `<span class="badge-sheet-exceed" title="Exceeds sheet width">⚠️ EXCEEDS</span> `;
+      }
+
+      return `
+        <tr class="multiscale-row ${s.isCurrent ? 'is-current' : ''}">
+          <td style="text-align: center;">
+            <button type="button" class="scale-fav-btn ${isFav ? 'is-fav' : ''}" data-ratio="${s.ratio}" title="${isFav ? 'Remove from favorites' : 'Mark as favorite'}">
+              ${isFav ? '★' : '☆'}
+            </button>
+          </td>
+          <td>
+            <strong style="font-family: var(--font-family-mono); color: var(--text-primary);">${escapeHtml(s.label)}</strong>
+          </td>
+          <td>
+            <span style="font-family: var(--font-family-mono); font-weight: 700; color: var(--accent-primary);">${escapeHtml(s.formatted)}</span>
+          </td>
+          <td class="multiscale-bar-cell">
+            <div class="multiscale-bar-track" title="Drawing length at ${s.label}: ${s.formatted} (${s.barPercent}% of max)">
+              <div class="multiscale-bar-fill" style="width: ${s.barPercent}%;"></div>
+            </div>
+          </td>
+          <td>
+            ${statusHtml || '<span style="color: var(--text-muted); font-size: 0.75rem;">—</span>'}
+          </td>
+          <td style="text-align: right;">
+            <button type="button" class="multiscale-row-action-btn ms-add-ws-btn" data-ratio="${s.ratio}" data-formatted="${escapeHtml(s.formatted)}" data-label="${escapeHtml(s.label)}" title="Add ${s.formatted} to Dimension Workspace">
+              + WS
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Attach row favorite toggles
+    dom.multiscaleTableBody.querySelectorAll('.scale-fav-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ratio = parseFloat(btn.dataset.ratio);
+        toggleScaleFavorite(ratio);
+      });
+    });
+
+    // Attach row add-to-workspace buttons
+    dom.multiscaleTableBody.querySelectorAll('.ms-add-ws-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ratio = parseFloat(btn.dataset.ratio);
+        const formatted = btn.dataset.formatted;
+        const label = btn.dataset.label;
+        const rawDim = comparison.input.formattedReal;
+
+        const entry = createDimensionEntry({
+          name: `Scale ${label} (${rawDim})`,
+          rawInput: formatted,
+          dimensionType: 'reference',
+          defaultUnit: comparison.input.displayUnit,
+          notes: `Source: Multi-Scale Comparison (${label})`
+        }, comparison.input.displayUnit);
+
+        state.workspace.entries.push(entry);
+        saveWorkspace();
+        renderWorkspace();
+        AudioService.playTick();
+        showToast(`Added [REF] "Scale ${label}" (${formatted}) to Workspace`);
+      });
+    });
+  }
+
+  function toggleScaleFavorite(ratio) {
+    if (!Array.isArray(state.multiscaleFavorites)) state.multiscaleFavorites = [];
+    const idx = state.multiscaleFavorites.indexOf(ratio);
+    if (idx >= 0) {
+      state.multiscaleFavorites.splice(idx, 1);
+      showToast(`Removed 1:${ratio} from favorites`);
+    } else {
+      state.multiscaleFavorites.push(ratio);
+      showToast(`Saved 1:${ratio} to favorites`);
+    }
+    StorageService.setItem('archiscale_multiscale_favs', JSON.stringify(state.multiscaleFavorites));
+    calculateMultiScale(false);
+  }
+
+  function addCustomScale(ratio) {
+    if (isNaN(ratio) || ratio <= 0 || !isFinite(ratio)) {
+      showToast('Enter a valid positive scale ratio (e.g. 33 for 1:33)', 'warning');
+      return;
+    }
+    if (!Array.isArray(state.multiscaleCustomScales)) state.multiscaleCustomScales = [];
+    if (!state.multiscaleCustomScales.includes(ratio)) {
+      state.multiscaleCustomScales.push(ratio);
+      showToast(`Added custom scale 1:${ratio}`);
+      calculateMultiScale(true);
+    } else {
+      showToast(`Custom scale 1:${ratio} is already present`);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -7500,6 +7840,190 @@ function initializeApp() {
       });
     }
 
+    // Mode 8 -> Mode 9: Compare Across Scales Action
+    if (dom.expressionCompareBtn) {
+      dom.expressionCompareBtn.addEventListener('click', () => {
+        calculateExpression(true);
+        const exprToCompare = state.lastValidExpression?.formatted || dom.expressionInput?.value?.trim();
+        if (exprToCompare) {
+          switchMode('multiscale');
+          if (dom.multiscaleInput) {
+            dom.multiscaleInput.value = exprToCompare;
+            calculateMultiScale(true);
+          }
+          AudioService.playTick();
+          showToast(`Loaded "${exprToCompare}" into Multi-Scale Comparison`);
+        } else {
+          showToast('Enter and evaluate an expression first', 'warning');
+        }
+      });
+    }
+
+    // Mode 9: Multi-Scale Comparison Listeners
+    if (dom.multiscaleInput) {
+      dom.multiscaleInput.addEventListener('input', () => {
+        calculateMultiScale(false);
+      });
+
+      dom.multiscaleInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          calculateMultiScale(true);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          dom.multiscaleInput.value = '';
+          calculateMultiScale(false);
+          AudioService.playTick();
+        }
+      });
+    }
+
+    if (dom.multiscaleClearInputBtn) {
+      dom.multiscaleClearInputBtn.addEventListener('click', () => {
+        if (dom.multiscaleInput) {
+          dom.multiscaleInput.value = '';
+          dom.multiscaleInput.focus();
+          calculateMultiScale(false);
+          AudioService.playTick();
+        }
+      });
+    }
+
+    if (dom.multiscaleDefaultUnit) {
+      dom.multiscaleDefaultUnit.addEventListener('change', () => {
+        calculateMultiScale(true);
+        AudioService.playTick();
+      });
+    }
+
+    if (dom.multiscaleDisplayUnit) {
+      dom.multiscaleDisplayUnit.addEventListener('change', () => {
+        calculateMultiScale(true);
+        AudioService.playTick();
+      });
+    }
+
+    // Preset Group Pills
+    document.querySelectorAll('.multiscale-group-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        document.querySelectorAll('.multiscale-group-pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        state.multiscaleGroup = pill.dataset.group;
+        calculateMultiScale(true);
+        AudioService.playTick();
+      });
+    });
+
+    if (dom.multiscaleAddScaleBtn) {
+      dom.multiscaleAddScaleBtn.addEventListener('click', () => {
+        const ratio = parseFloat(dom.multiscaleCustomScaleInput?.value);
+        addCustomScale(ratio);
+        if (dom.multiscaleCustomScaleInput) dom.multiscaleCustomScaleInput.value = '';
+      });
+    }
+
+    if (dom.multiscaleSortSelect) {
+      dom.multiscaleSortSelect.addEventListener('change', () => {
+        calculateMultiScale(true);
+        AudioService.playTick();
+      });
+    }
+
+    if (dom.multiscalePaperSelect) {
+      dom.multiscalePaperSelect.addEventListener('change', () => {
+        calculateMultiScale(true);
+        AudioService.playTick();
+      });
+    }
+
+    if (dom.multiscaleFitMin) {
+      dom.multiscaleFitMin.addEventListener('input', () => {
+        calculateMultiScale(false);
+      });
+    }
+
+    if (dom.multiscaleFitMax) {
+      dom.multiscaleFitMax.addEventListener('input', () => {
+        calculateMultiScale(false);
+      });
+    }
+
+    // Example Chips
+    document.querySelectorAll('.multiscale-example-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const dim = chip.dataset.dim;
+        if (dom.multiscaleInput && dim) {
+          dom.multiscaleInput.value = dim;
+          calculateMultiScale(true);
+          AudioService.playTick();
+        }
+      });
+    });
+
+    if (dom.btnRunMultiscale) {
+      dom.btnRunMultiscale.addEventListener('click', () => {
+        calculateMultiScale(true);
+      });
+    }
+
+    if (dom.multiscaleLoadSampleBtn) {
+      dom.multiscaleLoadSampleBtn.addEventListener('click', () => {
+        if (dom.multiscaleInput) {
+          dom.multiscaleInput.value = '2400 mm';
+          calculateMultiScale(true);
+          AudioService.playTick();
+        }
+      });
+    }
+
+    if (dom.multiscaleCopyTableBtn) {
+      dom.multiscaleCopyTableBtn.addEventListener('click', () => {
+        calculateMultiScale(true);
+        if (state.lastValidMultiScale && state.lastValidMultiScale.isValid) {
+          const out = formatScaleComparison(state.lastValidMultiScale, 'table');
+          copyToClipboard(out, 'Scale Comparison Table');
+        } else {
+          showToast('No scale comparison data to copy', 'warning');
+        }
+      });
+    }
+
+    if (dom.multiscaleCopyAllBtn) {
+      dom.multiscaleCopyAllBtn.addEventListener('click', () => {
+        calculateMultiScale(true);
+        if (state.lastValidMultiScale && state.lastValidMultiScale.isValid) {
+          const out = formatScaleComparison(state.lastValidMultiScale, 'all');
+          copyToClipboard(out, 'All Scales List');
+        } else {
+          showToast('No scale comparison data to copy', 'warning');
+        }
+      });
+    }
+
+    if (dom.multiscaleCopyCurrentBtn) {
+      dom.multiscaleCopyCurrentBtn.addEventListener('click', () => {
+        calculateMultiScale(true);
+        if (state.lastValidMultiScale && state.lastValidMultiScale.isValid) {
+          const out = formatScaleComparison(state.lastValidMultiScale, 'current');
+          copyToClipboard(out, 'Current Scale Comparison');
+        } else {
+          showToast('No scale comparison data to copy', 'warning');
+        }
+      });
+    }
+
+    if (dom.multiscaleCopyRawBtn) {
+      dom.multiscaleCopyRawBtn.addEventListener('click', () => {
+        calculateMultiScale(true);
+        if (state.lastValidMultiScale && state.lastValidMultiScale.isValid) {
+          const out = formatScaleComparison(state.lastValidMultiScale, 'raw');
+          copyToClipboard(out, 'Raw Drawing Numbers (CAD)');
+        } else {
+          showToast('No scale comparison data to copy', 'warning');
+        }
+      });
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -7627,6 +8151,7 @@ function initializeApp() {
       else if (e.key === '6') { e.preventDefault(); switchMode('reference'); }
       else if (e.key === '7') { e.preventDefault(); switchMode('workspace'); }
       else if (e.key === '8') { e.preventDefault(); switchMode('expression'); }
+      else if (e.key === '9') { e.preventDefault(); switchMode('multiscale'); }
       else if (e.key === 's' || e.key === 'S') { e.preventDefault(); swapDirection(); }
       else if (e.key === 'h' || e.key === 'H') { e.preventDefault(); toggleHistoryDrawer(); }
       else if (e.key === '?') {
