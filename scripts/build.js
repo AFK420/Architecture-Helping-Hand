@@ -14,6 +14,58 @@ const rootDir = path.resolve(__dirname, '..');
 const srcDir = path.join(rootDir, 'src');
 const distFile = path.join(rootDir, 'js', 'app.js');
 
+/**
+ * Build manifest — the single source of truth for bundle composition.
+ *
+ * CONTRACT:
+ * - Every runtime source module under src/ MUST be registered here exactly once.
+ * - Order MUST be dependency-first: a module's relative imports must all be
+ *   listed above it (enforced by tests/build-integrity.test.js).
+ * - Test-only/support files are never placed under src/ (they live in tests/),
+ *   so at present every JS file under src/ is a runtime module. If a future
+ *   support-only file must live under src/, add it to NON_RUNTIME_MODULES
+ *   with a documented reason — the coverage test enforces the union.
+ */
+export const BUNDLE_MODULES = [
+  // --- Core foundations (no intra-core dependencies beyond those listed) ---
+  { name: 'Units', file: path.join(srcDir, 'core', 'units.js') },
+  { name: 'Presets', file: path.join(srcDir, 'core', 'presets.js') },
+  { name: 'Formatter', file: path.join(srcDir, 'core', 'formatter.js') },
+  { name: 'Parser', file: path.join(srcDir, 'core', 'parser.js') },
+  { name: 'Calculator', file: path.join(srcDir, 'core', 'calculator.js') },
+  { name: 'Geometry', file: path.join(srcDir, 'core', 'geometry.js') },
+  { name: 'Furniture', file: path.join(srcDir, 'core', 'furniture.js') },
+
+  // --- Toolkit feature core (dependency order: workspace -> expression ->
+  //     cad-clipboard -> multi-scale/chains -> batch-cad/quick-dimension) ---
+  { name: 'DimensionWorkspace', file: path.join(srcDir, 'core', 'dimension-workspace.js') },
+  { name: 'DimensionExpression', file: path.join(srcDir, 'core', 'dimension-expression.js') },
+  { name: 'CadClipboard', file: path.join(srcDir, 'core', 'cad-clipboard.js') },
+  { name: 'MultiScale', file: path.join(srcDir, 'core', 'multi-scale.js') },
+  { name: 'DimensionChains', file: path.join(srcDir, 'core', 'dimension-chains.js') },
+  { name: 'BatchCad', file: path.join(srcDir, 'core', 'batch-cad.js') },
+  { name: 'QuickDimension', file: path.join(srcDir, 'core', 'quick-dimension.js') },
+
+  // --- Services ---
+  { name: 'Storage', file: path.join(srcDir, 'services', 'storage.js') },
+  { name: 'Audio', file: path.join(srcDir, 'services', 'audio.js') },
+  { name: 'History', file: path.join(srcDir, 'services', 'history.js') },
+  { name: 'Commands', file: path.join(srcDir, 'services', 'commands.js') },
+
+  // --- UI (last: imports everything above) ---
+  { name: 'Visualizer', file: path.join(srcDir, 'ui', 'visualizer.js') },
+  { name: 'App', file: path.join(srcDir, 'ui', 'app.js') }
+];
+
+/**
+ * Explicit allowlist of src/ files that are intentionally NOT runtime modules
+ * (test helpers, type-only modules, etc.). Keep this empty unless a file has a
+ * documented reason to live under src/ without being bundled. The coverage test
+ * in tests/build-integrity.test.js enforces: every JS file under src/ must appear
+ * in BUNDLE_MODULES or here.
+ */
+export const NON_RUNTIME_MODULES = [];
+
 export function stripImportsAndExports(code) {
   return code
     .replace(/import\s+[\s\S]*?from\s+['"][^'"]+['"];?/g, '')
@@ -24,26 +76,12 @@ export function stripImportsAndExports(code) {
 }
 
 export function generateBundleContent() {
-  const modules = [
-    { name: 'Units', file: path.join(srcDir, 'core', 'units.js') },
-    { name: 'Presets', file: path.join(srcDir, 'core', 'presets.js') },
-    { name: 'Formatter', file: path.join(srcDir, 'core', 'formatter.js') },
-    { name: 'Parser', file: path.join(srcDir, 'core', 'parser.js') },
-    { name: 'Calculator', file: path.join(srcDir, 'core', 'calculator.js') },
-    { name: 'Geometry', file: path.join(srcDir, 'core', 'geometry.js') },
-    { name: 'Furniture', file: path.join(srcDir, 'core', 'furniture.js') },
-    { name: 'DimensionWorkspace', file: path.join(srcDir, 'core', 'dimension-workspace.js') },
-    { name: 'Storage', file: path.join(srcDir, 'services', 'storage.js') },
-    { name: 'Audio', file: path.join(srcDir, 'services', 'audio.js') },
-    { name: 'History', file: path.join(srcDir, 'services', 'history.js') },
-    { name: 'Commands', file: path.join(srcDir, 'services', 'commands.js') },
-    { name: 'Visualizer', file: path.join(srcDir, 'ui', 'visualizer.js') },
-    { name: 'App', file: path.join(srcDir, 'ui', 'app.js') }
-  ];
+  const modules = BUNDLE_MODULES;
 
   let bundleContent = `/**
- * Architecture Helping Hand - Standalone Bundle v2.0.0
- * Compiled automatically from src/ modules. Works with file:/// and http:// protocols.
+ * Architecture Helping Hand - Standalone Bundle v2.1.0
+ * Compiled automatically from src/ modules (see BUNDLE_MODULES in scripts/build.js).
+ * Works with file:/// and http:// protocols.
  */
 
 (function() {
@@ -72,6 +110,7 @@ export function generateBundleContent() {
   }
 
 })();
+
 `;
 
   return bundleContent;

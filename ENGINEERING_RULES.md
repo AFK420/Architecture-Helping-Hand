@@ -123,9 +123,18 @@ $$\text{Scale Ratio} = \frac{\text{Real Measurement (Meters)}}{\text{Paper Measu
 ## 6. Build System & Standalone Deployment
 
 * **Source of Truth**: `src/` is the authoritative source for all code.
-* **Deterministic Bundler**: `node scripts/build.js` concatenates `src/` modules in deterministic dependency order into `js/app.js`.
+* **Build Manifest**: `scripts/build.js` exports `BUNDLE_MODULES` — the single, ordered source of truth for bundle composition. Every runtime module must be registered there exactly once, in dependency-first order (a module's relative imports must all be bundled before it).
+* **Runtime Module Rule**: every `*.js` file under `src/` is a runtime module by definition. Test helpers and support code live exclusively in `tests/`. If a support-only file must ever live under `src/`, it must be added to `NON_RUNTIME_MODULES` in `scripts/build.js` with a documented reason. This rule is enforced by `tests/build-integrity.test.js`.
+* **Deterministic Bundler**: `node scripts/build.js` concatenates `src/` modules in manifest order into `js/app.js`.
 * **Bundle Check**: `node scripts/build.js --check` verifies that `js/app.js` is identical to the compiled `src/`.
+* **Bundle Verification (automatic, part of `npm test`)**: `tests/build-integrity.test.js` enforces three layers — (1) manifest coverage: every `src/**/*.js` file is registered, exactly once, dependency-first; (2) bundle content: the generated bundle contains the distinctive definitions of every module and is byte-identical to a fresh regeneration; (3) runtime smoke: the bundle boots end-to-end against a minimal mocked browser environment without unresolved references.
 * **Rule**: NEVER edit `js/app.js` manually.
+
+### 6.1 How to Add a New Source Module Safely
+1. Create `src/core/<module>.js` (or `src/services/`, `src/ui/`).
+2. Register it in `BUNDLE_MODULES` in `scripts/build.js` **after** every module it imports.
+3. Run `npm test` — `build-integrity.test.js` fails loudly if the module is missing from the manifest, misordered, duplicated, or absent from the generated bundle.
+4. Run `npm run build && node scripts/build.js --check` before committing.
 
 ---
 
@@ -148,6 +157,8 @@ Run Test Runner (npm test) ➔ Verify 100% Passing
                ▼
 Rebuild Bundle (node scripts/build.js)
 ```
+
+The master runner (`tests/run-all.js`) emits the authoritative total assertion count on completion — quote that number in documentation instead of maintaining hard-coded counts by hand. New test suites must emit a parseable `Summary: N passed, M failed.` line so they are counted.
 
 ---
 

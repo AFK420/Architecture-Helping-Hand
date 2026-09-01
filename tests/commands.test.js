@@ -149,3 +149,4 @@ assertEqual(unregistered, true, 'Successfully unregistered custom command');
 assert(CommandRegistry.getCommand('custom-cad-plugin') === null, 'Custom command is removed');
 
 console.log(`\n🎉 COMMAND REGISTRY TESTS PASSED (${passed}/${total} assertions)\n`);
+console.log(`Summary: ${passed} passed, ${total - passed} failed.\n`);

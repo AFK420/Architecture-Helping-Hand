@@ -27,6 +27,7 @@ const testFiles = [
   'services.test.js',
   'commands.test.js',
   'data-integrity.test.js',
+  'build-integrity.test.js',
   'ui-contracts.test.js',
   'responsive.test.js'
 ];
@@ -37,15 +38,37 @@ console.log('=================================================================\n
 
 let totalSuites = 0;
 let passedSuites = 0;
+let totalAssertions = 0;
+
+/**
+ * Extracts the assertion count from a suite's "Summary: N passed" output.
+ * This makes the runner emit one authoritative total assertion count so
+ * documentation never has to guess. Suites whose summary line cannot be
+ * parsed (e.g. custom formats) count as 0 assertions and are reported so
+ * the gap stays visible instead of silently undercounting.
+ */
+function extractAssertionCount(stdout, file) {
+  const match = stdout.match(/(\d+)\s+passed/);
+  if (!match) {
+    console.warn(`⚠️  Could not parse assertion count for ${file} — not counted in total.`);
+    return 0;
+  }
+  return parseInt(match[1], 10);
+}
 
 for (const file of testFiles) {
   totalSuites++;
   const filePath = path.join(__dirname, file);
-  const res = spawnSync(process.execPath, [filePath], { stdio: 'inherit' });
+  const res = spawnSync(process.execPath, [filePath], { encoding: 'utf-8' });
 
   if (res.status === 0) {
     passedSuites++;
+    totalAssertions += extractAssertionCount(res.stdout || '', file);
+    process.stdout.write(res.stdout || '');
   } else {
+    // Surface everything from the failing suite, then abort the run.
+    process.stdout.write(res.stdout || '');
+    process.stderr.write(res.stderr || '');
     console.error(`❌ Test suite failed: ${file}\n`);
     process.exit(1);
   }
@@ -53,4 +76,5 @@ for (const file of testFiles) {
 
 console.log('=================================================================');
 console.log(`🎉 ALL ${passedSuites} OF ${totalSuites} TEST SUITES PASSED CLEANLY!`);
+console.log(`📊 TOTAL ASSERTIONS: ${totalAssertions} passed`);
 console.log('=================================================================\n');

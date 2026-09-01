@@ -17,9 +17,9 @@ The current design—where `src/core/` houses pure calculation engines, `src/cor
 
 ## 2. Planned Core Module Extensions (Future Phases)
 
-When feature development begins in subsequent phases, new calculations will be added as dedicated pure mathematical modules under `src/core/`:
+When feature development begins in subsequent phases, new calculations will be added as dedicated pure mathematical modules under `src/core/`. *(Update, September 2, 2026: `src/core/geometry.js` already exists and is verified by `tests/geometry.test.js` — it is no longer future work. `stairs.js` and `slope.js` remain planned. Any new module must be registered in `BUNDLE_MODULES` in `scripts/build.js` per the build contract in ENGINEERING_RULES.md §6.1.)*
 
-### 2.1 `src/core/geometry.js` (Future)
+### 2.1 `src/core/geometry.js` (✅ IMPLEMENTED — verified by tests/geometry.test.js)
 * **Pure Functions**:
   - `calcRectangle({ width, length, unitKey })` $\rightarrow$ `{ perimeter, area, diagonal }`
   - `calcCircle({ radius, diameter, unitKey })` $\rightarrow$ `{ circumference, area }`
@@ -68,6 +68,6 @@ Future UI modes (e.g. a Stair Calculator tab or Geometry Explorer) will strictly
 ## 4. Architectural Boundaries Checklist for Future PRs
 
 1. **No Math in UI**: All geometric equations ($A = \pi r^2$, $a^2 + b^2 = c^2$, Blondel's rule) must reside in `src/core/`.
-2. **Deterministic Build**: Any new file added to `src/core/` or `src/ui/` must be registered in `scripts/build.js`.
+2. **Deterministic Build**: Any new file added to `src/core/`, `src/services/`, or `src/ui/` must be registered in `BUNDLE_MODULES` in `scripts/build.js` (dependency-first order) — `tests/build-integrity.test.js` fails otherwise. See ENGINEERING_RULES.md §6.1.
 3. **Strict Validation**: All geometric parameters must use `requireFiniteNumber` and `requireUnit`.
 4. **Automated Unit Tests**: Every geometric formula must have an accompanying test file in `tests/`.

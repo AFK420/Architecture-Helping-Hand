@@ -317,6 +317,7 @@ export function runDimensionWorkspaceTests() {
   }
 
   console.log(`\nDimension Workspace Tests Summary: ${passed} passed, ${failed} failed\n`);
+  console.log(`Summary: ${passed} passed, ${failed} failed.\n`);
   return { passed, failed };
 }
 

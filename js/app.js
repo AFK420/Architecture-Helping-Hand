@@ -1,6 +1,7 @@
 /**
- * Architecture Helping Hand - Standalone Bundle v2.0.0
- * Compiled automatically from src/ modules. Works with file:/// and http:// protocols.
+ * Architecture Helping Hand - Standalone Bundle v2.1.0
+ * Compiled automatically from src/ modules (see BUNDLE_MODULES in scripts/build.js).
+ * Works with file:/// and http:// protocols.
  */
 
 (function() {
@@ -1935,6 +1936,3874 @@ function deserializeWorkspace(raw) {
   } catch (e) {
     // Corrupted storage recovery
     return createDefaultWorkspace();
+  }
+}
+
+
+  // =========================================================================
+  // MODULE: DimensionExpression
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Dimension Expression Engine
+ * Phase 2.5: Daily Architect Toolkit — Part 3: Dimension Expression Engine
+ *
+ * Deterministic architectural dimension expression engine with mixed-unit
+ * dimensional arithmetic, operator precedence, parentheses, and live scale conversions.
+ * Zero-dependency, pure mathematical parser. Never uses eval() or new Function().
+ */
+
+
+
+
+
+const MAX_EXPRESSION_LENGTH = 1000;
+const MAX_TOKEN_COUNT = 200;
+const MAX_NESTING_DEPTH = 50;
+
+/**
+ * Standard Error Codes for Dimension Expressions
+ */
+const EXPRESSION_ERROR_CODES = Object.freeze({
+  EMPTY_EXPRESSION: 'EMPTY_EXPRESSION',
+  EXPRESSION_TOO_LONG: 'EXPRESSION_TOO_LONG',
+  MAX_TOKENS_EXCEEDED: 'MAX_TOKENS_EXCEEDED',
+  MAX_DEPTH_EXCEEDED: 'MAX_DEPTH_EXCEEDED',
+  UNEXPECTED_CHARACTER: 'UNEXPECTED_CHARACTER',
+  UNEXPECTED_TOKEN: 'UNEXPECTED_TOKEN',
+  UNEXPECTED_OPERATOR: 'UNEXPECTED_OPERATOR',
+  MISSING_OPERAND: 'MISSING_OPERAND',
+  UNBALANCED_PARENTHESES: 'UNBALANCED_PARENTHESES',
+  DIVISION_BY_ZERO: 'DIVISION_BY_ZERO',
+  INCOMPATIBLE_DIMENSIONS: 'INCOMPATIBLE_DIMENSIONS',
+  NON_FINITE_RESULT: 'NON_FINITE_RESULT',
+  INVALID_MEASUREMENT: 'INVALID_MEASUREMENT'
+});
+
+/**
+ * Checks if a string contains expression-like operators or syntax
+ * @param {string} input - Input query
+ * @returns {boolean}
+ */
+function isExpressionLike(input) {
+  if (!input || typeof input !== 'string') return false;
+  const trimmed = input.trim();
+  if (trimmed === '') return false;
+
+  // Must contain at least one arithmetic operator (+, *, /, ×, ÷) or parentheses,
+  // or a minus sign that is not merely an architectural hyphen separator (e.g. 12'-6")
+  if (/[+*\/×÷()]/.test(trimmed)) return true;
+
+  // Check for minus / subtract operator: e.g. "5m - 2m" or "2400 - 900" or "2400−900"
+  if (/[\s\d][\-−][\s\d]/.test(trimmed) || /^[+\-−]\s*\(/.test(trimmed)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Tokenize a dimension expression string into a stream of tokens
+ * @param {string} expression - Math expression string
+ * @param {string} [defaultUnit='mm'] - Unit assumed for bare numbers
+ * @returns {Array<Object>} Array of token objects
+ */
+function tokenizeExpression(expression, defaultUnit = 'mm') {
+  if (typeof expression !== 'string') {
+    throw createExpressionError(EXPRESSION_ERROR_CODES.EMPTY_EXPRESSION, 'Expression must be a string', 0);
+  }
+
+  const str = expression.trim();
+  if (str === '') {
+    throw createExpressionError(EXPRESSION_ERROR_CODES.EMPTY_EXPRESSION, 'Expression is empty', 0);
+  }
+
+  if (str.length > MAX_EXPRESSION_LENGTH) {
+    throw createExpressionError(
+      EXPRESSION_ERROR_CODES.EXPRESSION_TOO_LONG,
+      `Expression exceeds maximum length of ${MAX_EXPRESSION_LENGTH} characters`,
+      0
+    );
+  }
+
+  const tokens = [];
+  let pos = 0;
+  const len = str.length;
+
+  while (pos < len) {
+    // 1. Skip whitespace
+    if (/\s/.test(str[pos])) {
+      pos++;
+      continue;
+    }
+
+    const startPos = pos;
+    const char = str[pos];
+
+    // 2. Parentheses
+    if (char === '(') {
+      tokens.push({ type: 'LPAREN', value: '(', raw: '(', position: startPos });
+      pos++;
+      continue;
+    }
+    if (char === ')') {
+      tokens.push({ type: 'RPAREN', value: ')', raw: ')', position: startPos });
+      pos++;
+      continue;
+    }
+
+    // 3. Operators: +, -, *, /, ×, ÷, −
+    if (char === '+' || char === '*' || char === '/' || char === '×' || char === '÷' || char === '−') {
+      const normalizedOp = (char === '×') ? '*' : ((char === '÷') ? '/' : ((char === '−') ? '-' : char));
+      tokens.push({ type: 'OPERATOR', value: normalizedOp, raw: char, position: startPos });
+      pos++;
+      continue;
+    }
+
+    // Special check for hyphen / minus operator:
+    if (char === '-') {
+      tokens.push({ type: 'OPERATOR', value: '-', raw: '-', position: startPos });
+      pos++;
+      continue;
+    }
+
+    // 4. Dimensional or Numeric Literals
+    const remaining = str.slice(pos);
+
+    // Pattern A: Feet & Inches (e.g. 7' 6", 7'-6 1/2", 12'6", 8', 6", 7' 6 1/2")
+    const ftInMatch = remaining.match(/^(\d+(?:\.\d+)?)\s*['′]\s*[-–—]?\s*(?:(\d+(?:\.\d+)?|\d+\s+\d+\/\d+|\d+\/\d+)\s*["″]?\s*)?/);
+    if (ftInMatch && (ftInMatch[0].includes("'") || ftInMatch[0].includes("′"))) {
+      const rawText = ftInMatch[0].trim();
+      const parsed = parseInput(rawText, { allowNegative: true });
+      if (parsed.isValid) {
+        const unitDef = requireUnit('in', 'length');
+        const meters = parsed.value * unitDef.toMeters;
+        tokens.push({
+          type: 'DIMENSION',
+          value: meters,
+          canonicalMeters: meters,
+          dimension: 'length',
+          detectedUnit: 'in',
+          raw: rawText,
+          position: startPos
+        });
+        pos += ftInMatch[0].length;
+        continue;
+      }
+    }
+
+    // Pattern B: Standalone Inches with fractions (e.g. 6 1/2" or 12")
+    const inMatch = remaining.match(/^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)\s*["″]/);
+    if (inMatch) {
+      const rawText = inMatch[0].trim();
+      const parsed = parseInput(rawText, { allowNegative: true });
+      if (parsed.isValid) {
+        const unitDef = requireUnit('in', 'length');
+        const meters = parsed.value * unitDef.toMeters;
+        tokens.push({
+          type: 'DIMENSION',
+          value: meters,
+          canonicalMeters: meters,
+          dimension: 'length',
+          detectedUnit: 'in',
+          raw: rawText,
+          position: startPos
+        });
+        pos += inMatch[0].length;
+        continue;
+      }
+    }
+
+    // Pattern C: Number with Unit Suffix (e.g. 2400mm, 2.4m, 150cm, 12ft, 10yd)
+    const unitMatch = remaining.match(/^(\d+(?:\.\d+)?|\d+\s+\d+\/\d+|\d+\/\d+)\s*([a-zA-Z²³_]+)/);
+    if (unitMatch) {
+      const candidateUnit = unitMatch[2].toLowerCase();
+      if (UNITS[candidateUnit]) {
+        const rawText = unitMatch[0].trim();
+        const parsed = parseInput(rawText, { allowNegative: true });
+        if (parsed.isValid) {
+          const unitDef = requireUnit(candidateUnit, 'length');
+          const meters = parsed.value * unitDef.toMeters;
+          tokens.push({
+            type: 'DIMENSION',
+            value: meters,
+            canonicalMeters: meters,
+            dimension: 'length',
+            detectedUnit: candidateUnit,
+            raw: rawText,
+            position: startPos
+          });
+          pos += unitMatch[0].length;
+          continue;
+        }
+      } else {
+        throw createExpressionError(
+          EXPRESSION_ERROR_CODES.UNEXPECTED_CHARACTER,
+          `Unknown unit suffix: "${unitMatch[2]}"`,
+          startPos + unitMatch[1].length
+        );
+      }
+    }
+
+    // Pattern D: Standalone Fraction (e.g. "3 1/2", "5/8")
+    const fractionMatch = remaining.match(/^(\d+\s+\d+\/\d+|\d+\/\d+)/);
+    if (fractionMatch) {
+      const rawText = fractionMatch[0];
+      const parsed = parseInput(rawText, { allowNegative: true });
+      if (parsed.isValid) {
+        tokens.push({
+          type: 'NUMBER',
+          value: parsed.value,
+          dimension: 'scalar',
+          raw: rawText,
+          position: startPos
+        });
+        pos += fractionMatch[0].length;
+        continue;
+      }
+    }
+
+    // Pattern E: Standard Decimal or Integer (e.g. 2400, 900, 12.5)
+    const numberMatch = remaining.match(/^(\d+(?:\.\d+)?)/);
+    if (numberMatch) {
+      const rawText = numberMatch[0];
+      const val = parseFloat(rawText);
+      if (!isNaN(val)) {
+        tokens.push({
+          type: 'NUMBER',
+          value: val,
+          dimension: 'scalar',
+          raw: rawText,
+          position: startPos
+        });
+        pos += numberMatch[0].length;
+        continue;
+      }
+    }
+
+    // If nothing matched, throw syntax error at current position
+    throw createExpressionError(
+      EXPRESSION_ERROR_CODES.UNEXPECTED_CHARACTER,
+      `Unexpected character "${str[pos]}" in expression`,
+      pos
+    );
+  }
+
+  if (tokens.length > MAX_TOKEN_COUNT) {
+    throw createExpressionError(
+      EXPRESSION_ERROR_CODES.MAX_TOKENS_EXCEEDED,
+      `Expression contains too many tokens (${tokens.length} > ${MAX_TOKEN_COUNT})`,
+      0
+    );
+  }
+
+  tokens.push({ type: 'EOF', value: null, raw: '', position: len });
+  return tokens;
+}
+
+/**
+ * Recursive Descent Expression Parser
+ */
+class ExpressionParser {
+  constructor(tokens, defaultUnit = 'mm') {
+    this.tokens = tokens;
+    this.defaultUnit = defaultUnit;
+    this.current = 0;
+    this.depth = 0;
+  }
+
+  peek() {
+    return this.tokens[this.current] || { type: 'EOF', value: null, position: 0 };
+  }
+
+  previous() {
+    return this.tokens[this.current - 1];
+  }
+
+  isAtEnd() {
+    return this.peek().type === 'EOF';
+  }
+
+  advance() {
+    if (!this.isAtEnd()) this.current++;
+    return this.previous();
+  }
+
+  match(...types) {
+    for (const type of types) {
+      if (this.check(type)) {
+        this.advance();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  matchOperator(...operators) {
+    if (this.check('OPERATOR') && operators.includes(this.peek().value)) {
+      this.advance();
+      return true;
+    }
+    return false;
+  }
+
+  check(type) {
+    if (this.isAtEnd()) return false;
+    return this.peek().type === type;
+  }
+
+  parse() {
+    if (this.tokens.length === 1 && this.tokens[0].type === 'EOF') {
+      throw createExpressionError(EXPRESSION_ERROR_CODES.EMPTY_EXPRESSION, 'Expression is empty', 0);
+    }
+    const ast = this.expression();
+    if (!this.isAtEnd()) {
+      const extraToken = this.peek();
+      throw createExpressionError(
+        EXPRESSION_ERROR_CODES.UNEXPECTED_TOKEN,
+        `Unexpected token "${extraToken.raw}" at end of expression`,
+        extraToken.position
+      );
+    }
+    return ast;
+  }
+
+  expression() {
+    return this.addition();
+  }
+
+  addition() {
+    let expr = this.multiplication();
+
+    while (this.matchOperator('+', '-')) {
+      const operator = this.previous();
+      // Check for illegal consecutive operators e.g. 1200 + * 600 or 1200 + + 600
+      if (this.check('OPERATOR')) {
+        throw createExpressionError(
+          EXPRESSION_ERROR_CODES.UNEXPECTED_OPERATOR,
+          `Unexpected operator "${this.peek().raw}" after "${operator.raw}"`,
+          this.peek().position
+        );
+      }
+      const right = this.multiplication();
+      expr = {
+        type: 'BINARY_OP',
+        operator: operator.value,
+        left: expr,
+        right: right,
+        position: operator.position
+      };
+    }
+
+    return expr;
+  }
+
+  multiplication() {
+    let expr = this.unary();
+
+    while (this.matchOperator('*', '/')) {
+      const operator = this.previous();
+      // Check for illegal consecutive operators
+      if (this.check('OPERATOR')) {
+        throw createExpressionError(
+          EXPRESSION_ERROR_CODES.UNEXPECTED_OPERATOR,
+          `Unexpected operator "${this.peek().raw}" after "${operator.raw}"`,
+          this.peek().position
+        );
+      }
+      const right = this.unary();
+      expr = {
+        type: 'BINARY_OP',
+        operator: operator.value,
+        left: expr,
+        right: right,
+        position: operator.position
+      };
+    }
+
+    return expr;
+  }
+
+  unary() {
+    if (this.matchOperator('+', '-')) {
+      const operator = this.previous();
+      if (this.check('OPERATOR')) {
+        throw createExpressionError(
+          EXPRESSION_ERROR_CODES.UNEXPECTED_OPERATOR,
+          `Unexpected operator "${this.peek().raw}" after "${operator.raw}"`,
+          this.peek().position
+        );
+      }
+      const right = this.primary();
+      return {
+        type: 'UNARY_OP',
+        operator: operator.value,
+        operand: right,
+        position: operator.position
+      };
+    }
+
+    return this.primary();
+  }
+
+  primary() {
+    if (this.match('LPAREN')) {
+      const lparen = this.previous();
+      this.depth++;
+      if (this.depth > MAX_NESTING_DEPTH) {
+        throw createExpressionError(
+          EXPRESSION_ERROR_CODES.MAX_DEPTH_EXCEEDED,
+          `Exceeded maximum nesting depth of ${MAX_NESTING_DEPTH}`,
+          lparen.position
+        );
+      }
+
+      const expr = this.expression();
+
+      if (!this.match('RPAREN')) {
+        throw createExpressionError(
+          EXPRESSION_ERROR_CODES.UNBALANCED_PARENTHESES,
+          'Missing closing parenthesis ")"',
+          this.peek().position
+        );
+      }
+
+      this.depth--;
+      return {
+        type: 'GROUPING',
+        expression: expr,
+        position: lparen.position
+      };
+    }
+
+    if (this.match('DIMENSION')) {
+      const tok = this.previous();
+      return {
+        type: 'LITERAL_DIMENSION',
+        value: tok.value,
+        canonicalMeters: tok.canonicalMeters,
+        dimension: 'length',
+        detectedUnit: tok.detectedUnit,
+        raw: tok.raw,
+        position: tok.position
+      };
+    }
+
+    if (this.match('NUMBER')) {
+      const tok = this.previous();
+      return {
+        type: 'LITERAL_NUMBER',
+        value: tok.value,
+        dimension: 'scalar',
+        isBareNumber: true,
+        raw: tok.raw,
+        position: tok.position
+      };
+    }
+
+    const unexpected = this.peek();
+    if (unexpected.type === 'OPERATOR') {
+      throw createExpressionError(
+        EXPRESSION_ERROR_CODES.UNEXPECTED_OPERATOR,
+        `Unexpected operator "${unexpected.raw}". Expected a measurement or number.`,
+        unexpected.position
+      );
+    }
+
+    throw createExpressionError(
+      EXPRESSION_ERROR_CODES.MISSING_OPERAND,
+      `Expected a measurement or number, but found "${unexpected.raw || 'end of expression'}"`,
+      unexpected.position
+    );
+  }
+}
+
+/**
+ * Parse an expression into an AST
+ * @param {string} expression
+ * @param {Object} [options]
+ * @returns {Object} AST root node
+ */
+function parseExpression(expression, options = {}) {
+  const { defaultUnit = 'mm' } = options;
+  const tokens = tokenizeExpression(expression, defaultUnit);
+  const parser = new ExpressionParser(tokens, defaultUnit);
+  return parser.parse();
+}
+
+/**
+ * Evaluates an AST node with dimensional quantity semantics
+ */
+function evaluateASTNode(node, context) {
+  if (!node) {
+    throw createExpressionError(EXPRESSION_ERROR_CODES.EMPTY_EXPRESSION, 'Empty AST node', 0);
+  }
+
+  const { defaultUnit = 'mm' } = context;
+
+  switch (node.type) {
+    case 'LITERAL_DIMENSION':
+      return {
+        value: node.canonicalMeters,
+        dimension: 'length',
+        explicitUnit: node.detectedUnit,
+        isBareNumber: false
+      };
+
+    case 'LITERAL_NUMBER':
+      return {
+        value: node.value,
+        dimension: 'scalar',
+        isBareNumber: true
+      };
+
+    case 'GROUPING':
+      return evaluateASTNode(node.expression, context);
+
+    case 'UNARY_OP': {
+      const operand = evaluateASTNode(node.operand, context);
+      if (node.operator === '-') {
+        return {
+          value: -operand.value,
+          dimension: operand.dimension,
+          explicitUnit: operand.explicitUnit,
+          isBareNumber: operand.isBareNumber
+        };
+      }
+      return operand;
+    }
+
+    case 'BINARY_OP': {
+      const left = evaluateASTNode(node.left, context);
+      const right = evaluateASTNode(node.right, context);
+
+      return applyBinaryOperator(node.operator, left, right, defaultUnit, node.position);
+    }
+
+    default:
+      throw createExpressionError(
+        EXPRESSION_ERROR_CODES.UNEXPECTED_TOKEN,
+        `Unknown AST node type: ${node.type}`,
+        node.position || 0
+      );
+  }
+}
+
+/**
+ * Applies a binary arithmetic operator to two dimensional quantities
+ */
+function applyBinaryOperator(op, left, right, defaultUnit, position = 0) {
+  const unitDef = requireUnit(defaultUnit, 'length');
+
+  if (op === '+' || op === '-') {
+    // 1. Both are lengths: length ± length -> length
+    if (left.dimension === 'length' && right.dimension === 'length') {
+      const val = (op === '+') ? (left.value + right.value) : (left.value - right.value);
+      return {
+        value: val,
+        dimension: 'length',
+        explicitUnit: left.explicitUnit || right.explicitUnit || defaultUnit,
+        isBareNumber: false
+      };
+    }
+
+    // 2. Length + Bare Scalar (e.g. 2400mm + 500)
+    if (left.dimension === 'length' && right.dimension === 'scalar') {
+      const rightMeters = right.value * unitDef.toMeters;
+      const val = (op === '+') ? (left.value + rightMeters) : (left.value - rightMeters);
+      return {
+        value: val,
+        dimension: 'length',
+        explicitUnit: left.explicitUnit || defaultUnit,
+        isBareNumber: false
+      };
+    }
+
+    // 3. Bare Scalar + Length (e.g. 500 + 2400mm)
+    if (left.dimension === 'scalar' && right.dimension === 'length') {
+      const leftMeters = left.value * unitDef.toMeters;
+      const val = (op === '+') ? (leftMeters + right.value) : (leftMeters - right.value);
+      return {
+        value: val,
+        dimension: 'length',
+        explicitUnit: right.explicitUnit || defaultUnit,
+        isBareNumber: false
+      };
+    }
+
+    // 4. Both are scalars:
+    if (left.dimension === 'scalar' && right.dimension === 'scalar') {
+      // If both are bare numbers (e.g. 2400 + 900): in defaultUnit context, treat as length in defaultUnit
+      if (left.isBareNumber && right.isBareNumber) {
+        const numSum = (op === '+') ? (left.value + right.value) : (left.value - right.value);
+        return {
+          value: numSum * unitDef.toMeters,
+          dimension: 'length',
+          explicitUnit: defaultUnit,
+          isBareNumber: true
+        };
+      }
+
+      // If one is a dimensionless scalar ratio:
+      const val = (op === '+') ? (left.value + right.value) : (left.value - right.value);
+      return {
+        value: val,
+        dimension: 'scalar',
+        isBareNumber: false
+      };
+    }
+  }
+
+  if (op === '*') {
+    // 1. length * scalar -> length (e.g. 250mm * 8)
+    if (left.dimension === 'length' && right.dimension === 'scalar') {
+      return {
+        value: left.value * right.value,
+        dimension: 'length',
+        explicitUnit: left.explicitUnit || defaultUnit,
+        isBareNumber: false
+      };
+    }
+
+    // 2. scalar * length -> length (e.g. 8 * 250mm)
+    if (left.dimension === 'scalar' && right.dimension === 'length') {
+      return {
+        value: left.value * right.value,
+        dimension: 'length',
+        explicitUnit: right.explicitUnit || defaultUnit,
+        isBareNumber: false
+      };
+    }
+
+    // 3. scalar * scalar:
+    if (left.dimension === 'scalar' && right.dimension === 'scalar') {
+      // If both are bare numbers in an architectural context (e.g. 250 * 8):
+      if (left.isBareNumber && right.isBareNumber) {
+        const product = left.value * right.value;
+        return {
+          value: product * unitDef.toMeters,
+          dimension: 'length',
+          explicitUnit: defaultUnit,
+          isBareNumber: true
+        };
+      }
+      return {
+        value: left.value * right.value,
+        dimension: 'scalar',
+        isBareNumber: false
+      };
+    }
+
+    // 4. length * length -> unsupported linear operation
+    if (left.dimension === 'length' && right.dimension === 'length') {
+      throw createExpressionError(
+        EXPRESSION_ERROR_CODES.INCOMPATIBLE_DIMENSIONS,
+        'Multiplying two lengths produces an area (m²); this linear expression engine calculates lengths and scalar counts. For area calculations, use the Area & Volume scaler.',
+        position
+      );
+    }
+  }
+
+  if (op === '/') {
+    // Check division by zero
+    if (Math.abs(right.value) < 1e-15) {
+      throw createExpressionError(
+        EXPRESSION_ERROR_CODES.DIVISION_BY_ZERO,
+        'Division by zero is undefined',
+        position
+      );
+    }
+
+    // 1. length / scalar -> length (e.g. 2400mm / 3 = 800mm)
+    if (left.dimension === 'length' && right.dimension === 'scalar') {
+      return {
+        value: left.value / right.value,
+        dimension: 'length',
+        explicitUnit: left.explicitUnit || defaultUnit,
+        isBareNumber: false
+      };
+    }
+
+    // 2. length / length -> scalar (dimensionless count / ratio, e.g. 2400mm / 800mm = 3)
+    if (left.dimension === 'length' && right.dimension === 'length') {
+      return {
+        value: left.value / right.value,
+        dimension: 'scalar',
+        isBareNumber: false
+      };
+    }
+
+    // 3. scalar / scalar:
+    if (left.dimension === 'scalar' && right.dimension === 'scalar') {
+      // If both are bare numbers (e.g. 2400 / 3):
+      if (left.isBareNumber && right.isBareNumber) {
+        const quotient = left.value / right.value;
+        return {
+          value: quotient * unitDef.toMeters,
+          dimension: 'length',
+          explicitUnit: defaultUnit,
+          isBareNumber: true
+        };
+      }
+      return {
+        value: left.value / right.value,
+        dimension: 'scalar',
+        isBareNumber: false
+      };
+    }
+
+    // 4. scalar / length -> unsupported
+    if (left.dimension === 'scalar' && right.dimension === 'length') {
+      throw createExpressionError(
+        EXPRESSION_ERROR_CODES.INCOMPATIBLE_DIMENSIONS,
+        'Cannot divide a dimensionless scalar by a length measurement.',
+        position
+      );
+    }
+  }
+
+  throw createExpressionError(
+    EXPRESSION_ERROR_CODES.UNEXPECTED_OPERATOR,
+    `Unsupported operator: "${op}"`,
+    position
+  );
+}
+
+/**
+ * Evaluates a mathematical dimension expression string
+ * @param {string} expression - Architectural math expression
+ * @param {Object} [options]
+ * @param {string} [options.defaultUnit='mm'] - Default unit for bare numbers
+ * @param {string} [options.displayUnit=null] - Preferred output unit key (e.g. 'mm', 'm', 'ft_in')
+ * @param {number} [options.scaleRatio=50] - Scale ratio denominator for drawing representation
+ * @param {number} [options.precision=3] - Decimal precision
+ * @returns {Object} Structured expression result
+ */
+function evaluateExpression(expression, options = {}) {
+  const {
+    defaultUnit = 'mm',
+    displayUnit = null,
+    scaleRatio = 50,
+    precision = 3
+  } = options;
+
+  const ast = parseExpression(expression, { defaultUnit });
+  const rawResult = evaluateASTNode(ast, { defaultUnit });
+
+  if (!Number.isFinite(rawResult.value)) {
+    throw createExpressionError(
+      EXPRESSION_ERROR_CODES.NON_FINITE_RESULT,
+      'Calculation resulted in a non-finite or invalid number',
+      0
+    );
+  }
+
+  return formatExpressionResult(rawResult, expression, {
+    defaultUnit,
+    displayUnit: displayUnit || rawResult.explicitUnit || defaultUnit,
+    scaleRatio,
+    precision
+  });
+}
+
+/**
+ * Non-throwing safe evaluation wrapper
+ * @param {string} expression
+ * @param {Object} [options]
+ * @returns {Object} Result object with isValid boolean
+ */
+function evaluateExpressionSafe(expression, options = {}) {
+  try {
+    return evaluateExpression(expression, options);
+  } catch (err) {
+    return {
+      expression: expression || '',
+      value: 0,
+      dimension: 'length',
+      canonicalMeters: 0,
+      displayUnit: options.displayUnit || options.defaultUnit || 'mm',
+      formatted: '---',
+      secondaryFormatted: [],
+      scaleRatio: options.scaleRatio || 50,
+      drawingMeters: null,
+      drawingFormatted: null,
+      isNegative: false,
+      isValid: false,
+      error: {
+        code: err.code || 'EVALUATION_ERROR',
+        message: err.message || 'Invalid expression',
+        position: typeof err.position === 'number' ? err.position : 0
+      }
+    };
+  }
+}
+
+/**
+ * Formats a calculated evaluation result into a standardized architectural object
+ */
+function formatExpressionResult(rawResult, expression, options = {}) {
+  const {
+    defaultUnit = 'mm',
+    displayUnit = 'mm',
+    scaleRatio = 50,
+    precision = 3
+  } = options;
+
+  const isScalar = rawResult.dimension === 'scalar';
+
+  if (isScalar) {
+    const formatted = formatNumber(rawResult.value, precision);
+    return {
+      expression: expression.trim(),
+      value: rawResult.value,
+      dimension: 'scalar',
+      canonicalMeters: null,
+      displayUnit: 'scalar',
+      formatted: formatted,
+      secondaryFormatted: [],
+      scaleRatio: null,
+      drawingMeters: null,
+      drawingFormatted: null,
+      isNegative: rawResult.value < 0,
+      isValid: true,
+      error: null
+    };
+  }
+
+  // Linear Dimension (Length)
+  const canonicalMeters = rawResult.value;
+  const isNegative = canonicalMeters < 0;
+  const absMeters = Math.abs(canonicalMeters);
+
+  const unitKey = (displayUnit === 'scalar' || !displayUnit) ? defaultUnit : displayUnit;
+  const unitDef = UNITS[unitKey] || UNITS.mm;
+  const converted = canonicalMeters / unitDef.toMeters;
+
+  let formatted = '';
+  if (unitKey === 'ft_in') {
+    const totalInches = canonicalMeters / UNITS.in.toMeters;
+    formatted = `${isNegative ? '-' : ''}${formatFeetInches(Math.abs(totalInches))}`;
+  } else {
+    formatted = `${isNegative ? '-' : ''}${formatNumber(Math.abs(converted), precision)} ${unitDef.symbol}`;
+  }
+
+  // Secondary representations across standard units
+  const secondaryFormatted = [
+    { unit: 'm', value: canonicalMeters, formatted: `${isNegative ? '-' : ''}${formatNumber(absMeters, precision)} m` },
+    { unit: 'cm', value: canonicalMeters * 100, formatted: `${isNegative ? '-' : ''}${formatNumber(absMeters * 100, precision > 1 ? precision - 1 : 1)} cm` },
+    { unit: 'mm', value: canonicalMeters * 1000, formatted: `${isNegative ? '-' : ''}${formatNumber(absMeters * 1000, 0)} mm` },
+    { unit: 'ft_in', value: canonicalMeters / 0.0254, formatted: `${isNegative ? '-' : ''}${formatFeetInches(absMeters / 0.0254)}` }
+  ];
+
+  // Scale drawing calculation
+  let drawingMeters = null;
+  let drawingFormatted = null;
+
+  if (scaleRatio && scaleRatio > 0) {
+    drawingMeters = canonicalMeters / scaleRatio;
+    const drawingUnit = (unitKey === 'ft' || unitKey === 'in' || unitKey === 'ft_in') ? 'in' : 'mm';
+    const drawUnitDef = UNITS[drawingUnit] || UNITS.mm;
+    const drawConverted = drawingMeters / drawUnitDef.toMeters;
+    drawingFormatted = `${isNegative ? '-' : ''}${formatNumber(Math.abs(drawConverted), precision)} ${drawUnitDef.symbol}`;
+  }
+
+  return {
+    expression: expression.trim(),
+    value: canonicalMeters,
+    dimension: 'length',
+    canonicalMeters: canonicalMeters,
+    displayUnit: unitKey,
+    formatted: formatted,
+    secondaryFormatted: secondaryFormatted,
+    scaleRatio: scaleRatio,
+    drawingMeters: drawingMeters,
+    drawingFormatted: drawingFormatted,
+    isNegative: isNegative,
+    isValid: true,
+    error: null
+  };
+}
+
+/**
+ * Creates a structured expression error object
+ */
+function createExpressionError(code, message, position = 0) {
+  const err = new Error(message);
+  err.code = code;
+  err.position = position;
+  return err;
+}
+
+
+  // =========================================================================
+  // MODULE: CadClipboard
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - CAD Clipboard & Drafting Handoff Engine
+ * Pure, deterministic, zero-DOM formatting module for copying normalized
+ * dimension data, continuous chains, and schedules into AutoCAD, Rhino,
+ * SketchUp, Revit, spreadsheets, and CAD command prompts.
+ */
+
+
+
+
+const CAD_STORAGE_KEY = 'archiscale_cad_clipboard_settings';
+
+/**
+ * Standard CAD Application Formatting Presets
+ */
+const CAD_FORMAT_PRESETS = Object.freeze({
+  generic: {
+    id: 'generic',
+    name: 'Generic CAD',
+    description: 'Clean space or newline-separated numbers with dot decimal separator, no prose or emojis.',
+    defaultUnit: 'mm',
+    defaultPrecision: 2,
+    defaultSuffix: 'none',
+    defaultDelimiter: 'space',
+    targetValue: 'real'
+  },
+  autocad: {
+    id: 'autocad',
+    name: 'AutoCAD-style',
+    description: 'Direct command-line and prompt values formatted for AutoCAD drafting inputs.',
+    defaultUnit: 'mm',
+    defaultPrecision: 2,
+    defaultSuffix: 'none',
+    defaultDelimiter: 'space',
+    targetValue: 'real'
+  },
+  rhino: {
+    id: 'rhino',
+    name: 'Rhino-style',
+    description: 'Clean numerical inputs formatted for Rhino command prompts and curve lengths.',
+    defaultUnit: 'mm',
+    defaultPrecision: 3,
+    defaultSuffix: 'none',
+    defaultDelimiter: 'space',
+    targetValue: 'real'
+  },
+  sketchup: {
+    id: 'sketchup',
+    name: 'SketchUp-style',
+    description: 'Values formatted with unit identifiers suitable for SketchUp Value Control Box (VCB).',
+    defaultUnit: 'mm',
+    defaultPrecision: 1,
+    defaultSuffix: 'symbol',
+    defaultDelimiter: 'space',
+    targetValue: 'real'
+  },
+  spreadsheet: {
+    id: 'spreadsheet',
+    name: 'Spreadsheet (TSV)',
+    description: 'Tab-separated schedule table with clean column headers for Excel, Google Sheets, and LibreOffice.',
+    defaultUnit: 'mm',
+    defaultPrecision: 2,
+    defaultSuffix: 'none',
+    defaultDelimiter: 'tsv',
+    targetValue: 'real'
+  },
+  csv: {
+    id: 'csv',
+    name: 'CSV Schedule',
+    description: 'Comma-separated values with RFC-4180 standard escaping for CAD tables and BIM schedules.',
+    defaultUnit: 'mm',
+    defaultPrecision: 2,
+    defaultSuffix: 'none',
+    defaultDelimiter: 'csv',
+    targetValue: 'real'
+  },
+  plaintext: {
+    id: 'plaintext',
+    name: 'Plain Text Notes',
+    description: 'Readable list with dimension labels and formatted units for general architectural notes.',
+    defaultUnit: 'mm',
+    defaultPrecision: 2,
+    defaultSuffix: 'symbol',
+    defaultDelimiter: 'newline',
+    targetValue: 'real'
+  }
+});
+
+/**
+ * Escapes a string for safe inclusion in Tab-Separated Values (TSV).
+ * Strips tab characters and converts newlines to spaces to prevent row breaks.
+ * @param {*} val 
+ * @returns {string}
+ */
+function escapeTSV(val) {
+  if (val === null || val === undefined) return '';
+  const str = String(val);
+  return str.replace(/\t/g, ' ').replace(/\r?\n/g, ' ').trim();
+}
+
+/**
+ * Escapes a string for RFC-4180 compliant Comma-Separated Values (CSV).
+ * Encloses field in double quotes if it contains commas, quotes, or newlines.
+ * @param {*} val 
+ * @returns {string}
+ */
+function escapeCSV(val) {
+  if (val === null || val === undefined) return '';
+  const str = String(val);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+/**
+ * Formats a single numerical value (in canonical meters) into a CAD-compliant string.
+ * Ensures dot (.) decimal separator, handles negative values and 0 correctly.
+ * 
+ * @param {number} meters - The canonical length in meters
+ * @param {Object} options
+ * @param {string} [options.unit='mm'] - Output unit: 'mm' | 'cm' | 'm' | 'in' | 'ft' | 'ft-in'
+ * @param {number} [options.precision=2] - Decimal precision (0 to 4)
+ * @param {string} [options.suffix='none'] - Suffix mode: 'none' | 'symbol' | 'full'
+ * @param {number} [options.scaleRatio=null] - If provided and targetValue is 'drawing', scale is applied
+ * @returns {string}
+ */
+function formatCadValue(meters, options = {}) {
+  if (typeof meters !== 'number' || isNaN(meters) || !isFinite(meters)) {
+    return '0';
+  }
+
+  const unit = options.unit || 'mm';
+  const precision = typeof options.precision === 'number' ? Math.max(0, Math.min(4, options.precision)) : 2;
+  const suffix = options.suffix || 'none';
+
+  // Feet-inches special formatting
+  if (unit === 'ft-in') {
+    const formattedFeetInches = formatFeetInches(meters, precision);
+    if (suffix === 'none') {
+      // Return unadorned feet-inches format e.g. "7'-6 1/2""
+      return formattedFeetInches;
+    }
+    return formattedFeetInches;
+  }
+
+  const unitDef = UNITS[unit] || UNITS.mm;
+  const convertedValue = meters / unitDef.toMeters;
+
+  // Format to exact decimal precision with standard dot decimal point
+  const fixedStr = convertedValue.toFixed(precision);
+
+  // Strip trailing zeros if precision > 0 when using generic CAD or if requested
+  let cleanNumberStr = fixedStr;
+  if (options.stripTrailingZeros && precision > 0 && cleanNumberStr.includes('.')) {
+    cleanNumberStr = cleanNumberStr.replace(/\.?0+$/, '');
+  }
+
+  // Handle unit suffix
+  if (suffix === 'symbol') {
+    return `${cleanNumberStr} ${unitDef.symbol}`;
+  } else if (suffix === 'full') {
+    return `${cleanNumberStr} ${unitDef.name}`;
+  }
+
+  return cleanNumberStr;
+}
+
+/**
+ * Formats an array of canonical meter values into a formatted CAD string with chosen delimiter.
+ * 
+ * @param {Array<number>} meterValues 
+ * @param {Object} options 
+ * @returns {string}
+ */
+function formatCadValues(meterValues, options = {}) {
+  if (!Array.isArray(meterValues) || meterValues.length === 0) {
+    return '';
+  }
+
+  const formattedItems = meterValues.map(m => formatCadValue(m, options));
+  const delimiter = options.delimiter || 'space';
+
+  if (delimiter === 'newline') {
+    return formattedItems.join('\n');
+  } else if (delimiter === 'comma') {
+    return formattedItems.join(', ');
+  } else if (delimiter === 'tsv') {
+    return formattedItems.join('\t');
+  } else if (delimiter === 'pipe') {
+    return formattedItems.join(' | ');
+  }
+
+  return formattedItems.join(' ');
+}
+
+/**
+ * Formats a Dimension Workspace collection for CAD clipboard export.
+ * 
+ * @param {Object} workspace - The dimension workspace object { entries: [...], groups: [...], scaleRatio, displayUnit }
+ * @param {Object} options
+ * @param {string} [options.filterScope='all'] - 'all' | 'selected' | 'segments' | 'references' | 'allowances'
+ * @param {Set<string>} [options.selectedIds=null] - Selected entry IDs
+ * @param {string} [options.targetValue='real'] - 'real' | 'drawing'
+ * @param {string} [options.format='generic'] - 'generic' | 'autocad' | 'rhino' | 'sketchup' | 'spreadsheet' | 'csv' | 'plaintext'
+ * @param {string} [options.unit='mm'] - Target unit
+ * @param {number} [options.precision=2] - Decimal precision
+ * @param {string} [options.suffix='none'] - Suffix mode
+ * @param {string} [options.delimiter='space'] - Delimiter for linear modes
+ * @returns {{ text: string, count: number, totalRealMeters: number, totalDrawingMeters: number }}
+ */
+function formatCadWorkspace(workspace, options = {}) {
+  if (!workspace || !Array.isArray(workspace.entries)) {
+    return { text: '', count: 0, totalRealMeters: 0, totalDrawingMeters: 0 };
+  }
+
+  const scaleRatio = typeof options.scaleRatio === 'number' && options.scaleRatio > 0
+    ? options.scaleRatio
+    : (workspace.scaleRatio || 50);
+
+  const filterScope = options.filterScope || 'all';
+  const selectedIds = options.selectedIds instanceof Set ? options.selectedIds : new Set();
+  const targetValue = options.targetValue || 'real';
+  const format = options.format || 'generic';
+  const unit = options.unit || workspace.displayUnit || 'mm';
+  const precision = typeof options.precision === 'number' ? options.precision : 2;
+  const suffix = options.suffix || 'none';
+  const delimiter = options.delimiter || (format === 'spreadsheet' ? 'tsv' : (format === 'csv' ? 'csv' : (format === 'plaintext' ? 'newline' : 'space')));
+
+  // Filter entries based on scope
+  const filteredEntries = workspace.entries.filter(entry => {
+    if (entry.enabled === false) return false;
+
+    if (filterScope === 'selected') {
+      return selectedIds.has(entry.id);
+    }
+    if (filterScope === 'segments') {
+      return entry.dimensionType === 'segment' || !entry.dimensionType;
+    }
+    if (filterScope === 'references') {
+      return entry.dimensionType === 'reference';
+    }
+    if (filterScope === 'allowances') {
+      return entry.dimensionType === 'allowance';
+    }
+    return true;
+  });
+
+  if (filteredEntries.length === 0) {
+    return { text: '', count: 0, totalRealMeters: 0, totalDrawingMeters: 0 };
+  }
+
+  let totalRealMeters = 0;
+  let totalDrawingMeters = 0;
+
+  filteredEntries.forEach(e => {
+    const realMeters = typeof e.realMeters === 'number' && isFinite(e.realMeters) ? e.realMeters : 0;
+    if (e.dimensionType !== 'reference') {
+      totalRealMeters += realMeters;
+      totalDrawingMeters += realMeters / scaleRatio;
+    }
+  });
+
+  // Table Schedule Format (Spreadsheet TSV or CSV)
+  if (format === 'spreadsheet' || delimiter === 'tsv') {
+    const header = ['#', 'Name', `Real (${unit})`, `Drawing @ 1:${scaleRatio} (${unit})`, 'Type', 'Notes'].join('\t');
+    const rows = filteredEntries.map((entry, idx) => {
+      const realM = typeof entry.realMeters === 'number' ? entry.realMeters : 0;
+      const drawM = realM / scaleRatio;
+      const realStr = formatCadValue(realM, { unit, precision, suffix: 'none' });
+      const drawStr = formatCadValue(drawM, { unit, precision, suffix: 'none' });
+      const roleStr = (entry.dimensionType || 'segment').toUpperCase();
+      return [
+        idx + 1,
+        escapeTSV(entry.name || `Dimension ${idx + 1}`),
+        realStr,
+        drawStr,
+        roleStr,
+        escapeTSV(entry.notes || '')
+      ].join('\t');
+    });
+    return {
+      text: [header, ...rows].join('\n'),
+      count: filteredEntries.length,
+      totalRealMeters,
+      totalDrawingMeters
+    };
+  }
+
+  if (format === 'csv' || delimiter === 'csv') {
+    const header = ['#', 'Name', `Real (${unit})`, `Drawing @ 1:${scaleRatio} (${unit})`, 'Type', 'Notes'].map(escapeCSV).join(',');
+    const rows = filteredEntries.map((entry, idx) => {
+      const realM = typeof entry.realMeters === 'number' ? entry.realMeters : 0;
+      const drawM = realM / scaleRatio;
+      const realStr = formatCadValue(realM, { unit, precision, suffix: 'none' });
+      const drawStr = formatCadValue(drawM, { unit, precision, suffix: 'none' });
+      const roleStr = (entry.dimensionType || 'segment').toUpperCase();
+      return [
+        idx + 1,
+        escapeCSV(entry.name || `Dimension ${idx + 1}`),
+        escapeCSV(realStr),
+        escapeCSV(drawStr),
+        escapeCSV(roleStr),
+        escapeCSV(entry.notes || '')
+      ].join(',');
+    });
+    return {
+      text: [header, ...rows].join('\n'),
+      count: filteredEntries.length,
+      totalRealMeters,
+      totalDrawingMeters
+    };
+  }
+
+  // Plain Text Descriptive List
+  if (format === 'plaintext') {
+    const rows = filteredEntries.map((entry, idx) => {
+      const realM = typeof entry.realMeters === 'number' ? entry.realMeters : 0;
+      const valM = targetValue === 'drawing' ? realM / scaleRatio : realM;
+      const valStr = formatCadValue(valM, { unit, precision, suffix });
+      const roleTag = entry.dimensionType === 'reference' ? ' [REF]' : (entry.dimensionType === 'allowance' ? ' [ALW]' : '');
+      return `${idx + 1}. ${entry.name || 'Dimension'}${roleTag}: ${valStr}`;
+    });
+    return {
+      text: rows.join('\n'),
+      count: filteredEntries.length,
+      totalRealMeters,
+      totalDrawingMeters
+    };
+  }
+
+  // Linear Numbers Mode (Generic / AutoCAD / Rhino / SketchUp)
+  const numbers = filteredEntries.map(entry => {
+    const realM = typeof entry.realMeters === 'number' ? entry.realMeters : 0;
+    const valM = targetValue === 'drawing' ? realM / scaleRatio : realM;
+    return formatCadValue(valM, { unit, precision, suffix });
+  });
+
+  const text = delimiter === 'newline' ? numbers.join('\n') : (delimiter === 'comma' ? numbers.join(', ') : numbers.join(' '));
+
+  return {
+    text,
+    count: filteredEntries.length,
+    totalRealMeters,
+    totalDrawingMeters
+  };
+}
+
+/**
+ * Formats a calculated Dimension Chain for CAD clipboard export.
+ * 
+ * @param {Object} calculatedChain - Result from calculateChain()
+ * @param {Object} options
+ * @param {string} [options.chainOutputMode='segments'] - 'segments' | 'cumulative' | 'table' | 'schedule'
+ * @param {string} [options.targetValue='real'] - 'real' | 'drawing'
+ * @param {string} [options.unit='mm'] - Target unit
+ * @param {number} [options.precision=2] - Decimal precision
+ * @param {string} [options.suffix='none'] - Suffix mode
+ * @param {string} [options.delimiter='space'] - Delimiter
+ * @returns {{ text: string, count: number }}
+ */
+function formatCadChain(calculatedChain, options = {}) {
+  if (!calculatedChain || !Array.isArray(calculatedChain.segments)) {
+    return { text: '', count: 0 };
+  }
+
+  const chainOutputMode = options.chainOutputMode || 'segments';
+  const unit = options.unit || calculatedChain.defaultUnit || 'mm';
+  const precision = typeof options.precision === 'number' ? options.precision : 2;
+  const suffix = options.suffix || 'none';
+  const scaleRatio = calculatedChain.scaleRatio || 50;
+  const targetValue = options.targetValue || 'real';
+  const delimiter = options.delimiter || 'space';
+
+  const activeSegments = calculatedChain.segments.filter(s => s.enabled !== false && s.isValid !== false);
+
+  if (activeSegments.length === 0) {
+    return { text: '', count: 0 };
+  }
+
+  // 1. Cumulative Running Coordinates (e.g. 0 1200 3000 3900 5400)
+  if (chainOutputMode === 'cumulative') {
+    const runningCoords = [0];
+    let runningMeters = 0;
+
+    activeSegments.forEach(s => {
+      if (s.dimensionType !== 'reference') {
+        runningMeters += s.realMeters;
+        runningCoords.push(targetValue === 'drawing' ? runningMeters / scaleRatio : runningMeters);
+      }
+    });
+
+    const formattedCoords = runningCoords.map(m => formatCadValue(m, { unit, precision, suffix }));
+    const text = delimiter === 'newline' ? formattedCoords.join('\n') : (delimiter === 'comma' ? formattedCoords.join(', ') : formattedCoords.join(' '));
+    return { text, count: formattedCoords.length };
+  }
+
+  // 2. Tabular TSV Chain Schedule
+  if (chainOutputMode === 'table' || chainOutputMode === 'schedule') {
+    const header = ['#', 'Segment Name', `Start (${unit})`, `End (${unit})`, `Length (${unit})`, `Drawing @ 1:${scaleRatio}`, 'Type'].join('\t');
+    const rows = activeSegments.map((s, idx) => {
+      const lenM = targetValue === 'drawing' ? s.realMeters / scaleRatio : s.realMeters;
+      const startM = targetValue === 'drawing' ? s.startMeters / scaleRatio : s.startMeters;
+      const endM = targetValue === 'drawing' ? s.endMeters / scaleRatio : s.endMeters;
+
+      const startStr = formatCadValue(startM, { unit, precision, suffix: 'none' });
+      const endStr = formatCadValue(endM, { unit, precision, suffix: 'none' });
+      const lenStr = formatCadValue(lenM, { unit, precision, suffix: 'none' });
+      const drawStr = formatCadValue(s.drawingMeters, { unit, precision, suffix: 'none' });
+      const typeStr = (s.dimensionType || 'segment').toUpperCase();
+
+      return [
+        idx + 1,
+        escapeTSV(s.name || `Segment ${idx + 1}`),
+        startStr,
+        endStr,
+        lenStr,
+        drawStr,
+        typeStr
+      ].join('\t');
+    });
+
+    return {
+      text: [header, ...rows].join('\n'),
+      count: activeSegments.length
+    };
+  }
+
+  // 3. Segment Lengths (Default)
+  const segmentValues = activeSegments.map(s => {
+    const valM = targetValue === 'drawing' ? s.realMeters / scaleRatio : s.realMeters;
+    return formatCadValue(valM, { unit, precision, suffix });
+  });
+
+  const text = delimiter === 'newline' ? segmentValues.join('\n') : (delimiter === 'comma' ? segmentValues.join(', ') : segmentValues.join(' '));
+  return { text, count: activeSegments.length };
+}
+
+/**
+ * Formats a Multi-Scale Comparison evaluation for CAD clipboard export.
+ * 
+ * @param {Object} calculatedMultiScale - Result from compareAcrossScales()
+ * @param {Object} options
+ * @returns {{ text: string, count: number }}
+ */
+function formatCadMultiScale(calculatedMultiScale, options = {}) {
+  if (!calculatedMultiScale || !Array.isArray(calculatedMultiScale.results) || calculatedMultiScale.results.length === 0) {
+    return { text: '', count: 0 };
+  }
+
+  const unit = options.unit || calculatedMultiScale.input.displayUnit || 'mm';
+  const precision = typeof options.precision === 'number' ? options.precision : 2;
+  const suffix = options.suffix || 'none';
+  const delimiter = options.delimiter || 'space';
+  const format = options.format || 'generic';
+
+  if (format === 'spreadsheet' || delimiter === 'tsv') {
+    const header = ['Scale', 'Ratio', `Drawing Length (${unit})`, 'Paper Usable Check'].join('\t');
+    const rows = calculatedMultiScale.results.map(r => {
+      const drawStr = formatCadValue(r.drawingMeters, { unit, precision, suffix: 'none' });
+      return [
+        r.label,
+        `1:${r.ratio}`,
+        drawStr,
+        r.fitsPaper ? `Fits ${r.paperSize}` : 'Exceeds paper'
+      ].join('\t');
+    });
+    return {
+      text: [header, ...rows].join('\n'),
+      count: calculatedMultiScale.results.length
+    };
+  }
+
+  const drawingValues = calculatedMultiScale.results.map(r => {
+    return formatCadValue(r.drawingMeters, { unit, precision, suffix });
+  });
+
+  const text = delimiter === 'newline' ? drawingValues.join('\n') : (delimiter === 'comma' ? drawingValues.join(', ') : drawingValues.join(' '));
+  return { text, count: calculatedMultiScale.results.length };
+}
+
+/**
+ * Formats a Dimension Expression result for CAD clipboard export.
+ * 
+ * @param {Object} calculatedExpression - Result from evaluateExpressionSafe()
+ * @param {Object} options
+ * @returns {{ text: string, count: number }}
+ */
+function formatCadExpression(calculatedExpression, options = {}) {
+  if (!calculatedExpression || !calculatedExpression.isValid) {
+    return { text: '', count: 0 };
+  }
+
+  const unit = options.unit || calculatedExpression.displayUnit || 'mm';
+  const precision = typeof options.precision === 'number' ? options.precision : 2;
+  const suffix = options.suffix || 'none';
+  const targetValue = options.targetValue || 'real';
+  const scaleRatio = calculatedExpression.scaleRatio || 50;
+
+  const metersToFormat = targetValue === 'drawing'
+    ? calculatedExpression.canonicalMeters / scaleRatio
+    : calculatedExpression.canonicalMeters;
+
+  const formatted = formatCadValue(metersToFormat, { unit, precision, suffix });
+  return { text: formatted, count: 1 };
+}
+
+/**
+ * Formats manual text input containing space or comma-separated measurements.
+ * 
+ * @param {string} rawInput 
+ * @param {Object} options 
+ * @returns {{ text: string, count: number }}
+ */
+function formatManualCadInput(rawInput, options = {}) {
+  if (!rawInput || typeof rawInput !== 'string' || !rawInput.trim()) {
+    return { text: '', count: 0 };
+  }
+
+  const defaultUnit = options.unit || 'mm';
+  const unitDef = UNITS[defaultUnit] || UNITS.mm;
+
+  // Split by whitespace, commas, or plus signs
+  const tokens = rawInput.trim().split(/[\s,+/]+/).filter(t => t.length > 0);
+  const meterValues = [];
+
+  tokens.forEach(tok => {
+    const num = parseFloat(tok);
+    if (!isNaN(num) && isFinite(num)) {
+      meterValues.push(num * unitDef.toMeters);
+    }
+  });
+
+  if (meterValues.length === 0) {
+    return { text: '', count: 0 };
+  }
+
+  const text = formatCadValues(meterValues, options);
+  return { text, count: meterValues.length };
+}
+
+/**
+ * Generates a human-friendly format summary string for user confirmation.
+ * Example: "4 values • mm • 2 decimal places • No unit suffix"
+ * 
+ * @param {number} count 
+ * @param {Object} options 
+ * @returns {string}
+ */
+function getCadFormatSummary(count, options = {}) {
+  const unit = options.unit || 'mm';
+  const precision = typeof options.precision === 'number' ? options.precision : 2;
+  const suffix = options.suffix || 'none';
+  const target = options.targetValue === 'drawing' ? 'Drawing @ scale' : 'Real-world';
+
+  const suffixLabel = suffix === 'symbol' ? 'Unit symbol' : (suffix === 'full' ? 'Full unit name' : 'No suffix');
+  const countLabel = `${count} ${count === 1 ? 'value' : 'values'}`;
+  const precLabel = `${precision} ${precision === 1 ? 'decimal' : 'decimals'}`;
+
+  return `${countLabel} • ${target} (${unit}) • ${precLabel} • ${suffixLabel}`;
+}
+
+
+  // =========================================================================
+  // MODULE: MultiScale
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Multi-Scale Comparison Engine
+ * Phase 2.5: Daily Architect Toolkit — Part 4: Multi-Scale Comparison
+ *
+ * Deterministic multi-scale comparison module. Evaluates a single real-world
+ * dimension or mathematical expression across multiple architectural scales simultaneously.
+ * Zero DOM access, pure mathematical functions, reusable across CLI, tests, and UI.
+ */
+
+
+
+
+
+
+
+
+const DEFAULT_COMPARISON_SCALES = Object.freeze([
+  10, 20, 25, 50, 75, 100, 150, 200, 250, 500
+]);
+
+const STANDARD_PAPER_SIZES = Object.freeze({
+  A4: { key: 'A4', name: 'A4 Sheet (297 × 210 mm)', widthMm: 297, heightMm: 210, usableWidthMm: 277, usableHeightMm: 190 },
+  A3: { key: 'A3', name: 'A3 Sheet (420 × 297 mm)', widthMm: 420, heightMm: 297, usableWidthMm: 387, usableHeightMm: 267 },
+  A2: { key: 'A2', name: 'A2 Sheet (594 × 420 mm)', widthMm: 594, heightMm: 420, usableWidthMm: 554, usableHeightMm: 380 },
+  A1: { key: 'A1', name: 'A1 Sheet (841 × 594 mm)', widthMm: 841, heightMm: 594, usableWidthMm: 801, usableHeightMm: 554 },
+  A0: { key: 'A0', name: 'A0 Sheet (1189 × 841 mm)', widthMm: 1189, heightMm: 841, usableWidthMm: 1139, usableHeightMm: 791 }
+});
+
+const SCALE_PRESET_GROUPS = Object.freeze({
+  all: Object.freeze([1, 2, 5, 10, 20, 25, 50, 75, 100, 150, 200, 250, 500, 1000]),
+  architectural: Object.freeze([20, 25, 50, 75, 100, 200]),
+  detail: Object.freeze([1, 2, 5, 10, 20]),
+  site: Object.freeze([100, 200, 250, 500, 1000, 1250, 2500, 5000]),
+  imperial: Object.freeze([4, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192])
+});
+
+/**
+ * Returns the default array of comparison scale ratio denominators
+ * @returns {number[]}
+ */
+function getDefaultComparisonScales() {
+  return [...DEFAULT_COMPARISON_SCALES];
+}
+
+/**
+ * Returns preset scale groups
+ * @returns {Object}
+ */
+function getScalePresetGroups() {
+  return { ...SCALE_PRESET_GROUPS };
+}
+
+/**
+ * Parses user input for multi-scale comparison (direct dimension, bare number, or expression)
+ * @param {string} inputStr - Input dimension or math expression
+ * @param {Object} [options]
+ * @param {string} [options.defaultUnit='mm']
+ * @param {number} [options.precision=3]
+ * @returns {Object} Parsed input result
+ */
+function parseMultiScaleInput(inputStr, options = {}) {
+  const { defaultUnit = 'mm', precision = 3 } = options;
+
+  if (inputStr === undefined || inputStr === null || String(inputStr).trim() === '') {
+    return {
+      isValid: false,
+      canonicalMeters: 0,
+      displayUnit: defaultUnit,
+      rawInput: '',
+      isExpression: false,
+      errorMessage: 'Enter a dimension or expression'
+    };
+  }
+
+  const trimmed = String(inputStr).trim();
+
+  // 1. Check if input is a mathematical expression (e.g. 2400 + 900 or 5.4m - 1200mm)
+  if (isExpressionLike(trimmed)) {
+    const exprEval = evaluateExpressionSafe(trimmed, { defaultUnit, precision });
+    if (exprEval.isValid) {
+      if (exprEval.dimension === 'scalar') {
+        // Scalar count: convert to defaultUnit
+        const unitDef = requireUnit(defaultUnit, 'length');
+        const meters = exprEval.value * unitDef.toMeters;
+        return {
+          isValid: true,
+          canonicalMeters: meters,
+          displayUnit: defaultUnit,
+          rawInput: trimmed,
+          isExpression: true,
+          expressionResult: exprEval,
+          errorMessage: null
+        };
+      }
+      return {
+        isValid: true,
+        canonicalMeters: exprEval.canonicalMeters,
+        displayUnit: exprEval.displayUnit || defaultUnit,
+        rawInput: trimmed,
+        isExpression: true,
+        expressionResult: exprEval,
+        errorMessage: null
+      };
+    } else {
+      return {
+        isValid: false,
+        canonicalMeters: 0,
+        displayUnit: defaultUnit,
+        rawInput: trimmed,
+        isExpression: true,
+        expressionResult: null,
+        errorMessage: exprEval.error?.message || 'Invalid mathematical expression'
+      };
+    }
+  }
+
+  // 2. Direct Dimension or Bare Number
+  const parsed = parseInput(trimmed, { allowNegative: true });
+  if (parsed.isValid) {
+    let meters = 0;
+    let detectedUnit = parsed.detectedUnit;
+
+    if (detectedUnit) {
+      const unitDef = requireUnit(detectedUnit, 'length');
+      meters = parsed.value * unitDef.toMeters;
+    } else {
+      // Bare number: assume defaultUnit
+      detectedUnit = defaultUnit;
+      const unitDef = requireUnit(defaultUnit, 'length');
+      meters = parsed.value * unitDef.toMeters;
+    }
+
+    return {
+      isValid: true,
+      canonicalMeters: meters,
+      displayUnit: detectedUnit,
+      rawInput: trimmed,
+      isExpression: false,
+      expressionResult: null,
+      errorMessage: null
+    };
+  }
+
+  return {
+    isValid: false,
+    canonicalMeters: 0,
+    displayUnit: defaultUnit,
+    rawInput: trimmed,
+    isExpression: false,
+    errorMessage: parsed.errorMessage || 'Invalid measurement input'
+  };
+}
+
+/**
+ * Pure calculation of a canonical dimension at a specific scale ratio
+ * @param {number} canonicalMeters - Real-world measurement in canonical meters
+ * @param {number} scaleRatio - Scale ratio denominator (e.g. 50 for 1:50)
+ * @param {Object} [options]
+ * @param {string} [options.displayUnit='mm'] - Preferred unit for real world
+ * @param {string} [options.drawingUnit=null] - Preferred drawing unit ('mm' or 'in')
+ * @param {number} [options.precision=3]
+ * @returns {Object} Single scale result
+ */
+function calculateAtScale(canonicalMeters, scaleRatio, options = {}) {
+  if (typeof scaleRatio !== 'number' || isNaN(scaleRatio) || !isFinite(scaleRatio) || scaleRatio <= 0) {
+    throw new Error(`Scale ratio must be a positive finite number greater than 0 (received: ${scaleRatio})`);
+  }
+
+  if (typeof canonicalMeters !== 'number' || isNaN(canonicalMeters) || !isFinite(canonicalMeters)) {
+    throw new Error(`canonicalMeters must be a valid finite number (received: ${canonicalMeters})`);
+  }
+
+  const {
+    displayUnit = 'mm',
+    drawingUnit = null,
+    precision = 3
+  } = options;
+
+  const drawingMeters = canonicalMeters / scaleRatio;
+
+  // Determine drawing unit: if imperial real unit, default drawing unit is inches ('in'), otherwise millimeters ('mm')
+  const isImperial = (displayUnit === 'ft' || displayUnit === 'in' || displayUnit === 'ft_in' || displayUnit === 'yd');
+  const targetDrawingUnit = drawingUnit || (isImperial ? 'in' : 'mm');
+  const drawUnitDef = UNITS[targetDrawingUnit] || UNITS.mm;
+
+  const drawingValue = drawingMeters / drawUnitDef.toMeters;
+  const isNegative = canonicalMeters < 0;
+  const absDrawingMeters = Math.abs(drawingMeters);
+
+  let formatted = '';
+  if (targetDrawingUnit === 'ft_in') {
+    const totalInches = absDrawingMeters / UNITS.in.toMeters;
+    formatted = `${isNegative ? '-' : ''}${formatFeetInches(totalInches)}`;
+  } else {
+    formatted = `${isNegative ? '-' : ''}${formatNumber(Math.abs(drawingValue), precision)} ${drawUnitDef.symbol}`;
+  }
+
+  // Find standard preset label if available
+  const preset = SCALE_PRESETS.find(p => Math.abs(p.ratio - scaleRatio) < 1e-6);
+  const label = preset ? preset.id : `1:${formatNumber(scaleRatio, precision > 2 ? precision : 2)}`;
+  const description = preset ? preset.description : `Custom scale 1:${scaleRatio}`;
+  const category = preset ? preset.category : 'custom';
+
+  return {
+    ratio: scaleRatio,
+    label: label,
+    description: description,
+    category: category,
+    canonicalMeters: canonicalMeters,
+    drawingMeters: drawingMeters,
+    drawingValue: drawingValue,
+    drawingUnit: targetDrawingUnit,
+    formatted: formatted,
+    isNegative: isNegative
+  };
+}
+
+/**
+ * Compare a dimension or expression across multiple architectural scale ratios
+ * @param {string|number|Object} input - Raw string, canonical meter number, or parsed input object
+ * @param {number[]} scaleRatios - Array of scale ratio denominators
+ * @param {Object} [options]
+ * @param {string} [options.defaultUnit='mm']
+ * @param {string} [options.displayUnit=null]
+ * @param {number} [options.currentScaleRatio=50]
+ * @param {string} [options.sortOrder='ratio_asc'] - 'ratio_asc' | 'ratio_desc' | 'drawing_desc' | 'drawing_asc'
+ * @param {string} [options.paperSize=null] - 'A4' | 'A3' | 'A2' | 'A1' | 'A0'
+ * @param {number} [options.customPaperWidthMm=null]
+ * @param {number} [options.targetFitMinMm=null]
+ * @param {number} [options.targetFitMaxMm=null]
+ * @param {number[]} [options.favoriteRatios=[]]
+ * @param {number} [options.precision=3]
+ * @returns {Object} Structured comparison result
+ */
+function compareAcrossScales(input, scaleRatios = DEFAULT_COMPARISON_SCALES, options = {}) {
+  const {
+    defaultUnit = 'mm',
+    displayUnit = null,
+    currentScaleRatio = 50,
+    sortOrder = 'ratio_asc',
+    paperSize = null,
+    customPaperWidthMm = null,
+    targetFitMinMm = null,
+    targetFitMaxMm = null,
+    favoriteRatios = [],
+    precision = 3
+  } = options;
+
+  let parsed = null;
+  if (typeof input === 'object' && input !== null && input.isValid !== undefined) {
+    parsed = input;
+  } else if (typeof input === 'number') {
+    parsed = {
+      isValid: Number.isFinite(input),
+      canonicalMeters: input,
+      displayUnit: displayUnit || defaultUnit,
+      rawInput: String(input),
+      isExpression: false,
+      errorMessage: Number.isFinite(input) ? null : 'Invalid number'
+    };
+  } else {
+    parsed = parseMultiScaleInput(String(input || ''), { defaultUnit, precision });
+  }
+
+  const activeDisplayUnit = displayUnit || parsed.displayUnit || defaultUnit;
+
+  if (!parsed.isValid) {
+    return {
+      isValid: false,
+      errorMessage: parsed.errorMessage || 'Invalid dimension input',
+      input: {
+        raw: parsed.rawInput || '',
+        canonicalMeters: 0,
+        formattedReal: '---',
+        displayUnit: activeDisplayUnit,
+        isExpression: parsed.isExpression || false
+      },
+      scales: [],
+      currentScaleRatio: currentScaleRatio,
+      maxDrawingMeters: 0,
+      paperContext: null,
+      targetFitRange: null,
+      count: 0
+    };
+  }
+
+  const canonicalMeters = parsed.canonicalMeters;
+  const formattedReal = formatMeasurementValue(canonicalMeters, activeDisplayUnit, precision);
+
+  // Validate and sanitize unique scale ratios
+  const validRatios = [];
+  const seenRatios = new Set();
+
+  for (const r of (Array.isArray(scaleRatios) ? scaleRatios : DEFAULT_COMPARISON_SCALES)) {
+    const num = Number(r);
+    if (Number.isFinite(num) && num > 0 && !seenRatios.has(num)) {
+      seenRatios.add(num);
+      validRatios.push(num);
+    }
+  }
+
+  if (validRatios.length === 0) {
+    validRatios.push(50);
+  }
+
+  // Calculate drawing sizes at each scale
+  const calculatedScales = validRatios.map(ratio => {
+    return calculateAtScale(canonicalMeters, ratio, {
+      displayUnit: activeDisplayUnit,
+      precision
+    });
+  });
+
+  // Calculate maximum drawing meters in the set for true physical proportional bars
+  const maxDrawingMeters = calculatedScales.reduce((max, s) => Math.max(max, Math.abs(s.drawingMeters)), 0);
+
+  // Paper Context Helper
+  let paperContext = null;
+  if (paperSize && (STANDARD_PAPER_SIZES[paperSize] || paperSize === 'custom')) {
+    const paperDef = STANDARD_PAPER_SIZES[paperSize] || {
+      key: 'custom',
+      name: `Custom Sheet (${customPaperWidthMm || 300} mm)`,
+      usableWidthMm: customPaperWidthMm || 300
+    };
+    paperContext = {
+      key: paperDef.key,
+      name: paperDef.name,
+      usableWidthMm: paperDef.usableWidthMm
+    };
+  }
+
+  // Target Fit Heuristic
+  let targetFitRange = null;
+  if (targetFitMinMm !== null && targetFitMaxMm !== null && targetFitMinMm >= 0 && targetFitMaxMm >= targetFitMinMm) {
+    targetFitRange = {
+      minMm: targetFitMinMm,
+      maxMm: targetFitMaxMm
+    };
+  }
+
+  // Enrich each scale row with proportional bar, current scale status, favorites, and heuristics
+  const favSet = new Set(Array.isArray(favoriteRatios) ? favoriteRatios.map(Number) : []);
+
+  const enrichedScales = calculatedScales.map(item => {
+    const absDrawingMeters = Math.abs(item.drawingMeters);
+    const drawingMm = absDrawingMeters * 1000;
+    const barPercent = maxDrawingMeters > 0 ? Math.round((absDrawingMeters / maxDrawingMeters) * 100) : 0;
+    const isCurrent = Math.abs(item.ratio - currentScaleRatio) < 1e-6;
+    const isFavorite = favSet.has(item.ratio);
+
+    let fitsPaper = null;
+    if (paperContext) {
+      fitsPaper = drawingMm <= paperContext.usableWidthMm;
+    }
+
+    let fitStatus = null; // 'suggested' | 'too_small' | 'too_large' | null
+    if (targetFitRange) {
+      if (drawingMm >= targetFitRange.minMm && drawingMm <= targetFitRange.maxMm) {
+        fitStatus = 'suggested';
+      } else if (drawingMm < targetFitRange.minMm) {
+        fitStatus = 'too_small';
+      } else {
+        fitStatus = 'too_large';
+      }
+    }
+
+    return {
+      ...item,
+      barPercent,
+      isCurrent,
+      isFavorite,
+      fitsPaper,
+      fitStatus
+    };
+  });
+
+  // Apply Sorting
+  enrichedScales.sort((a, b) => {
+    if (sortOrder === 'ratio_desc') return b.ratio - a.ratio;
+    if (sortOrder === 'drawing_desc') return b.drawingMeters - a.drawingMeters;
+    if (sortOrder === 'drawing_asc') return a.drawingMeters - b.drawingMeters;
+    return a.ratio - b.ratio; // default: ratio_asc
+  });
+
+  return {
+    isValid: true,
+    errorMessage: null,
+    input: {
+      raw: parsed.rawInput || '',
+      canonicalMeters: canonicalMeters,
+      formattedReal: formattedReal,
+      displayUnit: activeDisplayUnit,
+      isExpression: parsed.isExpression || false
+    },
+    scales: enrichedScales,
+    currentScaleRatio: currentScaleRatio,
+    maxDrawingMeters: maxDrawingMeters,
+    paperContext: paperContext,
+    targetFitRange: targetFitRange,
+    count: enrichedScales.length
+  };
+}
+
+/**
+ * Formats multi-scale comparison results for clipboard, table, or CAD preparation
+ * @param {Object} comparisonResult - Result from compareAcrossScales
+ * @param {'table'|'all'|'current'|'raw'} [formatType='table']
+ * @returns {string} Formatted text
+ */
+function formatScaleComparison(comparisonResult, formatType = 'table') {
+  if (!comparisonResult || !comparisonResult.isValid || !Array.isArray(comparisonResult.scales) || comparisonResult.scales.length === 0) {
+    return 'No valid scale comparison data.';
+  }
+
+  const { input, scales, currentScaleRatio } = comparisonResult;
+
+  if (formatType === 'raw') {
+    // Space-delimited raw drawing numbers (e.g. "120 96 48 32 24 12")
+    return scales.map(s => formatNumber(s.drawingValue, 2)).join(' ');
+  }
+
+  if (formatType === 'current') {
+    const current = scales.find(s => s.isCurrent) || scales[0];
+    return `Scale ${current.label}: Real ${input.formattedReal} ➔ Drawing ${current.formatted}`;
+  }
+
+  if (formatType === 'all') {
+    return scales.map(s => `${s.label.padEnd(8)} ${s.formatted}`).join('\n');
+  }
+
+  // Format 'table' (Markdown Table with headers)
+  let out = `### Multi-Scale Comparison: ${input.formattedReal}\n\n`;
+  out += `| Scale | Drawing Size | Status |\n`;
+  out += `| :--- | :--- | :--- |\n`;
+
+  for (const s of scales) {
+    let status = '';
+    if (s.isCurrent) status += '★ Current Scale ';
+    if (s.fitStatus === 'suggested') status += '✓ Suggested Fit ';
+    if (s.fitsPaper === false) status += '⚠️ Exceeds Sheet ';
+    out += `| **${s.label}** | \`${s.formatted}\` | ${status.trim() || '—'} |\n`;
+  }
+
+  return out;
+}
+
+
+  // =========================================================================
+  // MODULE: DimensionChains
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Dimension Chains Core Model & Engine
+ * Phase 2.5: Daily Architect Toolkit — Part 5: Dimension Chains
+ *
+ * Headless, deterministic architectural dimension-string engine. Evaluates ordered,
+ * continuous sequences of measured segments, cumulative running coordinates,
+ * start/end offsets, scale-accurate SVG drafting geometry, and multi-format exports.
+ */
+
+
+
+
+
+
+
+
+const CHAIN_STORAGE_KEY = 'archiscale_dimension_chains';
+const DEFAULT_CHAIN_SCALE = 50;
+const DEFAULT_CHAIN_UNIT = 'mm';
+
+let chainIdCounter = 0;
+let segmentIdCounter = 0;
+
+/**
+ * Generate a unique ID for a dimension chain
+ * @returns {string}
+ */
+function generateChainId() {
+  chainIdCounter++;
+  return `chain_${Date.now()}_${chainIdCounter}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/**
+ * Generate a unique ID for a chain segment
+ * @returns {string}
+ */
+function generateSegmentId() {
+  segmentIdCounter++;
+  return `cseg_${Date.now()}_${segmentIdCounter}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/**
+ * Create a new normalized DimensionChain object
+ * @param {Object} [options]
+ * @returns {Object} DimensionChain
+ */
+function createDimensionChain(options = {}) {
+  return {
+    id: options.id || generateChainId(),
+    name: typeof options.name === 'string' && options.name.trim() !== '' ? options.name.trim() : 'Dimension Chain',
+    defaultUnit: options.defaultUnit || DEFAULT_CHAIN_UNIT,
+    scaleRatio: typeof options.scaleRatio === 'number' && options.scaleRatio > 0 ? options.scaleRatio : DEFAULT_CHAIN_SCALE,
+    startOffsetRaw: options.startOffsetRaw || '0',
+    endOffsetRaw: options.endOffsetRaw || '0',
+    segments: Array.isArray(options.segments) ? options.segments.map(s => createChainSegment(s, options.defaultUnit || DEFAULT_CHAIN_UNIT)) : []
+  };
+}
+
+/**
+ * Create a new normalized ChainSegment object
+ * @param {Object} [options]
+ * @param {string} [defaultUnit='mm']
+ * @returns {Object} ChainSegment
+ */
+function createChainSegment(options = {}, defaultUnit = DEFAULT_CHAIN_UNIT) {
+  const type = (options.dimensionType === 'reference' || options.dimensionType === 'allowance')
+    ? options.dimensionType
+    : 'segment';
+
+  return {
+    id: options.id || generateSegmentId(),
+    name: typeof options.name === 'string' && options.name.trim() !== '' ? options.name.trim() : 'Segment',
+    rawInput: typeof options.rawInput === 'string' ? options.rawInput.trim() : (options.rawInput !== undefined ? String(options.rawInput) : '1200'),
+    dimensionType: type, // 'segment' (default, additive) | 'reference' (annotation) | 'allowance' (tolerance)
+    enabled: options.enabled !== false,
+    startLabel: typeof options.startLabel === 'string' ? options.startLabel.trim() : '',
+    endLabel: typeof options.endLabel === 'string' ? options.endLabel.trim() : '',
+    notes: typeof options.notes === 'string' ? options.notes.trim() : ''
+  };
+}
+
+/**
+ * Parse a segment's raw input string (direct dimension or math expression)
+ * @param {string} rawInput
+ * @param {string} [defaultUnit='mm']
+ * @param {number} [precision=3]
+ * @returns {Object}
+ */
+function parseSegmentMeasurement(rawInput, defaultUnit = DEFAULT_CHAIN_UNIT, precision = 3) {
+  if (rawInput === undefined || rawInput === null || String(rawInput).trim() === '') {
+    return { isValid: false, canonicalMeters: 0, detectedUnit: defaultUnit, error: 'Empty measurement' };
+  }
+
+  const trimmed = String(rawInput).trim();
+
+  // 1. Check if input is a math expression
+  if (isExpressionLike(trimmed)) {
+    const exprEval = evaluateExpressionSafe(trimmed, { defaultUnit, precision });
+    if (exprEval.isValid) {
+      const meters = exprEval.dimension === 'scalar'
+        ? exprEval.value * (UNITS[defaultUnit] || UNITS.mm).toMeters
+        : exprEval.canonicalMeters;
+
+      return {
+        isValid: true,
+        canonicalMeters: meters,
+        detectedUnit: exprEval.displayUnit || defaultUnit,
+        isExpression: true,
+        expressionFormatted: exprEval.formatted,
+        error: null
+      };
+    } else {
+      return {
+        isValid: false,
+        canonicalMeters: 0,
+        detectedUnit: defaultUnit,
+        isExpression: true,
+        expressionFormatted: '',
+        error: exprEval.error?.message || 'Invalid expression'
+      };
+    }
+  }
+
+  // 2. Direct Dimension or Bare Number
+  const parsed = parseInput(trimmed, { allowNegative: false });
+  if (parsed.isValid) {
+    const unitKey = parsed.detectedUnit || defaultUnit;
+    const unitDef = requireUnit(unitKey, 'length');
+    const meters = parsed.value * unitDef.toMeters;
+
+    return {
+      isValid: true,
+      canonicalMeters: meters,
+      detectedUnit: unitKey,
+      isExpression: false,
+      expressionFormatted: '',
+      error: null
+    };
+  }
+
+  return {
+    isValid: false,
+    canonicalMeters: 0,
+    detectedUnit: defaultUnit,
+    isExpression: false,
+    expressionFormatted: '',
+    error: parsed.error || 'Invalid measurement value'
+  };
+}
+
+/**
+ * Rapidly parse multi-segment quick-add input strings
+ * Supports:
+ * - Delimited: "1200 + 1800 + 900 + 1500" or "1200 1800 900 1500" -> 4 segments
+ * - Comma-separated: "Bay 1 1200, Bay 2 1800, Door 900 ref" -> 3 segments
+ * - Single Expression: { expressionAsSingleSegment: true } -> 1 segment
+ * @param {string} inputStr
+ * @param {Object} [options]
+ * @returns {Object[]} Array of ChainSegment objects
+ */
+function parseQuickChainInput(inputStr, options = {}) {
+  const { defaultUnit = DEFAULT_CHAIN_UNIT, expressionAsSingleSegment = false } = options;
+
+  if (!inputStr || typeof inputStr !== 'string' || inputStr.trim() === '') {
+    return [];
+  }
+
+  const text = inputStr.trim();
+
+  // If explicitly flagged as single expression
+  if (expressionAsSingleSegment) {
+    return [createChainSegment({ name: 'Segment 1', rawInput: text, dimensionType: 'segment' }, defaultUnit)];
+  }
+
+  // Comma-separated list with optional names (e.g. "Bay 1 1200, Door 900 ref, Bay 2 1800")
+  if (text.includes(',')) {
+    const parts = text.split(',').map(p => p.trim()).filter(Boolean);
+    return parts.map((part, idx) => {
+      let type = 'segment';
+      let cleanPart = part;
+      if (/\b(ref|reference)\b/i.test(cleanPart)) {
+        type = 'reference';
+        cleanPart = cleanPart.replace(/\b(ref|reference)\b/ig, '').trim();
+      } else if (/\b(alw|allowance|tolerance)\b/i.test(cleanPart)) {
+        type = 'allowance';
+        cleanPart = cleanPart.replace(/\b(alw|allowance|tolerance)\b/ig, '').trim();
+      }
+
+      // Check if there is a name prefix before the numeric measurement
+      const match = cleanPart.match(/^(.*?)\s+([+-]?(?:\d+(?:\.\d+)?|\d+\s+\d+\/\d+|\d+\/\d+)(?:[a-zA-Z²³_'"′″\s\/-]+)?)$/);
+      if (match && match[1].trim()) {
+        return createChainSegment({
+          name: match[1].trim(),
+          rawInput: match[2].trim(),
+          dimensionType: type
+        }, defaultUnit);
+      }
+
+      return createChainSegment({
+        name: `Segment ${idx + 1}`,
+        rawInput: cleanPart,
+        dimensionType: type
+      }, defaultUnit);
+    });
+  }
+
+  // Plus-separated chain (e.g. "1200 + 1800 + 900 + 1500")
+  if (text.includes('+')) {
+    const parts = text.split('+').map(p => p.trim()).filter(Boolean);
+    if (parts.length > 1) {
+      return parts.map((part, idx) => createChainSegment({
+        name: `Segment ${idx + 1}`,
+        rawInput: part,
+        dimensionType: 'segment'
+      }, defaultUnit));
+    }
+  }
+
+  // Space-separated numbers without operator (e.g. "1200 1800 900 1500")
+  const spaceTokens = text.split(/\s+/).filter(Boolean);
+  if (spaceTokens.length > 1 && spaceTokens.every(t => /^\d+(\.\d+)?([a-zA-Z'"′″]+)?$/.test(t))) {
+    return spaceTokens.map((tok, idx) => createChainSegment({
+      name: `Segment ${idx + 1}`,
+      rawInput: tok,
+      dimensionType: 'segment'
+    }, defaultUnit));
+  }
+
+  // Single segment fallback
+  return [createChainSegment({ name: 'Segment 1', rawInput: text, dimensionType: 'segment' }, defaultUnit)];
+}
+
+/**
+ * Calculate running cumulative positions, totals, drawing sizes, and offsets for a DimensionChain
+ * @param {Object} chain - DimensionChain object
+ * @param {Object} [options]
+ * @param {string} [options.displayUnit=null]
+ * @param {number} [options.scaleRatio=null]
+ * @param {number} [options.precision=3]
+ * @returns {Object} Calculated chain result
+ */
+function calculateChain(chain, options = {}) {
+  if (!chain || typeof chain !== 'object') {
+    throw new TypeError('calculateChain requires a DimensionChain object');
+  }
+
+  const defaultUnit = chain.defaultUnit || DEFAULT_CHAIN_UNIT;
+  const displayUnit = options.displayUnit || defaultUnit;
+  const scaleRatio = typeof options.scaleRatio === 'number' && options.scaleRatio > 0
+    ? options.scaleRatio
+    : (chain.scaleRatio || DEFAULT_CHAIN_SCALE);
+  const precision = typeof options.precision === 'number' ? options.precision : 3;
+
+  // 1. Calculate Start and End Offsets
+  const startOffsetParsed = parseSegmentMeasurement(chain.startOffsetRaw || '0', displayUnit, precision);
+  const startOffsetMeters = (startOffsetParsed.isValid && startOffsetParsed.canonicalMeters > 0)
+    ? startOffsetParsed.canonicalMeters
+    : 0;
+
+  const endOffsetParsed = parseSegmentMeasurement(chain.endOffsetRaw || '0', displayUnit, precision);
+  const endOffsetMeters = (endOffsetParsed.isValid && endOffsetParsed.canonicalMeters > 0)
+    ? endOffsetParsed.canonicalMeters
+    : 0;
+
+  // 2. Iterate segments sequentially and calculate running coordinates
+  let currentPositionMeters = startOffsetMeters;
+  let segmentTotalMeters = 0;
+  let allowanceTotalMeters = 0;
+  let validCount = 0;
+  let invalidCount = 0;
+
+  const calculatedSegments = (chain.segments || []).map((seg, idx) => {
+    const parsed = parseSegmentMeasurement(seg.rawInput, displayUnit, precision);
+
+    if (!parsed.isValid) {
+      invalidCount++;
+      return {
+        ...seg,
+        index: idx + 1,
+        isValid: false,
+        error: parsed.error,
+        startMeters: currentPositionMeters,
+        endMeters: currentPositionMeters,
+        lengthMeters: 0,
+        startFormatted: formatMeasurementValue(currentPositionMeters, displayUnit, precision),
+        endFormatted: formatMeasurementValue(currentPositionMeters, displayUnit, precision),
+        lengthFormatted: '---',
+        drawingLengthMeters: 0,
+        drawingFormatted: '---'
+      };
+    }
+
+    validCount++;
+    const lengthMeters = parsed.canonicalMeters;
+    const isEnabled = seg.enabled !== false;
+
+    let segStartMeters = currentPositionMeters;
+    let segEndMeters = currentPositionMeters;
+
+    if (isEnabled) {
+      if (seg.dimensionType === 'segment') {
+        // Additive segment
+        segStartMeters = currentPositionMeters;
+        segEndMeters = currentPositionMeters + lengthMeters;
+        currentPositionMeters = segEndMeters;
+        segmentTotalMeters += lengthMeters;
+      } else if (seg.dimensionType === 'allowance') {
+        // Additive allowance / tolerance
+        segStartMeters = currentPositionMeters;
+        segEndMeters = currentPositionMeters + lengthMeters;
+        currentPositionMeters = segEndMeters;
+        allowanceTotalMeters += lengthMeters;
+      } else {
+        // Reference dimension (annotation): DOES NOT advance structural baseline
+        segStartMeters = currentPositionMeters;
+        segEndMeters = currentPositionMeters; // Stays at current position
+      }
+    }
+
+    // Drawing scale values
+    const drawingLengthMeters = lengthMeters / scaleRatio;
+    const isImperial = (displayUnit === 'ft' || displayUnit === 'in' || displayUnit === 'ft_in');
+    const drawUnitKey = isImperial ? 'in' : 'mm';
+    const drawUnitDef = UNITS[drawUnitKey] || UNITS.mm;
+    const drawingValue = drawingLengthMeters / drawUnitDef.toMeters;
+
+    let drawingFormatted = '';
+    if (drawUnitKey === 'ft_in') {
+      const totalInches = drawingLengthMeters / UNITS.in.toMeters;
+      drawingFormatted = formatFeetInches(totalInches);
+    } else {
+      drawingFormatted = `${formatNumber(drawingValue, precision)} ${drawUnitDef.symbol}`;
+    }
+
+    return {
+      ...seg,
+      index: idx + 1,
+      isValid: true,
+      error: null,
+      startMeters: segStartMeters,
+      endMeters: segEndMeters,
+      lengthMeters: lengthMeters,
+      startFormatted: formatMeasurementValue(segStartMeters, displayUnit, precision),
+      endFormatted: formatMeasurementValue(segEndMeters, displayUnit, precision),
+      lengthFormatted: formatMeasurementValue(lengthMeters, displayUnit, precision),
+      drawingLengthMeters: drawingLengthMeters,
+      drawingFormatted: drawingFormatted
+    };
+  });
+
+  // Overall Extent = Start Offset + Segments + Allowances + End Offset
+  const overallExtentMeters = startOffsetMeters + segmentTotalMeters + allowanceTotalMeters + endOffsetMeters;
+  const drawingOverallMeters = overallExtentMeters / scaleRatio;
+  const isImperialOverall = (displayUnit === 'ft' || displayUnit === 'in' || displayUnit === 'ft_in');
+  const drawOverallUnit = isImperialOverall ? 'in' : 'mm';
+  const drawOverallUnitDef = UNITS[drawOverallUnit] || UNITS.mm;
+  const drawingOverallValue = drawingOverallMeters / drawOverallUnitDef.toMeters;
+
+  let drawingOverallFormatted = '';
+  if (drawOverallUnit === 'ft_in') {
+    drawingOverallFormatted = formatFeetInches(drawingOverallMeters / UNITS.in.toMeters);
+  } else {
+    drawingOverallFormatted = `${formatNumber(drawingOverallValue, precision)} ${drawOverallUnitDef.symbol}`;
+  }
+
+  return {
+    id: chain.id,
+    name: chain.name || 'Dimension Chain',
+    defaultUnit: defaultUnit,
+    displayUnit: displayUnit,
+    scaleRatio: scaleRatio,
+    startOffsetMeters: startOffsetMeters,
+    startOffsetFormatted: formatMeasurementValue(startOffsetMeters, displayUnit, precision),
+    endOffsetMeters: endOffsetMeters,
+    endOffsetFormatted: formatMeasurementValue(endOffsetMeters, displayUnit, precision),
+    segmentTotalMeters: segmentTotalMeters,
+    segmentTotalFormatted: formatMeasurementValue(segmentTotalMeters, displayUnit, precision),
+    allowanceTotalMeters: allowanceTotalMeters,
+    allowanceTotalFormatted: formatMeasurementValue(allowanceTotalMeters, displayUnit, precision),
+    overallExtentMeters: overallExtentMeters,
+    overallExtentFormatted: formatMeasurementValue(overallExtentMeters, displayUnit, precision),
+    drawingOverallMeters: drawingOverallMeters,
+    drawingOverallFormatted: drawingOverallFormatted,
+    segments: calculatedSegments,
+    segmentCount: calculatedSegments.length,
+    validCount: validCount,
+    invalidCount: invalidCount,
+    isValid: invalidCount === 0 && calculatedSegments.length > 0
+  };
+}
+
+/**
+ * Generate a scale-accurate SVG drafting representation of the dimension chain
+ * @param {Object} calculatedChain - Output from calculateChain
+ * @param {Object} [options]
+ * @param {string} [options.selectedSegmentId=null]
+ * @param {number} [options.svgWidth=860]
+ * @param {number} [options.svgHeight=180]
+ * @returns {string} SVG markup
+ */
+function generateChainSVG(calculatedChain, options = {}) {
+  if (!calculatedChain || !Array.isArray(calculatedChain.segments) || calculatedChain.segments.length === 0) {
+    return `<svg viewBox="0 0 800 120" xmlns="http://www.w3.org/2000/svg" class="chain-svg-empty"><text x="400" y="65" text-anchor="middle" fill="currentColor" opacity="0.4" font-family="monospace" font-size="13">No chain segments entered yet</text></svg>`;
+  }
+
+  const {
+    selectedSegmentId = null,
+    svgWidth = 860,
+    svgHeight = 180
+  } = options;
+
+  const padLeft = 60;
+  const padRight = 60;
+  const usableWidth = svgWidth - padLeft - padRight;
+
+  const baselineY = 90;
+  const dimLineY = 52;
+  const totalDimLineY = 145;
+
+  const totalExtent = Math.max(calculatedChain.overallExtentMeters, 0.001);
+
+  function getX(meters) {
+    return padLeft + (meters / totalExtent) * usableWidth;
+  }
+
+  let svgElements = [];
+
+  // 1. Grid Background lines & Ticks
+  svgElements.push(`<defs>
+    <pattern id="chainGrid" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="currentColor" stroke-width="0.5" opacity="0.05" />
+    </pattern>
+  </defs>`);
+  svgElements.push(`<rect width="${svgWidth}" height="${svgHeight}" fill="url(#chainGrid)" rx="6" />`);
+
+  // 2. Start Offset Indicator
+  if (calculatedChain.startOffsetMeters > 0) {
+    const startOffsetEndX = getX(calculatedChain.startOffsetMeters);
+    svgElements.push(`
+      <rect x="${padLeft}" y="${baselineY - 12}" width="${startOffsetEndX - padLeft}" height="24" fill="rgba(245, 158, 11, 0.12)" stroke="#f59e0b" stroke-dasharray="3 3" stroke-width="1" />
+      <text x="${(padLeft + startOffsetEndX) / 2}" y="${baselineY + 4}" font-family="monospace" font-size="9" font-weight="600" fill="#f59e0b" text-anchor="middle">OFFSET: ${calculatedChain.startOffsetFormatted}</text>
+    `);
+  }
+
+  // 3. Main Continuous Baseline Axis
+  const startX = getX(0);
+  const endX = getX(totalExtent);
+  svgElements.push(`<line x1="${startX}" y1="${baselineY}" x2="${endX}" y2="${baselineY}" stroke="currentColor" stroke-width="2" opacity="0.8" />`);
+
+  // 4. Cumulative Position Coordinate Labels & Major Baseline Ticks
+  const positionsSet = new Set();
+  positionsSet.add(0);
+  if (calculatedChain.startOffsetMeters > 0) positionsSet.add(calculatedChain.startOffsetMeters);
+
+  calculatedChain.segments.forEach(seg => {
+    if (seg.isValid && seg.enabled) {
+      positionsSet.add(seg.startMeters);
+      positionsSet.add(seg.endMeters);
+    }
+  });
+
+  const sortedPositions = Array.from(positionsSet).sort((a, b) => a - b);
+  sortedPositions.forEach(posMeters => {
+    const px = getX(posMeters);
+    const posFormatted = formatMeasurementValue(posMeters, calculatedChain.displayUnit, 1);
+    svgElements.push(`
+      <line x1="${px}" y1="${baselineY - 8}" x2="${px}" y2="${baselineY + 8}" stroke="currentColor" stroke-width="1.5" opacity="0.7" />
+      <text x="${px}" y="${baselineY - 14}" font-family="monospace" font-size="10" font-weight="700" fill="currentColor" opacity="0.9" text-anchor="middle">${posFormatted}</text>
+    `);
+  });
+
+  // 5. Render Individual Segments, Extension Lines, Dimension Witness Arrows & Text
+  calculatedChain.segments.forEach(seg => {
+    if (!seg.isValid || !seg.enabled) return;
+
+    const x1 = getX(seg.startMeters);
+    const x2 = getX(seg.endMeters);
+    const segWidth = Math.max(x2 - x1, 1);
+    const isSelected = seg.id === selectedSegmentId;
+    const isRef = seg.dimensionType === 'reference';
+    const isAlw = seg.dimensionType === 'allowance';
+
+    const strokeColor = isSelected
+      ? '#38bdf8'
+      : isRef
+      ? '#94a3b8'
+      : isAlw
+      ? '#f59e0b'
+      : 'var(--accent-primary, #38bdf8)';
+
+    // Highlight background slice if selected
+    if (isSelected) {
+      svgElements.push(`
+        <rect x="${x1}" y="20" width="${segWidth}" height="110" fill="rgba(56, 189, 248, 0.12)" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 2" rx="4" />
+      `);
+    }
+
+    if (isRef) {
+      // Reference Dimension (Annotation Pin at coordinate)
+      svgElements.push(`
+        <circle cx="${x1}" cy="${baselineY}" r="4" fill="#94a3b8" />
+        <line x1="${x1}" y1="${baselineY - 20}" x2="${x1}" y2="${baselineY + 20}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="2 2" />
+        <text x="${x1}" y="${baselineY + 34}" font-family="monospace" font-size="9" fill="#94a3b8" text-anchor="middle">${seg.name} [REF]</text>
+      `);
+    } else {
+      // Standard or Allowance Dimension Segment
+      // Extension Witness Lines
+      svgElements.push(`
+        <line x1="${x1}" y1="${dimLineY - 4}" x2="${x1}" y2="${baselineY - 4}" stroke="${strokeColor}" stroke-width="1" opacity="0.4" stroke-dasharray="2 2" />
+        <line x1="${x2}" y1="${dimLineY - 4}" x2="${x2}" y2="${baselineY - 4}" stroke="${strokeColor}" stroke-width="1" opacity="0.4" stroke-dasharray="2 2" />
+      `);
+
+      // Dimension Horizontal Line with architectural 45° slash ticks
+      svgElements.push(`
+        <line x1="${x1}" y1="${dimLineY}" x2="${x2}" y2="${dimLineY}" stroke="${strokeColor}" stroke-width="1.5" />
+        <line x1="${x1 - 4}" y1="${dimLineY + 4}" x2="${x1 + 4}" y2="${dimLineY - 4}" stroke="${strokeColor}" stroke-width="1.8" />
+        <line x1="${x2 - 4}" y1="${dimLineY + 4}" x2="${x2 + 4}" y2="${dimLineY - 4}" stroke="${strokeColor}" stroke-width="1.8" />
+      `);
+
+      // Segment Dimension Text (Real & Drawing)
+      const midX = (x1 + x2) / 2;
+      svgElements.push(`
+        <text x="${midX}" y="${dimLineY - 7}" font-family="monospace" font-size="11" font-weight="700" fill="${strokeColor}" text-anchor="middle">${seg.lengthFormatted}</text>
+      `);
+
+      // Segment Name & Markers below baseline
+      const markerText = (seg.startLabel && seg.endLabel)
+        ? `${seg.startLabel} ➔ ${seg.endLabel}`
+        : seg.name;
+
+      svgElements.push(`
+        <text x="${midX}" y="${baselineY + 22}" font-family="sans-serif" font-size="10" font-weight="600" fill="currentColor" opacity="0.85" text-anchor="middle">${markerText}</text>
+      `);
+    }
+  });
+
+  // 6. Bottom Overall Total Dimension Line & Scale Legend
+  if (calculatedChain.overallExtentMeters > 0) {
+    svgElements.push(`
+      <line x1="${startX}" y1="${totalDimLineY}" x2="${endX}" y2="${totalDimLineY}" stroke="currentColor" stroke-width="1.5" opacity="0.6" />
+      <line x1="${startX - 4}" y1="${totalDimLineY + 4}" x2="${startX + 4}" y2="${totalDimLineY - 4}" stroke="currentColor" stroke-width="2" opacity="0.8" />
+      <line x1="${endX - 4}" y1="${totalDimLineY + 4}" x2="${endX + 4}" y2="${totalDimLineY - 4}" stroke="currentColor" stroke-width="2" opacity="0.8" />
+      <text x="${(startX + endX) / 2}" y="${totalDimLineY - 6}" font-family="monospace" font-size="11" font-weight="800" fill="currentColor" text-anchor="middle">TOTAL: ${calculatedChain.overallExtentFormatted} (Drawing @ 1:${calculatedChain.scaleRatio}: ${calculatedChain.drawingOverallFormatted})</text>
+    `);
+  }
+
+  // 7. Scale Ratio Stamp Badge (Top Right)
+  svgElements.push(`
+    <rect x="${svgWidth - 110}" y="8" width="95" height="20" rx="3" fill="rgba(56, 189, 248, 0.15)" stroke="#38bdf8" stroke-width="1" />
+    <text x="${svgWidth - 62}" y="22" font-family="monospace" font-size="10" font-weight="700" fill="#38bdf8" text-anchor="middle">SCALE 1:${calculatedChain.scaleRatio}</text>
+  `);
+
+  return `
+    <svg viewBox="0 0 ${svgWidth} ${svgHeight}" xmlns="http://www.w3.org/2000/svg" class="chain-svg-viewport" role="img" aria-label="${calculatedChain.name} dimension chain with ${calculatedChain.segmentCount} segments, total length ${calculatedChain.overallExtentFormatted}">
+      ${svgElements.join('\n')}
+    </svg>
+  `;
+}
+
+/**
+ * Format calculated chain data for multi-stream clipboard export or TSV download
+ * @param {Object} calculatedChain - Output from calculateChain
+ * @param {'tsv'|'table'|'cumulative'|'segments'|'drawing'} [formatType='tsv']
+ * @returns {string} Formatted text
+ */
+function formatChainForClipboard(calculatedChain, formatType = 'tsv') {
+  if (!calculatedChain || !Array.isArray(calculatedChain.segments) || calculatedChain.segments.length === 0) {
+    return 'No dimension chain data available.';
+  }
+
+  const { segments, name, overallExtentFormatted, scaleRatio, drawingOverallFormatted } = calculatedChain;
+
+  if (formatType === 'cumulative') {
+    // Running coordinate stream (e.g. "0 1200 3000 3900 5400")
+    const positions = [calculatedChain.startOffsetFormatted];
+    segments.forEach(s => {
+      if (s.isValid && s.enabled && s.dimensionType !== 'reference') {
+        positions.push(s.endFormatted);
+      }
+    });
+    return positions.join('   ');
+  }
+
+  if (formatType === 'segments') {
+    // Raw segment lengths stream (e.g. "1200 1800 900 1500")
+    return segments.filter(s => s.isValid && s.enabled).map(s => s.lengthFormatted).join('   ');
+  }
+
+  if (formatType === 'drawing') {
+    // Scaled drawing lengths stream
+    return segments.filter(s => s.isValid && s.enabled).map(s => s.drawingFormatted).join('   ');
+  }
+
+  if (formatType === 'table') {
+    // Markdown Table
+    let md = `### Dimension Chain: ${name}\n`;
+    md += `**Overall Extent:** ${overallExtentFormatted} (Drawing @ 1:${scaleRatio}: ${drawingOverallFormatted})\n\n`;
+    md += `| # | Name | Start | End | Length | Type | Drawing @ 1:${scaleRatio} |\n`;
+    md += `| :---: | :--- | :--- | :--- | :--- | :---: | :--- |\n`;
+
+    segments.forEach((s, idx) => {
+      md += `| ${idx + 1} | ${s.name} | ${s.startFormatted} | ${s.endFormatted} | **${s.lengthFormatted}** | ${s.dimensionType.toUpperCase()} | \`${s.drawingFormatted}\` |\n`;
+    });
+
+    return md;
+  }
+
+  // Default: TSV (Tab-Separated Values for CAD/Excel)
+  let tsv = `Index\tName\tStart\tEnd\tLength\tType\tDrawing_1_${scaleRatio}\tNotes\n`;
+  segments.forEach((s, idx) => {
+    tsv += `${idx + 1}\t${s.name}\t${s.startFormatted}\t${s.endFormatted}\t${s.lengthFormatted}\t${s.dimensionType}\t${s.drawingFormatted}\t${s.notes || ''}\n`;
+  });
+
+  return tsv;
+}
+
+/**
+ * Converts a calculated chain into a grouped set of Dimension Workspace entries
+ * @param {Object} calculatedChain - Output from calculateChain
+ * @returns {Object} { group: Object, entries: Object[] }
+ */
+function convertChainToWorkspaceGroup(calculatedChain) {
+  if (!calculatedChain || !Array.isArray(calculatedChain.segments)) {
+    return { group: createGroup('Dimension Chain'), entries: [] };
+  }
+
+  const group = createGroup(calculatedChain.name || 'Dimension Chain');
+  const unit = calculatedChain.displayUnit || DEFAULT_CHAIN_UNIT;
+
+  const entries = calculatedChain.segments.map((s, idx) => {
+    return createDimensionEntry({
+      name: s.name || `Chain Segment ${idx + 1}`,
+      rawInput: s.rawInput,
+      dimensionType: s.dimensionType || 'segment',
+      defaultUnit: unit,
+      groupId: group.id,
+      notes: `Chain: ${calculatedChain.name} (#${idx + 1}, Start: ${s.startFormatted}, End: ${s.endFormatted})`
+    }, unit);
+  });
+
+  return { group, entries };
+}
+
+/**
+ * Built-in architectural chain templates
+ */
+const CHAIN_TEMPLATES = Object.freeze({
+  wall_opening: {
+    id: 'wall_opening',
+    name: 'Wall Opening Sequence',
+    defaultUnit: 'mm',
+    segments: [
+      { name: 'Wall Pier A', rawInput: '1200', dimensionType: 'segment' },
+      { name: 'Window Opening', rawInput: '1500', dimensionType: 'segment' },
+      { name: 'Center Pier', rawInput: '600', dimensionType: 'segment' },
+      { name: 'Door Opening', rawInput: '900', dimensionType: 'segment' },
+      { name: 'Wall Pier B', rawInput: '1200', dimensionType: 'segment' }
+    ]
+  },
+  grid_bays: {
+    id: 'grid_bays',
+    name: 'Structural Grid Line Bays',
+    defaultUnit: 'mm',
+    segments: [
+      { name: 'Bay 1–2', rawInput: '6000', dimensionType: 'segment', startLabel: 'Grid 1', endLabel: 'Grid 2' },
+      { name: 'Bay 2–3', rawInput: '6000', dimensionType: 'segment', startLabel: 'Grid 2', endLabel: 'Grid 3' },
+      { name: 'Bay 3–4 (Core)', rawInput: '7500', dimensionType: 'segment', startLabel: 'Grid 3', endLabel: 'Grid 4' },
+      { name: 'Bay 4–5', rawInput: '6000', dimensionType: 'segment', startLabel: 'Grid 4', endLabel: 'Grid 5' }
+    ]
+  },
+  facade_rhythm: {
+    id: 'facade_rhythm',
+    name: 'Curtain Wall Facade Rhythm',
+    defaultUnit: 'mm',
+    segments: [
+      { name: 'Corner Mullion', rawInput: '150', dimensionType: 'segment' },
+      { name: 'Vision Glass 1', rawInput: '1350', dimensionType: 'segment' },
+      { name: 'Intermediate Mullion', rawInput: '150', dimensionType: 'segment' },
+      { name: 'Vision Glass 2', rawInput: '1350', dimensionType: 'segment' },
+      { name: 'End Mullion', rawInput: '150', dimensionType: 'segment' }
+    ]
+  },
+  room_perimeter: {
+    id: 'room_perimeter',
+    name: 'Interior Corridor Partitions',
+    defaultUnit: 'mm',
+    segments: [
+      { name: 'Entry Foyer', rawInput: '2400', dimensionType: 'segment' },
+      { name: 'Corridor Spine', rawInput: '1800', dimensionType: 'segment' },
+      { name: 'Main Gallery', rawInput: '5400', dimensionType: 'segment' }
+    ]
+  }
+});
+
+
+  // =========================================================================
+  // MODULE: BatchCad
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Batch CAD Conversion Engine
+ * Phase 2.5: Daily Architect Toolkit — Part 7: Batch CAD Conversion
+ *
+ * Deterministic bulk dimension parsing, multi-format input extraction,
+ * canonical normalization, transformation orchestration (Real↔Drawing,
+ * Scale↔Scale, Unit↔Unit), non-destructive retention, and CAD/Workspace handoffs.
+ * Zero-DOM, pure mathematical module.
+ */
+
+
+
+
+
+
+
+
+
+
+const BATCH_STORAGE_KEY = 'archi_batch_cad_state';
+
+/**
+ * Standard Batch Conversion Presets
+ */
+const BATCH_PRESETS = Object.freeze({
+  real_to_1_50_mm: Object.freeze({
+    id: 'real_to_1_50_mm',
+    name: 'Real ➔ 1:50 (mm)',
+    description: 'Convert real-world millimeters to drawing paper millimeters at 1:50 scale',
+    mode: 'real_to_drawing',
+    sourceUnit: 'mm',
+    sourceScale: 1,
+    targetUnit: 'mm',
+    targetScale: 50,
+    precision: 2
+  }),
+  real_to_1_100_mm: Object.freeze({
+    id: 'real_to_1_100_mm',
+    name: 'Real ➔ 1:100 (mm)',
+    description: 'Convert real-world millimeters to drawing paper millimeters at 1:100 scale',
+    mode: 'real_to_drawing',
+    sourceUnit: 'mm',
+    sourceScale: 1,
+    targetUnit: 'mm',
+    targetScale: 100,
+    precision: 2
+  }),
+  scale_1_50_to_1_100: Object.freeze({
+    id: 'scale_1_50_to_1_100',
+    name: '1:50 ➔ 1:100 (Scale)',
+    description: 'Rescale drawing dimensions from 1:50 floor plan to 1:100 arrangement',
+    mode: 'scale_to_scale',
+    sourceUnit: 'mm',
+    sourceScale: 50,
+    targetUnit: 'mm',
+    targetScale: 100,
+    precision: 2
+  }),
+  mm_to_m: Object.freeze({
+    id: 'mm_to_m',
+    name: 'mm ➔ m (Unit)',
+    description: 'Convert millimeters to meters (real-world site dimensions)',
+    mode: 'unit_to_unit',
+    sourceUnit: 'mm',
+    sourceScale: 1,
+    targetUnit: 'm',
+    targetScale: 1,
+    precision: 3
+  }),
+  m_to_mm: Object.freeze({
+    id: 'm_to_mm',
+    name: 'm ➔ mm (Unit)',
+    description: 'Convert meters to millimeters',
+    mode: 'unit_to_unit',
+    sourceUnit: 'm',
+    sourceScale: 1,
+    targetUnit: 'mm',
+    targetScale: 1,
+    precision: 0
+  }),
+  in_to_ft_in: Object.freeze({
+    id: 'in_to_ft_in',
+    name: 'in ➔ ft-in (Unit)',
+    description: 'Convert fractional or decimal inches to architectural feet-inches',
+    mode: 'unit_to_unit',
+    sourceUnit: 'in',
+    sourceScale: 1,
+    targetUnit: 'ft-in',
+    targetScale: 1,
+    precision: 2
+  })
+});
+
+/**
+ * Deterministically detects the delimiter used in a raw pasted text block.
+ * @param {string} rawText - Raw pasted text
+ * @returns {'newline' | 'tab' | 'comma' | 'semicolon'} Detected delimiter
+ */
+function detectBatchDelimiter(rawText) {
+  if (!rawText || typeof rawText !== 'string') return 'newline';
+
+  const text = rawText.trim();
+  if (!text) return 'newline';
+
+  const newlineCount = (text.match(/\r?\n/g) || []).length;
+  const tabCount = (text.match(/\t/g) || []).length;
+  const semicolonCount = (text.match(/;/g) || []).length;
+
+  // In architectural CAD, dots are decimal points (e.g. 2.4).
+  // Comma is a delimiter if it's separating numbers and not followed by non-numbers.
+  const commaCount = (text.match(/,/g) || []).length;
+
+  if (tabCount > 0 && tabCount >= newlineCount) {
+    return 'tab';
+  }
+
+  if (newlineCount > 0 && tabCount === 0 && (commaCount === 0 || newlineCount >= commaCount)) {
+    return 'newline';
+  }
+
+  if (commaCount > 0 && newlineCount === 0) {
+    return 'comma';
+  }
+
+  if (semicolonCount > 0 && newlineCount === 0) {
+    return 'semicolon';
+  }
+
+  return 'newline';
+}
+
+/**
+ * Parses a single raw row/line into a structured batch row item.
+ * @param {string} rawLine - Single line or token
+ * @param {number} index - Row index (0-based)
+ * @param {Object} [options]
+ * @param {string} [options.defaultUnit='mm']
+ * @param {number} [options.defaultScale=50]
+ * @param {string} [options.defaultSemanticRole='reference']
+ * @returns {Object} Structured batch row item
+ */
+function parseBatchRow(rawLine, index = 0, options = {}) {
+  const {
+    defaultUnit = 'mm',
+    defaultScale = 50,
+    defaultSemanticRole = 'reference'
+  } = options;
+
+  const raw = typeof rawLine === 'string' ? rawLine.trim() : String(rawLine || '').trim();
+  const id = `batch-row-${index + 1}-${Math.random().toString(36).substring(2, 7)}`;
+  const defaultName = `Dimension ${index + 1}`;
+
+  if (!raw) {
+    return {
+      id,
+      index: index + 1,
+      name: defaultName,
+      originalText: '',
+      parsedValue: 0,
+      sourceUnit: defaultUnit,
+      canonicalMeters: 0,
+      semanticRole: defaultSemanticRole,
+      isExpression: false,
+      valid: false,
+      error: 'Empty input row'
+    };
+  }
+
+  let textToParse = raw;
+  let extractedName = null;
+  let semanticRole = defaultSemanticRole;
+
+  // 1. Check for explicit semantic role tags: [SEG], [REF], [ALW] or prefixes SEG:, REF:, ALW:
+  const rolePrefixMatch = textToParse.match(/^\[?(SEG|REF|ALW)\]?[:\s\-]+(.+)$/i);
+  if (rolePrefixMatch) {
+    const roleTag = rolePrefixMatch[1].toUpperCase();
+    if (roleTag === 'SEG') semanticRole = 'segment';
+    else if (roleTag === 'ALW') semanticRole = 'allowance';
+    else semanticRole = 'reference';
+    textToParse = rolePrefixMatch[2].trim();
+  }
+
+  // 2. Extract optional row name
+  // Pattern A: "Wall A = 4800" or "Door 1: 900"
+  const nameSeparatorMatch = textToParse.match(/^([^=:\t]+?)\s*[=:]\s*(.+)$/);
+  if (nameSeparatorMatch && isNaN(Number(nameSeparatorMatch[1].trim()))) {
+    extractedName = nameSeparatorMatch[1].trim();
+    textToParse = nameSeparatorMatch[2].trim();
+  } else {
+    // Pattern B: Tab-separated e.g. "Wall A\t4800"
+    const tabParts = textToParse.split('\t');
+    if (tabParts.length >= 2 && tabParts[0].trim() && tabParts[1].trim()) {
+      extractedName = tabParts[0].trim();
+      textToParse = tabParts.slice(1).join(' ').trim();
+    } else if (!isExpressionLike(textToParse)) {
+      // Pattern C: If the whole string is NOT directly a valid measurement (like "7' 6"" or "3 1/2in"):
+      const directParse = parseInput(textToParse, { allowNegative: true });
+      if (!directParse.isValid) {
+        // Try space-separated name + measurement e.g. "Wall A 4800mm"
+        const spaceParts = textToParse.split(/\s+/);
+        if (spaceParts.length >= 2) {
+          const lastToken = spaceParts[spaceParts.length - 1];
+          const testParse = parseInput(lastToken, { allowNegative: true });
+          if (testParse.isValid) {
+            const potentialName = spaceParts.slice(0, spaceParts.length - 1).join(' ');
+            if (potentialName && isNaN(Number(potentialName))) {
+              extractedName = potentialName;
+              textToParse = lastToken;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Check for trailing role tag e.g. "4800 SEG"
+  const trailingRoleMatch = textToParse.match(/^(.+?)\s+\[?(SEG|REF|ALW)\]?$/i);
+  if (trailingRoleMatch) {
+    const roleTag = trailingRoleMatch[2].toUpperCase();
+    if (roleTag === 'SEG') semanticRole = 'segment';
+    else if (roleTag === 'ALW') semanticRole = 'allowance';
+    else semanticRole = 'reference';
+    textToParse = trailingRoleMatch[1].trim();
+  }
+
+  const finalName = extractedName || defaultName;
+
+  // 4. Parse Measurement / Math Expression
+  const isExpr = isExpressionLike(textToParse);
+
+  if (isExpr) {
+    try {
+      const exprRes = evaluateExpression(textToParse, {
+        defaultUnit: defaultUnit,
+        scaleRatio: defaultScale
+      });
+
+      if (!exprRes.isValid) {
+        return {
+          id,
+          index: index + 1,
+          name: finalName,
+          originalText: raw,
+          parsedValue: 0,
+          sourceUnit: defaultUnit,
+          canonicalMeters: 0,
+          semanticRole,
+          isExpression: true,
+          valid: false,
+          error: exprRes.error || 'Expression could not be evaluated'
+        };
+      }
+
+      const canonicalMeters = exprRes.canonicalMeters !== null && exprRes.canonicalMeters !== undefined
+        ? exprRes.canonicalMeters
+        : (exprRes.value * (UNITS[defaultUnit]?.toMeters || 0.001));
+      const detectedUnit = (exprRes.displayUnit && exprRes.displayUnit !== 'scalar') ? exprRes.displayUnit : defaultUnit;
+      const unitDef = UNITS[detectedUnit] || UNITS.mm;
+      const parsedValue = canonicalMeters / unitDef.toMeters;
+
+      return {
+        id,
+        index: index + 1,
+        name: finalName,
+        originalText: raw,
+        parsedValue: parsedValue,
+        sourceUnit: detectedUnit,
+        canonicalMeters: canonicalMeters,
+        semanticRole,
+        isExpression: true,
+        valid: true,
+        error: null
+      };
+    } catch (err) {
+      return {
+        id,
+        index: index + 1,
+        name: finalName,
+        originalText: raw,
+        parsedValue: 0,
+        sourceUnit: defaultUnit,
+        canonicalMeters: 0,
+        semanticRole,
+        isExpression: true,
+        valid: false,
+        error: err.message || 'Expression evaluation error'
+      };
+    }
+  }
+
+  // Standard Dimension Parsing
+  const parseRes = parseInput(textToParse, { allowNegative: true });
+
+  if (!parseRes.isValid) {
+    return {
+      id,
+      index: index + 1,
+      name: finalName,
+      originalText: raw,
+      parsedValue: 0,
+      sourceUnit: defaultUnit,
+      canonicalMeters: 0,
+      semanticRole,
+      isExpression: false,
+      valid: false,
+      error: parseRes.error || 'Invalid dimension format'
+    };
+  }
+
+  const unitKey = parseRes.detectedUnit || defaultUnit;
+  const unitDef = requireUnit(unitKey, 'length');
+  const canonicalMeters = parseRes.value * unitDef.toMeters;
+
+  return {
+    id,
+    index: index + 1,
+    name: finalName,
+    originalText: raw,
+    parsedValue: parseRes.value,
+    sourceUnit: unitKey,
+    canonicalMeters: canonicalMeters,
+    semanticRole,
+    isExpression: false,
+    valid: true,
+    error: null
+  };
+}
+
+/**
+ * Splits and parses raw batch text into a list of structured row items.
+ * @param {string} rawText - Raw input text
+ * @param {Object} [options]
+ * @param {'auto'|'newline'|'comma'|'tab'|'semicolon'} [options.delimiter='auto']
+ * @param {string} [options.defaultUnit='mm']
+ * @param {number} [options.defaultScale=50]
+ * @param {string} [options.defaultSemanticRole='reference']
+ * @returns {Object} { delimiter, rows: Array<Object> }
+ */
+function parseBatchInput(rawText, options = {}) {
+  const {
+    delimiter = 'auto',
+    defaultUnit = 'mm',
+    defaultScale = 50,
+    defaultSemanticRole = 'reference'
+  } = options;
+
+  if (!rawText || typeof rawText !== 'string' || !rawText.trim()) {
+    return {
+      delimiter: delimiter === 'auto' ? 'newline' : delimiter,
+      rows: []
+    };
+  }
+
+  const detectedDelim = delimiter === 'auto' ? detectBatchDelimiter(rawText) : delimiter;
+  let lines = [];
+
+  if (detectedDelim === 'newline') {
+    lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  } else if (detectedDelim === 'comma') {
+    // Split by commas, handling potential whitespace
+    lines = rawText.split(',').map(l => l.trim()).filter(l => l.length > 0);
+  } else if (detectedDelim === 'semicolon') {
+    lines = rawText.split(';').map(l => l.trim()).filter(l => l.length > 0);
+  } else if (detectedDelim === 'tab') {
+    // If multiline with tabs, split by line first, then tokens
+    const rawLines = rawText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+    if (rawLines.length > 1) {
+      lines = rawLines;
+    } else {
+      lines = rawText.split('\t').map(l => l.trim()).filter(l => l.length > 0);
+    }
+  } else {
+    lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  }
+
+  const rows = lines.map((line, idx) => parseBatchRow(line, idx, {
+    defaultUnit,
+    defaultScale,
+    defaultSemanticRole
+  }));
+
+  return {
+    delimiter: detectedDelim,
+    rows
+  };
+}
+
+/**
+ * Converts a single parsed batch row according to configuration parameters.
+ * @param {Object} row - Parsed batch row item
+ * @param {Object} config - Conversion configuration
+ * @returns {Object} Converted row item
+ */
+function convertBatchRow(row, config = {}) {
+  const {
+    mode = 'real_to_drawing',
+    sourceUnit = 'mm',
+    sourceScale = 1,
+    targetUnit = 'mm',
+    targetScale = 50,
+    precision = 2
+  } = config;
+
+  if (!row.valid) {
+    return {
+      ...row,
+      targetValue: null,
+      targetCanonicalMeters: null,
+      sourceFormatted: row.originalText || '—',
+      targetFormatted: '—',
+      status: 'INVALID'
+    };
+  }
+
+  let targetValue = 0;
+  let targetCanonicalMeters = 0;
+  const targetUnitDef = requireUnit(targetUnit === 'ft-in' ? 'ft' : targetUnit, 'length');
+
+  if (mode === 'real_to_drawing') {
+    const scaleRatio = requireFiniteNumber(targetScale, 'targetScale') || 50;
+    targetCanonicalMeters = row.canonicalMeters / scaleRatio;
+    targetValue = targetCanonicalMeters / targetUnitDef.toMeters;
+  } else if (mode === 'drawing_to_real') {
+    const scaleRatio = requireFiniteNumber(sourceScale, 'sourceScale') || 50;
+    targetCanonicalMeters = row.canonicalMeters * scaleRatio;
+    targetValue = targetCanonicalMeters / targetUnitDef.toMeters;
+  } else if (mode === 'unit_to_unit') {
+    targetCanonicalMeters = row.canonicalMeters;
+    targetValue = row.canonicalMeters / targetUnitDef.toMeters;
+  } else if (mode === 'scale_to_scale') {
+    const srcRatio = requireFiniteNumber(sourceScale, 'sourceScale') || 50;
+    const tgtRatio = requireFiniteNumber(targetScale, 'targetScale') || 100;
+    const realMeters = row.canonicalMeters * srcRatio;
+    targetCanonicalMeters = realMeters / tgtRatio;
+    targetValue = targetCanonicalMeters / targetUnitDef.toMeters;
+  } else {
+    targetCanonicalMeters = row.canonicalMeters;
+    targetValue = row.canonicalMeters / targetUnitDef.toMeters;
+  }
+
+  // Format Source String
+  let sourceFormatted = '';
+  if (row.sourceUnit === 'ft-in') {
+    sourceFormatted = formatFeetInches(row.canonicalMeters / 0.0254);
+  } else {
+    sourceFormatted = formatCadValue(row.canonicalMeters, { unit: row.sourceUnit, precision, suffix: 'symbol' });
+  }
+
+  // Format Target String
+  let targetFormatted = '';
+  if (targetUnit === 'ft-in') {
+    targetFormatted = formatFeetInches(targetCanonicalMeters / 0.0254);
+  } else {
+    targetFormatted = formatCadValue(targetCanonicalMeters, { unit: targetUnit, precision, suffix: 'symbol' });
+  }
+
+  const isUnchanged = (Math.abs(row.parsedValue - targetValue) < 1e-9) &&
+                      (row.sourceUnit === targetUnit) &&
+                      (sourceScale === targetScale);
+
+  return {
+    ...row,
+    targetValue,
+    targetCanonicalMeters,
+    sourceFormatted,
+    targetFormatted,
+    status: isUnchanged ? 'UNCHANGED' : 'CONVERTED'
+  };
+}
+
+/**
+ * Transforms an array of batch rows according to configuration.
+ * @param {Array<Object>} rows - Array of parsed batch rows
+ * @param {Object} config - Conversion configuration
+ * @returns {Object} Structured batch calculation result
+ */
+function convertBatch(rows, config = {}) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const convertedRows = safeRows.map(row => convertBatchRow(row, config));
+
+  let validCount = 0;
+  let invalidCount = 0;
+  let convertedCount = 0;
+  let unchangedCount = 0;
+  let totalCanonicalMeters = 0;
+  let totalTargetValue = 0;
+
+  for (const row of convertedRows) {
+    if (row.valid) {
+      validCount++;
+      totalCanonicalMeters += row.canonicalMeters;
+      if (typeof row.targetValue === 'number' && !isNaN(row.targetValue)) {
+        totalTargetValue += row.targetValue;
+      }
+      if (row.status === 'CONVERTED') convertedCount++;
+      else if (row.status === 'UNCHANGED') unchangedCount++;
+    } else {
+      invalidCount++;
+    }
+  }
+
+  return {
+    config: { ...config },
+    rows: convertedRows,
+    summary: {
+      totalRows: convertedRows.length,
+      validRows: validCount,
+      invalidRows: invalidCount,
+      convertedRows: convertedCount,
+      unchangedRows: unchangedCount,
+      totalCanonicalMeters,
+      totalTargetValue
+    }
+  };
+}
+
+/**
+ * Non-destructively filters rows based on criteria.
+ * @param {Array<Object>} rows - Converted batch rows
+ * @param {string} filterKey - 'all' | 'valid' | 'invalid' | 'selected' | 'seg' | 'ref' | 'alw'
+ * @param {Set<string>} [selectedIds=new Set()] - Set of selected row IDs
+ * @returns {Array<Object>} Filtered rows
+ */
+function filterBatchRows(rows, filterKey = 'all', selectedIds = new Set()) {
+  if (!Array.isArray(rows)) return [];
+
+  switch (filterKey) {
+    case 'valid':
+      return rows.filter(r => r.valid);
+    case 'invalid':
+      return rows.filter(r => !r.valid);
+    case 'selected':
+      return rows.filter(r => selectedIds.has(r.id));
+    case 'seg':
+      return rows.filter(r => r.semanticRole === 'segment');
+    case 'ref':
+      return rows.filter(r => r.semanticRole === 'reference');
+    case 'alw':
+      return rows.filter(r => r.semanticRole === 'allowance');
+    case 'all':
+    default:
+      return rows;
+  }
+}
+
+/**
+ * Formats batch conversion results for clipboard or export.
+ * @param {Object} batchResult - Converted batch result
+ * @param {Object} [options]
+ * @param {'results_only'|'raw_numbers'|'names_and_results'|'tsv_schedule'|'csv_schedule'|'cad_preset'} [options.format='results_only']
+ * @param {boolean} [options.selectedOnly=false]
+ * @param {Set<string>} [options.selectedIds=null]
+ * @param {string} [options.cadPreset='generic']
+ * @returns {string} Formatted string
+ */
+function formatBatchResults(batchResult, options = {}) {
+  if (!batchResult || !Array.isArray(batchResult.rows)) return '';
+
+  const {
+    format = 'results_only',
+    selectedOnly = false,
+    selectedIds = new Set(),
+    cadPreset = 'generic'
+  } = options;
+
+  let targetRows = batchResult.rows;
+  if (selectedOnly && selectedIds && selectedIds.size > 0) {
+    targetRows = targetRows.filter(r => selectedIds.has(r.id));
+  }
+
+  // Filter out invalid rows for clean numerical formats
+  const validRows = targetRows.filter(r => r.valid);
+
+  if (format === 'raw_numbers') {
+    return validRows
+      .map(r => formatCadValue(r.targetCanonicalMeters, {
+        unit: batchResult.config?.targetUnit || 'mm',
+        precision: batchResult.config?.precision || 2,
+        suffix: 'none'
+      }))
+      .join(' ');
+  }
+
+  if (format === 'results_only') {
+    return validRows
+      .map(r => formatCadValue(r.targetCanonicalMeters, {
+        unit: batchResult.config?.targetUnit || 'mm',
+        precision: batchResult.config?.precision || 2,
+        suffix: 'symbol'
+      }))
+      .join('\n');
+  }
+
+  if (format === 'names_and_results') {
+    return validRows
+      .map(r => `${r.name}: ${r.targetFormatted}`)
+      .join('\n');
+  }
+
+  if (format === 'tsv_schedule') {
+    const headers = ['#', 'Name', 'Type', 'Input Value', 'Converted Result', 'Status'];
+    const lines = [headers.join('\t')];
+    for (const r of targetRows) {
+      const typeTag = r.semanticRole === 'segment' ? 'SEG' : (r.semanticRole === 'allowance' ? 'ALW' : 'REF');
+      lines.push([
+        escapeTSV(r.index),
+        escapeTSV(r.name),
+        escapeTSV(typeTag),
+        escapeTSV(r.sourceFormatted),
+        escapeTSV(r.targetFormatted),
+        escapeTSV(r.status)
+      ].join('\t'));
+    }
+    return lines.join('\n');
+  }
+
+  if (format === 'csv_schedule') {
+    const headers = ['#', 'Name', 'Type', 'Input Value', 'Converted Result', 'Status'];
+    const lines = [headers.map(escapeCSV).join(',')];
+    for (const r of targetRows) {
+      const typeTag = r.semanticRole === 'segment' ? 'SEG' : (r.semanticRole === 'allowance' ? 'ALW' : 'REF');
+      lines.push([
+        escapeCSV(r.index),
+        escapeCSV(r.name),
+        escapeCSV(typeTag),
+        escapeCSV(r.sourceFormatted),
+        escapeCSV(r.targetFormatted),
+        escapeCSV(r.status)
+      ].join(','));
+    }
+    return lines.join('\n');
+  }
+
+  if (format === 'cad_preset') {
+    const meterVals = validRows.map(r => r.targetCanonicalMeters);
+    return meterVals
+      .map(m => formatCadValue(m, {
+        unit: batchResult.config?.targetUnit || 'mm',
+        precision: batchResult.config?.precision || 2,
+        suffix: 'none'
+      }))
+      .join(' ');
+  }
+
+  return validRows.map(r => r.targetFormatted).join('\n');
+}
+
+/**
+ * Prepares a Dimension Workspace Group payload from batch rows.
+ * @param {Object} batchResult - Converted batch result
+ * @param {Object} [options]
+ * @param {string} [options.groupName='Batch CAD Conversion']
+ * @param {boolean} [options.selectedOnly=false]
+ * @param {Set<string>} [options.selectedIds=null]
+ * @returns {Object} { group, entries: Array<Object> }
+ */
+function convertBatchToWorkspaceGroup(batchResult, options = {}) {
+  if (!batchResult || !Array.isArray(batchResult.rows)) {
+    return { group: null, entries: [] };
+  }
+
+  const {
+    groupName = 'Batch CAD Conversion',
+    selectedOnly = false,
+    selectedIds = new Set()
+  } = options;
+
+  let targetRows = batchResult.rows.filter(r => r.valid);
+  if (selectedOnly && selectedIds && selectedIds.size > 0) {
+    targetRows = targetRows.filter(r => selectedIds.has(r.id));
+  }
+
+  const group = createGroup(groupName);
+  const targetUnit = batchResult.config?.targetUnit || 'mm';
+
+  const entries = targetRows.map(r => {
+    return createDimensionEntry({
+      name: r.name,
+      rawInput: `${r.targetValue} ${targetUnit === 'ft-in' ? 'ft' : targetUnit}`,
+      dimensionType: r.semanticRole || 'reference',
+      groupId: group.id,
+      notes: `Batch converted from ${r.sourceFormatted}`
+    }, targetUnit === 'ft-in' ? 'ft' : targetUnit);
+  });
+
+  return { group, entries };
+}
+
+/**
+ * Prepares a Dimension Chain structure from ordered batch rows.
+ * @param {Object} batchResult - Converted batch result
+ * @param {Object} [options]
+ * @param {string} [options.chainName='Batch Dimension Chain']
+ * @param {boolean} [options.selectedOnly=false]
+ * @param {Set<string>} [options.selectedIds=null]
+ * @returns {Object} Dimension Chain object
+ */
+function convertBatchToDimensionChain(batchResult, options = {}) {
+  if (!batchResult || !Array.isArray(batchResult.rows)) {
+    return createDimensionChain();
+  }
+
+  const {
+    chainName = 'Batch Dimension Chain',
+    selectedOnly = false,
+    selectedIds = new Set()
+  } = options;
+
+  let targetRows = batchResult.rows.filter(r => r.valid);
+  if (selectedOnly && selectedIds && selectedIds.size > 0) {
+    targetRows = targetRows.filter(r => selectedIds.has(r.id));
+  }
+
+  const targetUnit = batchResult.config?.targetUnit || 'mm';
+  const scaleRatio = batchResult.config?.targetScale || 50;
+
+  const segments = targetRows.map((r, idx) => {
+    return createChainSegment({
+      name: r.name,
+      measurement: `${r.targetValue} ${targetUnit === 'ft-in' ? 'ft' : targetUnit}`,
+      role: r.semanticRole || 'reference'
+    }, targetUnit === 'ft-in' ? 'ft' : targetUnit);
+  });
+
+  return createDimensionChain({
+    name: chainName,
+    defaultUnit: targetUnit === 'ft-in' ? 'ft' : targetUnit,
+    scaleRatio: scaleRatio,
+    segments
+  });
+}
+
+
+  // =========================================================================
+  // MODULE: QuickDimension
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Quick Dimension Strip Core Model
+ * Phase 2.5: Daily Architect Toolkit — Part 8: Quick Dimension Strip
+ *
+ * Headless, high-precision architectural dimension inspector & micro-tool.
+ * Zero-DOM, pure mathematical functions, reusable across CLI, tests, and UI.
+ */
+
+
+
+
+
+
+
+
+
+
+const QUICK_DIM_STORAGE_KEY = 'archiscale_quick_dimension_prefs';
+
+const DEFAULT_QUICK_SCALES = Object.freeze([
+  10, 20, 25, 50, 75, 100, 125, 200, 250, 500
+]);
+
+const DEFAULT_QUICK_PREFS = Object.freeze({
+  defaultScale: 50,
+  displayUnit: 'mm',
+  drawingUnit: 'mm',
+  precision: 2,
+  showContext: true,
+  mode: 'real_to_drawing',
+  pinned: false
+});
+
+/**
+ * Verified architectural reference heuristics and typical building standard dimension ranges.
+ */
+const ARCHITECTURAL_HEURISTICS = Object.freeze([
+  {
+    minM: 0.075,
+    maxM: 0.105,
+    label: 'Interior Partition Wall',
+    detail: 'Standard drywall / metal stud partition thickness (75–100 mm / 3–4 in)'
+  },
+  {
+    minM: 0.145,
+    maxM: 0.185,
+    label: 'Stair Riser Height',
+    detail: 'Standard architectural stair step rise (150–180 mm / 6–7 in)'
+  },
+  {
+    minM: 0.250,
+    maxM: 0.310,
+    label: 'Stair Tread Run Depth',
+    detail: 'Standard stair going / foot tread depth (250–300 mm / 10–12 in)'
+  },
+  {
+    minM: 0.600,
+    maxM: 0.650,
+    label: 'Countertop & Base Cabinet Depth',
+    detail: 'Standard kitchen counter / base unit depth (600 mm / 24 in)'
+  },
+  {
+    minM: 0.700,
+    maxM: 0.820,
+    label: 'Interior Passage Door / Desk Height',
+    detail: 'Standard interior door width (700–800 mm) or standard desk/table work height (720–760 mm)'
+  },
+  {
+    minM: 0.850,
+    maxM: 0.950,
+    label: 'Entry Door Width / Counter Height',
+    detail: 'Standard main entry / ADA accessible doorway width (850–900 mm) or kitchen work counter height (900 mm / 36 in)'
+  },
+  {
+    minM: 1.000,
+    maxM: 1.150,
+    label: 'Commercial Door / Balustrade Height',
+    detail: 'Standard commercial door width (1000 mm) or stair guardrail/balustrade height (1050–1100 mm)'
+  },
+  {
+    minM: 1.200,
+    maxM: 1.500,
+    label: 'Corridor Width / Double Circulation',
+    detail: 'Comfortable residential corridor or 2-person commercial circulation path (1200–1500 mm)'
+  },
+  {
+    minM: 1.500,
+    maxM: 1.550,
+    label: 'ADA Turning Circle',
+    detail: 'Standard wheelchair 360° turning diameter clearance (1500–1524 mm / 60 in)'
+  },
+  {
+    minM: 1.800,
+    maxM: 2.050,
+    label: 'King Bed Width / Double Door',
+    detail: 'King size bed width (1800 mm) or double French door opening (1800–2000 mm)'
+  },
+  {
+    minM: 2.100,
+    maxM: 2.150,
+    label: 'Standard Door Frame Height',
+    detail: 'Standard interior/exterior door rough opening frame height (2100 mm / 7\'-0")'
+  },
+  {
+    minM: 2.400,
+    maxM: 2.500,
+    label: 'Residential Ceiling Height',
+    detail: 'Standard residential finished floor-to-ceiling height (2400 mm / 8\'-0")'
+  },
+  {
+    minM: 2.700,
+    maxM: 2.800,
+    label: 'High Residential Ceiling',
+    detail: 'Generous residential finished ceiling height (2700 mm / 9\'-0")'
+  },
+  {
+    minM: 3.000,
+    maxM: 3.200,
+    label: 'Commercial Ceiling Height',
+    detail: 'Standard commercial office or luxury residential finished ceiling height (3000 mm / 10\'-0")'
+  }
+]);
+
+/**
+ * Returns architectural contextual guidance for a given real-world dimension.
+ * Explicitly returns "No stored reference" when no range matches to avoid false claims.
+ * @param {number} canonicalMeters - Real-world length in meters
+ * @returns {Object} Context result
+ */
+function getArchitecturalContext(canonicalMeters) {
+  if (typeof canonicalMeters !== 'number' || isNaN(canonicalMeters) || !isFinite(canonicalMeters) || canonicalMeters <= 0) {
+    return {
+      hasReference: false,
+      message: 'No stored reference for this dimension.',
+      matches: [],
+      disclaimer: null
+    };
+  }
+
+  const absMeters = Math.abs(canonicalMeters);
+  const matched = ARCHITECTURAL_HEURISTICS.filter(h => absMeters >= h.minM && absMeters <= h.maxM);
+
+  if (matched.length === 0) {
+    return {
+      hasReference: false,
+      message: 'No stored reference for this dimension.',
+      matches: [],
+      disclaimer: null
+    };
+  }
+
+  return {
+    hasReference: true,
+    message: `${matched.length} contextual architectural reference${matched.length > 1 ? 's' : ''} found`,
+    matches: matched.map(m => ({ label: m.label, detail: m.detail })),
+    disclaimer: 'Reference guidance only; verify with local building codes & project specifications.'
+  };
+}
+
+/**
+ * Evaluates a quick dimension string (bare number, attached unit, feet-inches, or math expression).
+ * @param {string} rawInput - User input dimension string
+ * @param {Object} [options]
+ * @param {number} [options.selectedScale=50] - Active scale denominator (e.g. 50 for 1:50)
+ * @param {number[]} [options.scales=DEFAULT_QUICK_SCALES] - Array of scale denominators to evaluate
+ * @param {string} [options.displayUnit='mm'] - Unit for real dimension display
+ * @param {string} [options.drawingUnit='mm'] - Unit for drawing dimension display
+ * @param {number} [options.precision=2] - Fractional digits
+ * @param {'real_to_drawing'|'drawing_to_real'} [options.mode='real_to_drawing'] - Conversion direction
+ * @returns {Object} Structured quick dimension evaluation result
+ */
+function evaluateQuickDimension(rawInput, options = {}) {
+  const {
+    selectedScale = DEFAULT_QUICK_PREFS.defaultScale,
+    scales = DEFAULT_QUICK_SCALES,
+    displayUnit = DEFAULT_QUICK_PREFS.displayUnit,
+    drawingUnit = DEFAULT_QUICK_PREFS.drawingUnit,
+    precision = DEFAULT_QUICK_PREFS.precision,
+    mode = DEFAULT_QUICK_PREFS.mode
+  } = options;
+
+  const raw = typeof rawInput === 'string' ? rawInput.trim() : (rawInput !== undefined && rawInput !== null ? String(rawInput).trim() : '');
+
+  const safeSelectedScale = (typeof selectedScale === 'number' && Number.isFinite(selectedScale) && selectedScale > 0)
+    ? selectedScale
+    : 50;
+
+  const safeScales = Array.isArray(scales) && scales.length > 0
+    ? Array.from(new Set(scales.filter(s => typeof s === 'number' && Number.isFinite(s) && s > 0)))
+    : [...DEFAULT_QUICK_SCALES];
+
+  // Include safeSelectedScale if not present in scale list
+  if (!safeScales.includes(safeSelectedScale)) {
+    safeScales.push(safeSelectedScale);
+    safeScales.sort((a, b) => a - b);
+  }
+
+  const safeDisplayUnit = UNITS[displayUnit] || displayUnit === 'ft-in' ? displayUnit : 'mm';
+  const safeDrawingUnit = UNITS[drawingUnit] || drawingUnit === 'ft-in' ? drawingUnit : 'mm';
+
+  if (!raw) {
+    return {
+      rawInput: '',
+      valid: false,
+      isExpression: false,
+      mode,
+      canonicalMeters: 0,
+      realValue: 0,
+      realFormatted: '---',
+      commonEquivalents: [],
+      selectedScale: safeSelectedScale,
+      selectedDrawingValue: 0,
+      selectedDrawingFormatted: '---',
+      scaleMatrix: [],
+      context: { hasReference: false, message: 'Enter a dimension to view quick interpretations.', matches: [], disclaimer: null },
+      cadNumbers: '',
+      status: 'EMPTY',
+      error: null
+    };
+  }
+
+  let canonicalMeters = 0;
+  let isExpression = false;
+  let isValid = false;
+  let errorMsg = null;
+
+  // 1. Evaluate input (Expression vs Direct Parsing)
+  if (isExpressionLike(raw)) {
+    isExpression = true;
+    const exprRes = evaluateExpressionSafe(raw, {
+      defaultUnit: safeDisplayUnit === 'ft-in' ? 'ft' : safeDisplayUnit,
+      scaleRatio: safeSelectedScale,
+      precision
+    });
+
+    if (exprRes.isValid) {
+      isValid = true;
+      canonicalMeters = exprRes.canonicalMeters !== null && exprRes.canonicalMeters !== undefined
+        ? exprRes.canonicalMeters
+        : (exprRes.value * (UNITS[safeDisplayUnit]?.toMeters || 0.001));
+    } else {
+      isValid = false;
+      errorMsg = exprRes.error?.message || 'Invalid mathematical expression';
+    }
+  } else {
+    // Direct dimension parsing
+    const parseRes = parseInput(raw, {
+      defaultUnit: safeDisplayUnit === 'ft-in' ? 'ft' : safeDisplayUnit,
+      allowNegative: true
+    });
+
+    if (parseRes.isValid) {
+      isValid = true;
+      const detectedUnitKey = parseRes.detectedUnit || (safeDisplayUnit === 'ft-in' ? 'mm' : safeDisplayUnit);
+      const unitDef = UNITS[detectedUnitKey] || UNITS.mm;
+      canonicalMeters = parseRes.value * unitDef.toMeters;
+    } else {
+      isValid = false;
+      errorMsg = parseRes.error || 'Invalid dimension format';
+    }
+  }
+
+  if (!isValid) {
+    return {
+      rawInput: raw,
+      valid: false,
+      isExpression,
+      mode,
+      canonicalMeters: 0,
+      realValue: 0,
+      realFormatted: '---',
+      commonEquivalents: [],
+      selectedScale: safeSelectedScale,
+      selectedDrawingValue: 0,
+      selectedDrawingFormatted: '---',
+      scaleMatrix: [],
+      context: { hasReference: false, message: 'No stored reference for this dimension.', matches: [], disclaimer: null },
+      cadNumbers: '',
+      status: 'INVALID',
+      error: errorMsg
+    };
+  }
+
+  // 2. Account for Mode (real_to_drawing vs drawing_to_real)
+  let realCanonicalMeters = canonicalMeters;
+  if (mode === 'drawing_to_real') {
+    // Input is paper measurement at selected scale, calculate real-world size
+    realCanonicalMeters = canonicalMeters * safeSelectedScale;
+  }
+
+  const isNegative = realCanonicalMeters < 0;
+  const absMeters = Math.abs(realCanonicalMeters);
+
+  // 3. Format Real-World Output
+  let realFormatted = '';
+  let realValue = 0;
+  if (safeDisplayUnit === 'ft-in') {
+    const totalInches = realCanonicalMeters / 0.0254;
+    realValue = totalInches;
+    realFormatted = formatFeetInches(totalInches);
+  } else {
+    const unitDef = UNITS[safeDisplayUnit] || UNITS.mm;
+    realValue = realCanonicalMeters / unitDef.toMeters;
+    realFormatted = formatCadValue(realCanonicalMeters, { unit: safeDisplayUnit, precision, suffix: 'symbol' });
+  }
+
+  // 4. Common Unit Equivalents
+  const commonEquivalents = [
+    {
+      unit: 'mm',
+      label: 'Millimeters',
+      value: realCanonicalMeters / 0.001,
+      formatted: formatCadValue(realCanonicalMeters, { unit: 'mm', precision: precision > 0 ? 0 : 0, suffix: 'symbol' })
+    },
+    {
+      unit: 'cm',
+      label: 'Centimeters',
+      value: realCanonicalMeters / 0.01,
+      formatted: formatCadValue(realCanonicalMeters, { unit: 'cm', precision: precision > 1 ? precision - 1 : 1, suffix: 'symbol' })
+    },
+    {
+      unit: 'm',
+      label: 'Meters',
+      value: realCanonicalMeters,
+      formatted: formatCadValue(realCanonicalMeters, { unit: 'm', precision: Math.max(precision, 3), suffix: 'symbol' })
+    },
+    {
+      unit: 'in',
+      label: 'Decimal Inches',
+      value: realCanonicalMeters / 0.0254,
+      formatted: formatCadValue(realCanonicalMeters, { unit: 'in', precision, suffix: 'symbol' })
+    },
+    {
+      unit: 'ft-in',
+      label: 'Feet & Inches',
+      value: realCanonicalMeters / 0.0254,
+      formatted: `${isNegative ? '-' : ''}${formatFeetInches(absMeters / 0.0254)}`
+    }
+  ];
+
+  // 5. Multi-Scale Drawing Size Matrix
+  const scaleMatrix = safeScales.map(sRatio => {
+    const drawMeters = realCanonicalMeters / sRatio;
+    let drawVal = 0;
+    let drawFormatted = '';
+
+    if (safeDrawingUnit === 'ft-in') {
+      const drawInches = drawMeters / 0.0254;
+      drawVal = drawInches;
+      drawFormatted = formatFeetInches(drawInches);
+    } else {
+      const dUnitDef = UNITS[safeDrawingUnit] || UNITS.mm;
+      drawVal = drawMeters / dUnitDef.toMeters;
+      drawFormatted = formatCadValue(drawMeters, { unit: safeDrawingUnit, precision, suffix: 'symbol' });
+    }
+
+    return {
+      scale: sRatio,
+      scaleFormatted: `1:${sRatio}`,
+      drawingValue: drawVal,
+      drawingFormatted: drawFormatted,
+      canonicalDrawingMeters: drawMeters,
+      isSelected: sRatio === safeSelectedScale
+    };
+  });
+
+  // 6. Selected Scale Result
+  const selectedMatch = scaleMatrix.find(m => m.scale === safeSelectedScale) || scaleMatrix[0];
+
+  // 7. Architectural Context Readout
+  const context = getArchitecturalContext(realCanonicalMeters);
+
+  // 8. Clean CAD Numbers
+  const cadRealNum = formatCadValue(realCanonicalMeters, { unit: safeDisplayUnit === 'ft-in' ? 'in' : safeDisplayUnit, precision, suffix: 'none' });
+  const cadDrawNum = formatCadValue(selectedMatch.canonicalDrawingMeters, { unit: safeDrawingUnit === 'ft-in' ? 'in' : safeDrawingUnit, precision, suffix: 'none' });
+  const cadNumbers = `${cadRealNum} ${cadDrawNum}`;
+
+  return {
+    rawInput: raw,
+    valid: true,
+    isExpression,
+    mode,
+    canonicalMeters: realCanonicalMeters,
+    realValue,
+    realFormatted,
+    commonEquivalents,
+    selectedScale: safeSelectedScale,
+    selectedDrawingValue: selectedMatch.drawingValue,
+    selectedDrawingFormatted: selectedMatch.drawingFormatted,
+    scaleMatrix,
+    context,
+    cadNumbers,
+    status: 'VALID',
+    error: null
+  };
+}
+
+/**
+ * Formats quick dimension evaluation results for clipboard copying.
+ * @param {Object} evalResult - Result of evaluateQuickDimension
+ * @param {'real'|'drawing'|'real_and_drawing'|'all_scales'|'cad_numbers'|'tsv_row'|'json'} [formatType='real']
+ * @param {Object} [options]
+ * @returns {string} Formatted clipboard text
+ */
+function formatQuickDimensionClipboard(evalResult, formatType = 'real', options = {}) {
+  if (!evalResult || !evalResult.valid) return '';
+
+  switch (formatType) {
+    case 'real':
+      return evalResult.realFormatted;
+
+    case 'drawing':
+      return evalResult.selectedDrawingFormatted;
+
+    case 'real_and_drawing':
+      return `Real: ${evalResult.realFormatted} | 1:${evalResult.selectedScale}: ${evalResult.selectedDrawingFormatted}`;
+
+    case 'all_scales':
+      return evalResult.scaleMatrix
+        .map(m => `${m.scaleFormatted}: ${m.drawingFormatted}`)
+        .join('\n');
+
+    case 'cad_numbers':
+      return evalResult.cadNumbers;
+
+    case 'tsv_row':
+      return [
+        evalResult.rawInput,
+        evalResult.realFormatted,
+        `1:${evalResult.selectedScale}`,
+        evalResult.selectedDrawingFormatted,
+        evalResult.context.hasReference ? evalResult.context.matches.map(m => m.label).join('; ') : 'None'
+      ].join('\t');
+
+    case 'json':
+      return JSON.stringify({
+        input: evalResult.rawInput,
+        realMeters: evalResult.canonicalMeters,
+        realFormatted: evalResult.realFormatted,
+        selectedScale: evalResult.selectedScale,
+        drawingFormatted: evalResult.selectedDrawingFormatted,
+        equivalents: evalResult.commonEquivalents.map(e => ({ unit: e.unit, formatted: e.formatted })),
+        context: evalResult.context
+      }, null, 2);
+
+    default:
+      return evalResult.realFormatted;
+  }
+}
+
+/**
+ * Creates downstream handoff payloads for existing studio modes.
+ * @param {Object} evalResult - Result of evaluateQuickDimension
+ * @param {'workspace'|'multiscale'|'chain'|'cad_clipboard'|'journal'} targetTool
+ * @param {Object} [options]
+ * @returns {Object} Handoff payload
+ */
+function createQuickHandoffPayload(evalResult, targetTool, options = {}) {
+  if (!evalResult || !evalResult.valid) return null;
+
+  switch (targetTool) {
+    case 'workspace': {
+      const entry = createDimensionEntry({
+        name: options.name || `Quick Dim (${evalResult.rawInput})`,
+        rawInput: evalResult.realFormatted,
+        dimensionType: options.dimensionType || 'reference',
+        notes: `Quick Dimension 1:${evalResult.selectedScale} = ${evalResult.selectedDrawingFormatted}`
+      }, evalResult.displayUnit || 'mm');
+      return { entry };
+    }
+
+    case 'multiscale': {
+      return {
+        dimensionInput: evalResult.realFormatted,
+        sourceUnit: evalResult.displayUnit || 'mm'
+      };
+    }
+
+    case 'chain': {
+      const segment = createChainSegment({
+        name: options.name || `Segment ${evalResult.rawInput}`,
+        rawInput: evalResult.realFormatted,
+        type: 'segment'
+      }, evalResult.displayUnit || 'mm');
+      return { segment };
+    }
+
+    case 'cad_clipboard': {
+      return {
+        manualInput: evalResult.cadNumbers,
+        source: 'manual'
+      };
+    }
+
+    case 'journal': {
+      return {
+        toolMode: 'quick_dim',
+        title: `Quick Dim: ${evalResult.realFormatted}`,
+        inputString: evalResult.rawInput,
+        resultString: `1:${evalResult.selectedScale} = ${evalResult.selectedDrawingFormatted}`,
+        metadata: {
+          canonicalMeters: evalResult.canonicalMeters,
+          selectedScale: evalResult.selectedScale,
+          selectedDrawingFormatted: evalResult.selectedDrawingFormatted,
+          hasContext: evalResult.context.hasReference
+        }
+      };
+    }
+
+    default:
+      return null;
   }
 }
 
@@ -10325,3 +14194,4 @@ function initializeApp() {
   }
 
 })();
+

@@ -3,7 +3,7 @@
 > **Professional Architectural Scale, Furniture Sizing & Multi-Unit Calculation Studio**  
 > *A high-precision, zero-dependency, tactile architectural conversion studio built for architects, interior designers, urban planners, physical model makers, and design students.*
 
-[![Tests](https://img.shields.io/badge/Tests-398%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-1329%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-3--Tier%20Core%20%7C%20Frozen-10b981?style=flat-square)](ENGINEERING_RULES.md)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Vanilla)-f59e0b?style=flat-square)](package.json)
 [![License](https://img.shields.io/badge/License-MIT-6366f1?style=flat-square)](package.json)
@@ -141,7 +141,7 @@ The codebase has evolved through rigorous engineering, auditing, hardening, and 
 This repository serves as:
 1. **An Open-Source Reference Studio**: A tactile, zero-friction architectural scaling studio for architects, interior designers, landscape architects, students, and educators.
 2. **Zero-Dependency Architecture**: No React, no Vue, no webpack, no runtime `node_modules`. Anyone can clone the repository, double-click `index.html`, and use it immediately offline via `file:///`.
-3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **299 automated test assertions across 9 test suites**.
+3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **1,329 automated test assertions across 19 test suites** (authoritative count emitted by `npm test`).
 4. **An Extensible Platform**: Prepared for future architectural geometry engines, CAD vector exports (SVG/DXF), and stair/ramp calculations.
 
 ---
@@ -423,13 +423,16 @@ python -m http.server 3500
 ### 3. Run Automated Test Suite
 ```bash
 npm test
-# Executes all 9 test suites (299 exact assertions, 100% passing)
+# Executes all 19 test suites (1,329 assertions, 100% passing).
+# The runner emits the authoritative total assertion count on completion.
 ```
 
 ### 4. Build Standalone Bundle
 ```bash
 npm run build
-# Compiles src/ into standalone js/app.js deterministically
+# Compiles src/ into standalone js/app.js deterministically.
+# The manifest (BUNDLE_MODULES in scripts/build.js) must list every src/ module
+# in dependency order — enforced by tests/build-integrity.test.js.
 ```
 
 ### 5. Verify Bundle Synchronization
@@ -437,6 +440,17 @@ npm run build
 node scripts/build.js --check
 # Asserts that js/app.js is 100% in sync with src/
 ```
+
+### 6. Build Integrity Verification (automatic, part of `npm test`)
+`tests/build-integrity.test.js` guards the bundle pipeline in three layers:
+1. **Manifest coverage** — every `src/**/*.js` runtime module must be registered
+   in `BUNDLE_MODULES` (or the documented `NON_RUNTIME_MODULES` allowlist),
+   exactly once, in dependency-first order.
+2. **Bundle content** — the generated `js/app.js` must contain the distinctive
+   definitions of every module (not merely be valid syntax), and must be
+   byte-identical to a fresh regeneration.
+3. **Runtime smoke test** — the bundle executes end-to-end against a minimal
+   mocked browser environment and boots without unresolved references.
 
 ---
 
