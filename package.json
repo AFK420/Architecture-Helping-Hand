@@ -1,0 +1,25 @@
+{
+  "name": "architecture-helping-hand",
+  "version": "2.0.0",
+  "description": "Architecture Helping Hand - Professional Architectural Scale, Furniture Sizing & Unit Conversion Studio",
+  "type": "module",
+  "main": "index.html",
+  "scripts": {
+    "test": "node tests/converter.test.js",
+    "start": "npx serve -l 3000 ."
+  },
+  "keywords": [
+    "architecture",
+    "scale",
+    "furniture-scaling",
+    "scaler",
+    "converter",
+    "metric",
+    "imperial",
+    "cad",
+    "drafting",
+    "architectural-standards"
+  ],
+  "author": "Architecture Helping Hand",
+  "license": "MIT"
+}

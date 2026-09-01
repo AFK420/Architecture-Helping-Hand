@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Architecture Helping Hand - Professional Architectural Scale, Furniture Sizing & Unit Conversion Studio. Convert effortlessly between drawing dimensions and real-world scale across metric and imperial standards.">
+  <title>Architecture Helping Hand — Scaling & Furniture Studio</title>
+  
+  <!-- CSS Stylesheets -->
+  <link rel="stylesheet" href="css/themes.css">
+  <link rel="stylesheet" href="css/main.css">
+  
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cpath d='M3 9h18M9 21V9'/%3E%3C/svg%3E">
+</head>
+<body>
+
+  <!-- Decorative Drafting Background Grid Crosshairs -->
+  <div class="grid-overlay" aria-hidden="true"></div>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="brand-section">
+      <div class="brand-logo-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3h18v18H3z"></path>
+          <path d="M3 9h18"></path>
+          <path d="M9 21V9"></path>
+          <path d="M15 9v4"></path>
+          <path d="M3 15h6"></path>
+        </svg>
+      </div>
+      <div class="brand-titles">
+        <h1>Architecture Helping Hand <span class="brand-badge">Studio v2.0</span></h1>
+        <p class="brand-subtitle">Architectural Scaling, Furniture Sizing & Multi-Unit Conversion</p>
+      </div>
+    </div>
+
+    <div class="header-controls">
+      <!-- Theme Switcher -->
+      <select id="theme-select" class="theme-dropdown" title="Select Drafting Theme">
+        <option value="dark" selected>📐 Studio Dark</option>
+        <option value="paper">📜 Drafting Paper</option>
+        <option value="blueprint">🟦 Blueprint Cyan</option>
+      </select>
+
+      <!-- Sound Toggle -->
+      <button id="sound-toggle-btn" class="control-btn" title="Toggle Tactile Sounds">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+        </svg>
+        <span>Sound: On</span>
+      </button>
+
+      <!-- History Button -->
+      <button id="history-toggle-btn" class="control-btn" title="View Calculation History (H)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        <span>History</span>
+      </button>
+
+      <!-- Shortcuts / Help Modal Trigger -->
+      <button id="shortcuts-modal-btn" class="control-btn" title="Keyboard Shortcuts (?)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Wrapper -->
+  <main class="main-wrapper">
+    <!-- Mode Selection Navigation Bar -->
+    <nav class="modes-nav" aria-label="Tool Modes">
+      <button class="mode-tab active" data-mode="converter">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 21v-7a4 4 0 0 1 4-4h12"></path>
+          <polyline points="16 6 20 10 16 14"></polyline>
+          <path d="M20 3v7a4 4 0 0 1-4 4H4"></path>
+          <polyline points="8 18 4 14 8 10"></polyline>
+        </svg>
+        <span>Scale Converter</span>
+      </button>
+
+      <button class="mode-tab" data-mode="rescale">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="2" width="20" height="8" rx="2"></rect>
+          <rect x="2" y="14" width="20" height="8" rx="2"></rect>
+          <line x1="6" y1="6" x2="6.01" y2="6"></line>
+          <line x1="6" y1="18" x2="6.01" y2="18"></line>
+        </svg>
+        <span>Rescaler (A → B)</span>
+      </button>
+
+      <button class="mode-tab" data-mode="detector">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          <line x1="11" y1="8" x2="11" y2="14"></line>
+          <line x1="8" y1="11" x2="14" y2="11"></line>
+        </svg>
+        <span>Scale Finder</span>
+      </button>
+
+      <button class="mode-tab" data-mode="area_volume">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+          <line x1="12" y1="22.08" x2="12" y2="12"></line>
+        </svg>
+        <span>Area & Volume</span>
+      </button>
+
+      <button class="mode-tab" data-mode="furniture">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 9V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v2"></path>
+          <path d="M2 11a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7z"></path>
+          <path d="M4 18v2"></path>
+          <path d="M20 18v2"></path>
+          <path d="M12 11v4"></path>
+        </svg>
+        <span>Furniture Scales</span>
+      </button>
+
+      <button class="mode-tab" data-mode="reference">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        <span>Reference Chart</span>
+      </button>
+    </nav>
+
+    <!-- ======================================================== -->
+    <!-- MODE 1: MAIN SCALE CONVERTER (Drawing <-> Real World)   -->
+    <!-- ======================================================== -->
+    <div id="mode-view-converter" class="tool-mode-view active">
+      <div class="tool-layout">
+        <!-- Left Column: Inputs & Controls -->
+        <div class="archi-card">
+          <!-- Drafting Corner Registration Marks -->
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <div class="card-title-row">
+            <h2>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"></path>
+                <path d="m14.5 12.5 2-2"></path>
+                <path d="m11.5 9.5 2-2"></path>
+                <path d="m8.5 6.5 2-2"></path>
+                <path d="m17.5 15.5 2-2"></path>
+              </svg>
+              Architectural Ratio & Dimension
+            </h2>
+            <span class="card-tag">PRECISION 1:1 TO 1:10000</span>
+          </div>
+
+          <!-- Scale Presets Selector Block -->
+          <div class="scale-selector-block">
+            <div class="preset-category-pills" id="preset-category-pills">
+              <button class="preset-pill-btn active" data-category="all">All Standards</button>
+              <button class="preset-pill-btn" data-category="architectural">Architecture (1:50-250)</button>
+              <button class="preset-pill-btn" data-category="detail">Details (1:1-25)</button>
+              <button class="preset-pill-btn" data-category="urban">Urban & Site</button>
+              <button class="preset-pill-btn" data-category="imperial">Imperial (Ft/In)</button>
+            </div>
+
+            <div class="presets-grid" id="presets-grid">
+              <!-- Preset chips populated dynamically by JS -->
+            </div>
+
+            <!-- Custom Ratio Input -->
+            <div class="custom-scale-row">
+              <span class="custom-scale-prefix">Scale Ratio 1 :</span>
+              <div class="scale-input-box">
+                <input type="number" id="custom-scale-input" class="form-input" value="50" min="0.001" step="any" placeholder="e.g. 50, 100, 200">
+              </div>
+            </div>
+          </div>
+
+          <!-- Bidirectional Conversion Input / Output Flow -->
+          <div class="conversion-flow-box">
+            <!-- Source Input Card -->
+            <div class="input-block-card">
+              <div class="card-field-header">
+                <span class="section-label">Source Input</span>
+                <span id="main-input-badge" class="field-badge">Drawing Measurement (Paper)</span>
+              </div>
+              <div class="input-with-unit-row">
+                <input type="text" id="main-input-val" class="form-input" value="10" placeholder="e.g. 10, 12.5, 3 1/2">
+                <select id="main-input-unit" class="form-select">
+                  <!-- Populated by JS -->
+                </select>
+              </div>
+            </div>
+
+            <!-- Swap Direction Divider Button -->
+            <div class="swap-divider-row">
+              <div class="swap-line"></div>
+              <button id="swap-direction-btn" class="swap-action-btn" title="Swap Conversion Direction (S)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <polyline points="17 14 12 9 7 14"></polyline>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Target Output / Result Card -->
+            <div class="input-block-card">
+              <div class="card-field-header">
+                <span class="section-label">Target Output</span>
+                <span id="main-output-badge" class="field-badge highlight">Real-World Dimension</span>
+              </div>
+              <div class="input-with-unit-row">
+                <div class="result-hero-box" style="flex: 1.4; padding: 0.5rem 0.85rem;">
+                  <div class="result-main-value" style="margin: 0; font-size: 1.6rem;">
+                    <span id="result-display-val">5</span>
+                    <span id="result-display-unit" class="result-unit-suffix">m</span>
+                  </div>
+                </div>
+                <select id="main-output-unit" class="form-select">
+                  <!-- Populated by JS -->
+                </select>
+              </div>
+
+              <!-- Action Bar (Copy, Save to History) -->
+              <div class="result-actions-bar">
+                <button id="copy-result-btn" class="action-tool-btn" title="Copy calculated result to clipboard">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  Copy Result
+                </button>
+                <button id="save-history-btn" class="action-tool-btn" title="Record this conversion to history log">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                    <polyline points="7 3 7 8 15 8"></polyline>
+                  </svg>
+                  Save Log
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Visual Proportions & Multi-Unit Table -->
+        <div class="visual-column">
+          <!-- Dynamic Scale Bar & Reference Visualizer -->
+          <div class="archi-card" id="visual-container">
+            <!-- Rendered by JS visualization engine -->
+          </div>
+
+          <!-- Multi-Unit Real Dimension Equivalents -->
+          <div class="archi-card quick-equiv-card">
+            <div class="card-title-row" style="margin-bottom: 0.75rem;">
+              <h2>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="8" y1="6" x2="21" y2="6"></line>
+                  <line x1="8" y1="12" x2="21" y2="12"></line>
+                  <line x1="8" y1="18" x2="21" y2="18"></line>
+                  <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                  <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                  <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                </svg>
+                Equivalent Units Breakdown
+              </h2>
+              <span class="card-tag">REAL-WORLD EQUIVALENTS</span>
+            </div>
+            <div class="equiv-grid" id="equiv-grid">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODE 2: RESCALER (Drawing Scale A -> Scale B)           -->
+    <!-- ======================================================== -->
+    <div id="mode-view-rescale" class="tool-mode-view">
+      <div class="archi-card" style="max-width: 800px; margin: 0 auto;">
+        <div class="corner-mark top-left"></div>
+        <div class="corner-mark top-right"></div>
+        <div class="corner-mark bottom-left"></div>
+        <div class="corner-mark bottom-right"></div>
+
+        <div class="card-title-row">
+          <h2>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="17 1 21 5 17 9"></polyline>
+              <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+              <polyline points="7 23 3 19 7 15"></polyline>
+              <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+            </svg>
+            Rescale Drawing Dimension Between Sheets
+          </h2>
+          <span class="card-tag">SCALE A ➔ SCALE B</span>
+        </div>
+
+        <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1.25rem;">
+          Calculate how long a measured drawing line will be when redrawn onto a different scale sheet.
+        </p>
+
+        <div class="grid-two-cols">
+          <!-- Scale A (Original) -->
+          <div class="input-block-card">
+            <span class="section-label">Original Drawing (Scale A)</span>
+            <div style="margin-bottom: 0.75rem;">
+              <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Original Scale Ratio (1 : X)</label>
+              <input type="number" id="rescale-orig-ratio" class="form-input" value="50">
+            </div>
+            <div>
+              <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Original Dimension on Paper</label>
+              <div class="input-with-unit-row">
+                <input type="text" id="rescale-orig-val" class="form-input" value="12">
+                <select id="rescale-orig-unit" class="form-select"></select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Scale B (Target) -->
+          <div class="input-block-card">
+            <span class="section-label">Target Drawing (Scale B)</span>
+            <div style="margin-bottom: 0.75rem;">
+              <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Target Scale Ratio (1 : X)</label>
+              <input type="number" id="rescale-target-ratio" class="form-input" value="200">
+            </div>
+            <div>
+              <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Target Unit on New Sheet</label>
+              <select id="rescale-target-unit" class="form-select" style="width: 100%;"></select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rescale Result Display -->
+        <div class="detector-result-card" style="margin-top: 1.5rem;">
+          <span class="section-label">Calculated Dimension on New Sheet</span>
+          <div class="detector-ratio-big">
+            <span id="rescale-result-val">3.00</span>
+            <span style="font-size: 1.2rem; font-weight: 500; color: var(--text-secondary);">cm</span>
+          </div>
+          <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+            Magnification Factor: <strong id="rescale-factor-val" style="color: var(--accent-primary);">25.0% (Reduced)</strong>
+          </div>
+          <button id="copy-rescale-btn" class="action-tool-btn" style="margin: 0 auto;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            Copy Rescaled Dimension
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODE 3: SCALE DETECTOR / FINDER                         -->
+    <!-- ======================================================== -->
+    <div id="mode-view-detector" class="tool-mode-view">
+      <div class="archi-card" style="max-width: 800px; margin: 0 auto;">
+        <div class="corner-mark top-left"></div>
+        <div class="corner-mark top-right"></div>
+        <div class="corner-mark bottom-left"></div>
+        <div class="corner-mark bottom-right"></div>
+
+        <div class="card-title-row">
+          <h2>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              <line x1="11" y1="8" x2="11" y2="14"></line>
+              <line x1="8" y1="11" x2="14" y2="11"></line>
+            </svg>
+            Scale Detector / Unknown Scale Finder
+          </h2>
+          <span class="card-tag">AUTO-CALCULATE RATIO</span>
+        </div>
+
+        <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1.25rem;">
+          Measure a physical distance on a printed drawing and enter the known real-world length to determine the exact architectural scale.
+        </p>
+
+        <div class="grid-two-cols">
+          <!-- Measured Drawing Length -->
+          <div class="input-block-card">
+            <span class="section-label">1. Measured on Paper Drawing</span>
+            <div class="input-with-unit-row">
+              <input type="text" id="detector-paper-val" class="form-input" value="4.5">
+              <select id="detector-paper-unit" class="form-select"></select>
+            </div>
+          </div>
+
+          <!-- Known Real World Dimension -->
+          <div class="input-block-card">
+            <span class="section-label">2. Known Real-World Dimension</span>
+            <div class="input-with-unit-row">
+              <input type="text" id="detector-real-val" class="form-input" value="9">
+              <select id="detector-real-unit" class="form-select"></select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detected Scale Result -->
+        <div class="detector-result-card">
+          <span class="section-label">Calculated Architectural Scale</span>
+          <div class="detector-ratio-big" id="detector-ratio-display">1 : 200</div>
+          <div id="detector-closest-preset" class="preset-match-badge">
+            Exact Match: <strong>1:200 (Site / Large Building)</strong>
+          </div>
+          <div style="margin-top: 1.25rem;">
+            <button id="use-detected-scale-btn" class="control-btn active" style="font-weight: 600; padding: 0.5rem 1rem;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Apply Scale to Main Converter
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODE 4: AREA & VOLUME SCALER                            -->
+    <!-- ======================================================== -->
+    <div id="mode-view-area_volume" class="tool-mode-view">
+      <div class="archi-card" style="max-width: 800px; margin: 0 auto;">
+        <div class="corner-mark top-left"></div>
+        <div class="corner-mark top-right"></div>
+        <div class="corner-mark bottom-left"></div>
+        <div class="corner-mark bottom-right"></div>
+
+        <div class="card-title-row">
+          <h2>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+              <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
+            Architectural Area & 3D Volume Scaler
+          </h2>
+          <span class="card-tag">EXPONENTIAL S² & S³ SCALING</span>
+        </div>
+
+        <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1.25rem;">
+          Calculate real-world room floor plan areas ($S^2$) and 3D architectural model volumes ($S^3$) with exact mathematical precision.
+        </p>
+
+        <div class="scale-selector-block">
+          <div class="grid-two-cols">
+            <div>
+              <label class="section-label">Calculation Mode</label>
+              <select id="areavol-type-select" class="form-select" style="width: 100%;">
+                <option value="area">Area Scaling (S² — Floor Plans & Parcels)</option>
+                <option value="volume">Volume Scaling (S³ — 3D Models & Massing)</option>
+              </select>
+            </div>
+            <div>
+              <label class="section-label">Scale Ratio (1 : X)</label>
+              <input type="number" id="areavol-ratio-input" class="form-input" value="100">
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-two-cols" style="margin-top: 1rem;">
+          <div class="input-block-card">
+            <span class="section-label">Drawing / Model Dimension</span>
+            <div class="input-with-unit-row">
+              <input type="text" id="areavol-input-val" class="form-input" value="10">
+              <select id="areavol-input-unit" class="form-select"></select>
+            </div>
+          </div>
+
+          <div class="input-block-card">
+            <span class="section-label">Real-World Target Unit</span>
+            <select id="areavol-output-unit" class="form-select" style="width: 100%; height: 46px;"></select>
+          </div>
+        </div>
+
+        <!-- Area/Volume Result -->
+        <div class="detector-result-card" style="margin-top: 1.5rem;">
+          <span class="section-label">Calculated Real-World Area / Volume</span>
+          <div class="detector-ratio-big">
+            <span id="areavol-result-val">100.00</span>
+          </div>
+          <button id="copy-areavol-btn" class="action-tool-btn" style="margin: 0.5rem auto 0 auto;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            Copy Area / Volume Result
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODE 6: FURNITURE SCALING WITH SEARCH & CATEGORIES       -->
+    <!-- ======================================================== -->
+    <div id="mode-view-furniture" class="tool-mode-view">
+      <div class="archi-card" style="margin-bottom: 1.5rem;">
+        <div class="corner-mark top-left"></div>
+        <div class="corner-mark top-right"></div>
+        <div class="corner-mark bottom-left"></div>
+        <div class="corner-mark bottom-right"></div>
+
+        <div class="card-title-row">
+          <h2>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 9V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v2"></path>
+              <path d="M2 11a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7z"></path>
+              <path d="M4 18v2"></path>
+              <path d="M20 18v2"></path>
+              <path d="M12 11v4"></path>
+            </svg>
+            Architectural Furniture & Fixtures Scaler
+          </h2>
+          <span class="card-tag">40+ STANDARD SIZES & 2D BLUEPRINTS</span>
+        </div>
+
+        <!-- Toolbar: Search Bar + Scale Presets + Category Nav -->
+        <div class="furniture-toolbar">
+          <!-- Live Search Bar -->
+          <div class="furniture-search-row">
+            <div class="furniture-search-container">
+              <svg class="search-icon-inside" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="furniture-search-input" class="furniture-search-input" placeholder="Search furniture or fixtures (e.g. Sofa, King Bed, Dining 6-Seater, Sink, Door, Desk)...">
+              <button id="clear-furniture-search-btn" class="clear-search-btn" title="Clear search">✕</button>
+            </div>
+            <div id="furn-results-count" style="font-size: 0.8rem; color: var(--text-secondary); font-family: var(--font-mono); white-space: nowrap;">
+              40+ items
+            </div>
+          </div>
+
+          <!-- Scale Selector Bar for Furniture -->
+          <div class="furniture-scale-bar">
+            <div class="furniture-scale-controls">
+              <span class="section-label" style="margin: 0; margin-right: 0.25rem;">Drawing Scale:</span>
+              <div class="furniture-presets-pills" id="furn-scale-presets">
+                <button class="furn-preset-chip" data-ratio="10">1:10</button>
+                <button class="furn-preset-chip" data-ratio="20">1:20</button>
+                <button class="furn-preset-chip" data-ratio="25">1:25</button>
+                <button class="furn-preset-chip active" data-ratio="50">1:50</button>
+                <button class="furn-preset-chip" data-ratio="100">1:100</button>
+                <button class="furn-preset-chip" data-ratio="48">1/4"=1' (1:48)</button>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.3rem;">
+                <span style="font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-secondary);">1:</span>
+                <input type="number" id="furn-custom-ratio" class="form-input" style="width: 70px; padding: 0.3rem 0.5rem; font-size: 0.85rem;" value="50" min="1" step="any">
+              </div>
+            </div>
+
+            <!-- Output Unit Toggle (cm vs mm vs in) -->
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <span class="section-label" style="margin: 0;">Paper Unit:</span>
+              <select id="furn-paper-unit-select" class="form-select" style="padding: 0.35rem 0.65rem; font-size: 0.82rem;">
+                <option value="cm">Centimeters (cm)</option>
+                <option value="mm">Millimeters (mm)</option>
+                <option value="in">Inches (in)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Category Navigation Pills -->
+          <div class="furniture-category-nav" id="furn-category-nav">
+            <button class="furn-cat-pill active" data-cat="all">All Furniture <span class="furn-cat-count" id="count-all"></span></button>
+            <button class="furn-cat-pill" data-cat="living">🛋️ Living Room <span class="furn-cat-count" id="count-living"></span></button>
+            <button class="furn-cat-pill" data-cat="bedroom">🛏️ Bedroom <span class="furn-cat-count" id="count-bedroom"></span></button>
+            <button class="furn-cat-pill" data-cat="dining">🍽️ Dining <span class="furn-cat-count" id="count-dining"></span></button>
+            <button class="furn-cat-pill" data-cat="kitchen">🍳 Kitchen & Utility <span class="furn-cat-count" id="count-kitchen"></span></button>
+            <button class="furn-cat-pill" data-cat="bathroom">🚿 Bathroom & Fixtures <span class="furn-cat-count" id="count-bathroom"></span></button>
+            <button class="furn-cat-pill" data-cat="office">💼 Office & Workspace <span class="furn-cat-count" id="count-office"></span></button>
+            <button class="furn-cat-pill" data-cat="doors">🚪 Doors & Clearances <span class="furn-cat-count" id="count-doors"></span></button>
+          </div>
+        </div>
+
+        <!-- Custom Furniture Quick Scaler Box -->
+        <div class="custom-furn-box">
+          <div class="custom-furn-title">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
+            Quick Custom Dimension Scaler
+          </div>
+          <div class="custom-furn-inputs-row">
+            <input type="text" id="custom-furn-name" class="form-input" style="font-size: 0.85rem;" placeholder="Item name (e.g. Custom Cabinet)">
+            <input type="number" id="custom-furn-w" class="form-input" style="font-size: 0.85rem;" placeholder="Width (cm)" value="120">
+            <input type="number" id="custom-furn-d" class="form-input" style="font-size: 0.85rem;" placeholder="Depth (cm)" value="60">
+            <select id="custom-furn-unit" class="form-select" style="font-size: 0.82rem;">
+              <option value="cm">cm</option>
+              <option value="mm">mm</option>
+              <option value="m">m</option>
+              <option value="in">in</option>
+            </select>
+            <div id="custom-furn-result" class="custom-furn-result-badge">
+              Paper: 2.40 × 1.20 cm
+            </div>
+          </div>
+        </div>
+
+        <!-- Furniture Cards Grid Container -->
+        <div class="furniture-grid" id="furniture-cards-grid">
+          <!-- Populated dynamically by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODE 5: REFERENCE SCALE CHART                           -->
+    <!-- ======================================================== -->
+    <div id="mode-view-reference" class="tool-mode-view">
+      <div class="archi-card" style="max-width: 850px; margin: 0 auto;">
+        <div class="corner-mark top-left"></div>
+        <div class="corner-mark top-right"></div>
+        <div class="corner-mark bottom-left"></div>
+        <div class="corner-mark bottom-right"></div>
+
+        <div class="card-title-row">
+          <h2>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+            Multi-Length Architectural Quick Reference
+          </h2>
+          <span class="card-tag">PRINT-READY SHEET</span>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <label style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary);">Select Reference Scale:</label>
+            <select id="ref-scale-select" class="form-select"></select>
+          </div>
+          <button class="action-tool-btn" onclick="window.print()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 6 2 18 2 18 9"></polyline>
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+              <rect x="6" y="14" width="12" height="8"></rect>
+            </svg>
+            Print Reference Sheet
+          </button>
+        </div>
+
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem;">
+            <thead>
+              <tr style="border-bottom: 1px solid var(--border-medium); background: var(--bg-surface-elevated);">
+                <th style="padding: 0.75rem; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase;">Drawing Length</th>
+                <th style="padding: 0.75rem; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase;">Real-World (Metric)</th>
+                <th style="padding: 0.75rem; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase;">Real-World (Imperial Ft/In)</th>
+              </tr>
+            </thead>
+            <tbody id="ref-table-body">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- History Drawer Side Panel -->
+  <div id="history-overlay" class="history-drawer-overlay"></div>
+  <aside id="history-drawer" class="history-drawer" aria-label="Calculation History">
+    <div class="drawer-header">
+      <h3>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        Calculation Log
+      </h3>
+      <div class="drawer-actions">
+        <button id="export-csv-btn" class="hist-btn" title="Export as CSV spreadsheet">CSV</button>
+        <button id="export-md-btn" class="hist-btn" title="Export as Markdown text">Markdown</button>
+        <button id="clear-history-btn" class="hist-btn" title="Clear all history">Clear</button>
+        <button id="close-history-btn" class="hist-btn" title="Close drawer">✕</button>
+      </div>
+    </div>
+    <div id="history-list" class="history-list-container">
+      <!-- Populated by JS history module -->
+    </div>
+  </aside>
+
+  <!-- Keyboard Shortcuts Modal -->
+  <div id="shortcuts-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 style="font-size: 1.1rem; font-weight: 600;">⌨️ Keyboard Shortcuts & Tips</h3>
+        <button id="close-shortcuts-btn" class="hist-btn" style="font-size: 1.1rem;">✕</button>
+      </div>
+      <div>
+        <div class="shortcut-row">
+          <span>Swap Conversion Direction</span>
+          <span class="kbd-badge">S</span>
+        </div>
+        <div class="shortcut-row">
+          <span>Switch Tool Modes (1-5)</span>
+          <span class="kbd-badge">1 — 5</span>
+        </div>
+        <div class="shortcut-row">
+          <span>Toggle History Drawer</span>
+          <span class="kbd-badge">H</span>
+        </div>
+        <div class="shortcut-row">
+          <span>Toggle Shortcuts Modal</span>
+          <span class="kbd-badge">?</span>
+        </div>
+        <div class="shortcut-row">
+          <span>Unfocus / Close Modals</span>
+          <span class="kbd-badge">Esc</span>
+        </div>
+        <div class="shortcut-row">
+          <span>Fractional & Architectural Inputs</span>
+          <span style="font-size: 0.8rem; color: var(--text-secondary); font-family: var(--font-mono);">Supports 3 1/2, 1/4, 12'-6"</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- App Footer -->
+  <footer class="app-footer">
+    <p>Architecture Helping Hand • Built for Architects, Designers & Engineers • High-Precision Scaling Studio</p>
+  </footer>
+
+  <!-- Application Script (Standalone, works via file:// and http://) -->
+  <script src="js/app.js"></script>
+</body>
+</html>

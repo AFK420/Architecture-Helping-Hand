@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="96" fill="#1e2229"/>
+  <rect x="64" y="64" width="384" height="384" rx="24" fill="#f6f3eb" stroke="#c26d2d" stroke-width="12"/>
+  
+  <!-- Architectural drafting grid lines -->
+  <line x1="64" y1="160" x2="448" y2="160" stroke="#d1c6ab" stroke-width="4" stroke-dasharray="8 8"/>
+  <line x1="64" y1="256" x2="448" y2="256" stroke="#d1c6ab" stroke-width="4" stroke-dasharray="8 8"/>
+  <line x1="64" y1="352" x2="448" y2="352" stroke="#d1c6ab" stroke-width="4" stroke-dasharray="8 8"/>
+  <line x1="160" y1="64" x2="160" y2="448" stroke="#d1c6ab" stroke-width="4" stroke-dasharray="8 8"/>
+  <line x1="256" y1="64" x2="256" y2="448" stroke="#d1c6ab" stroke-width="4" stroke-dasharray="8 8"/>
+  <line x1="352" y1="64" x2="352" y2="448" stroke="#d1c6ab" stroke-width="4" stroke-dasharray="8 8"/>
+
+  <!-- Drafting Triangle Scale Symbol -->
+  <polygon points="128,384 384,384 384,128" fill="rgba(194, 109, 45, 0.2)" stroke="#c26d2d" stroke-width="16" stroke-linejoin="round"/>
+  <polygon points="184,350 350,350 350,184" fill="#f6f3eb" stroke="#c26d2d" stroke-width="8" stroke-linejoin="round"/>
+
+  <!-- Ruler Ticks -->
+  <line x1="160" y1="384" x2="160" y2="368" stroke="#c26d2d" stroke-width="6" stroke-linecap="round"/>
+  <line x1="200" y1="384" x2="200" y2="360" stroke="#c26d2d" stroke-width="6" stroke-linecap="round"/>
+  <line x1="240" y1="384" x2="240" y2="368" stroke="#c26d2d" stroke-width="6" stroke-linecap="round"/>
+  <line x1="280" y1="384" x2="280" y2="360" stroke="#c26d2d" stroke-width="6" stroke-linecap="round"/>
+  <line x1="320" y1="384" x2="320" y2="368" stroke="#c26d2d" stroke-width="6" stroke-linecap="round"/>
+</svg>

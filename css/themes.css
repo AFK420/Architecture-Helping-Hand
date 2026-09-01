@@ -1,0 +1,114 @@
+/**
+ * ArchiScale - Studio & Drafting Themes
+ */
+
+:root, [data-theme="dark"] {
+  --bg-app: #0d1117;
+  --bg-surface: #161b22;
+  --bg-surface-elevated: #21262d;
+  --bg-surface-translucent: rgba(22, 27, 34, 0.90);
+  --bg-input: #0d1117;
+  --bg-input-focus: #1c2128;
+  --bg-chip: #21262d;
+  --bg-chip-hover: #30363d;
+  --bg-chip-active: #38bdf8;
+  
+  --border-subtle: #30363d;
+  --border-medium: #484f58;
+  --border-strong: #6e7681;
+  --border-active: #38bdf8;
+
+  --text-primary: #f0f6fc;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+  --text-inverse: #0d1117;
+
+  --accent-primary: #38bdf8;
+  --accent-primary-hover: #0ea5e9;
+  --accent-primary-subtle: rgba(56, 189, 248, 0.15);
+  --accent-secondary: #f59e0b;
+  --accent-blueprint: #60a5fa;
+  --accent-success: #34d399;
+  --accent-danger: #f87171;
+
+  --grid-line-color: rgba(255, 255, 255, 0.05);
+  --grid-cross-color: rgba(56, 189, 248, 0.28);
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.7);
+
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+[data-theme="paper"] {
+  --bg-app: #f6f3eb;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #faf8f2;
+  --bg-surface-translucent: rgba(255, 255, 255, 0.85);
+  --bg-input: #f2eee3;
+  --bg-input-focus: #ffffff;
+  --bg-chip: #ece6d8;
+  --bg-chip-hover: #dfd7c3;
+  --bg-chip-active: #2b303a;
+  
+  --border-subtle: #e5dec9;
+  --border-medium: #d1c6ab;
+  --border-strong: #9e8e6d;
+  --border-active: #c26d2d;
+
+  --text-primary: #1e2229;
+  --text-secondary: #5a6270;
+  --text-muted: #88909d;
+  --text-inverse: #ffffff;
+
+  --accent-primary: #c26d2d;
+  --accent-primary-hover: #aa5a20;
+  --accent-primary-subtle: rgba(194, 109, 45, 0.12);
+  --accent-secondary: #356b82;
+  --accent-blueprint: #245785;
+  --accent-success: #2d8a5e;
+  --accent-danger: #c0392b;
+
+  --grid-line-color: rgba(160, 140, 110, 0.12);
+  --grid-cross-color: rgba(160, 140, 110, 0.28);
+  --shadow-sm: 0 1px 3px rgba(40, 30, 15, 0.06);
+  --shadow-md: 0 4px 16px rgba(40, 30, 15, 0.08);
+  --shadow-lg: 0 12px 32px rgba(40, 30, 15, 0.12);
+}
+
+[data-theme="blueprint"] {
+  --bg-app: #0a2540;
+  --bg-surface: #0f355c;
+  --bg-surface-elevated: #164677;
+  --bg-surface-translucent: rgba(15, 53, 92, 0.90);
+  --bg-input: #081d33;
+  --bg-input-focus: #0c2b4d;
+  --bg-chip: #184b7d;
+  --bg-chip-hover: #22609c;
+  --bg-chip-active: #00d2ff;
+  
+  --border-subtle: #1e558c;
+  --border-medium: #2b70b5;
+  --border-strong: #5296dd;
+  --border-active: #00d2ff;
+
+  --text-primary: #ffffff;
+  --text-secondary: #b0d4f7;
+  --text-muted: #6ea0d1;
+  --text-inverse: #081d33;
+
+  --accent-primary: #00d2ff;
+  --accent-primary-hover: #38e1ff;
+  --accent-primary-subtle: rgba(0, 210, 255, 0.16);
+  --accent-secondary: #ffd166;
+  --accent-blueprint: #ffffff;
+  --accent-success: #06d6a0;
+  --accent-danger: #ef476f;
+
+  --grid-line-color: rgba(255, 255, 255, 0.09);
+  --grid-cross-color: rgba(0, 210, 255, 0.4);
+  --shadow-sm: 0 2px 8px rgba(3, 15, 28, 0.5);
+  --shadow-md: 0 8px 24px rgba(3, 15, 28, 0.6);
+  --shadow-lg: 0 20px 48px rgba(3, 15, 28, 0.75);
+}

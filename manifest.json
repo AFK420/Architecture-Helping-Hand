@@ -1,0 +1,16 @@
+{
+  "name": "Architecture Helping Hand",
+  "short_name": "ArchHelpingHand",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#38bdf8",
+  "description": "Architecture Helping Hand - Professional Architectural scale, furniture sizing & unit conversion calculator for architects, designers, and engineers.",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
