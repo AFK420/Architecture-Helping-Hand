@@ -97,6 +97,15 @@ import {
   convertBatchToWorkspaceGroup,
   convertBatchToDimensionChain
 } from '../core/batch-cad.js';
+import {
+  DEFAULT_QUICK_SCALES,
+  DEFAULT_QUICK_PREFS,
+  QUICK_DIM_STORAGE_KEY,
+  getArchitecturalContext,
+  evaluateQuickDimension,
+  formatQuickDimensionClipboard,
+  createQuickHandoffPayload
+} from '../core/quick-dimension.js';
 import { StorageService } from '../services/storage.js';
 import { AudioService } from '../services/audio.js';
 import { HistoryService } from '../services/history.js';
@@ -263,6 +272,30 @@ export function initializeApp() {
         delimiter: 'auto',
         activeFilter: 'all',
         selectedIds: new Set(),
+        lastResult: null
+      };
+    })(),
+
+    // Quick Dimension Strip (Micro-Tool & Glance Strip)
+    quickDimension: (() => {
+      try {
+        const stored = StorageService.getItem(QUICK_DIM_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && typeof parsed === 'object') return parsed;
+        }
+      } catch (e) {}
+      return {
+        isOpen: false,
+        pinned: false,
+        rawInput: '2400mm',
+        selectedScale: 50,
+        scales: [...DEFAULT_QUICK_SCALES],
+        displayUnit: 'mm',
+        drawingUnit: 'mm',
+        precision: 2,
+        mode: 'real_to_drawing',
+        showContext: true,
         lastResult: null
       };
     })(),
@@ -640,7 +673,41 @@ export function initializeApp() {
     batchSendWorkspaceBtn: document.getElementById('batch-send-workspace-btn'),
     batchCompareMultiscaleBtn: document.getElementById('batch-compare-multiscale-btn'),
     batchCreateChainBtn: document.getElementById('batch-create-chain-btn'),
-    batchSaveJournalBtn: document.getElementById('batch-save-journal-btn')
+    batchSaveJournalBtn: document.getElementById('batch-save-journal-btn'),
+
+    // Quick Dimension Strip (Micro-Tool & Glance Strip)
+    quickDimToggleBtn: document.getElementById('quick-dim-toggle-btn'),
+    quickDimStrip: document.getElementById('quick-dimension-strip'),
+    quickDimStatusBadge: document.getElementById('quick-dim-status-badge'),
+    quickDimModePills: document.getElementById('quick-dim-mode-pills'),
+    quickDimPinBtn: document.getElementById('quick-dim-pin-btn'),
+    quickDimCloseBtn: document.getElementById('quick-dim-close-btn'),
+    quickDimInput: document.getElementById('quick-dim-input'),
+    btnRunQuickDim: document.getElementById('btn-run-quick-dim'),
+    quickDimErrorMsg: document.getElementById('quick-dim-error-msg'),
+    quickDimRealVal: document.getElementById('quick-dim-real-val'),
+    quickDimSelectedScaleLabel: document.getElementById('quick-dim-selected-scale-label'),
+    quickDimDrawingVal: document.getElementById('quick-dim-drawing-val'),
+    quickEquivMm: document.getElementById('quick-equiv-mm'),
+    quickEquivCm: document.getElementById('quick-equiv-cm'),
+    quickEquivM: document.getElementById('quick-equiv-m'),
+    quickEquivIn: document.getElementById('quick-equiv-in'),
+    quickEquivFtin: document.getElementById('quick-equiv-ftin'),
+    quickDimScaleChips: document.getElementById('quick-dim-scale-chips'),
+    quickDimCustomScaleInput: document.getElementById('quick-dim-custom-scale-input'),
+    quickDimMatrixGrid: document.getElementById('quick-dim-matrix-grid'),
+    quickDimContextCard: document.getElementById('quick-dim-context-card'),
+    quickDimContextTitle: document.getElementById('quick-dim-context-title'),
+    quickDimContextBody: document.getElementById('quick-dim-context-body'),
+    quickDimCopyRealBtn: document.getElementById('quick-dim-copy-real-btn'),
+    quickDimCopyDrawBtn: document.getElementById('quick-dim-copy-draw-btn'),
+    quickDimCopyCadBtn: document.getElementById('quick-dim-copy-cad-btn'),
+    quickDimCopyMatrixBtn: document.getElementById('quick-dim-copy-matrix-btn'),
+    quickDimSendWorkspaceBtn: document.getElementById('quick-dim-send-workspace-btn'),
+    quickDimSendMultiscaleBtn: document.getElementById('quick-dim-send-multiscale-btn'),
+    quickDimSendChainBtn: document.getElementById('quick-dim-send-chain-btn'),
+    quickDimSendCadBtn: document.getElementById('quick-dim-send-cad-btn'),
+    quickDimSaveJournalBtn: document.getElementById('quick-dim-save-journal-btn')
   };
 
   // ---------------------------------------------------------------------------
@@ -3282,6 +3349,10 @@ export function initializeApp() {
         showToast('Calculation history cleared');
         break;
       }
+      case 'util-quick-dim': {
+        toggleQuickDimension(true);
+        break;
+      }
       default:
         if (typeof cmd.action === 'function') {
           cmd.action();
@@ -4519,6 +4590,231 @@ export function initializeApp() {
     renderCadClipboard(true);
     AudioService.playTick();
     showToast('Loaded batch numbers into CAD Clipboard');
+  }
+
+  // ---------------------------------------------------------------------------
+  // 13i. Quick Dimension Strip Controller (Phase 2.5 Part 8: Glance Micro-Tool)
+  // ---------------------------------------------------------------------------
+  function saveQuickDimSettings() {
+    try {
+      StorageService.setItem(QUICK_DIM_STORAGE_KEY, JSON.stringify({
+        isOpen: state.quickDimension.isOpen,
+        pinned: state.quickDimension.pinned,
+        selectedScale: state.quickDimension.selectedScale,
+        displayUnit: state.quickDimension.displayUnit,
+        drawingUnit: state.quickDimension.drawingUnit,
+        precision: state.quickDimension.precision,
+        mode: state.quickDimension.mode,
+        showContext: state.quickDimension.showContext
+      }));
+    } catch (e) {}
+  }
+
+  function toggleQuickDimension(forceState) {
+    const shouldOpen = typeof forceState === 'boolean' ? forceState : !state.quickDimension.isOpen;
+    state.quickDimension.isOpen = shouldOpen;
+    if (dom.quickDimStrip) {
+      dom.quickDimStrip.hidden = !shouldOpen;
+    }
+    if (dom.quickDimToggleBtn) {
+      dom.quickDimToggleBtn.classList.toggle('active', shouldOpen);
+    }
+    if (shouldOpen) {
+      if (dom.quickDimInput) {
+        dom.quickDimInput.focus();
+        dom.quickDimInput.select();
+      }
+      parseAndEvaluateQuickDimension(false);
+    }
+    saveQuickDimSettings();
+  }
+
+  function toggleQuickDimPin() {
+    state.quickDimension.pinned = !state.quickDimension.pinned;
+    if (dom.quickDimPinBtn) {
+      dom.quickDimPinBtn.classList.toggle('pinned', state.quickDimension.pinned);
+    }
+    saveQuickDimSettings();
+    showToast(state.quickDimension.pinned ? 'Quick Dimension Strip pinned open' : 'Quick Dimension Strip unpinned');
+  }
+
+  function applyQuickScale(scaleRatio) {
+    if (typeof scaleRatio !== 'number' || isNaN(scaleRatio) || scaleRatio <= 0) return;
+    state.quickDimension.selectedScale = scaleRatio;
+    if (dom.quickDimScaleChips) {
+      dom.quickDimScaleChips.querySelectorAll('.quick-scale-chip').forEach(chip => {
+        const s = parseInt(chip.dataset.scale, 10);
+        chip.classList.toggle('active', s === scaleRatio);
+      });
+    }
+    if (dom.quickDimCustomScaleInput) {
+      const isPreset = DEFAULT_QUICK_SCALES.includes(scaleRatio);
+      dom.quickDimCustomScaleInput.value = isPreset ? '' : scaleRatio;
+    }
+    parseAndEvaluateQuickDimension(false);
+    AudioService.playTick();
+  }
+
+  function parseAndEvaluateQuickDimension(isExplicitRun = false) {
+    const rawInput = dom.quickDimInput ? dom.quickDimInput.value : state.quickDimension.rawInput;
+    state.quickDimension.rawInput = rawInput;
+
+    const evalResult = evaluateQuickDimension(rawInput, {
+      selectedScale: state.quickDimension.selectedScale,
+      scales: state.quickDimension.scales,
+      displayUnit: state.quickDimension.displayUnit,
+      drawingUnit: state.quickDimension.drawingUnit,
+      precision: state.quickDimension.precision,
+      mode: state.quickDimension.mode
+    });
+
+    state.quickDimension.lastResult = evalResult;
+    renderQuickDimensionResults(evalResult);
+
+    if (isExplicitRun && evalResult.valid) {
+      AudioService.playSuccess();
+    }
+  }
+
+  function renderQuickDimensionResults(res) {
+    if (!res) return;
+
+    if (dom.quickDimStatusBadge) {
+      dom.quickDimStatusBadge.textContent = res.valid ? 'VALID' : (res.status === 'EMPTY' ? 'READY' : 'INVALID');
+      dom.quickDimStatusBadge.className = res.valid ? 'badge-status-valid' : (res.status === 'EMPTY' ? 'badge-status-ready' : 'badge-status-invalid');
+    }
+
+    if (dom.quickDimErrorMsg) {
+      if (res.valid || res.status === 'EMPTY') {
+        dom.quickDimErrorMsg.style.display = 'none';
+        dom.quickDimErrorMsg.textContent = '';
+      } else {
+        dom.quickDimErrorMsg.style.display = 'block';
+        dom.quickDimErrorMsg.textContent = res.error || 'Invalid dimension or expression';
+      }
+    }
+
+    // Hero Readouts
+    if (dom.quickDimRealVal) {
+      dom.quickDimRealVal.textContent = res.valid ? res.realFormatted : '---';
+    }
+    if (dom.quickDimSelectedScaleLabel) {
+      dom.quickDimSelectedScaleLabel.textContent = `DRAWING @ 1:${res.selectedScale}`;
+    }
+    if (dom.quickDimDrawingVal) {
+      dom.quickDimDrawingVal.textContent = res.valid ? res.selectedDrawingFormatted : '---';
+    }
+
+    // Common Unit Equivalents
+    if (res.valid && res.commonEquivalents) {
+      const mmEq = res.commonEquivalents.find(e => e.unit === 'mm');
+      const cmEq = res.commonEquivalents.find(e => e.unit === 'cm');
+      const mEq = res.commonEquivalents.find(e => e.unit === 'm');
+      const inEq = res.commonEquivalents.find(e => e.unit === 'in');
+      const ftinEq = res.commonEquivalents.find(e => e.unit === 'ft-in');
+
+      if (dom.quickEquivMm) dom.quickEquivMm.textContent = mmEq ? mmEq.formatted : '---';
+      if (dom.quickEquivCm) dom.quickEquivCm.textContent = cmEq ? cmEq.formatted : '---';
+      if (dom.quickEquivM) dom.quickEquivM.textContent = mEq ? mEq.formatted : '---';
+      if (dom.quickEquivIn) dom.quickEquivIn.textContent = inEq ? inEq.formatted : '---';
+      if (dom.quickEquivFtin) dom.quickEquivFtin.textContent = ftinEq ? ftinEq.formatted : '---';
+    } else {
+      if (dom.quickEquivMm) dom.quickEquivMm.textContent = '---';
+      if (dom.quickEquivCm) dom.quickEquivCm.textContent = '---';
+      if (dom.quickEquivM) dom.quickEquivM.textContent = '---';
+      if (dom.quickEquivIn) dom.quickEquivIn.textContent = '---';
+      if (dom.quickEquivFtin) dom.quickEquivFtin.textContent = '---';
+    }
+
+    // Multi-Scale Matrix Grid
+    if (dom.quickDimMatrixGrid) {
+      if (res.valid && res.scaleMatrix && res.scaleMatrix.length > 0) {
+        dom.quickDimMatrixGrid.innerHTML = res.scaleMatrix.map(item => `
+          <div class="quick-matrix-cell ${item.isSelected ? 'selected' : ''}" data-scale="${item.scale}">
+            <span class="quick-matrix-scale">${item.scaleFormatted}</span>
+            <span class="quick-matrix-val">${item.drawingFormatted}</span>
+          </div>
+        `).join('');
+
+        dom.quickDimMatrixGrid.querySelectorAll('.quick-matrix-cell').forEach(cell => {
+          cell.addEventListener('click', () => {
+            const sc = parseInt(cell.dataset.scale, 10);
+            applyQuickScale(sc);
+          });
+        });
+      } else {
+        dom.quickDimMatrixGrid.innerHTML = '';
+      }
+    }
+
+    // Context Card
+    if (dom.quickDimContextCard && dom.quickDimContextBody) {
+      if (res.valid && res.context) {
+        if (res.context.hasReference && res.context.matches.length > 0) {
+          dom.quickDimContextBody.innerHTML = res.context.matches.map(m => `
+            <div><strong>${m.label}:</strong> ${m.detail}</div>
+          `).join('') + `<div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 3px;"><em>${res.context.disclaimer}</em></div>`;
+        } else {
+          dom.quickDimContextBody.textContent = res.context.message || 'No stored reference for this dimension.';
+        }
+      } else {
+        dom.quickDimContextBody.textContent = 'Enter a dimension to view contextual reference standards.';
+      }
+    }
+  }
+
+  function copyQuickDimension(formatType) {
+    const res = state.quickDimension.lastResult;
+    if (!res || !res.valid) {
+      showToast('Enter a valid dimension to copy', 'warning');
+      return;
+    }
+    const text = formatQuickDimensionClipboard(res, formatType);
+    if (!text) return;
+    copyToClipboard(text, `Quick Dimension (${formatType.replace(/_/g, ' ')})`);
+  }
+
+  function handoffQuickDimension(targetTool) {
+    const res = state.quickDimension.lastResult;
+    if (!res || !res.valid) {
+      showToast('Enter a valid dimension first', 'warning');
+      return;
+    }
+    const payload = createQuickHandoffPayload(res, targetTool);
+    if (!payload) return;
+
+    if (targetTool === 'workspace') {
+      state.workspace.entries.push(payload.entry);
+      saveWorkspaceState();
+      switchMode('workspace');
+      showToast(`Added "${payload.entry.name}" to Dimension Workspace`);
+    } else if (targetTool === 'multiscale') {
+      if (dom.multiscaleInput) {
+        dom.multiscaleInput.value = payload.dimensionInput;
+      }
+      switchMode('multiscale');
+      runMultiScaleComparison(true);
+      showToast('Loaded dimension in Multi-Scale Comparison');
+    } else if (targetTool === 'chain') {
+      state.chains.segments.push(payload.segment);
+      saveChainState();
+      switchMode('chains');
+      showToast(`Added "${payload.segment.name}" to Dimension Chain`);
+    } else if (targetTool === 'cad_clipboard') {
+      state.cadClipboard.manualInput = payload.manualInput;
+      state.cadClipboard.source = 'manual';
+      if (dom.cadSourceSelect) dom.cadSourceSelect.value = 'manual';
+      if (dom.cadManualGroup) dom.cadManualGroup.style.display = 'block';
+      if (dom.cadManualInput) dom.cadManualInput.value = payload.manualInput;
+      switchMode('cad_clipboard');
+      updateCadPreview();
+      showToast('Transferred dimensions to CAD Clipboard');
+    } else if (targetTool === 'journal') {
+      HistoryService.addEntry(payload);
+      renderHistoryList();
+      AudioService.playTick();
+      showToast('Saved snapshot to Calculation Journal');
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -6147,6 +6443,134 @@ export function initializeApp() {
       });
     }
 
+    // Quick Dimension Strip Event Listeners
+    if (dom.quickDimToggleBtn) {
+      dom.quickDimToggleBtn.addEventListener('click', () => {
+        toggleQuickDimension();
+      });
+    }
+
+    if (dom.quickDimCloseBtn) {
+      dom.quickDimCloseBtn.addEventListener('click', () => {
+        toggleQuickDimension(false);
+      });
+    }
+
+    if (dom.quickDimPinBtn) {
+      dom.quickDimPinBtn.addEventListener('click', () => {
+        toggleQuickDimPin();
+      });
+    }
+
+    if (dom.quickDimModePills) {
+      dom.quickDimModePills.querySelectorAll('.quick-mode-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+          state.quickDimension.mode = pill.dataset.mode;
+          dom.quickDimModePills.querySelectorAll('.quick-mode-pill').forEach(p => {
+            p.classList.toggle('active', p === pill);
+          });
+          parseAndEvaluateQuickDimension(false);
+          AudioService.playTick();
+        });
+      });
+    }
+
+    if (dom.quickDimScaleChips) {
+      dom.quickDimScaleChips.querySelectorAll('.quick-scale-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          const s = parseInt(chip.dataset.scale, 10);
+          applyQuickScale(s);
+        });
+      });
+    }
+
+    if (dom.quickDimCustomScaleInput) {
+      dom.quickDimCustomScaleInput.addEventListener('input', () => {
+        const val = parseInt(dom.quickDimCustomScaleInput.value, 10);
+        if (!isNaN(val) && val > 0) {
+          applyQuickScale(val);
+        }
+      });
+    }
+
+    if (dom.quickDimInput) {
+      dom.quickDimInput.addEventListener('input', () => {
+        parseAndEvaluateQuickDimension(false);
+      });
+
+      dom.quickDimInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          parseAndEvaluateQuickDimension(true);
+        } else if (e.key === 'Escape') {
+          if (!state.quickDimension.pinned) {
+            e.preventDefault();
+            toggleQuickDimension(false);
+          }
+        }
+      });
+    }
+
+    if (dom.btnRunQuickDim) {
+      dom.btnRunQuickDim.addEventListener('click', () => {
+        parseAndEvaluateQuickDimension(true);
+      });
+    }
+
+    if (dom.quickDimCopyRealBtn) {
+      dom.quickDimCopyRealBtn.addEventListener('click', () => {
+        copyQuickDimension('real');
+      });
+    }
+
+    if (dom.quickDimCopyDrawBtn) {
+      dom.quickDimCopyDrawBtn.addEventListener('click', () => {
+        copyQuickDimension('drawing');
+      });
+    }
+
+    if (dom.quickDimCopyCadBtn) {
+      dom.quickDimCopyCadBtn.addEventListener('click', () => {
+        copyQuickDimension('cad_numbers');
+      });
+    }
+
+    if (dom.quickDimCopyMatrixBtn) {
+      dom.quickDimCopyMatrixBtn.addEventListener('click', () => {
+        copyQuickDimension('all_scales');
+      });
+    }
+
+    if (dom.quickDimSendWorkspaceBtn) {
+      dom.quickDimSendWorkspaceBtn.addEventListener('click', () => {
+        handoffQuickDimension('workspace');
+      });
+    }
+
+    if (dom.quickDimSendMultiscaleBtn) {
+      dom.quickDimSendMultiscaleBtn.addEventListener('click', () => {
+        handoffQuickDimension('multiscale');
+      });
+    }
+
+    if (dom.quickDimSendChainBtn) {
+      dom.quickDimSendChainBtn.addEventListener('click', () => {
+        handoffQuickDimension('chain');
+      });
+    }
+
+    if (dom.quickDimSendCadBtn) {
+      dom.quickDimSendCadBtn.addEventListener('click', () => {
+        handoffQuickDimension('cad_clipboard');
+      });
+    }
+
+    if (dom.quickDimSaveJournalBtn) {
+      dom.quickDimSaveJournalBtn.addEventListener('click', () => {
+        handoffQuickDimension('journal');
+      });
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -6170,7 +6594,7 @@ export function initializeApp() {
         return;
       }
 
-      // Esc closes Command Palette first, then drawers/modals/selection
+      // Esc closes Command Palette first, then drawers/modals/selection/quick-strip
       if (e.key === 'Escape') {
         if (dom.commandPaletteModal?.classList.contains('open')) {
           e.preventDefault();
@@ -6186,6 +6610,10 @@ export function initializeApp() {
         if (state.currentMode === 'workspace' && state.workspaceSelectedIds.size > 0) {
           state.workspaceSelectedIds.clear();
           renderWorkspace();
+          return;
+        }
+        if (state.quickDimension.isOpen && !state.quickDimension.pinned) {
+          toggleQuickDimension(false);
           return;
         }
         if (activeEl && activeEl.blur) activeEl.blur();
@@ -6285,6 +6713,7 @@ export function initializeApp() {
       else if (e.key === '0') { e.preventDefault(); switchMode('chains'); }
       else if (e.key === 'c' || e.key === 'C') { e.preventDefault(); switchMode('cad_clipboard'); }
       else if (e.key === 'b' || e.key === 'B') { e.preventDefault(); switchMode('batch_cad'); }
+      else if (e.key === 'q' || e.key === 'Q') { e.preventDefault(); toggleQuickDimension(); }
       else if (e.key === 's' || e.key === 'S') { e.preventDefault(); swapDirection(); }
       else if (e.key === 'h' || e.key === 'H') { e.preventDefault(); toggleHistoryDrawer(); }
       else if (e.key === '?') {
@@ -6312,5 +6741,11 @@ export function initializeApp() {
   populateUnitSelects();
   renderPresetChips(state.selectedCategory);
   attachEventListeners();
+  if (state.quickDimension.isOpen || state.quickDimension.pinned) {
+    toggleQuickDimension(true);
+    if (state.quickDimension.pinned && dom.quickDimPinBtn) {
+      dom.quickDimPinBtn.classList.add('pinned');
+    }
+  }
   switchMode(state.currentMode);
 }

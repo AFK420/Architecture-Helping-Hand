@@ -3,7 +3,7 @@
 > **Professional Architectural Scale, Furniture Sizing & Multi-Unit Calculation Studio**  
 > *A high-precision, zero-dependency, tactile architectural conversion studio built for architects, interior designers, urban planners, physical model makers, and design students.*
 
-[![Tests](https://img.shields.io/badge/Tests-363%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-398%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-3--Tier%20Core%20%7C%20Frozen-10b981?style=flat-square)](ENGINEERING_RULES.md)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Vanilla)-f59e0b?style=flat-square)](package.json)
 [![License](https://img.shields.io/badge/License-MIT-6366f1?style=flat-square)](package.json)
@@ -29,6 +29,7 @@
    - [11. Dimension Chains (Continuous Strings)](#11-dimension-chains-continuous-strings)
    - [12. CAD Clipboard & Drafting Handoff](#12-cad-clipboard--drafting-handoff)
    - [13. Batch CAD Conversion (Bulk Scaling & Unit Engine)](#13-batch-cad-conversion-bulk-scaling--unit-engine)
+   - [14. Quick Dimension Strip (Micro-Tool Glance Instrument)](#14-quick-dimension-strip-micro-tool-glance-instrument)
 5. [📐 Architectural Scale Presets (All 28 Presets)](#-architectural-scale-presets-all-28-presets)
 6. [🛋️ Architectural Furniture & Fixtures Database (179 Items Across 9 Domains)](#️-architectural-furniture--fixtures-database-179-items-across-9-domains)
 7. [📏 Supported Measurement Units](#-supported-measurement-units)
@@ -229,6 +230,13 @@ This repository serves as:
 * **Multi-Format Downstream Handoffs**: 1-click export to CAD Clipboard (Mode 11), Dimension Workspace groups (Mode 7), Multi-Scale Comparison (Mode 9), Dimension Chains (Mode 10), and Calculation Journal.
 * **High-Throughput Benchmark**: Benchmarked to process **1,000+ rows in < 10ms** with zero external dependencies.
 
+### 14. Quick Dimension Strip (Micro-Tool Glance Instrument)
+* **Always-Accessible Compact Drafting Strip**: Open from any mode or workspace via <kbd>Q</kbd> to immediately inspect real-world measurements, scale equivalents, and arithmetic expressions.
+* **Live Multi-Scale Matrix**: Instant drawing size evaluations across 10 standard architectural scale ratios ($1:10 \dots 1:500$) plus custom ratios.
+* **Common Unit Readouts**: Instant equivalents across Millimeters (`mm`), Centimeters (`cm`), Meters (`m`), Decimal Inches (`in`), and Architectural Feet-Inches (`ft-in`).
+* **Verified Standard Context**: Evaluates dimensions against physical building standards (doors, circulation, stairs, counters, ceiling heights) and returns explicit no-reference notices for unindexed values.
+* **1-Click Copy & Cross-Tool Handoffs**: Fast exports to clipboard (Real, Drawing, All Scales, CAD Numbers, TSV row) and direct transfers to Dimension Workspace, Multi-Scale, Chains, CAD Clipboard, and Journal.
+
 ---
 
 ## 📐 Architectural Scale Presets (All 28 Presets)
@@ -379,16 +387,22 @@ $$\text{Area} = \frac{1}{2} \left| \sum_{i=1}^{n} (x_i y_{i+1} - x_{i+1} y_i) \r
 | <kbd>Ctrl</kbd> + <kbd>K</kbd> / <kbd>⌘</kbd> + <kbd>K</kbd> | Open **Architect's Global Command Palette** |
 | <kbd>Enter</kbd> | Run Calculation for active tool / Execute command |
 | <kbd>S</kbd> | Swap Conversion Direction (Drawing ↔ Real World) |
-| <kbd>1</kbd> | Switch to **Scale Converter** |
-| <kbd>2</kbd> | Switch to **Rescaler (Scale A ➔ B)** |
-| <kbd>3</kbd> | Switch to **Scale Finder / Detector** |
-| <kbd>4</kbd> | Switch to **Area & Volume Scaler** |
-| <kbd>5</kbd> | Switch to **Furniture Scales & Standards** |
-| <kbd>6</kbd> | Switch to **Reference Chart Sheet** |
-| <kbd>7</kbd> | Switch to **Dimension Workspace** |
+| <kbd>1</kbd> | Switch to **Scale Converter** (Mode 1) |
+| <kbd>2</kbd> | Switch to **Rescaler (Scale A ➔ B)** (Mode 2) |
+| <kbd>3</kbd> | Switch to **Scale Finder / Detector** (Mode 3) |
+| <kbd>4</kbd> | Switch to **Area & Volume Scaler** (Mode 4) |
+| <kbd>5</kbd> | Switch to **Furniture Scales & Standards** (Mode 5) |
+| <kbd>6</kbd> | Switch to **Reference Chart Sheet** (Mode 6) |
+| <kbd>7</kbd> | Switch to **Dimension Workspace** (Mode 7) |
+| <kbd>8</kbd> | Switch to **Dimension Expression** (Mode 8) |
+| <kbd>9</kbd> | Switch to **Multi-Scale Comparison** (Mode 9) |
+| <kbd>0</kbd> | Switch to **Dimension Chains** (Mode 10) |
+| <kbd>C</kbd> / <kbd>Ctrl+Shift+C</kbd> | Switch to **CAD Clipboard** (Mode 11) |
+| <kbd>B</kbd> | Switch to **Batch CAD Converter** (Mode 12) |
+| <kbd>Q</kbd> | Toggle **Quick Dimension Strip** (Micro-Tool) |
 | <kbd>H</kbd> | Toggle Calculation History Drawer |
 | <kbd>?</kbd> | Open Keyboard Shortcuts Modal |
-| <kbd>Esc</kbd> | Close Palette / Modal / Drawer / Unfocus Inputs |
+| <kbd>Esc</kbd> | Close Palette / Modal / Quick Strip / Drawer / Unfocus |
 
 ---
 

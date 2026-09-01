@@ -378,6 +378,42 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'batch-create-chain-btn',
     'batch-save-journal-btn',
 
+    // Quick Dimension Strip IDs
+    'quick-dimension-strip',
+    'quick-dim-toggle-btn',
+    'quick-dim-status-badge',
+    'quick-dim-mode-pills',
+    'quick-dim-pin-btn',
+    'quick-dim-close-btn',
+    'quick-dim-input',
+    'btn-run-quick-dim',
+    'quick-dim-error-msg',
+    'quick-dim-real-val',
+    'quick-dim-selected-scale-label',
+    'quick-dim-drawing-val',
+    'quick-dim-equivalents-row',
+    'quick-dim-equiv-chips',
+    'quick-equiv-mm',
+    'quick-equiv-cm',
+    'quick-equiv-m',
+    'quick-equiv-in',
+    'quick-equiv-ftin',
+    'quick-dim-scale-chips',
+    'quick-dim-custom-scale-input',
+    'quick-dim-matrix-grid',
+    'quick-dim-context-card',
+    'quick-dim-context-title',
+    'quick-dim-context-body',
+    'quick-dim-copy-real-btn',
+    'quick-dim-copy-draw-btn',
+    'quick-dim-copy-cad-btn',
+    'quick-dim-copy-matrix-btn',
+    'quick-dim-send-workspace-btn',
+    'quick-dim-send-multiscale-btn',
+    'quick-dim-send-chain-btn',
+    'quick-dim-send-cad-btn',
+    'quick-dim-save-journal-btn',
+
     // Workflow Pipeline & Mathematical Explanation IDs
     'converter-math-formula',
     'converter-flow-from',
@@ -421,7 +457,8 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'btn-run-multiscale',
     'btn-run-chains',
     'btn-run-cad-clipboard',
-    'btn-run-batch-cad'
+    'btn-run-batch-cad',
+    'btn-run-quick-dim'
   ];
 
   for (const rBtn of runButtons) {

@@ -176,6 +176,17 @@ const DEFAULT_COMMANDS = [
     actionType: 'action',
     available: true
   },
+  {
+    id: 'util-quick-dim',
+    title: 'Quick Dimension Strip',
+    description: 'Glanceable architectural dimension inspector, multi-scale sizes & instant CAD copy',
+    category: 'Utility',
+    icon: '⚡',
+    keywords: ['quick', 'dimension', 'strip', 'glance', 'micro', 'scale', 'inspect', 'q'],
+    shortcut: 'Q',
+    actionType: 'action',
+    available: true
+  },
 
   {
     id: 'nav-expression',

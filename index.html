@@ -71,6 +71,15 @@
         <span>History</span>
       </button>
 
+      <!-- Quick Dimension Strip Trigger -->
+      <button id="quick-dim-toggle-btn" class="control-btn quick-dim-trigger" title="Quick Dimension Strip (Q)" aria-label="Toggle Quick Dimension Strip">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+        <span class="cmd-palette-btn-text">Quick Dim</span>
+        <span class="cmd-palette-kbd-hint"><kbd>Q</kbd></span>
+      </button>
+
       <!-- Shortcuts / Help Modal Trigger -->
       <button id="shortcuts-help-btn" class="control-btn" title="Keyboard Shortcuts (?)" aria-label="Keyboard shortcuts">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -81,6 +90,142 @@
       </button>
     </div>
   </header>
+
+  <!-- ======================================================== -->
+  <!-- QUICK DIMENSION STRIP (Always-Accessible Micro-Tool)     -->
+  <!-- ======================================================== -->
+  <aside id="quick-dimension-strip" class="quick-dim-strip" aria-label="Quick Dimension Strip" hidden>
+    <div class="quick-dim-container">
+      <!-- Top Bar: Instrument Tag, Mode Toggle, Close Button -->
+      <div class="quick-dim-header">
+        <div class="quick-dim-header-left">
+          <span class="card-tag">MICRO-TOOL • GLANCE STRIP</span>
+          <span id="quick-dim-status-badge" class="badge-status-ready">READY</span>
+        </div>
+        <div class="quick-dim-header-right">
+          <!-- Direction Mode Switch -->
+          <div class="quick-dim-mode-pills" id="quick-dim-mode-pills">
+            <button type="button" class="quick-mode-pill active" data-mode="real_to_drawing" title="Real World ➔ Drawing @ Scale">Real ➔ Draw</button>
+            <button type="button" class="quick-mode-pill" data-mode="drawing_to_real" title="Drawing @ Scale ➔ Real World">Draw ➔ Real</button>
+          </div>
+          <button type="button" id="quick-dim-pin-btn" class="quick-dim-icon-btn" title="Pin / Keep Strip Open">📌</button>
+          <button type="button" id="quick-dim-close-btn" class="quick-dim-icon-btn" title="Close Strip (Esc)">✕</button>
+        </div>
+      </div>
+
+      <!-- Main Input & Hero Row -->
+      <div class="quick-dim-main-row">
+        <!-- Input Group -->
+        <div class="quick-dim-input-wrapper">
+          <div class="quick-dim-input-box">
+            <input type="text" id="quick-dim-input" class="text-input quick-dim-input" placeholder="e.g. 2400mm, 2.4m, 7' 6&quot;, 5.4m - 1200mm..." autocomplete="off" spellcheck="false" />
+            <button type="button" id="btn-run-quick-dim" class="btn-calc-primary quick-dim-run-btn" title="Calculate (Enter)">
+              <span>⚡</span>
+            </button>
+          </div>
+          <div id="quick-dim-error-msg" class="tool-error-msg" style="display: none; margin-top: 4px; font-size: 0.75rem;"></div>
+        </div>
+
+        <!-- Hero Readouts Box -->
+        <div class="quick-dim-hero-box">
+          <div class="quick-dim-hero-real">
+            <span class="quick-dim-label">REAL WORLD</span>
+            <span id="quick-dim-real-val" class="quick-dim-val">---</span>
+          </div>
+          <div class="quick-dim-hero-divider"></div>
+          <div class="quick-dim-hero-drawing">
+            <span class="quick-dim-label" id="quick-dim-selected-scale-label">DRAWING @ 1:50</span>
+            <span id="quick-dim-drawing-val" class="quick-dim-val highlight">---</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Common Unit Equivalents Strip -->
+      <div class="quick-dim-equivalents-row" id="quick-dim-equivalents-row">
+        <span class="quick-dim-sublabel">EQUIVALENTS:</span>
+        <div class="quick-dim-chips" id="quick-dim-equiv-chips">
+          <span class="quick-dim-chip" data-unit="mm"><span class="chip-label">MM</span> <strong id="quick-equiv-mm">---</strong></span>
+          <span class="quick-dim-chip" data-unit="cm"><span class="chip-label">CM</span> <strong id="quick-equiv-cm">---</strong></span>
+          <span class="quick-dim-chip" data-unit="m"><span class="chip-label">M</span> <strong id="quick-equiv-m">---</strong></span>
+          <span class="quick-dim-chip" data-unit="in"><span class="chip-label">IN</span> <strong id="quick-equiv-in">---</strong></span>
+          <span class="quick-dim-chip" data-unit="ft-in"><span class="chip-label">FT-IN</span> <strong id="quick-equiv-ftin">---</strong></span>
+        </div>
+      </div>
+
+      <!-- Quick Scale Preset Selector Strip -->
+      <div class="quick-dim-scale-row">
+        <span class="quick-dim-sublabel">SCALE MATRIX:</span>
+        <div class="quick-dim-scale-chips" id="quick-dim-scale-chips">
+          <button type="button" class="quick-scale-chip" data-scale="10">1:10</button>
+          <button type="button" class="quick-scale-chip" data-scale="20">1:20</button>
+          <button type="button" class="quick-scale-chip" data-scale="25">1:25</button>
+          <button type="button" class="quick-scale-chip active" data-scale="50">1:50</button>
+          <button type="button" class="quick-scale-chip" data-scale="75">1:75</button>
+          <button type="button" class="quick-scale-chip" data-scale="100">1:100</button>
+          <button type="button" class="quick-scale-chip" data-scale="125">1:125</button>
+          <button type="button" class="quick-scale-chip" data-scale="200">1:200</button>
+          <button type="button" class="quick-scale-chip" data-scale="250">1:250</button>
+          <button type="button" class="quick-scale-chip" data-scale="500">1:500</button>
+        </div>
+        <!-- Custom Scale Input -->
+        <div class="quick-dim-custom-scale">
+          <span style="font-size: 0.75rem; color: var(--text-muted);">1:</span>
+          <input type="number" id="quick-dim-custom-scale-input" class="text-input" placeholder="custom" style="width: 55px; height: 26px; padding: 2px 6px; font-size: 0.75rem;" min="1" max="50000" />
+        </div>
+      </div>
+
+      <!-- Compact Multi-Scale Drawing Size Matrix Grid -->
+      <div class="quick-dim-matrix-grid" id="quick-dim-matrix-grid">
+        <!-- Dynamically rendered mini scale cards -->
+      </div>
+
+      <!-- Architectural Context Readout Card -->
+      <div class="quick-dim-context-card" id="quick-dim-context-card">
+        <div class="quick-dim-context-header">
+          <span class="quick-dim-context-icon">🏛️</span>
+          <span class="quick-dim-context-title" id="quick-dim-context-title">ARCHITECTURAL CONTEXT</span>
+        </div>
+        <p class="quick-dim-context-body" id="quick-dim-context-body">
+          Enter a dimension to view contextual reference standards.
+        </p>
+      </div>
+
+      <!-- Action & Handoff Toolbar -->
+      <div class="quick-dim-actions-bar">
+        <div class="quick-dim-actions-left">
+          <button type="button" id="quick-dim-copy-real-btn" class="result-action-btn" title="Copy real dimension">
+            <span>Copy Real</span>
+          </button>
+          <button type="button" id="quick-dim-copy-draw-btn" class="result-action-btn" title="Copy selected scale drawing dimension">
+            <span>Copy Draw</span>
+          </button>
+          <button type="button" id="quick-dim-copy-cad-btn" class="result-action-btn" title="Copy clean CAD numbers">
+            <span>Copy CAD</span>
+          </button>
+          <button type="button" id="quick-dim-copy-matrix-btn" class="result-action-btn" title="Copy all scales breakdown">
+            <span>Copy All Scales</span>
+          </button>
+        </div>
+        <div class="quick-dim-actions-right">
+          <button type="button" id="quick-dim-send-workspace-btn" class="result-action-btn secondary" title="Add to Dimension Workspace (Mode 7)">
+            <span>📐 Workspace</span>
+          </button>
+          <button type="button" id="quick-dim-send-multiscale-btn" class="result-action-btn secondary" title="Compare in Multi-Scale (Mode 9)">
+            <span>📊 Multi-Scale</span>
+          </button>
+          <button type="button" id="quick-dim-send-chain-btn" class="result-action-btn secondary" title="Add to Dimension Chain (Mode 10)">
+            <span>🔗 Chain</span>
+          </button>
+          <button type="button" id="quick-dim-send-cad-btn" class="result-action-btn secondary" title="Open in CAD Clipboard (Mode 11)">
+            <span>📋 CAD Clipboard</span>
+          </button>
+          <button type="button" id="quick-dim-save-journal-btn" class="result-action-btn secondary" title="Save snapshot to History Journal">
+            <span>📜 Journal</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </aside>
 
   <!-- Main Content Wrapper -->
   <main class="main-wrapper">
@@ -2706,6 +2851,10 @@
         <div class="shortcut-row">
           <span>Open Batch CAD Converter</span>
           <span class="kbd-badge">B</span>
+        </div>
+        <div class="shortcut-row">
+          <span>Quick Dimension Strip</span>
+          <span class="kbd-badge">Q</span>
         </div>
         <div class="shortcut-row">
           <span>Toggle Calculation History Drawer</span>
