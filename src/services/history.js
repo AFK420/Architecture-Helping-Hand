@@ -44,6 +44,12 @@ export const HistoryService = {
       id: 'hist_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       date: new Date().toLocaleDateString(),
+      operation: entry.operation || entry.mode || 'Scale Converter',
+      mode: entry.mode || entry.operation || 'Scale Converter',
+      scaleStr: entry.scaleStr || (entry.scaleRatio ? `1:${entry.scaleRatio}` : '-'),
+      inputStr: entry.inputStr || '',
+      outputStr: entry.outputStr || '',
+      stateSnapshot: entry.stateSnapshot || null,
       ...entry
     };
 
@@ -73,11 +79,11 @@ export const HistoryService = {
 
   exportCSV() {
     if (historyList.length === 0) return null;
-    const headers = ['Timestamp', 'Date', 'Mode', 'Scale', 'Input', 'Result', 'Notes'];
+    const headers = ['Timestamp', 'Date', 'Operation', 'Scale', 'Input', 'Result', 'Notes'];
     const rows = historyList.map(h => [
       `"${h.timestamp || ''}"`,
       `"${h.date || ''}"`,
-      `"${h.mode || 'Scale'}"`,
+      `"${h.operation || h.mode || 'Scale'}"`,
       `"${h.scaleStr || ''}"`,
       `"${h.inputStr || ''}"`,
       `"${h.outputStr || ''}"`,
@@ -88,12 +94,12 @@ export const HistoryService = {
 
   exportMarkdown() {
     if (historyList.length === 0) return null;
-    let md = '# Architecture Helping Hand - Architectural Scaling Log\n\n';
+    let md = '# Architecture Helping Hand - Architectural Calculation Journal\n\n';
     md += `*Generated on ${new Date().toLocaleString()}*\n\n`;
-    md += '| Time | Mode | Scale | Input | Result |\n';
+    md += '| Time | Operation | Scale | Input | Result |\n';
     md += '| :--- | :--- | :--- | :--- | :--- |\n';
     historyList.forEach(h => {
-      md += `| ${h.timestamp || ''} | ${h.mode || 'Scale'} | ${h.scaleStr || '-'} | ${h.inputStr || '-'} | **${h.outputStr || '-'}** |\n`;
+      md += `| ${h.timestamp || ''} | ${h.operation || h.mode || 'Scale'} | ${h.scaleStr || '-'} | ${h.inputStr || '-'} | **${h.outputStr || '-'}** |\n`;
     });
     return md;
   }

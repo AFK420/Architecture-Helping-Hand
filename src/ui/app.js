@@ -103,6 +103,7 @@ export function initializeApp() {
     clearHistoryBtn: document.getElementById('clear-history-btn'),
     exportCsvBtn: document.getElementById('export-csv-btn'),
     exportMdBtn: document.getElementById('export-md-btn'),
+    historyCountBadge: document.getElementById('history-count-badge'),
     historyList: document.getElementById('history-list'),
     toastContainer: document.getElementById('toast-container'),
     modeTabs: document.querySelectorAll('.mode-tab'),
@@ -1538,18 +1539,30 @@ export function initializeApp() {
   }
 
   // ---------------------------------------------------------------------------
-  // 13. History Drawer Manager
+  // 13. Calculation Journal & History Manager
   // ---------------------------------------------------------------------------
   function renderHistoryList() {
     if (!dom.historyList) return;
     const history = HistoryService.getHistory();
 
+    if (dom.historyCountBadge) {
+      dom.historyCountBadge.textContent = `${history.length} ${history.length === 1 ? 'entry' : 'entries'}`;
+    }
+
     if (history.length === 0) {
       dom.historyList.innerHTML = `
         <div class="empty-history-box">
-          <div style="font-size: 1.8rem; margin-bottom: 0.5rem;">📜</div>
-          <div style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.25rem;">No History Recorded</div>
-          <div style="font-size: 0.78rem; color: var(--text-secondary);">Calculations and conversions will be logged here.</div>
+          <div class="empty-hist-icon">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <div class="empty-hist-title">No calculations yet.</div>
+          <div class="empty-hist-desc">Run a calculation and it will appear here.</div>
         </div>
       `;
       return;
@@ -1558,26 +1571,63 @@ export function initializeApp() {
     dom.historyList.innerHTML = history.map(item => `
       <div class="history-item-card" data-id="${item.id}">
         <div class="hist-card-top">
-          <span class="hist-mode-tag">${item.mode || 'Converter'}</span>
-          <span class="hist-scale-tag">${item.scaleStr || ''}</span>
-          <span class="hist-time-tag">${item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : ''}</span>
+          <div class="hist-title-group">
+            <span class="hist-mode-tag">${item.operation || item.mode || 'Scale Converter'}</span>
+            <span class="hist-scale-tag">${item.scaleStr || '-'}</span>
+          </div>
+          <span class="hist-time-tag">${item.timestamp || ''}</span>
         </div>
-        <div class="hist-formula-row">
-          <span class="hist-input">${item.inputStr}</span>
-          <span class="hist-arrow">➔</span>
-          <span class="hist-output">${item.outputStr}</span>
+        
+        <div class="hist-details-grid">
+          <div class="hist-data-row">
+            <span class="hist-lbl">INPUT</span>
+            <span class="hist-val hist-input-val">${item.inputStr || '-'}</span>
+          </div>
+          <div class="hist-data-row highlight">
+            <span class="hist-lbl">RESULT</span>
+            <span class="hist-val hist-output-val">${item.outputStr || '-'}</span>
+          </div>
         </div>
+
         <div class="hist-card-actions">
-          <button class="hist-btn-copy action-tool-btn compact" data-text="${item.outputStr}">Copy</button>
-          <button class="hist-btn-del action-tool-btn compact" data-id="${item.id}" title="Delete entry">✕</button>
+          ${item.stateSnapshot ? `
+            <button class="hist-btn-restore action-tool-btn compact primary" data-id="${item.id}" title="Restore and rerun this calculation">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+              </svg>
+              Restore
+            </button>
+          ` : ''}
+          <button class="hist-btn-copy action-tool-btn compact" data-text="${item.outputStr || item.inputStr}" title="Copy calculated result">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            Copy
+          </button>
+          <button class="hist-btn-del action-tool-btn compact danger" data-id="${item.id}" title="Remove entry from journal">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            Remove
+          </button>
         </div>
       </div>
     `).join('');
 
+    dom.historyList.querySelectorAll('.hist-btn-restore').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        restoreCalculationById(btn.dataset.id);
+      });
+    });
+
     dom.historyList.querySelectorAll('.hist-btn-copy').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        copyToClipboard(btn.dataset.text, 'History Result');
+        copyToClipboard(btn.dataset.text, 'Calculation Result');
       });
     });
 
@@ -1586,9 +1636,201 @@ export function initializeApp() {
         e.stopPropagation();
         HistoryService.removeEntry(btn.dataset.id);
         renderHistoryList();
-        showToast('Entry removed from history');
+        showToast('Entry removed from journal');
       });
     });
+  }
+
+  function restoreCalculationById(id) {
+    const item = HistoryService.getHistory().find(h => h.id === id);
+    if (!item || !item.stateSnapshot) {
+      showToast('Cannot restore state for this entry', 'warning');
+      return;
+    }
+    const snap = item.stateSnapshot;
+    switch (snap.modeKey) {
+      case 'converter':
+        switchMode('converter');
+        if (dom.scaleRatioInput) dom.scaleRatioInput.value = snap.ratio;
+        if (dom.converterInputVal) dom.converterInputVal.value = snap.val;
+        if (dom.converterInputUnit) dom.converterInputUnit.value = snap.inUnit;
+        if (dom.converterOutputUnit) dom.converterOutputUnit.value = snap.outUnit;
+        state.direction = snap.direction || 'drawing_to_real';
+        updateDirectionUI();
+        calculateConverter();
+        break;
+      case 'rescale':
+        switchMode('rescale');
+        if (dom.rescaleOrigRatio) dom.rescaleOrigRatio.value = snap.origRatio;
+        if (dom.rescaleOrigVal) dom.rescaleOrigVal.value = snap.origVal;
+        if (dom.rescaleOrigUnit) dom.rescaleOrigUnit.value = snap.origUnit;
+        if (dom.rescaleTargetRatio) dom.rescaleTargetRatio.value = snap.targetRatio;
+        if (dom.rescaleTargetUnit) dom.rescaleTargetUnit.value = snap.targetUnit;
+        calculateRescaler();
+        break;
+      case 'detector':
+        switchMode('detector');
+        if (dom.detectorPaperVal) dom.detectorPaperVal.value = snap.paperVal;
+        if (dom.detectorPaperUnit) dom.detectorPaperUnit.value = snap.paperUnit;
+        if (dom.detectorRealVal) dom.detectorRealVal.value = snap.realVal;
+        if (dom.detectorRealUnit) dom.detectorRealUnit.value = snap.realUnit;
+        calculateDetector();
+        break;
+      case 'area_volume':
+        switchMode('area_volume');
+        if (dom.areavolRatioInput) dom.areavolRatioInput.value = snap.ratio;
+        if (dom.areavolInputVal) dom.areavolInputVal.value = snap.val;
+        state.calcType = snap.type || 'area';
+        state.calcDirection = snap.direction || 'drawing_to_real';
+        updateAreaVolumeTypeUI();
+        updateAreaVolumeDirUI();
+        updateAreaVolumeUnitSelects();
+        if (dom.areavolInputUnit) dom.areavolInputUnit.value = snap.inUnit;
+        if (dom.areavolOutputUnit) dom.areavolOutputUnit.value = snap.outUnit;
+        calculateAreaVolume();
+        break;
+      case 'furniture':
+        switchMode('furniture');
+        if (dom.customFurnName) dom.customFurnName.value = snap.name || 'Custom Piece';
+        if (dom.customFurnW) dom.customFurnW.value = snap.w;
+        if (dom.customFurnD) dom.customFurnD.value = snap.d;
+        if (dom.customFurnUnit) dom.customFurnUnit.value = snap.unit || 'cm';
+        if (dom.furnScaleRatioInput) dom.furnScaleRatioInput.value = snap.ratio || 50;
+        if (dom.furnPaperUnitSelect) dom.furnPaperUnitSelect.value = snap.paperUnit || 'cm';
+        calculateCustomFurniture();
+        break;
+    }
+    AudioService.playTick();
+    showToast(`↺ Restored calculation into ${item.operation || item.mode}`);
+    if (window.innerWidth <= 768) {
+      toggleHistoryDrawer();
+    }
+  }
+
+  function logCurrentCalculationToHistory(modeKey) {
+    let entry = null;
+
+    if (modeKey === 'converter') {
+      const val = dom.converterResultVal?.textContent;
+      const unit = dom.converterResultUnit?.textContent;
+      const inputVal = dom.converterInputVal?.value;
+      if (val && val !== '---' && inputVal) {
+        const dirLabel = state.direction === 'drawing_to_real' ? 'Drawing Paper' : 'Real Site';
+        const outDirLabel = state.direction === 'drawing_to_real' ? 'Real Site' : 'Drawing Paper';
+        entry = {
+          operation: 'Scale Converter',
+          mode: 'Scale Converter',
+          scaleRatio: state.scaleRatio,
+          scaleStr: `1:${state.scaleRatio}`,
+          inputStr: `${inputVal} ${state.converterInputUnit} (${dirLabel})`,
+          outputStr: `${val} ${unit} (${outDirLabel})`,
+          stateSnapshot: {
+            modeKey: 'converter',
+            ratio: state.scaleRatio,
+            val: inputVal,
+            inUnit: state.converterInputUnit,
+            outUnit: state.converterOutputUnit,
+            direction: state.direction
+          }
+        };
+      }
+    } else if (modeKey === 'rescale') {
+      const val = dom.rescaleResultVal?.textContent;
+      const unit = dom.rescaleResultUnit?.textContent;
+      const origVal = dom.rescaleOrigVal?.value;
+      if (val && val !== '---' && origVal) {
+        entry = {
+          operation: 'Rescaler',
+          mode: 'Rescaler',
+          scaleRatio: state.rescaleOrigRatio,
+          scaleStr: `1:${state.rescaleOrigRatio} ➔ 1:${state.rescaleTargetRatio}`,
+          inputStr: `${origVal} ${state.rescaleOrigUnit} (@ 1:${state.rescaleOrigRatio})`,
+          outputStr: `${val} ${unit} (@ 1:${state.rescaleTargetRatio})`,
+          stateSnapshot: {
+            modeKey: 'rescale',
+            origRatio: state.rescaleOrigRatio,
+            origVal: origVal,
+            origUnit: state.rescaleOrigUnit,
+            targetRatio: state.rescaleTargetRatio,
+            targetUnit: state.rescaleTargetUnit
+          }
+        };
+      }
+    } else if (modeKey === 'detector') {
+      const ratioStr = dom.detectorRatioVal?.textContent;
+      const paperVal = dom.detectorPaperVal?.value;
+      const realVal = dom.detectorRealVal?.value;
+      if (ratioStr && !ratioStr.includes('---') && paperVal && realVal) {
+        entry = {
+          operation: 'Scale Detector',
+          mode: 'Scale Detector',
+          scaleStr: ratioStr,
+          inputStr: `Paper: ${paperVal} ${state.detectPaperUnit} | Real: ${realVal} ${state.detectRealUnit}`,
+          outputStr: ratioStr,
+          stateSnapshot: {
+            modeKey: 'detector',
+            paperVal: paperVal,
+            paperUnit: state.detectPaperUnit,
+            realVal: realVal,
+            realUnit: state.detectRealUnit
+          }
+        };
+      }
+    } else if (modeKey === 'area_volume') {
+      const val = dom.areavolResultVal?.textContent;
+      const unit = dom.areavolResultUnit?.textContent;
+      const inputVal = dom.areavolInputVal?.value;
+      if (val && val !== '---' && inputVal) {
+        const typeName = state.calcType === 'area' ? 'Area Scaler' : 'Volume Scaler';
+        entry = {
+          operation: typeName,
+          mode: typeName,
+          scaleRatio: state.areavolRatio,
+          scaleStr: `1:${state.areavolRatio}`,
+          inputStr: `${inputVal} ${state.areavolInputUnit}`,
+          outputStr: `${val} ${unit}`,
+          stateSnapshot: {
+            modeKey: 'area_volume',
+            ratio: state.areavolRatio,
+            val: inputVal,
+            inUnit: state.areavolInputUnit,
+            outUnit: state.areavolOutputUnit,
+            type: state.calcType,
+            direction: state.calcDirection
+          }
+        };
+      }
+    } else if (modeKey === 'furniture') {
+      const name = dom.customFurnName?.value || 'Custom Piece';
+      const w = dom.customFurnW?.value;
+      const d = dom.customFurnD?.value;
+      if (w && d && parseFloat(w) > 0 && parseFloat(d) > 0) {
+        entry = {
+          operation: 'Custom Furniture',
+          mode: 'Custom Furniture',
+          scaleRatio: state.furnitureScaleRatio,
+          scaleStr: `1:${state.furnitureScaleRatio}`,
+          inputStr: `${name}: ${w} × ${d} ${state.customFurnUnit}`,
+          outputStr: dom.customFurnResult?.textContent?.trim() || `${w} × ${d} ${state.customFurnUnit}`,
+          stateSnapshot: {
+            modeKey: 'furniture',
+            name: name,
+            w: parseFloat(w),
+            d: parseFloat(d),
+            unit: state.customFurnUnit,
+            ratio: state.furnitureScaleRatio,
+            paperUnit: state.furniturePaperUnit
+          }
+        };
+      }
+    }
+
+    if (entry) {
+      HistoryService.addEntry(entry);
+      renderHistoryList();
+      AudioService.playTick();
+      showToast(`Saved ${entry.operation} to journal`);
+    }
   }
 
   function toggleHistoryDrawer() {
@@ -1729,7 +1971,12 @@ export function initializeApp() {
     if (dom.converterInputUnit) dom.converterInputUnit.addEventListener('change', calculateConverter);
     if (dom.converterOutputUnit) dom.converterOutputUnit.addEventListener('change', calculateConverter);
     if (dom.swapDirectionBtn) dom.swapDirectionBtn.addEventListener('click', swapDirection);
-    if (dom.btnRunConverter) dom.btnRunConverter.addEventListener('click', calculateConverter);
+    if (dom.btnRunConverter) {
+      dom.btnRunConverter.addEventListener('click', () => {
+        calculateConverter();
+        logCurrentCalculationToHistory('converter');
+      });
+    }
 
     // Copy Result & Save Log
     if (dom.btnCopyResult) {
@@ -1744,19 +1991,7 @@ export function initializeApp() {
 
     if (dom.btnSaveHistory) {
       dom.btnSaveHistory.addEventListener('click', () => {
-        const val = dom.converterResultVal?.textContent;
-        const unit = dom.converterResultUnit?.textContent;
-        if (val && val !== '---') {
-          HistoryService.addEntry({
-            mode: 'Scale Converter',
-            scaleRatio: state.scaleRatio,
-            scaleStr: `1:${state.scaleRatio}`,
-            inputStr: `${dom.converterInputVal?.value} ${state.converterInputUnit}`,
-            outputStr: `${val} ${unit}`
-          });
-          showToast('Saved conversion to calculation log');
-          AudioService.playTick();
-        }
+        logCurrentCalculationToHistory('converter');
       });
     }
 
@@ -1766,11 +2001,19 @@ export function initializeApp() {
         el.addEventListener('input', calculateRescaler);
         el.addEventListener('change', calculateRescaler);
         el.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') calculateRescaler();
+          if (e.key === 'Enter') {
+            calculateRescaler();
+            logCurrentCalculationToHistory('rescale');
+          }
         });
       }
     });
-    if (dom.btnRunRescale) dom.btnRunRescale.addEventListener('click', calculateRescaler);
+    if (dom.btnRunRescale) {
+      dom.btnRunRescale.addEventListener('click', () => {
+        calculateRescaler();
+        logCurrentCalculationToHistory('rescale');
+      });
+    }
     if (dom.btnCopyRescale) {
       dom.btnCopyRescale.addEventListener('click', () => {
         const val = dom.rescaleResultVal?.textContent;
@@ -1785,11 +2028,19 @@ export function initializeApp() {
         el.addEventListener('input', calculateDetector);
         el.addEventListener('change', calculateDetector);
         el.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') calculateDetector();
+          if (e.key === 'Enter') {
+            calculateDetector();
+            logCurrentCalculationToHistory('detector');
+          }
         });
       }
     });
-    if (dom.btnRunDetector) dom.btnRunDetector.addEventListener('click', calculateDetector);
+    if (dom.btnRunDetector) {
+      dom.btnRunDetector.addEventListener('click', () => {
+        calculateDetector();
+        logCurrentCalculationToHistory('detector');
+      });
+    }
     if (dom.btnApplyDetected) {
       dom.btnApplyDetected.addEventListener('click', () => {
         if (state.lastDetectedRatio !== null && state.lastDetectedRatio > 0) {
@@ -1838,11 +2089,19 @@ export function initializeApp() {
         el.addEventListener('input', calculateAreaVolume);
         el.addEventListener('change', calculateAreaVolume);
         el.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') calculateAreaVolume();
+          if (e.key === 'Enter') {
+            calculateAreaVolume();
+            logCurrentCalculationToHistory('area_volume');
+          }
         });
       }
     });
-    if (dom.btnRunAreavol) dom.btnRunAreavol.addEventListener('click', calculateAreaVolume);
+    if (dom.btnRunAreavol) {
+      dom.btnRunAreavol.addEventListener('click', () => {
+        calculateAreaVolume();
+        logCurrentCalculationToHistory('area_volume');
+      });
+    }
     if (dom.btnCopyAreavol) {
       dom.btnCopyAreavol.addEventListener('click', () => {
         const val = dom.areavolResultVal?.textContent;
@@ -1941,7 +2200,12 @@ export function initializeApp() {
         el.addEventListener('change', calculateCustomFurniture);
       }
     });
-    if (dom.btnRunCustomFurn) dom.btnRunCustomFurn.addEventListener('click', calculateCustomFurniture);
+    if (dom.btnRunCustomFurn) {
+      dom.btnRunCustomFurn.addEventListener('click', () => {
+        calculateCustomFurniture();
+        logCurrentCalculationToHistory('furniture');
+      });
+    }
     if (dom.btnPlannerCustomFurn) {
       dom.btnPlannerCustomFurn.addEventListener('click', () => {
         const name = dom.customFurnName?.value || 'Custom Piece';

@@ -34,26 +34,42 @@ console.log('🧪 Running tests/services.test.js...');
   assert(StorageService.getItem('test_k1') === null, 'StorageService clear wipes storage');
 }
 
-// 2. HistoryService Standard Operations
+// 2. HistoryService Standard Operations & Journal Snapshot Tests
 {
+  // Set an unrelated user storage key to ensure history operations NEVER wipe unrelated keys
+  StorageService.setItem('user_theme_preference', 'blueprint-blueprint');
+  StorageService.setItem('user_custom_setting', 'keep_this_safe');
+
   HistoryService.clear();
   assert(HistoryService.getHistory().length === 0, 'HistoryService starts empty after clear');
+  assert(StorageService.getItem('user_theme_preference') === 'blueprint-blueprint', 'HistoryService.clear protects unrelated localStorage data');
+  assert(StorageService.getItem('user_custom_setting') === 'keep_this_safe', 'HistoryService.clear never wipes unrelated storage keys');
 
   const entry = HistoryService.addEntry({
+    operation: 'Scale Converter',
     mode: 'Scale Converter',
     scaleRatio: 50,
     scaleStr: '1:50',
-    inputStr: '10 cm',
-    outputStr: '5.0 m',
-    notes: 'Test conversion'
+    inputStr: '10 cm (Paper Drawing)',
+    outputStr: '5.000 m (Real Site)',
+    notes: 'Test conversion',
+    stateSnapshot: {
+      modeKey: 'converter',
+      ratio: 50,
+      val: '10',
+      inUnit: 'cm',
+      outUnit: 'm',
+      direction: 'drawing_to_real'
+    }
   });
 
   assert(entry && entry.id && entry.id.startsWith('hist_'), 'addEntry returns an entry with a generated ID');
+  assert(entry.stateSnapshot && entry.stateSnapshot.modeKey === 'converter', 'addEntry preserves stateSnapshot for calculator reconstruction');
   assert(HistoryService.getHistory().length === 1, 'History has 1 entry');
 
   // CSV Export
   const csv = HistoryService.exportCSV();
-  assert(csv && csv.includes('Timestamp') && csv.includes('1:50') && csv.includes('5.0 m'), 'exportCSV generates valid CSV string');
+  assert(csv && csv.includes('Timestamp') && csv.includes('1:50') && csv.includes('5.000 m'), 'exportCSV generates valid CSV string');
 
   // Markdown Export
   const md = HistoryService.exportMarkdown();
@@ -62,6 +78,7 @@ console.log('🧪 Running tests/services.test.js...');
   // Remove Entry
   HistoryService.removeEntry(entry.id);
   assert(HistoryService.getHistory().length === 0, 'removeEntry removes specified entry by ID');
+  assert(StorageService.getItem('user_theme_preference') === 'blueprint-blueprint', 'removeEntry preserves unrelated localStorage keys');
 }
 
 // 3. HistoryService Corrupted Storage Resilience

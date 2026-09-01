@@ -62,6 +62,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'clear-history-btn',
     'export-csv-btn',
     'export-md-btn',
+    'history-count-badge',
     'history-list',
     'toast-container',
 
