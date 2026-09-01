@@ -3,7 +3,7 @@
 > **Professional Architectural Scale, Furniture Sizing & Multi-Unit Calculation Studio**  
 > *A high-precision, zero-dependency, tactile architectural conversion tool built for architects, interior designers, urban planners, physical model makers, and design students.*
 
-[![Tests](https://img.shields.io/badge/Tests-295%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-299%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-3--Tier%20Core%20%7C%20Frozen-10b981?style=flat-square)](ENGINEERING_RULES.md)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Vanilla)-f59e0b?style=flat-square)](package.json)
 [![License](https://img.shields.io/badge/License-MIT-6366f1?style=flat-square)](package.json)
@@ -23,7 +23,7 @@
    - [5. Furniture Scales & Fixtures Catalog (with Live Search)](#5-furniture-scales--fixtures-catalog-with-live-search)
    - [6. Multi-Length Architectural Reference Sheet](#6-multi-length-architectural-reference-sheet)
 5. [📐 Architectural Scale Presets (All 28 Presets)](#-architectural-scale-presets-all-28-presets)
-6. [🛋️ Architectural Furniture & Fixtures Database (61 Items)](#️-architectural-furniture--fixtures-database-61-items)
+6. [🛋️ Architectural Furniture & Fixtures Database (179 Items)](#️-architectural-furniture--fixtures-database-179-items-across-9-domains)
 7. [📏 Supported Measurement Units](#-supported-measurement-units)
 8. [🧮 Mathematical Formulas & Contracts](#-mathematical-formulas--contracts)
 9. [🎨 Visual Proportions & Tactile Audio](#-visual-proportions--tactile-audio)
@@ -46,7 +46,7 @@ Manual scale calculations often cause:
 * **Furniture Placement Uncertainties**: Hand-drafting and CAD block sizing require looking up standard clearances and real-world dimensions across multiple reference manuals.
 
 ### The Solution: Architecture Helping Hand
-**Architecture Helping Hand** eliminates manual calculation errors by providing a unified, tactile, mathematically verified studio that runs 100% client-side with **zero external dependencies**. It parses fractions (`3 1/2`), feet-inches (`12'-6 1/2"`), scales areas ($S^2$) and volumes ($S^3$), detects unknown scales, and provides an instant searchable database of 61 architectural furniture standards.
+**Architecture Helping Hand** eliminates manual calculation errors by providing a unified, tactile, mathematically verified studio that runs 100% client-side with **zero external dependencies**. It parses fractions (`3 1/2`), feet-inches (`12'-6 1/2"`), scales areas ($S^2$) and volumes ($S^3$), detects unknown scales, and provides an instant searchable database of 179 architectural furniture and fixture standards across 9 domains.
 
 ---
 
@@ -197,44 +197,21 @@ This repository serves as:
 | **Dining** | 4-Person Table (Square) | $90 \times 90 \times 75\text{ cm}$ | $2\text{'-}11" \times 2\text{'-}11"$ | $1.80 \times 1.80\text{ cm}$ |
 | **Dining** | 4-Person Table (Round Ø105) | $105 \times 105 \times 75\text{ cm}$ | $3\text{'-}5" \text{ dia}$ | $2.10 \times 2.10\text{ cm}$ |
 | **Dining** | 6-Person Table (Rectangular)| $160 \times 90 \times 75\text{ cm}$ | $5\text{'-}3" \times 2\text{'-}11"$ | $3.20 \times 1.80\text{ cm}$ |
-| **Dining** | 6-Person Table (Round Ø140) | $140 \times 140 \times 75\text{ cm}$ | $4\text{'-}7" \text{ dia}$ | $2.80 \times 2.80\text{ cm}$ |
-| **Dining** | 8-Person Table | $220 \times 100 \times 75\text{ cm}$ | $7\text{'-}3" \times 3\text{'-}3"$ | $4.40 \times 2.00\text{ cm}$ |
-| **Dining** | 10-Person Table | $280 \times 110 \times 75\text{ cm}$ | $9\text{'-}2" \times 3\text{'-}7"$ | $5.60 \times 2.20\text{ cm}$ |
-| **Dining** | Dining Chair | $45 \times 50 \times 85\text{ cm}$ | $1\text{'-}6" \times 1\text{'-}8"$ | $0.90 \times 1.00\text{ cm}$ |
-| **Dining** | Bar Stool | $40 \times 40 \times 95\text{ cm}$ | $1\text{'-}4" \times 1\text{'-}4"$ | $0.80 \times 0.80\text{ cm}$ |
-| **Dining** | Sideboard / Credenza | $160 \times 45 \times 85\text{ cm}$ | $5\text{'-}3" \times 1\text{'-}6"$ | $3.20 \times 0.90\text{ cm}$ |
-| **Kitchen** | Base Counter (60cm module)| $60 \times 60 \times 90\text{ cm}$ | $2\text{'-}0" \times 2\text{'-}0"$ | $1.20 \times 1.20\text{ cm}$ |
-| **Kitchen** | Island with Breakfast Bar | $180 \times 90 \times 90\text{ cm}$ | $5\text{'-}11" \times 2\text{'-}11"$ | $3.60 \times 1.80\text{ cm}$ |
-| **Kitchen** | Single Sink & Drainer | $85 \times 50 \times 20\text{ cm}$ | $2\text{'-}9" \times 1\text{'-}8"$ | $1.70 \times 1.00\text{ cm}$ |
-| **Kitchen** | Double Bowl Sink | $100 \times 50 \times 20\text{ cm}$ | $3\text{'-}3" \times 1\text{'-}8"$ | $2.00 \times 1.00\text{ cm}$ |
-| **Kitchen** | 4-Burner Cooktop | $60 \times 60 \times 10\text{ cm}$ | $2\text{'-}0" \times 2\text{'-}0"$ | $1.20 \times 1.20\text{ cm}$ |
-| **Kitchen** | 5-Burner Wide Cooktop | $90 \times 60 \times 10\text{ cm}$ | $2\text{'-}11" \times 2\text{'-}0"$ | $1.80 \times 1.20\text{ cm}$ |
-| **Kitchen** | Single Refrigerator | $70 \times 70 \times 180\text{ cm}$ | $2\text{'-}4" \times 2\text{'-}4"$ | $1.40 \times 1.40\text{ cm}$ |
-| **Kitchen** | French-Door Refrigerator | $90 \times 80 \times 185\text{ cm}$ | $2\text{'-}11" \times 2\text{'-}7"$ | $1.80 \times 1.60\text{ cm}$ |
-| **Kitchen** | Dishwasher | $60 \times 60 \times 85\text{ cm}$ | $2\text{'-}0" \times 2\text{'-}0"$ | $1.20 \times 1.20\text{ cm}$ |
-| **Kitchen** | Washing Machine / Dryer | $60 \times 60 \times 85\text{ cm}$ | $2\text{'-}0" \times 2\text{'-}0"$ | $1.20 \times 1.20\text{ cm}$ |
-| **Bathroom**| Standard Toilet (WC) | $40 \times 70 \times 75\text{ cm}$ | $1\text{'-}4" \times 2\text{'-}4"$ | $0.80 \times 1.40\text{ cm}$ |
-| **Bathroom**| Wall-Hung Toilet | $38 \times 55 \times 40\text{ cm}$ | $1\text{'-}3" \times 1\text{'-}10"$ | $0.76 \times 1.10\text{ cm}$ |
-| **Bathroom**| Single Basin Vanity | $60 \times 48 \times 85\text{ cm}$ | $2\text{'-}0" \times 1\text{'-}7"$ | $1.20 \times 0.96\text{ cm}$ |
-| **Bathroom**| Double Basin Vanity | $120 \times 52 \times 85\text{ cm}$ | $3\text{'-}11" \times 1\text{'-}8"$ | $2.40 \times 1.04\text{ cm}$ |
-| **Bathroom**| Standard Inset Bathtub | $170 \times 75 \times 55\text{ cm}$ | $5\text{'-}7" \times 2\text{'-}6"$ | $3.40 \times 1.50\text{ cm}$ |
-| **Bathroom**| Freestanding Oval Tub | $180 \times 80 \times 60\text{ cm}$ | $5\text{'-}11" \times 2\text{'-}7"$ | $3.60 \times 1.60\text{ cm}$ |
-| **Bathroom**| Corner Shower Enclosure | $90 \times 90 \times 200\text{ cm}$ | $2\text{'-}11" \times 2\text{'-}11"$ | $1.80 \times 1.80\text{ cm}$ |
-| **Bathroom**| Walk-In Wetroom Shower | $120 \times 90 \times 200\text{ cm}$ | $3\text{'-}11" \times 2\text{'-}11"$ | $2.40 \times 1.80\text{ cm}$ |
-| **Bathroom**| Bathroom Bidet | $38 \times 55 \times 40\text{ cm}$ | $1\text{'-}3" \times 1\text{'-}10"$ | $0.76 \times 1.10\text{ cm}$ |
-| **Office** | Standard Workstation Desk | $140 \times 70 \times 75\text{ cm}$ | $4\text{'-}7" \times 2\text{'-}4"$ | $2.80 \times 1.40\text{ cm}$ |
-| **Office** | Executive Director Desk | $180 \times 90 \times 75\text{ cm}$ | $5\text{'-}11" \times 2\text{'-}11"$ | $3.60 \times 1.80\text{ cm}$ |
-| **Office** | L-Shaped Corner Desk | $160 \times 160 \times 75\text{ cm}$ | $5\text{'-}3" \times 5\text{'-}3"$ | $3.20 \times 3.20\text{ cm}$ |
-| **Office** | Ergonomic Task Chair | $65 \times 65 \times 95\text{ cm}$ | $2\text{'-}2" \times 2\text{'-}2"$ | $1.30 \times 1.30\text{ cm}$ |
-| **Office** | 8-Person Conference Table | $240 \times 110 \times 75\text{ cm}$ | $7\text{'-}10" \times 3\text{'-}7"$ | $4.80 \times 2.20\text{ cm}$ |
-| **Office** | 12-Person Conference Table | $360 \times 120 \times 75\text{ cm}$ | $11\text{'-}10" \times 3\text{'-}11"$ | $7.20 \times 2.40\text{ cm}$ |
-| **Office** | Filing Cabinet (4-Drawer) | $45 \times 60 \times 130\text{ cm}$ | $1\text{'-}6" \times 2\text{'-}0"$ | $0.90 \times 1.20\text{ cm}$ |
-| **Doors** | Interior Door (800mm) | $80 \times 10 \times 210\text{ cm}$ | $2\text{'-}8" \times 6\text{'-}11"$ | $1.60 \times 0.20\text{ cm}$ |
-| **Doors** | Main Entrance Door (900mm)| $90 \times 10 \times 210\text{ cm}$ | $2\text{'-}11" \times 6\text{'-}11"$ | $1.80 \times 0.20\text{ cm}$ |
-| **Doors** | Double French Doors (1600mm)| $160 \times 10 \times 210\text{ cm}$ | $5\text{'-}3" \times 6\text{'-}11"$ | $3.20 \times 0.20\text{ cm}$ |
-| **Doors** | Sliding Patio Door (1800mm)| $180 \times 12 \times 210\text{ cm}$ | $5\text{'-}11" \times 6\text{'-}11"$ | $3.60 \times 0.24\text{ cm}$ |
-| **Doors** | Standard Walkway Clearance | $90 \times 90\text{ cm min}$ | $2\text{'-}11" \text{ min}$ | $1.80 \times 1.80\text{ cm}$ |
-| **Doors** | Accessible Corridor (ADA) | $120 \times 120\text{ cm min}$| $3\text{'-}11" \text{ min}$ | $2.40 \times 2.40\text{ cm}$ |
+## 🛋️ Architectural Furniture & Fixtures Database (179 Items Across 9 Domains)
+
+The studio contains **179 standard architectural pieces** across 9 domains with exact metric dimensions, imperial equivalents, and proportional paper dimensions computed across any scale ratio ($1:10$, $1:20$, $1:25$, $1:50$, $1:100$, $1:200$, $1/4"=1'$):
+
+| Category | Typical Standard Pieces Included | Real-World Dimensions (Metric) | Imperial Equiv | Paper @ 1:50 |
+| :--- | :--- | :---: | :---: | :---: |
+| **Living & Lounge** (23) | 3-Seater Sofa, 2-Seater Loveseat, 4-Seater Large Sofa, L-Sectional, U-Sectional, Chesterfield, Chaise Lounge, Recliner, Wingback, Coffee Tables, Console, Bookshelf, Fireplace Hearth, Grand Piano | $220 \times 90 \times 85\text{ cm}$ | $7\text{'-}3" \times 2\text{'-}11"$ | $4.40 \times 1.80\text{ cm}$ |
+| **Bedroom & Wardrobe** (20) | Super King ($200 \times 200$), King ($180 \times 200$), Queen ($150 \times 200$), Double ($135 \times 190$), Twin XL, Single/Twin, Bunk Bed, Trundle, Baby Crib, Toddler Bed, Nightstands, 2/3/4-Door Wardrobes, Sliding Wardrobes, Closet Island, Dressers, Vanity | $180 \times 200 \times 110\text{ cm}$ | $5\text{'-}11" \times 6\text{'-}7"$ | $3.60 \times 4.00\text{ cm}$ |
+| **Dining & Bar** (18) | Bistro Tables (2P Square/Round), 4P/6P/8P/10P/12P Dining Tables (Square, Rectangular, Round, Oval), Dining Chairs, Carver Armchair, Bar Stools, Breakfast Nook Banquette, Sideboards, Credenza, Bar Cart | $160 \times 90 \times 75\text{ cm}$ | $5\text{'-}3" \times 2\text{'-}11"$ | $3.20 \times 1.80\text{ cm}$ |
+| **Kitchen & Utility** (22) | Base Cabinets ($60/90\text{cm}$), Corner Lazy Susan, Kitchen Islands ($1.8\text{m}/2.4\text{m}$ with Prep Sink), Peninsula Bar, Tall Pantry, Oven/Microwave Tower, Single/Double/Apron Sinks, 4/5-Burner Cooktops, Range Cookers, French-Door Fridge, Dishwasher, Laundry Washer/Dryer | $180 \times 90 \times 90\text{ cm}$ | $5\text{'-}11" \times 2\text{'-}11"$ | $3.60 \times 1.80\text{ cm}$ |
+| **Bathroom & Spa** (20) | Close-Coupled WC, Wall-Hung WC, Accessible ADA Toilet, Bidet, Wall Urinal with Partition, Cloakroom Basin, Pedestal Basin, Single/Double/Luxury Vanities ($60-160\text{cm}$), Inset/Oval/Corner Jacuzzi Tubs, Corner/Neo/Walk-In/ADA Roll-In Showers | $170 \times 70 \times 55\text{ cm}$ | $5\text{'-}7" \times 2\text{'-}4"$ | $3.40 \times 1.40\text{ cm}$ |
+| **Office & Studio** (22) | Compact Desk, Standard Workstation ($1.4\text{m}$), Studio Desk ($1.6\text{m}$), Sit-Stand Electric Desk, Executive Desk, L/U-Shaped Executive Suites, Drafting Table, 2P/4P/6P Benching Pods, Reception Counter, Phone Booth, 8P/12P Conference Tables, Task/Exec Chairs, Filing, Server Rack | $140 \times 70 \times 75\text{ cm}$ | $4\text{'-}7" \times 2\text{'-}4"$ | $2.80 \times 1.40\text{ cm}$ |
+| **Doors & Circulation** (22) | Interior Doors ($700/800\text{mm}$), Entrance Door ($900\text{mm}$), ADA Accessible Door ($1000\text{mm}$), French Doors ($1.6/1.8\text{m}$), Pocket Door, Sliding Patio Doors ($1.8/2.7\text{m}$), Bi-fold Glass Wall ($3.0\text{m}$), Casement/Picture/Sliding Windows, Straight/L/U/Spiral Stairs, Corridors, ADA Turning Circle ($1.5\text{m}$), Access Ramp, Elevator Shaft | $90 \times 10 \times 210\text{ cm}$ | $2\text{'-}11" \times 6\text{'-}11"$ | $1.80 \times 0.20\text{ cm}$ |
+| **Outdoor & Patio** (16) | Patio Dining Sets, Terrace Chairs, Sun Loungers, Outdoor L-Sectional, Fire Pit Table, Cantilever Parasol ($\text{Ø}300\text{cm}$), BBQ Kitchen Station, Planter Boxes, Bicycle Racks, Motorcycle Bays, Compact/Standard/ADA Car Parking Bays, EV Charging Bay, Single Garage | $250 \times 500\text{ cm}$ | $8\text{'-}2" \times 16\text{'-}5"$ | $5.00 \times 10.00\text{ cm}$ |
+| **Commercial & Gym** (16) | Restaurant 2P/4P Booths, Bar Service Counter with Taps, Retail Apparel Racks, POS Cashier Counter, Supermarket Conveyor, Gym Treadmills, Spin Bikes, Ellipticals, Olympic Bench Press, Multi-Gym Cable Stack, Hospital Patient Beds, Medical Clinic Exam Tables, Dental Operatory Chairs | $120 \times 180 \times 100\text{ cm}$ | $3\text{'-}11" \times 5\text{'-}11"$ | $2.40 \times 3.60\text{ cm}$ |
 
 ---
 

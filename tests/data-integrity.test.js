@@ -53,7 +53,7 @@ console.log('🧪 Running tests/data-integrity.test.js...');
   const furnIds = new Set();
   let uniqueFurnIds = true;
   let validDimensions = true;
-  const validFurnCategories = new Set(['living', 'bedroom', 'dining', 'kitchen', 'bathroom', 'office', 'doors']);
+  const validFurnCategories = new Set(['living', 'bedroom', 'dining', 'kitchen', 'bathroom', 'office', 'doors', 'outdoor', 'commercial']);
 
   for (const item of FURNITURE_DATABASE) {
     if (furnIds.has(item.id)) {

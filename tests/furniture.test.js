@@ -29,7 +29,7 @@ console.log('🧪 Running tests/furniture.test.js...');
 
 // 1. Database Integrity Checks
 {
-  assert(FURNITURE_DATABASE.length >= 40, `Catalog contains 40+ items (Found: ${FURNITURE_DATABASE.length})`, FURNITURE_DATABASE.length);
+  assert(FURNITURE_DATABASE.length >= 170, `Catalog contains 170+ items (Found: ${FURNITURE_DATABASE.length})`, FURNITURE_DATABASE.length);
 
   let allValid = true;
   for (const item of FURNITURE_DATABASE) {
@@ -57,13 +57,16 @@ console.log('🧪 Running tests/furniture.test.js...');
 // 3. Search and Category Filter Tests
 {
   const sofas = filterFurnitureCatalog(FURNITURE_DATABASE, 'sofa', 'all');
-  assert(sofas.length >= 3, `Filter query "sofa" returns all sofas (Found: ${sofas.length})`, sofas.length);
+  assert(sofas.length >= 5, `Filter query "sofa" returns all sofas (Found: ${sofas.length})`, sofas.length);
 
   const bedroomItems = filterFurnitureCatalog(FURNITURE_DATABASE, '', 'bedroom');
-  assert(bedroomItems.length >= 8, `Filter category "bedroom" returns bedroom items (Found: ${bedroomItems.length})`, bedroomItems.length);
+  assert(bedroomItems.length >= 15, `Filter category "bedroom" returns bedroom items (Found: ${bedroomItems.length})`, bedroomItems.length);
 
-  const kitchenSink = filterFurnitureCatalog(FURNITURE_DATABASE, 'sink', 'kitchen');
-  assert(kitchenSink.length >= 2, `Filter "sink" in "kitchen" returns sinks (Found: ${kitchenSink.length})`, kitchenSink.length);
+  const outdoorItems = filterFurnitureCatalog(FURNITURE_DATABASE, '', 'outdoor');
+  assert(outdoorItems.length >= 12, `Filter category "outdoor" returns outdoor items (Found: ${outdoorItems.length})`, outdoorItems.length);
+
+  const commercialItems = filterFurnitureCatalog(FURNITURE_DATABASE, '', 'commercial');
+  assert(commercialItems.length >= 12, `Filter category "commercial" returns commercial items (Found: ${commercialItems.length})`, commercialItems.length);
 }
 
 console.log(`Summary: ${passed} passed, ${failed} failed.\n`);

@@ -713,8 +713,20 @@ export function initializeApp() {
   }
 
   // ---------------------------------------------------------------------------
-  // 11. Mode 5: Furniture Database & Catalog
-  // ---------------------------------------------------------------------------
+  function updateCategoryPillCounts() {
+    const counts = { all: FURNITURE_DATABASE.length };
+    for (const item of FURNITURE_DATABASE) {
+      counts[item.category] = (counts[item.category] || 0) + 1;
+    }
+    dom.furnCategoryNav?.querySelectorAll('.furn-cat-pill').forEach(pill => {
+      const cat = pill.dataset.cat;
+      const badge = pill.querySelector('.furn-cat-count');
+      if (badge && counts[cat] !== undefined) {
+        badge.textContent = counts[cat];
+      }
+    });
+  }
+
   function renderFurnitureGrid() {
     if (!dom.furnitureCardsGrid) return;
 
@@ -727,6 +739,8 @@ export function initializeApp() {
       state.furnitureSearchQuery,
       state.furnitureActiveCategory
     );
+
+    updateCategoryPillCounts();
 
     if (dom.furnitureResultsCount) {
       dom.furnitureResultsCount.textContent = `Showing ${filtered.length} of ${FURNITURE_DATABASE.length} items`;
