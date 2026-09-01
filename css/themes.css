@@ -1,120 +1,256 @@
 /**
- * Architecture Helping Hand - High-Contrast Comfortable Studio & Drafting Themes
+ * Architecture Helping Hand - Modern Architectural Studio Design System
+ * Systematic tokens across background levels, panel levels, border strengths,
+ * typography scale, restrained radii, precise control heights, and CAD drafting palettes.
  */
 
 :root, [data-theme="dark"] {
-  --bg-app: #0b0f17;
-  --bg-surface: #131924;
-  --bg-surface-elevated: #1e2638;
-  --bg-surface-translucent: rgba(19, 25, 36, 0.92);
-  --bg-input: #0b0f17;
-  --bg-input-focus: #172033;
-  --bg-chip: #1e2638;
-  --bg-chip-hover: #2b364e;
-  --bg-chip-active: #38bdf8;
+  /* -------------------------------------------------------------------------
+     1. Background & Panel Levels (Studio Dark - Graphite Workstation)
+     ------------------------------------------------------------------------- */
+  --bg-app: #080c14;
+  --bg-base: #080c14;
+  --bg-surface: #0f1624;
+  --bg-surface-elevated: #162032;
+  --bg-surface-raised: #1d2b42;
+  --bg-surface-overlay: #1a253a;
+  --bg-surface-translucent: rgba(15, 22, 36, 0.94);
   
-  --border-subtle: #2d3748;
-  --border-medium: #4a5568;
-  --border-strong: #718096;
+  --bg-input: #0a0f1a;
+  --bg-input-focus: #111b2c;
+  --bg-chip: #162032;
+  --bg-chip-hover: #223048;
+  --bg-chip-active: #38bdf8;
+
+  --panel-bg: #0f1624;
+  --panel-border: #25334a;
+  --panel-header-bg: #141d2e;
+
+  /* -------------------------------------------------------------------------
+     2. Border Strengths & Separators
+     ------------------------------------------------------------------------- */
+  --border-hairline: 1px solid rgba(255, 255, 255, 0.08);
+  --border-subtle: #223046;
+  --border-medium: #364864;
+  --border-strong: #5a7398;
   --border-active: #38bdf8;
 
-  --text-primary: #ffffff;
+  /* -------------------------------------------------------------------------
+     3. Text Hierarchy & Readability (WCAG AAA Slate Palette)
+     ------------------------------------------------------------------------- */
+  --text-primary: #f8fafc;
   --text-secondary: #cbd5e1;
-  --text-muted: #94a3b8;
-  --text-inverse: #0b0f17;
+  --text-tertiary: #94a3b8;
+  --text-muted: #64748b;
+  --text-inverse: #080c14;
+  --text-accent: #38bdf8;
 
+  /* -------------------------------------------------------------------------
+     4. Accent & Semantic Status Colors
+     ------------------------------------------------------------------------- */
   --accent-primary: #38bdf8;
   --accent-primary-hover: #0ea5e9;
-  --accent-primary-subtle: rgba(56, 189, 248, 0.18);
+  --accent-primary-subtle: rgba(56, 189, 248, 0.16);
+  --accent-primary-border: rgba(56, 189, 248, 0.40);
+  
   --accent-secondary: #f59e0b;
   --accent-blueprint: #60a5fa;
-  --accent-success: #34d399;
-  --accent-danger: #f87171;
+  --accent-success: #10b981;
+  --accent-danger: #f43f5e;
 
-  --grid-line-color: rgba(255, 255, 255, 0.05);
-  --grid-cross-color: rgba(56, 189, 248, 0.35);
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.45);
-  --shadow-md: 0 6px 24px rgba(0, 0, 0, 0.6);
-  --shadow-lg: 0 16px 44px rgba(0, 0, 0, 0.75);
+  --color-success: #10b981;
+  --color-success-subtle: rgba(16, 185, 129, 0.14);
+  --color-warning: #f59e0b;
+  --color-warning-subtle: rgba(245, 158, 11, 0.14);
+  --color-error: #f43f5e;
+  --color-error-subtle: rgba(244, 63, 94, 0.14);
 
-  --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', Consolas, Menlo, monospace;
+  /* -------------------------------------------------------------------------
+     5. CAD Drawing Grid & Technical Overlays
+     ------------------------------------------------------------------------- */
+  --grid-line-color: rgba(255, 255, 255, 0.04);
+  --grid-cross-color: rgba(56, 189, 248, 0.28);
+
+  /* -------------------------------------------------------------------------
+     6. Technical Shadows
+     ------------------------------------------------------------------------- */
+  --shadow-flat: none;
+  --shadow-inset: inset 0 2px 5px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.7), 0 4px 10px rgba(0, 0, 0, 0.4);
+  --shadow-focus: 0 0 0 2px rgba(56, 189, 248, 0.5);
+
+  /* -------------------------------------------------------------------------
+     7. Spacing Scale (8pt Grid Standard)
+     ------------------------------------------------------------------------- */
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 28px;
+  --space-3xl: 40px;
+
+  /* -------------------------------------------------------------------------
+     8. Restrained Architectural Border Radii (No generic round bubbles)
+     ------------------------------------------------------------------------- */
+  --radius-none: 0px;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-pill: 9999px;
+
+  /* -------------------------------------------------------------------------
+     9. Precise Control Heights
+     ------------------------------------------------------------------------- */
+  --control-height-sm: 32px;
+  --control-height-md: 40px;
+  --control-height-lg: 48px;
+  --control-height-xl: 56px;
+
+  /* -------------------------------------------------------------------------
+     10. Typography Scale (Tabular Numbers & Clean Sans)
+     ------------------------------------------------------------------------- */
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', Menlo, Consolas, monospace;
+
+  --font-size-2xs: 0.70rem;
+  --font-size-xs: 0.76rem;
+  --font-size-sm: 0.84rem;
+  --font-size-base: 0.94rem;
+  --font-size-md: 1.05rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.55rem;
+  --font-size-2xl: 2.1rem;
+  --font-size-hero: 2.85rem;
 }
 
+/* ===========================================================================
+   Theme 2: Drafting Paper (Warm Vellum & Terracotta Engineering)
+   =========================================================================== */
 [data-theme="paper"] {
-  --bg-app: #f5f2e9;
-  --bg-surface: #ffffff;
-  --bg-surface-elevated: #faf7ef;
-  --bg-surface-translucent: rgba(255, 255, 255, 0.90);
-  --bg-input: #f0ebe0;
+  --bg-app: #f3efe6;
+  --bg-base: #f3efe6;
+  --bg-surface: #fdfbf7;
+  --bg-surface-elevated: #faf6ec;
+  --bg-surface-raised: #f1ebd8;
+  --bg-surface-overlay: #ffffff;
+  --bg-surface-translucent: rgba(253, 251, 247, 0.94);
+
+  --bg-input: #ebe4d2;
   --bg-input-focus: #ffffff;
-  --bg-chip: #e8e2d4;
-  --bg-chip-hover: #dbd3c2;
-  --bg-chip-active: #1e293b;
-  
-  --border-subtle: #ded6c2;
-  --border-medium: #c7bda4;
-  --border-strong: #96896e;
-  --border-active: #c26d2d;
+  --bg-chip: #e8dfcc;
+  --bg-chip-hover: #ded3bd;
+  --bg-chip-active: #b85d19;
 
-  --text-primary: #0f172a;
-  --text-secondary: #334155;
-  --text-muted: #64748b;
+  --panel-bg: #fdfbf7;
+  --panel-border: #d8cdb4;
+  --panel-header-bg: #faf4e4;
+
+  --border-hairline: 1px solid rgba(140, 120, 85, 0.15);
+  --border-subtle: #dbd0b9;
+  --border-medium: #c2b396;
+  --border-strong: #8c7855;
+  --border-active: #b85d19;
+
+  --text-primary: #181511;
+  --text-secondary: #3d3529;
+  --text-tertiary: #5e523f;
+  --text-muted: #7d6f58;
   --text-inverse: #ffffff;
+  --text-accent: #b85d19;
 
-  --accent-primary: #c26d2d;
-  --accent-primary-hover: #aa5a20;
-  --accent-primary-subtle: rgba(194, 109, 45, 0.15);
+  --accent-primary: #b85d19;
+  --accent-primary-hover: #9c4c12;
+  --accent-primary-subtle: rgba(184, 93, 25, 0.14);
+  --accent-primary-border: rgba(184, 93, 25, 0.36);
+  
   --accent-secondary: #2563eb;
   --accent-blueprint: #1d4ed8;
-  --accent-success: #16a34a;
-  --accent-danger: #dc2626;
+  --accent-success: #15803d;
+  --accent-danger: #b91c1c;
 
-  --grid-line-color: rgba(150, 137, 110, 0.14);
-  --grid-cross-color: rgba(150, 137, 110, 0.32);
-  --shadow-sm: 0 2px 6px rgba(40, 30, 15, 0.08);
-  --shadow-md: 0 6px 20px rgba(40, 30, 15, 0.10);
-  --shadow-lg: 0 16px 36px rgba(40, 30, 15, 0.14);
+  --color-success: #15803d;
+  --color-success-subtle: rgba(21, 128, 61, 0.12);
+  --color-warning: #b45309;
+  --color-warning-subtle: rgba(180, 83, 9, 0.12);
+  --color-error: #b91c1c;
+  --color-error-subtle: rgba(185, 28, 28, 0.12);
 
-  --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', Consolas, Menlo, monospace;
+  --grid-line-color: rgba(140, 120, 85, 0.12);
+  --grid-cross-color: rgba(184, 93, 25, 0.25);
+
+  --shadow-flat: none;
+  --shadow-inset: inset 0 2px 4px rgba(60, 45, 20, 0.08);
+  --shadow-sm: 0 1px 3px rgba(45, 30, 10, 0.07);
+  --shadow-md: 0 4px 12px rgba(45, 30, 10, 0.09);
+  --shadow-lg: 0 12px 30px rgba(45, 30, 10, 0.12);
+  --shadow-focus: 0 0 0 2px rgba(184, 93, 25, 0.4);
 }
 
+/* ===========================================================================
+   Theme 3: Blueprint Cyan (Deep Royal Architectural Cyan Blueprint)
+   =========================================================================== */
 [data-theme="blueprint"] {
-  --bg-app: #081d33;
-  --bg-surface: #0e2d4f;
-  --bg-surface-elevated: #143d6b;
-  --bg-surface-translucent: rgba(14, 45, 79, 0.92);
-  --bg-input: #061626;
-  --bg-input-focus: #0c2542;
-  --bg-chip: #154170;
-  --bg-chip-hover: #1d5694;
+  --bg-app: #04101e;
+  --bg-base: #04101e;
+  --bg-surface: #091d36;
+  --bg-surface-elevated: #0e2a4d;
+  --bg-surface-raised: #133966;
+  --bg-surface-overlay: #102e54;
+  --bg-surface-translucent: rgba(9, 29, 54, 0.94);
+
+  --bg-input: #051426;
+  --bg-input-focus: #0c2544;
+  --bg-chip: #0e2a4d;
+  --bg-chip-hover: #163e70;
   --bg-chip-active: #00e5ff;
-  
-  --border-subtle: #1c528a;
-  --border-medium: #2a6eb8;
-  --border-strong: #549ceb;
+
+  --panel-bg: #091d36;
+  --panel-border: #184880;
+  --panel-header-bg: #0c2544;
+
+  --border-hairline: 1px solid rgba(0, 229, 255, 0.12);
+  --border-subtle: #174275;
+  --border-medium: #225e9e;
+  --border-strong: #4088db;
   --border-active: #00e5ff;
 
   --text-primary: #ffffff;
   --text-secondary: #e0f2fe;
-  --text-muted: #bae6fd;
-  --text-inverse: #081d33;
+  --text-tertiary: #93c5fd;
+  --text-muted: #60a5fa;
+  --text-inverse: #04101e;
+  --text-accent: #00e5ff;
 
   --accent-primary: #00e5ff;
-  --accent-primary-hover: #00b8d4;
-  --accent-primary-subtle: rgba(0, 229, 255, 0.20);
-  --accent-secondary: #fbbf24;
-  --accent-blueprint: #38bdf8;
-  --accent-success: #4ade80;
-  --accent-danger: #f87171;
+  --accent-primary-hover: #33ecff;
+  --accent-primary-subtle: rgba(0, 229, 255, 0.16);
+  --accent-primary-border: rgba(0, 229, 255, 0.42);
+  
+  --accent-secondary: #38bdf8;
+  --accent-blueprint: #00e5ff;
+  --accent-success: #34d399;
+  --accent-danger: #fb7185;
 
-  --grid-line-color: rgba(0, 229, 255, 0.10);
-  --grid-cross-color: rgba(0, 229, 255, 0.40);
-  --shadow-sm: 0 2px 8px rgba(3, 16, 30, 0.5);
-  --shadow-md: 0 6px 24px rgba(3, 16, 30, 0.65);
-  --shadow-lg: 0 16px 44px rgba(3, 16, 30, 0.8);
+  --color-success: #34d399;
+  --color-success-subtle: rgba(52, 211, 153, 0.15);
+  --color-warning: #fbbf24;
+  --color-warning-subtle: rgba(251, 191, 36, 0.15);
+  --color-error: #fb7185;
+  --color-error-subtle: rgba(251, 113, 133, 0.15);
 
-  --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', Consolas, Menlo, monospace;
+  --grid-line-color: rgba(0, 229, 255, 0.06);
+  --grid-cross-color: rgba(0, 229, 255, 0.35);
+
+  --shadow-flat: none;
+  --shadow-inset: inset 0 2px 6px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 14px 40px rgba(0, 0, 0, 0.75);
+  --shadow-focus: 0 0 0 2px rgba(0, 229, 255, 0.5);
 }
