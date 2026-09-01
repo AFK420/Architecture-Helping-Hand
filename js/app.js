@@ -2446,17 +2446,16 @@ const DEFAULT_COMMANDS = [
     available: true
   },
 
-  // 3. Upcoming Phase 2.5 Tool Placeholders (Designed for future expansion)
   {
-    id: 'future-dim-expr',
+    id: 'nav-expression',
     title: 'Dimension Expression Calculator',
-    description: 'Evaluate mixed-unit architectural math expressions (e.g. 2.4m + 180mm - 2\'-6")',
-    category: 'Upcoming Tool',
+    description: 'Evaluate mixed-unit architectural math expressions with live scaling and workspace insertion',
+    category: 'Navigation',
     icon: '🧮',
-    keywords: ['expression', 'calculator', 'math', 'eval', 'mixed units', 'arithmetic', 'phase 2.5'],
-    actionType: 'placeholder',
-    available: false,
-    badge: 'Phase 2.5'
+    keywords: ['expression', 'calculator', 'math', 'eval', 'mixed units', 'arithmetic', 'sum', 'subtraction', 'multiply', 'divide', 'mode 8'],
+    shortcut: '8',
+    actionType: 'navigation',
+    available: true
   },
   {
     id: 'future-dim-chains',
@@ -3650,6 +3649,7 @@ function getFurniturePlanSVG(item) {
 
 
 
+
 function initializeApp() {
   const state = {
     currentMode: 'converter',
@@ -3706,6 +3706,10 @@ function initializeApp() {
     workspace: deserializeWorkspace(StorageService.getItem(WORKSPACE_STORAGE_KEY)),
     workspaceSelectedIds: new Set(),
     workspaceEditingCell: null, // { id: string, field: string }
+
+    // Mode 8: Dimension Expression
+    lastValidExpression: null,
+    recentExpressions: [],
 
     // Cached Previous Valid Calculations (Never wipe to empty on invalid keystroke)
     lastValidConverter: null,
@@ -3915,7 +3919,34 @@ function initializeApp() {
     workspaceExportTsvBtn: document.getElementById('workspace-export-tsv-btn'),
     workspaceAddGroupBtn: document.getElementById('workspace-add-group-btn'),
     workspaceSaveJournalBtn: document.getElementById('workspace-save-journal-btn'),
-    workspaceClearBtn: document.getElementById('workspace-clear-btn')
+    workspaceClearBtn: document.getElementById('workspace-clear-btn'),
+
+    // Mode 8: Dimension Expression
+    expressionStateBadge: document.getElementById('expression-state-badge'),
+    expressionInput: document.getElementById('expression-input'),
+    expressionLivePreview: document.getElementById('expression-live-preview'),
+    expressionClearInputBtn: document.getElementById('expression-clear-input-btn'),
+    expressionErrorMsg: document.getElementById('expression-error-msg'),
+    expressionDefaultUnit: document.getElementById('expression-default-unit'),
+    expressionScaleSelect: document.getElementById('expression-scale-select'),
+    expressionCustomScaleGroup: document.getElementById('expression-custom-scale-group'),
+    expressionCustomScaleInput: document.getElementById('expression-custom-scale-input'),
+    btnRunExpression: document.getElementById('btn-run-expression'),
+    expressionDimBadge: document.getElementById('expression-dim-badge'),
+    expressionResultVal: document.getElementById('expression-result-val'),
+    expressionResultUnit: document.getElementById('expression-result-unit'),
+    expressionDrawingLabel: document.getElementById('expression-drawing-label'),
+    expressionDrawingVal: document.getElementById('expression-drawing-val'),
+    expressionSecondaryReadout: document.getElementById('expression-secondary-readout'),
+    expressionCopyBtn: document.getElementById('expression-copy-btn'),
+    expressionCopyRawBtn: document.getElementById('expression-copy-raw-btn'),
+    expressionCopyDrawingBtn: document.getElementById('expression-copy-drawing-btn'),
+    expressionAddName: document.getElementById('expression-add-name'),
+    expressionAddRoleSelect: document.getElementById('expression-add-role-select'),
+    expressionAddWorkspaceBtn: document.getElementById('expression-add-workspace-btn'),
+    expressionSaveJournalBtn: document.getElementById('expression-save-journal-btn'),
+    expressionRecentList: document.getElementById('expression-recent-list'),
+    expressionClearRecentBtn: document.getElementById('expression-clear-recent-btn')
   };
 
   // ---------------------------------------------------------------------------
@@ -4078,6 +4109,10 @@ function initializeApp() {
     else if (targetMode === 'furniture') renderFurnitureGrid();
     else if (targetMode === 'reference') renderReferenceChart();
     else if (targetMode === 'workspace') renderWorkspace();
+    else if (targetMode === 'expression') {
+      calculateExpression();
+      renderRecentExpressions();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -5396,6 +5431,23 @@ function initializeApp() {
         }
         renderWorkspace();
         break;
+      case 'expression':
+        switchMode('expression');
+        if (dom.expressionInput) dom.expressionInput.value = snap.expression || item.inputStr || '';
+        if (dom.expressionDefaultUnit && snap.defaultUnit) dom.expressionDefaultUnit.value = snap.defaultUnit;
+        if (dom.expressionScaleSelect && snap.scaleRatio) {
+          const ratioStr = String(snap.scaleRatio);
+          if (dom.expressionScaleSelect.querySelector(`option[value="${ratioStr}"]`)) {
+            dom.expressionScaleSelect.value = ratioStr;
+            if (dom.expressionCustomScaleGroup) dom.expressionCustomScaleGroup.style.display = 'none';
+          } else {
+            dom.expressionScaleSelect.value = 'custom';
+            if (dom.expressionCustomScaleGroup) dom.expressionCustomScaleGroup.style.display = 'block';
+            if (dom.expressionCustomScaleInput) dom.expressionCustomScaleInput.value = snap.scaleRatio;
+          }
+        }
+        calculateExpression(true);
+        break;
     }
     AudioService.playTick();
     showToast(`↺ Restored calculation into ${item.operation || item.mode}`);
@@ -5534,6 +5586,24 @@ function initializeApp() {
             modeKey: 'workspace',
             scaleRatio: state.workspace.scaleRatio,
             displayUnit: state.workspace.displayUnit
+          }
+        };
+      }
+    } else if (modeKey === 'expression') {
+      const res = state.lastValidExpression;
+      if (res && res.isValid) {
+        entry = {
+          operation: 'Dimension Expression',
+          mode: 'Dimension Expression',
+          scaleRatio: res.scaleRatio,
+          scaleStr: res.scaleRatio ? `1:${res.scaleRatio}` : '—',
+          inputStr: res.expression,
+          outputStr: `${res.formatted}${res.drawingFormatted ? ` (Drawing: ${res.drawingFormatted})` : ''}`,
+          stateSnapshot: {
+            modeKey: 'expression',
+            expression: res.expression,
+            scaleRatio: res.scaleRatio,
+            defaultUnit: dom.expressionDefaultUnit?.value || 'mm'
           }
         };
       }
@@ -6085,7 +6155,37 @@ function initializeApp() {
     const isSearching = Boolean(query && query.trim() !== '');
 
     if (isSearching) {
-      if (searchData.results.length === 0) {
+      // 0. Live Expression Detection Preview in Command Palette
+      if (isExpressionLike(query)) {
+        const liveCalc = evaluateExpressionSafe(query, {
+          defaultUnit: state.workspace?.displayUnit || 'mm',
+          scaleRatio: state.workspace?.scaleRatio || 50,
+          precision: state.precision
+        });
+        if (liveCalc.isValid) {
+          const exprItem = {
+            id: 'expr-live-preview',
+            title: `${query.trim()} = ${liveCalc.formatted}`,
+            description: `Live Dimension Expression (Drawing: ${liveCalc.drawingFormatted || '---'} @ 1:50) • Press Enter to open in Expression Tool`,
+            icon: '🧮',
+            shortcut: '↵ Open',
+            available: true,
+            isLiveExpr: true,
+            action: () => {
+              switchMode('expression');
+              if (dom.expressionInput) {
+                dom.expressionInput.value = query.trim();
+                calculateExpression(true);
+              }
+            }
+          };
+          paletteItems.push(exprItem);
+          html += `<div class="command-section-header">🧮 LIVE DIMENSION MATH PREVIEW</div>`;
+          html += renderCommandItemHTML(exprItem, paletteItems.length - 1);
+        }
+      }
+
+      if (searchData.results.length === 0 && paletteItems.length === 0) {
         html = `
           <div class="command-palette-empty">
             <div style="font-size: 1.4rem; margin-bottom: 0.35rem;">🔍</div>
@@ -6094,11 +6194,13 @@ function initializeApp() {
           </div>
         `;
       } else {
-        html += `<div class="command-section-header">MATCHING COMMANDS (${searchData.results.length})</div>`;
-        searchData.results.forEach(cmd => {
-          paletteItems.push(cmd);
-          html += renderCommandItemHTML(cmd, paletteItems.length - 1);
-        });
+        if (searchData.results.length > 0) {
+          html += `<div class="command-section-header">MATCHING COMMANDS (${searchData.results.length})</div>`;
+          searchData.results.forEach(cmd => {
+            paletteItems.push(cmd);
+            html += renderCommandItemHTML(cmd, paletteItems.length - 1);
+          });
+        }
       }
     } else {
       // 1. Favorites
@@ -6270,6 +6372,9 @@ function initializeApp() {
       case 'nav-workspace':
         switchMode('workspace');
         break;
+      case 'nav-expression':
+        switchMode('expression');
+        break;
       case 'nav-history':
         toggleHistoryDrawer();
         break;
@@ -6296,6 +6401,9 @@ function initializeApp() {
         } else if (state.currentMode === 'workspace') {
           val = dom.workspaceTotalRealVal?.textContent;
           unit = '';
+        } else if (state.currentMode === 'expression') {
+          val = dom.expressionResultVal?.textContent;
+          unit = dom.expressionResultUnit?.textContent || '';
         }
         if (val && val !== '---') {
           copyToClipboard(`${val} ${unit}`.trim(), 'Active Result');
@@ -6357,6 +6465,145 @@ function initializeApp() {
   function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ---------------------------------------------------------------------------
+  // 13d. Mode 8: Dimension Expression Controller
+  // ---------------------------------------------------------------------------
+  function calculateExpression(isExplicitRun = false) {
+    if (!dom.expressionInput) return;
+
+    const rawExpr = dom.expressionInput.value.trim();
+    const defaultUnit = dom.expressionDefaultUnit?.value || 'mm';
+    let scaleRatio = 50;
+    if (dom.expressionScaleSelect) {
+      if (dom.expressionScaleSelect.value === 'custom') {
+        scaleRatio = parseFloat(dom.expressionCustomScaleInput?.value) || 50;
+      } else {
+        scaleRatio = parseFloat(dom.expressionScaleSelect.value) || 50;
+      }
+    }
+
+    // Empty input state
+    if (rawExpr === '') {
+      if (dom.expressionLivePreview) dom.expressionLivePreview.textContent = 'Live: Ready';
+      if (dom.expressionErrorMsg) dom.expressionErrorMsg.style.display = 'none';
+      if (dom.expressionResultVal) dom.expressionResultVal.textContent = '0';
+      if (dom.expressionResultUnit) dom.expressionResultUnit.textContent = defaultUnit;
+      if (dom.expressionDrawingVal) dom.expressionDrawingVal.textContent = `0 ${defaultUnit}`;
+      setUnifiedResultState({
+        toolPrefix: 'expression',
+        status: 'ready'
+      });
+      return;
+    }
+
+    const evalResult = evaluateExpressionSafe(rawExpr, {
+      defaultUnit,
+      scaleRatio,
+      precision: state.precision
+    });
+
+    if (evalResult.isValid) {
+      state.lastValidExpression = evalResult;
+
+      // Update Live Preview Pill
+      if (dom.expressionLivePreview) {
+        dom.expressionLivePreview.textContent = `Live: = ${evalResult.formatted}`;
+        dom.expressionLivePreview.style.color = 'var(--text-accent)';
+      }
+      if (dom.expressionErrorMsg) dom.expressionErrorMsg.style.display = 'none';
+
+      // Update Primary Result Value & Unit
+      if (dom.expressionResultVal) dom.expressionResultVal.textContent = evalResult.formatted.replace(/\s*[a-zA-Z²³_"-]+$/, '') || evalResult.formatted;
+      if (dom.expressionResultUnit) dom.expressionResultUnit.textContent = (evalResult.dimension === 'scalar') ? 'scalar count' : evalResult.displayUnit;
+
+      // Update Dimension Badge
+      if (dom.expressionDimBadge) {
+        dom.expressionDimBadge.textContent = evalResult.dimension.toUpperCase();
+        dom.expressionDimBadge.className = evalResult.dimension === 'scalar' ? 'type-badge badge-alw' : 'type-badge badge-seg';
+      }
+
+      // Update Drawing Scale Output
+      if (dom.expressionDrawingLabel) {
+        dom.expressionDrawingLabel.textContent = `Scale 1:${scaleRatio}`;
+      }
+      if (dom.expressionDrawingVal) {
+        dom.expressionDrawingVal.textContent = evalResult.drawingFormatted || '---';
+      }
+
+      // Update Secondary Unit Equivalents
+      if (dom.expressionSecondaryReadout && evalResult.secondaryFormatted.length > 0) {
+        dom.expressionSecondaryReadout.innerHTML = evalResult.secondaryFormatted.map(sec => `
+          <div class="secondary-item"><span class="sec-unit">${sec.unit}</span><span class="sec-val">${sec.formatted}</span></div>
+        `).join('');
+      } else if (dom.expressionSecondaryReadout && evalResult.dimension === 'scalar') {
+        dom.expressionSecondaryReadout.innerHTML = `
+          <div class="secondary-item"><span class="sec-unit">count</span><span class="sec-val">${evalResult.formatted}</span></div>
+        `;
+      }
+
+      setUnifiedResultState({
+        toolPrefix: 'expression',
+        status: 'success'
+      });
+
+      if (isExplicitRun) {
+        addRecentExpression(rawExpr, evalResult.formatted);
+        AudioService.playTick();
+      }
+    } else {
+      // Invalid or incomplete syntax
+      if (dom.expressionLivePreview) {
+        dom.expressionLivePreview.textContent = `Live: Incomplete`;
+        dom.expressionLivePreview.style.color = 'var(--color-error)';
+      }
+      if (dom.expressionErrorMsg) {
+        dom.expressionErrorMsg.textContent = `⚠️ ${evalResult.error.message}`;
+        dom.expressionErrorMsg.style.display = 'block';
+      }
+
+      setUnifiedResultState({
+        toolPrefix: 'expression',
+        status: 'error',
+        errorText: `⚠️ ${evalResult.error.message}`
+      });
+    }
+  }
+
+  function addRecentExpression(expr, formatted) {
+    if (!state.recentExpressions) state.recentExpressions = [];
+    // Prevent duplicate adjacent
+    if (state.recentExpressions.length > 0 && state.recentExpressions[0].expr === expr) return;
+    state.recentExpressions.unshift({ expr, formatted, time: Date.now() });
+    if (state.recentExpressions.length > 10) state.recentExpressions.pop();
+    renderRecentExpressions();
+  }
+
+  function renderRecentExpressions() {
+    if (!dom.expressionRecentList) return;
+    if (!state.recentExpressions || state.recentExpressions.length === 0) {
+      dom.expressionRecentList.innerHTML = '<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">No recent expressions evaluated yet.</span>';
+      return;
+    }
+
+    dom.expressionRecentList.innerHTML = state.recentExpressions.map(item => `
+      <div class="recent-expr-item" data-expr="${escapeHtml(item.expr)}" title="Click to load expression">
+        <span class="recent-expr-formula">${escapeHtml(item.expr)}</span>
+        <span class="recent-expr-result">= ${escapeHtml(item.formatted)}</span>
+      </div>
+    `).join('');
+
+    dom.expressionRecentList.querySelectorAll('.recent-expr-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const expr = el.dataset.expr;
+        if (dom.expressionInput) {
+          dom.expressionInput.value = expr;
+          calculateExpression(true);
+          AudioService.playTick();
+        }
+      });
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -7095,6 +7342,164 @@ function initializeApp() {
       });
     }
 
+    // Mode 8: Dimension Expression Listeners
+    if (dom.expressionInput) {
+      dom.expressionInput.addEventListener('input', () => {
+        calculateExpression(false);
+      });
+
+      dom.expressionInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (e.shiftKey) {
+            dom.expressionAddWorkspaceBtn?.click();
+          } else {
+            calculateExpression(true);
+          }
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          dom.expressionInput.value = '';
+          calculateExpression(false);
+          AudioService.playTick();
+        }
+      });
+    }
+
+    if (dom.expressionClearInputBtn) {
+      dom.expressionClearInputBtn.addEventListener('click', () => {
+        if (dom.expressionInput) {
+          dom.expressionInput.value = '';
+          dom.expressionInput.focus();
+          calculateExpression(false);
+          AudioService.playTick();
+        }
+      });
+    }
+
+    if (dom.expressionDefaultUnit) {
+      dom.expressionDefaultUnit.addEventListener('change', () => {
+        calculateExpression(true);
+        AudioService.playTick();
+      });
+    }
+
+    if (dom.expressionScaleSelect) {
+      dom.expressionScaleSelect.addEventListener('change', (e) => {
+        const isCustom = e.target.value === 'custom';
+        if (dom.expressionCustomScaleGroup) {
+          dom.expressionCustomScaleGroup.style.display = isCustom ? 'block' : 'none';
+        }
+        calculateExpression(true);
+        AudioService.playTick();
+      });
+    }
+
+    if (dom.expressionCustomScaleInput) {
+      dom.expressionCustomScaleInput.addEventListener('input', () => {
+        calculateExpression(false);
+      });
+    }
+
+    if (dom.btnRunExpression) {
+      dom.btnRunExpression.addEventListener('click', () => {
+        calculateExpression(true);
+      });
+    }
+
+    // Quick Template Chips
+    document.querySelectorAll('.expr-template-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const expr = chip.dataset.expr;
+        if (dom.expressionInput && expr) {
+          dom.expressionInput.value = expr;
+          calculateExpression(true);
+          AudioService.playTick();
+        }
+      });
+    });
+
+    if (dom.expressionCopyBtn) {
+      dom.expressionCopyBtn.addEventListener('click', () => {
+        calculateExpression(true);
+        if (state.lastValidExpression && state.lastValidExpression.isValid) {
+          copyToClipboard(state.lastValidExpression.formatted, 'Evaluated Expression Result');
+        } else {
+          showToast('No valid result to copy', 'warning');
+        }
+      });
+    }
+
+    if (dom.expressionCopyRawBtn) {
+      dom.expressionCopyRawBtn.addEventListener('click', () => {
+        calculateExpression(true);
+        if (state.lastValidExpression && state.lastValidExpression.isValid) {
+          const valStr = state.lastValidExpression.dimension === 'scalar'
+            ? String(state.lastValidExpression.value)
+            : formatNumber(state.lastValidExpression.canonicalMeters, state.precision);
+          copyToClipboard(valStr, 'Raw Numeric Value');
+        } else {
+          showToast('No valid result to copy', 'warning');
+        }
+      });
+    }
+
+    if (dom.expressionCopyDrawingBtn) {
+      dom.expressionCopyDrawingBtn.addEventListener('click', () => {
+        calculateExpression(true);
+        if (state.lastValidExpression && state.lastValidExpression.isValid && state.lastValidExpression.drawingFormatted) {
+          copyToClipboard(state.lastValidExpression.drawingFormatted, `Scaled Drawing (${state.lastValidExpression.drawingFormatted})`);
+        } else {
+          showToast('No scaled drawing dimension available', 'warning');
+        }
+      });
+    }
+
+    if (dom.expressionAddWorkspaceBtn) {
+      dom.expressionAddWorkspaceBtn.addEventListener('click', () => {
+        calculateExpression(true);
+        if (!state.lastValidExpression || !state.lastValidExpression.isValid) {
+          showToast('Cannot add invalid expression to workspace', 'warning');
+          return;
+        }
+
+        const res = state.lastValidExpression;
+        const name = dom.expressionAddName?.value?.trim() || 'Expression Result';
+        const role = dom.expressionAddRoleSelect?.value || 'reference';
+        const rawInput = res.dimension === 'scalar' ? String(res.value) : res.formatted;
+        const unit = res.dimension === 'scalar' ? (dom.expressionDefaultUnit?.value || 'mm') : res.displayUnit;
+
+        const newEntry = createDimensionEntry({
+          name,
+          rawInput,
+          dimensionType: role,
+          defaultUnit: unit,
+          notes: `Evaluated: ${res.expression}`
+        }, unit);
+
+        state.workspace.entries.push(newEntry);
+        saveWorkspace();
+        renderWorkspace();
+        AudioService.playTick();
+        showToast(`Added [${role.toUpperCase()}] "${name}" (${rawInput}) to Workspace`);
+      });
+    }
+
+    if (dom.expressionSaveJournalBtn) {
+      dom.expressionSaveJournalBtn.addEventListener('click', () => {
+        calculateExpression(true);
+        logCurrentCalculationToHistory('expression');
+      });
+    }
+
+    if (dom.expressionClearRecentBtn) {
+      dom.expressionClearRecentBtn.addEventListener('click', () => {
+        state.recentExpressions = [];
+        renderRecentExpressions();
+        AudioService.playTick();
+        showToast('Recent expressions cleared');
+      });
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -7221,6 +7626,7 @@ function initializeApp() {
       else if (e.key === '5') { e.preventDefault(); switchMode('furniture'); }
       else if (e.key === '6') { e.preventDefault(); switchMode('reference'); }
       else if (e.key === '7') { e.preventDefault(); switchMode('workspace'); }
+      else if (e.key === '8') { e.preventDefault(); switchMode('expression'); }
       else if (e.key === 's' || e.key === 'S') { e.preventDefault(); swapDirection(); }
       else if (e.key === 'h' || e.key === 'H') { e.preventDefault(); toggleHistoryDrawer(); }
       else if (e.key === '?') {

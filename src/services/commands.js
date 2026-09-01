@@ -177,17 +177,16 @@ const DEFAULT_COMMANDS = [
     available: true
   },
 
-  // 3. Upcoming Phase 2.5 Tool Placeholders (Designed for future expansion)
   {
-    id: 'future-dim-expr',
+    id: 'nav-expression',
     title: 'Dimension Expression Calculator',
-    description: 'Evaluate mixed-unit architectural math expressions (e.g. 2.4m + 180mm - 2\'-6")',
-    category: 'Upcoming Tool',
+    description: 'Evaluate mixed-unit architectural math expressions with live scaling and workspace insertion',
+    category: 'Navigation',
     icon: '🧮',
-    keywords: ['expression', 'calculator', 'math', 'eval', 'mixed units', 'arithmetic', 'phase 2.5'],
-    actionType: 'placeholder',
-    available: false,
-    badge: 'Phase 2.5'
+    keywords: ['expression', 'calculator', 'math', 'eval', 'mixed units', 'arithmetic', 'sum', 'subtraction', 'multiply', 'divide', 'mode 8'],
+    shortcut: '8',
+    actionType: 'navigation',
+    available: true
   },
   {
     id: 'future-dim-chains',

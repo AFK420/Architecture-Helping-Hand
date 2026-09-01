@@ -163,6 +163,23 @@
         <span>Dimension Workspace</span>
         <span class="mode-key-hint">7</span>
       </button>
+
+      <button class="mode-tab" data-mode="expression" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="2" width="16" height="20" rx="2"></rect>
+          <line x1="8" y1="6" x2="16" y2="6"></line>
+          <line x1="16" y1="14" x2="16" y2="18"></line>
+          <path d="M16 10h.01"></path>
+          <path d="M12 10h.01"></path>
+          <path d="M8 10h.01"></path>
+          <path d="M12 14h.01"></path>
+          <path d="M8 14h.01"></path>
+          <path d="M12 18h.01"></path>
+          <path d="M8 18h.01"></path>
+        </svg>
+        <span>Dimension Expression</span>
+        <span class="mode-key-hint">8</span>
+      </button>
     </nav>
 
     <!-- ======================================================== -->
@@ -1405,6 +1422,217 @@
 
       </div>
     </section>
+
+    <!-- ======================================================== -->
+    <!-- MODE 8: DIMENSION EXPRESSION CALCULATOR                  -->
+    <!-- ======================================================== -->
+    <section id="mode-view-expression" class="tool-mode-view" aria-labelledby="heading-expression">
+      <div class="tool-layout">
+        <!-- Left Column: Expression Input & Configuration -->
+        <div class="archi-card main-calc-card">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <!-- Instrument Title & Scale Header -->
+          <div class="calc-header-strip">
+            <div class="calc-title-badge">
+              <span class="calc-indicator-dot"></span>
+              <h2 id="heading-expression">DIMENSION EXPRESSION CALCULATOR</h2>
+            </div>
+            <div class="calc-status-badge">
+              <span id="expression-state-badge" class="state-badge state-ready">READY</span>
+            </div>
+          </div>
+
+          <p class="tool-description">
+            Evaluate mixed-unit architectural math expressions (e.g. <code>2400 + 900 + 1200</code>, <code>5.4m - 1200mm</code>, <code>(2.4m + 900mm) / 3</code>, <code>250mm * 8</code>, <code>7' 6" + 2' 6"</code>) with standard operator precedence and live scaled drawing output.
+          </p>
+
+          <!-- Input Expression Box & Live Preview -->
+          <div class="calc-form">
+            <div class="form-group">
+              <label for="expression-input" class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>EXPRESSION INPUT</span>
+                <span id="expression-live-preview" class="expr-live-preview" style="font-family: var(--font-family-mono); font-size: 0.75rem; color: var(--text-accent);">Live: Ready</span>
+              </label>
+              <div class="input-with-inline-action">
+                <input
+                  type="text"
+                  id="expression-input"
+                  class="form-input mono-input"
+                  placeholder="e.g. 2400mm + 900mm + 1200mm or (2.4m + 900mm) / 3"
+                  autocomplete="off"
+                  spellcheck="false"
+                  aria-label="Dimension Expression"
+                />
+                <button type="button" id="expression-clear-input-btn" class="input-clear-btn" title="Clear expression (Esc)" aria-label="Clear expression">✕</button>
+              </div>
+              <div id="expression-error-msg" class="expr-error-text" style="display: none; font-size: 0.75rem; color: var(--color-error); margin-top: 4px;"></div>
+            </div>
+
+            <!-- Workspace Default Unit & Scale Ratio Row -->
+            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+              <div class="form-group">
+                <label for="expression-default-unit" class="form-label">DEFAULT UNIT (FOR BARE NUMBERS)</label>
+                <select id="expression-default-unit" class="form-select" aria-label="Default input unit">
+                  <option value="mm" selected>Millimeters (mm)</option>
+                  <option value="cm">Centimeters (cm)</option>
+                  <option value="m">Meters (m)</option>
+                  <option value="in">Inches (in)</option>
+                  <option value="ft">Feet (ft)</option>
+                  <option value="ft_in">Feet-Inches (ft-in)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="expression-scale-select" class="form-label">DRAWING SCALE RATIO</label>
+                <select id="expression-scale-select" class="form-select" aria-label="Scale ratio">
+                  <option value="1">1:1 (Full Size)</option>
+                  <option value="5">1:5 (Detail)</option>
+                  <option value="10">1:10 (Detail)</option>
+                  <option value="20">1:20 (Interior)</option>
+                  <option value="25">1:25 (Plan)</option>
+                  <option value="50" selected>1:50 (Architecture)</option>
+                  <option value="100">1:100 (Building Plan)</option>
+                  <option value="200">1:200 (Site Plan)</option>
+                  <option value="500">1:500 (Masterplan)</option>
+                  <option value="custom">Custom Scale...</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="expression-custom-scale-group" class="form-group" style="display: none; margin-bottom: 1rem;">
+              <label for="expression-custom-scale-input" class="form-label">CUSTOM SCALE (1:X)</label>
+              <input type="number" id="expression-custom-scale-input" class="form-input mono-input" value="50" min="0.001" step="any" placeholder="Enter scale ratio (e.g. 75 for 1:75)" />
+            </div>
+
+            <!-- Quick Example Syntax Chips -->
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <span class="form-label" style="display: block; margin-bottom: 0.35rem;">QUICK EXAMPLE TEMPLATES</span>
+              <div class="expr-sample-chips" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                <button type="button" class="sample-chip expr-template-chip" data-expr="2400 + 900 + 1200">2400 + 900 + 1200</button>
+                <button type="button" class="sample-chip expr-template-chip" data-expr="5.4m - 1200mm">5.4m - 1200mm</button>
+                <button type="button" class="sample-chip expr-template-chip" data-expr="(2.4m + 900mm) / 3">(2.4m + 900mm) / 3</button>
+                <button type="button" class="sample-chip expr-template-chip" data-expr="250mm * 8">250mm * 8</button>
+                <button type="button" class="sample-chip expr-template-chip" data-expr="7' 6&quot; + 2' 6&quot;">7' 6" + 2' 6"</button>
+                <button type="button" class="sample-chip expr-template-chip" data-expr="2400mm / 800mm">2400mm / 800mm (Scalar)</button>
+              </div>
+            </div>
+
+            <!-- Action Button: Evaluate Expression -->
+            <div class="form-actions" style="margin-top: 0.5rem;">
+              <button type="button" id="btn-run-expression" class="btn-calc-action primary">
+                <span class="btn-icon">🧮</span>
+                <span>EVALUATE EXPRESSION</span>
+                <span class="btn-kbd-hint"><kbd>↵</kbd></span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Result Hero, Scale Readout & Workspace Insertion -->
+        <div class="calc-results-column">
+          <!-- Primary Result Card -->
+          <div class="archi-card result-hero-card">
+            <div class="corner-mark top-left"></div>
+            <div class="corner-mark top-right"></div>
+            <div class="corner-mark bottom-left"></div>
+            <div class="corner-mark bottom-right"></div>
+
+            <div class="result-header">
+              <span class="result-category-label">EVALUATED DIMENSION RESULT</span>
+              <span id="expression-dim-badge" class="type-badge badge-seg" style="font-size: 0.65rem;">LENGTH</span>
+            </div>
+
+            <div class="result-value-display">
+              <div id="expression-result-val" class="result-number">0</div>
+              <div id="expression-result-unit" class="result-unit-label">mm</div>
+            </div>
+
+            <!-- Drawing Value at Active Scale -->
+            <div class="result-context-strip" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: var(--radius-sm); margin: 0.75rem 0; border: 1px solid var(--border-color-light);">
+              <div style="display: flex; flex-direction: column;">
+                <span style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">DRAWING AT ACTIVE SCALE</span>
+                <span id="expression-drawing-label" style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">Scale 1:50</span>
+              </div>
+              <div id="expression-drawing-val" style="font-family: var(--font-family-mono); font-size: 1.15rem; font-weight: 700; color: var(--accent-primary);">0 mm</div>
+            </div>
+
+            <!-- Secondary Equivalents Readout -->
+            <div class="secondary-conversions">
+              <span class="secondary-label">UNIT EQUIVALENTS</span>
+              <div id="expression-secondary-readout" class="secondary-readout-grid">
+                <div class="secondary-item"><span class="sec-unit">m</span><span class="sec-val">0 m</span></div>
+                <div class="secondary-item"><span class="sec-unit">cm</span><span class="sec-val">0 cm</span></div>
+                <div class="secondary-item"><span class="sec-unit">mm</span><span class="sec-val">0 mm</span></div>
+                <div class="secondary-item"><span class="sec-unit">ft-in</span><span class="sec-val">0"</span></div>
+              </div>
+            </div>
+
+            <!-- Result Actions -->
+            <div class="result-actions-strip" style="margin-top: 1rem;">
+              <button type="button" id="expression-copy-btn" class="result-action-btn" title="Copy formatted result">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                <span>Copy Result</span>
+              </button>
+              <button type="button" id="expression-copy-raw-btn" class="result-action-btn" title="Copy raw numeric value">
+                <span>Copy Raw</span>
+              </button>
+              <button type="button" id="expression-copy-drawing-btn" class="result-action-btn" title="Copy scaled drawing dimension">
+                <span>Copy Drawing</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Dimension Workspace Insertion Panel -->
+          <div class="archi-card" style="margin-top: 1rem; padding: 1.25rem;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.75rem;">
+              <span style="font-size: 1.1rem;">📐</span>
+              <h3 style="font-size: 0.9rem; font-weight: 800; letter-spacing: 0.05em; color: var(--text-primary); text-transform: uppercase;">ADD TO DIMENSION WORKSPACE</h3>
+            </div>
+            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+              Directly insert this calculated expression result into your active Dimension Workspace schedule.
+            </p>
+            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+              <div>
+                <label for="expression-add-name" class="form-label">MEMBER / ROW NAME</label>
+                <input type="text" id="expression-add-name" class="form-input" placeholder="e.g. Total Wall Run" value="Expression Result" />
+              </div>
+              <div>
+                <label for="expression-add-role-select" class="form-label">SEMANTIC ROLE</label>
+                <select id="expression-add-role-select" class="form-select">
+                  <option value="reference" selected>Reference (REF, Default)</option>
+                  <option value="segment">Segment (SEG, Additive)</option>
+                  <option value="allowance">Allowance (ALW, Tolerance)</option>
+                </select>
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button type="button" id="expression-add-workspace-btn" class="btn-calc-action secondary" style="flex: 1;">
+                <span>+ Add to Workspace</span>
+                <span class="btn-kbd-hint"><kbd>⇧↵</kbd></span>
+              </button>
+              <button type="button" id="expression-save-journal-btn" class="hist-btn" title="Save expression to calculation journal">
+                <span>Save to Journal</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Recent Expressions Panel -->
+          <div class="archi-card" style="margin-top: 1rem; padding: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+              <span style="font-size: 0.75rem; font-weight: 800; letter-spacing: 0.05em; color: var(--text-secondary); text-transform: uppercase;">RECENT EXPRESSIONS</span>
+              <button type="button" id="expression-clear-recent-btn" class="row-action-btn danger" style="font-size: 0.65rem;">Clear</button>
+            </div>
+            <div id="expression-recent-list" class="recent-expressions-list" style="display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">No recent expressions evaluated yet.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- History Drawer Side Panel -->
@@ -1508,8 +1736,8 @@
           <span class="kbd-badge">S</span>
         </div>
         <div class="shortcut-row">
-          <span>Switch Tool Modes (1-7)</span>
-          <span class="kbd-badge">1 — 7</span>
+          <span>Switch Tool Modes (1-8)</span>
+          <span class="kbd-badge">1 — 8</span>
         </div>
         <div class="shortcut-row">
           <span>Toggle Calculation History Drawer</span>

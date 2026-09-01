@@ -34,7 +34,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
 // 1. Verify Mode Navigation Targets in HTML
 {
-  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace'];
+  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression'];
   
   for (const mode of expectedModes) {
     const hasTab = htmlContent.includes(`data-mode="${mode}"`);
@@ -213,6 +213,33 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'workspace-save-journal-btn',
     'workspace-clear-btn',
 
+    // Mode 8: Dimension Expression IDs
+    'expression-state-badge',
+    'expression-input',
+    'expression-live-preview',
+    'expression-clear-input-btn',
+    'expression-error-msg',
+    'expression-default-unit',
+    'expression-scale-select',
+    'expression-custom-scale-group',
+    'expression-custom-scale-input',
+    'btn-run-expression',
+    'expression-dim-badge',
+    'expression-result-val',
+    'expression-result-unit',
+    'expression-drawing-label',
+    'expression-drawing-val',
+    'expression-secondary-readout',
+    'expression-copy-btn',
+    'expression-copy-raw-btn',
+    'expression-copy-drawing-btn',
+    'expression-add-name',
+    'expression-add-role-select',
+    'expression-add-workspace-btn',
+    'expression-save-journal-btn',
+    'expression-recent-list',
+    'expression-clear-recent-btn',
+
     // Workflow Pipeline & Mathematical Explanation IDs
     'converter-math-formula',
     'converter-flow-from',
@@ -251,7 +278,8 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'btn-run-rescale',
     'btn-run-detector',
     'btn-run-areavol',
-    'btn-run-custom-furn'
+    'btn-run-custom-furn',
+    'btn-run-expression'
   ];
 
   for (const rBtn of runButtons) {

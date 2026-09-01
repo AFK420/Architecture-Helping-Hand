@@ -23,6 +23,8 @@
    - [5. Furniture Scales & Fixtures Catalog (179 Items Across 9 Domains)](#5-furniture-scales--fixtures-catalog-with-live-search)
    - [6. Multi-Length Architectural Reference Sheet](#6-multi-length-architectural-reference-sheet)
    - [7. Architectural Geometry Engine (Core Math)](#7-architectural-geometry-engine-core-math)
+   - [8. Dimension Workspace & Dynamic Schedule (v1.1)](#8-dimension-workspace--dynamic-schedule-v11)
+   - [9. Dimension Expression Calculator](#9-dimension-expression-calculator)
 5. [📐 Architectural Scale Presets (All 28 Presets)](#-architectural-scale-presets-all-28-presets)
 6. [🛋️ Architectural Furniture & Fixtures Database (179 Items Across 9 Domains)](#️-architectural-furniture--fixtures-database-179-items-across-9-domains)
 7. [📏 Supported Measurement Units](#-supported-measurement-units)
@@ -185,6 +187,13 @@ This repository serves as:
 * **CAD Clipboard Preparation**: Copy formatted schedules, additive segments, reference dimensions, or raw CAD numbers (`4800\n3200\n900`) for direct pasting into Rhino, AutoCAD, or SketchUp.
 * **Keyboard-First Workflow**: Full keyboard productivity (<kbd>N</kbd> new/focus, <kbd>D</kbd> duplicate, <kbd>Del</kbd> delete selected, <kbd>↑</kbd>/<kbd>↓</kbd> navigate, <kbd>Ctrl+C</kbd> copy).
 * **Display Density Modes**: Switch between Comfortable drafting mode and high-density Compact schedule view.
+
+### 9. Dimension Expression Calculator (Mode 8)
+* **Deterministic Expression Parser**: Evaluates mixed-unit architectural math expressions (`2400 + 900 + 1200`, `5.4m - 1200mm`, `(2.4m + 900mm) / 3`, `250mm * 8`, `7' 6" + 2' 6"`) with standard operator precedence without using `eval()`.
+* **Physical Dimensional Semantics**: Enforces `length ± length -> length`, `length * scalar -> length`, `length / length -> scalar count`.
+* **Live Scaled Drawing Output**: Computes the exact scaled drawing dimensions on paper alongside unit equivalents ($m$, $cm$, $mm$, $ft\text{-}in$).
+* **Workspace Insertion Pipeline**: Directly send evaluated expressions into the active Dimension Workspace schedule with custom role selector (<kbd>Shift+Enter</kbd>).
+* **Command Palette Math Detection**: Type math expressions directly in <kbd>Ctrl+K</kbd> / <kbd>⌘K</kbd> for instant live evaluation preview.
 
 ---
 

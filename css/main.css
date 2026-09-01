@@ -4346,6 +4346,115 @@ body {
 }
 
 /* ==========================================================================
+   17. Dimension Expression Calculator Styles
+   ========================================================================== */
+.expr-live-preview {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent-primary);
+  background: var(--bg-surface-elevated);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color-light);
+}
+
+.input-with-inline-action {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.input-with-inline-action .form-input {
+  width: 100%;
+  padding-right: 2.2rem;
+}
+
+.input-clear-btn {
+  position: absolute;
+  right: 0.6rem;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.input-clear-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-elevated);
+}
+
+.expr-sample-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.expr-template-chip {
+  background: var(--bg-chip);
+  border: 1px solid var(--border-medium);
+  color: var(--text-secondary);
+  font-family: var(--font-family-mono);
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.expr-template-chip:hover {
+  background: var(--bg-chip-hover);
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.recent-expressions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.recent-expr-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-color-light);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family-mono);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.recent-expr-item:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-surface);
+}
+
+.recent-expr-formula {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.recent-expr-result {
+  color: var(--accent-primary);
+  font-weight: 700;
+}
+
+/* ==========================================================================
    18. Architectural Drafting Reference Sheet Print Stylesheet
    ========================================================================== */
 @media print {
