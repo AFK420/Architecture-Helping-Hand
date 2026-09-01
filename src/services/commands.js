@@ -82,6 +82,17 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
+    id: 'nav-workspace',
+    title: 'Dimension Workspace',
+    description: 'Multi-dimension schedule scratchpad, batch scaling & live totals',
+    category: 'Navigation',
+    icon: '📐',
+    keywords: ['dimension', 'workspace', 'schedule', 'scratchpad', 'batch', 'multi', 'totals', 'mode 7'],
+    shortcut: '7',
+    actionType: 'navigation',
+    available: true
+  },
+  {
     id: 'nav-history',
     title: 'Calculation Journal',
     description: 'Open calculation log, restore previous math, and export CSV / Markdown',
@@ -167,17 +178,6 @@ const DEFAULT_COMMANDS = [
   },
 
   // 3. Upcoming Phase 2.5 Tool Placeholders (Designed for future expansion)
-  {
-    id: 'future-dim-workspace',
-    title: 'Dimension Workspace',
-    description: 'Multi-measurement architectural workspace for simultaneous unit scaling',
-    category: 'Upcoming Tool',
-    icon: '📐',
-    keywords: ['dimension', 'workspace', 'cad', 'multi', 'phase 2.5'],
-    actionType: 'placeholder',
-    available: false,
-    badge: 'Phase 2.5'
-  },
   {
     id: 'future-dim-expr',
     title: 'Dimension Expression Calculator',

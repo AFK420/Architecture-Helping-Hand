@@ -17,6 +17,7 @@ const testFiles = [
   'units.test.js',
   'formatter.test.js',
   'furniture.test.js',
+  'dimension-workspace.test.js',
   'services.test.js',
   'commands.test.js',
   'data-integrity.test.js',

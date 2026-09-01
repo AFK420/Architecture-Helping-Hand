@@ -3193,6 +3193,370 @@ body {
 }
 
 /* ==========================================================================
+   14c. Mode 7: Dimension Workspace & Schedule
+   ========================================================================== */
+.workspace-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+}
+
+.workspace-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1.5px solid var(--border-subtle);
+}
+
+.workspace-title-group .card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.workspace-config-bar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  background: var(--bg-surface-elevated);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+}
+
+.workspace-config-bar .config-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workspace-chips-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.workspace-add-section {
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+
+.workspace-add-form .form-row-grid {
+  display: grid;
+  grid-template-columns: 2fr 2fr 1fr 2fr auto;
+  gap: var(--space-sm);
+  align-items: flex-end;
+}
+
+.workspace-add-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workspace-inline-error {
+  margin-top: var(--space-xs);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--radius-xs);
+}
+
+.workspace-schedule-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.workspace-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+  text-align: left;
+}
+
+.workspace-table th {
+  padding: 0.6rem 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  background: var(--bg-surface-elevated);
+  border-bottom: 2px solid var(--border-strong);
+}
+
+.workspace-table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.workspace-table tr:hover td {
+  background: var(--bg-chip);
+}
+
+.workspace-table tr.row-disabled {
+  opacity: 0.45;
+}
+
+.workspace-table tr.row-disabled .col-real,
+.workspace-table tr.row-disabled .col-drawing {
+  text-decoration: line-through;
+}
+
+.workspace-table tr.row-invalid td {
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.workspace-table .col-input-badge {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  background: var(--bg-chip);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-xs);
+  display: inline-block;
+}
+
+.workspace-table .col-real {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace-table .col-drawing {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  color: var(--accent-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace-table .col-notes {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.row-actions-group {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.row-action-btn {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  border-radius: var(--radius-xs);
+  padding: 0.25rem 0.45rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+}
+
+.row-action-btn:hover {
+  background: var(--bg-chip-hover);
+  color: var(--text-primary);
+  border-color: var(--border-medium);
+}
+
+.row-action-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--color-danger);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.workspace-empty-state {
+  text-align: center;
+  padding: var(--space-2xl) var(--space-md);
+  border: 2px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.workspace-totals-card {
+  background: var(--bg-surface-elevated);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.workspace-totals-card .totals-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.workspace-totals-card .totals-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.workspace-totals-card .totals-count-badge {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--bg-chip);
+  color: var(--accent-primary);
+  border: 1px solid var(--border-subtle);
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-pill);
+}
+
+.totals-hero-values {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.total-metric-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.total-type-label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.total-divider {
+  font-size: 1.5rem;
+  color: var(--accent-primary);
+  font-weight: 800;
+}
+
+.workspace-actions-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  padding-top: var(--space-xs);
+}
+
+.workspace-actions-toolbar .toolbar-left,
+.workspace-actions-toolbar .toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.workspace-cards-list {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .workspace-add-form .form-row-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .workspace-add-form .col-notes,
+  .workspace-add-form .col-btn {
+    grid-column: span 2;
+  }
+
+  .table-scroll-container:has(#workspace-table) {
+    display: none;
+  }
+
+  .workspace-cards-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .dim-card {
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: var(--space-sm) var(--space-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  .dim-card.row-disabled {
+    opacity: 0.5;
+  }
+
+  .dim-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .dim-card-title {
+    font-weight: 700;
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+  }
+
+  .dim-card-values {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+  }
+
+  .dim-card-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    padding-top: 4px;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .totals-hero-values {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-sm);
+  }
+
+  .total-divider {
+    display: none;
+  }
+}
+
+/* ==========================================================================
    15. Toast Notifications
    ========================================================================== */
 .toast-container {

@@ -34,7 +34,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
 // 1. Verify Mode Navigation Targets in HTML
 {
-  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference'];
+  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace'];
   
   for (const mode of expectedModes) {
     const hasTab = htmlContent.includes(`data-mode="${mode}"`);
@@ -163,6 +163,38 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'ref-data-table',
     'ref-density-btn-standard',
     'ref-density-btn-compact',
+
+    // Mode 7: Dimension Workspace
+    'workspace-state-badge',
+    'workspace-scale-select',
+    'workspace-custom-scale-group',
+    'workspace-custom-scale-input',
+    'workspace-unit-select',
+    'workspace-quick-chips',
+    'workspace-add-form',
+    'workspace-add-name',
+    'workspace-add-input',
+    'workspace-add-unit',
+    'workspace-add-notes',
+    'workspace-add-btn',
+    'workspace-add-error',
+    'workspace-table',
+    'workspace-table-body',
+    'workspace-th-drawing',
+    'workspace-cards-list',
+    'workspace-empty-state',
+    'workspace-load-samples-btn',
+    'workspace-totals-card',
+    'workspace-active-count',
+    'workspace-total-real-val',
+    'workspace-total-drawing-val',
+    'workspace-total-drawing-label',
+    'workspace-actions-toolbar',
+    'workspace-copy-all-btn',
+    'workspace-copy-drawing-btn',
+    'workspace-export-tsv-btn',
+    'workspace-save-journal-btn',
+    'workspace-clear-btn',
 
     // Workflow Pipeline & Mathematical Explanation IDs
     'converter-math-formula',

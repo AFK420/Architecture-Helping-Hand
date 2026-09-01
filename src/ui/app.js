@@ -22,6 +22,21 @@ import {
   getScaledFurnitureDimensions,
   filterFurnitureCatalog
 } from '../core/furniture.js';
+import {
+  createDimensionEntry,
+  updateDimensionEntry,
+  duplicateDimensionEntry,
+  calculateEntryValues,
+  calculateWorkspaceTotals,
+  formatWorkspaceForClipboard,
+  createDefaultWorkspace,
+  serializeWorkspace,
+  deserializeWorkspace,
+  WORKSPACE_STORAGE_KEY,
+  DEFAULT_WORKSPACE_SCALE,
+  DEFAULT_DISPLAY_UNIT,
+  SUPPORTED_DISPLAY_UNITS
+} from '../core/dimension-workspace.js';
 import { StorageService } from '../services/storage.js';
 import { AudioService } from '../services/audio.js';
 import { HistoryService } from '../services/history.js';
@@ -79,6 +94,9 @@ export function initializeApp() {
 
     // Mode 6: Reference
     refScaleRatio: 50,
+
+    // Mode 7: Dimension Workspace
+    workspace: deserializeWorkspace(StorageService.getItem(WORKSPACE_STORAGE_KEY)),
 
     // Cached Previous Valid Calculations (Never wipe to empty on invalid keystroke)
     lastValidConverter: null,
@@ -236,7 +254,37 @@ export function initializeApp() {
     detectorContextStrip: document.getElementById('detector-context-strip'),
     areavolStateBadge: document.getElementById('areavol-state-badge'),
     areavolContextStrip: document.getElementById('areavol-context-strip'),
-    customFurnStateBadge: document.getElementById('custom-furn-state-badge')
+    customFurnStateBadge: document.getElementById('custom-furn-state-badge'),
+
+    // Mode 7: Dimension Workspace Elements
+    workspaceStateBadge: document.getElementById('workspace-state-badge'),
+    workspaceScaleSelect: document.getElementById('workspace-scale-select'),
+    workspaceCustomScaleGroup: document.getElementById('workspace-custom-scale-group'),
+    workspaceCustomScaleInput: document.getElementById('workspace-custom-scale-input'),
+    workspaceUnitSelect: document.getElementById('workspace-unit-select'),
+    workspaceQuickChips: document.getElementById('workspace-quick-chips'),
+    workspaceAddForm: document.getElementById('workspace-add-form'),
+    workspaceAddName: document.getElementById('workspace-add-name'),
+    workspaceAddInput: document.getElementById('workspace-add-input'),
+    workspaceAddUnit: document.getElementById('workspace-add-unit'),
+    workspaceAddNotes: document.getElementById('workspace-add-notes'),
+    workspaceAddBtn: document.getElementById('workspace-add-btn'),
+    workspaceAddError: document.getElementById('workspace-add-error'),
+    workspaceTable: document.getElementById('workspace-table'),
+    workspaceTableBody: document.getElementById('workspace-table-body'),
+    workspaceThDrawing: document.getElementById('workspace-th-drawing'),
+    workspaceCardsList: document.getElementById('workspace-cards-list'),
+    workspaceEmptyState: document.getElementById('workspace-empty-state'),
+    workspaceLoadSamplesBtn: document.getElementById('workspace-load-samples-btn'),
+    workspaceActiveCount: document.getElementById('workspace-active-count'),
+    workspaceTotalRealVal: document.getElementById('workspace-total-real-val'),
+    workspaceTotalDrawingVal: document.getElementById('workspace-total-drawing-val'),
+    workspaceTotalDrawingLabel: document.getElementById('workspace-total-drawing-label'),
+    workspaceCopyAllBtn: document.getElementById('workspace-copy-all-btn'),
+    workspaceCopyDrawingBtn: document.getElementById('workspace-copy-drawing-btn'),
+    workspaceExportTsvBtn: document.getElementById('workspace-export-tsv-btn'),
+    workspaceSaveJournalBtn: document.getElementById('workspace-save-journal-btn'),
+    workspaceClearBtn: document.getElementById('workspace-clear-btn')
   };
 
   // ---------------------------------------------------------------------------
@@ -398,6 +446,7 @@ export function initializeApp() {
     else if (targetMode === 'area_volume') calculateAreaVolume();
     else if (targetMode === 'furniture') renderFurnitureGrid();
     else if (targetMode === 'reference') renderReferenceChart();
+    else if (targetMode === 'workspace') renderWorkspace();
   }
 
   // ---------------------------------------------------------------------------
@@ -1706,6 +1755,16 @@ export function initializeApp() {
         if (dom.furnPaperUnitSelect) dom.furnPaperUnitSelect.value = snap.paperUnit || 'cm';
         calculateCustomFurniture();
         break;
+      case 'workspace':
+        switchMode('workspace');
+        if (snap.scaleRatio) {
+          state.workspace.scaleRatio = snap.scaleRatio;
+        }
+        if (snap.displayUnit) {
+          state.workspace.displayUnit = snap.displayUnit;
+        }
+        renderWorkspace();
+        break;
     }
     AudioService.playTick();
     showToast(`↺ Restored calculation into ${item.operation || item.mode}`);
@@ -1830,6 +1889,23 @@ export function initializeApp() {
           }
         };
       }
+    } else if (modeKey === 'workspace') {
+      const totals = calculateWorkspaceTotals(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, state.precision);
+      if (totals.validCount > 0) {
+        entry = {
+          operation: 'Dimension Schedule',
+          mode: 'Dimension Workspace',
+          scaleRatio: state.workspace.scaleRatio,
+          scaleStr: `1:${state.workspace.scaleRatio}`,
+          inputStr: `${totals.enabledCount} active measurements (${totals.totalRealFormatted})`,
+          outputStr: `Drawing: ${totals.totalDrawingFormatted}`,
+          stateSnapshot: {
+            modeKey: 'workspace',
+            scaleRatio: state.workspace.scaleRatio,
+            displayUnit: state.workspace.displayUnit
+          }
+        };
+      }
     }
 
     if (entry) {
@@ -1850,7 +1926,274 @@ export function initializeApp() {
   }
 
   // ---------------------------------------------------------------------------
-  // 13b. Global Architect Command Palette Controller (Ctrl+K / ⌘K)
+  // 13b. Mode 7: Dimension Workspace Controller
+  // ---------------------------------------------------------------------------
+  function saveWorkspace() {
+    try {
+      StorageService.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(state.workspace));
+    } catch (e) {
+      console.error('Failed to save dimension workspace:', e);
+    }
+  }
+
+  function renderWorkspace() {
+    if (!dom.workspaceTableBody && !dom.workspaceCardsList) return;
+
+    const ws = state.workspace;
+    const totals = calculateWorkspaceTotals(ws.entries, ws.scaleRatio, ws.displayUnit, state.precision);
+
+    // Sync Scale Select
+    if (dom.workspaceScaleSelect) {
+      const knownValues = ['1', '2', '5', '10', '20', '25', '50', '100', '200', '500', '1000'];
+      if (knownValues.includes(String(ws.scaleRatio))) {
+        dom.workspaceScaleSelect.value = String(ws.scaleRatio);
+        if (dom.workspaceCustomScaleGroup) dom.workspaceCustomScaleGroup.style.display = 'none';
+      } else {
+        dom.workspaceScaleSelect.value = 'custom';
+        if (dom.workspaceCustomScaleGroup) {
+          dom.workspaceCustomScaleGroup.style.display = 'flex';
+          if (dom.workspaceCustomScaleInput) dom.workspaceCustomScaleInput.value = ws.scaleRatio;
+        }
+      }
+    }
+
+    // Sync Display Unit Select
+    if (dom.workspaceUnitSelect) {
+      dom.workspaceUnitSelect.value = ws.displayUnit;
+    }
+
+    // Sync Quick Scale Chips
+    if (dom.workspaceQuickChips) {
+      dom.workspaceQuickChips.querySelectorAll('.scale-chip').forEach(chip => {
+        const chipScale = parseFloat(chip.dataset.scale);
+        chip.classList.toggle('active', chipScale === ws.scaleRatio);
+      });
+    }
+
+    // Update Table Column Header & Totals Labels
+    if (dom.workspaceThDrawing) {
+      dom.workspaceThDrawing.textContent = `Drawing @ 1:${ws.scaleRatio}`;
+    }
+    if (dom.workspaceTotalDrawingLabel) {
+      dom.workspaceTotalDrawingLabel.textContent = `TOTAL DRAWING @ 1:${ws.scaleRatio}`;
+    }
+
+    // Render Table Rows (Desktop) & Cards (Mobile)
+    let tableHtml = '';
+    let cardsHtml = '';
+
+    ws.entries.forEach((entry, index) => {
+      const calc = calculateEntryValues(entry, ws.scaleRatio, ws.displayUnit, state.precision);
+      const isInvalid = !calc.isValid;
+      const isFirst = index === 0;
+      const isLast = index === ws.entries.length - 1;
+
+      // Table Row
+      tableHtml += `
+        <tr class="${!entry.enabled ? 'row-disabled' : ''} ${isInvalid ? 'row-invalid' : ''}" data-id="${entry.id}">
+          <td style="text-align: center;">
+            <input type="checkbox" class="ws-toggle-btn form-checkbox" data-id="${entry.id}" ${entry.enabled ? 'checked' : ''} title="${entry.enabled ? 'Disable row' : 'Enable row'}" aria-label="Toggle ${escapeHtml(entry.name)}">
+          </td>
+          <td>
+            <strong class="ws-name-text">${escapeHtml(entry.name)}</strong>
+          </td>
+          <td>
+            <span class="col-input-badge">${escapeHtml(entry.rawInput)}</span>
+          </td>
+          <td class="col-real">
+            ${isInvalid ? `<span class="col-err" title="${escapeHtml(calc.errorMessage || 'Invalid')}">⚠️ ${escapeHtml(calc.errorMessage || 'Invalid')}</span>` : calc.realFormatted}
+          </td>
+          <td class="col-drawing">
+            ${isInvalid ? '---' : calc.drawingFormatted}
+          </td>
+          <td class="col-notes">
+            ${escapeHtml(entry.notes || '—')}
+          </td>
+          <td>
+            <div class="row-actions-group">
+              <button type="button" class="row-action-btn ws-copy-row-btn" data-id="${entry.id}" title="Copy measurement">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+              </button>
+              <button type="button" class="row-action-btn ws-dup-row-btn" data-id="${entry.id}" title="Duplicate row">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              </button>
+              <button type="button" class="row-action-btn ws-up-row-btn" data-id="${entry.id}" ${isFirst ? 'disabled style="opacity: 0.3;"' : ''} title="Move up">
+                ↑
+              </button>
+              <button type="button" class="row-action-btn ws-down-row-btn" data-id="${entry.id}" ${isLast ? 'disabled style="opacity: 0.3;"' : ''} title="Move down">
+                ↓
+              </button>
+              <button type="button" class="row-action-btn danger ws-del-row-btn" data-id="${entry.id}" title="Delete row">
+                ✕
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+
+      // Mobile Card
+      cardsHtml += `
+        <div class="dim-card ${!entry.enabled ? 'row-disabled' : ''} ${isInvalid ? 'row-invalid' : ''}" data-id="${entry.id}">
+          <div class="dim-card-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" class="ws-toggle-btn form-checkbox" data-id="${entry.id}" ${entry.enabled ? 'checked' : ''} aria-label="Toggle ${escapeHtml(entry.name)}">
+              <span class="dim-card-title">${escapeHtml(entry.name)}</span>
+            </div>
+            <span class="col-input-badge">${escapeHtml(entry.rawInput)}</span>
+          </div>
+          <div class="dim-card-values">
+            <div style="display: flex; flex-direction: column;">
+              <span style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800;">REAL WORLD</span>
+              <span class="col-real" style="font-size: 0.95rem;">${isInvalid ? `⚠️ ${escapeHtml(calc.errorMessage || 'Invalid')}` : calc.realFormatted}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: flex-end;">
+              <span style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800;">DRAWING @ 1:${ws.scaleRatio}</span>
+              <span class="col-drawing" style="font-size: 0.95rem;">${isInvalid ? '---' : calc.drawingFormatted}</span>
+            </div>
+          </div>
+          ${entry.notes ? `<div style="font-size: 0.72rem; color: var(--text-secondary);">📝 ${escapeHtml(entry.notes)}</div>` : ''}
+          <div class="dim-card-actions">
+            <button type="button" class="row-action-btn ws-copy-row-btn" data-id="${entry.id}" title="Copy value">Copy</button>
+            <button type="button" class="row-action-btn ws-dup-row-btn" data-id="${entry.id}" title="Duplicate">Duplicate</button>
+            <button type="button" class="row-action-btn ws-up-row-btn" data-id="${entry.id}" ${isFirst ? 'disabled' : ''}>↑</button>
+            <button type="button" class="row-action-btn ws-down-row-btn" data-id="${entry.id}" ${isLast ? 'disabled' : ''}>↓</button>
+            <button type="button" class="row-action-btn danger ws-del-row-btn" data-id="${entry.id}">Delete</button>
+          </div>
+        </div>
+      `;
+    });
+
+    if (dom.workspaceTableBody) dom.workspaceTableBody.innerHTML = tableHtml;
+    if (dom.workspaceCardsList) dom.workspaceCardsList.innerHTML = cardsHtml;
+
+    // Toggle Empty State vs Table
+    const isEmpty = ws.entries.length === 0;
+    if (dom.workspaceEmptyState) dom.workspaceEmptyState.style.display = isEmpty ? 'flex' : 'none';
+    if (dom.workspaceTable) dom.workspaceTable.style.display = isEmpty ? 'none' : 'table';
+
+    // Update Totals Display
+    if (dom.workspaceActiveCount) {
+      dom.workspaceActiveCount.textContent = `${totals.enabledCount} of ${totals.totalCount} active measurements`;
+    }
+    if (dom.workspaceTotalRealVal) {
+      dom.workspaceTotalRealVal.textContent = totals.totalRealFormatted;
+    }
+    if (dom.workspaceTotalDrawingVal) {
+      dom.workspaceTotalDrawingVal.textContent = totals.totalDrawingFormatted;
+    }
+
+    // Update State Badge
+    if (dom.workspaceStateBadge) {
+      if (totals.invalidCount > 0) {
+        dom.workspaceStateBadge.className = 'state-badge state-error';
+        dom.workspaceStateBadge.textContent = 'CORRECTION REQUIRED';
+      } else {
+        dom.workspaceStateBadge.className = 'state-badge state-ready';
+        dom.workspaceStateBadge.textContent = 'READY';
+      }
+    }
+
+    attachWorkspaceRowEvents();
+  }
+
+  function attachWorkspaceRowEvents() {
+    // Toggle checkboxes
+    document.querySelectorAll('.ws-toggle-btn').forEach(btn => {
+      btn.addEventListener('change', (e) => {
+        const id = e.target.dataset.id;
+        const entry = state.workspace.entries.find(x => x.id === id);
+        if (entry) {
+          entry.enabled = e.target.checked;
+          saveWorkspace();
+          renderWorkspace();
+          AudioService.playTick();
+        }
+      });
+    });
+
+    // Copy single row measurement
+    document.querySelectorAll('.ws-copy-row-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = btn.dataset.id;
+        const entry = state.workspace.entries.find(x => x.id === id);
+        if (entry) {
+          const calc = calculateEntryValues(entry, state.workspace.scaleRatio, state.workspace.displayUnit, state.precision);
+          if (calc.isValid) {
+            copyToClipboard(`${entry.name}: ${calc.realFormatted} (Drawing @ 1:${state.workspace.scaleRatio}: ${calc.drawingFormatted})`, `${entry.name} Dimension`);
+          } else {
+            showToast('Cannot copy invalid measurement', 'warning');
+          }
+        }
+      });
+    });
+
+    // Duplicate row
+    document.querySelectorAll('.ws-dup-row-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = btn.dataset.id;
+        const idx = state.workspace.entries.findIndex(x => x.id === id);
+        if (idx !== -1) {
+          const dup = duplicateDimensionEntry(state.workspace.entries[idx]);
+          state.workspace.entries.splice(idx + 1, 0, dup);
+          saveWorkspace();
+          renderWorkspace();
+          AudioService.playTick();
+          showToast(`Duplicated "${state.workspace.entries[idx].name}"`);
+        }
+      });
+    });
+
+    // Move row up
+    document.querySelectorAll('.ws-up-row-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = btn.dataset.id;
+        const idx = state.workspace.entries.findIndex(x => x.id === id);
+        if (idx > 0) {
+          const temp = state.workspace.entries[idx];
+          state.workspace.entries[idx] = state.workspace.entries[idx - 1];
+          state.workspace.entries[idx - 1] = temp;
+          saveWorkspace();
+          renderWorkspace();
+          AudioService.playTick();
+        }
+      });
+    });
+
+    // Move row down
+    document.querySelectorAll('.ws-down-row-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = btn.dataset.id;
+        const idx = state.workspace.entries.findIndex(x => x.id === id);
+        if (idx !== -1 && idx < state.workspace.entries.length - 1) {
+          const temp = state.workspace.entries[idx];
+          state.workspace.entries[idx] = state.workspace.entries[idx + 1];
+          state.workspace.entries[idx + 1] = temp;
+          saveWorkspace();
+          renderWorkspace();
+          AudioService.playTick();
+        }
+      });
+    });
+
+    // Delete row
+    document.querySelectorAll('.ws-del-row-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = btn.dataset.id;
+        const idx = state.workspace.entries.findIndex(x => x.id === id);
+        if (idx !== -1) {
+          const deletedName = state.workspace.entries[idx].name;
+          state.workspace.entries.splice(idx, 1);
+          saveWorkspace();
+          renderWorkspace();
+          AudioService.playTick();
+          showToast(`Deleted "${deletedName}"`);
+        }
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 13c. Global Architect Command Palette Controller (Ctrl+K / ⌘K)
   // ---------------------------------------------------------------------------
   let paletteQuery = '';
   let paletteSelectedIndex = 0;
@@ -2073,6 +2416,9 @@ export function initializeApp() {
       case 'nav-reference':
         switchMode('reference');
         break;
+      case 'nav-workspace':
+        switchMode('workspace');
+        break;
       case 'nav-history':
         toggleHistoryDrawer();
         break;
@@ -2096,6 +2442,9 @@ export function initializeApp() {
           unit = dom.areavolResultUnit?.textContent || '';
         } else if (state.currentMode === 'furniture') {
           val = dom.customFurnResult?.textContent;
+        } else if (state.currentMode === 'workspace') {
+          val = dom.workspaceTotalRealVal?.textContent;
+          unit = '';
         }
         if (val && val !== '---') {
           copyToClipboard(`${val} ${unit}`.trim(), 'Active Result');
@@ -2633,6 +2982,140 @@ export function initializeApp() {
       });
     }
 
+    // Mode 7: Dimension Workspace Listeners
+    if (dom.workspaceScaleSelect) {
+      dom.workspaceScaleSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val === 'custom') {
+          if (dom.workspaceCustomScaleGroup) dom.workspaceCustomScaleGroup.style.display = 'flex';
+          if (dom.workspaceCustomScaleInput) dom.workspaceCustomScaleInput.focus();
+        } else {
+          if (dom.workspaceCustomScaleGroup) dom.workspaceCustomScaleGroup.style.display = 'none';
+          state.workspace.scaleRatio = parseFloat(val) || 50;
+          saveWorkspace();
+          renderWorkspace();
+          AudioService.playTick();
+        }
+      });
+    }
+
+    if (dom.workspaceCustomScaleInput) {
+      dom.workspaceCustomScaleInput.addEventListener('input', (e) => {
+        const r = parseFloat(e.target.value);
+        if (!isNaN(r) && r > 0) {
+          state.workspace.scaleRatio = r;
+          saveWorkspace();
+          renderWorkspace();
+        }
+      });
+    }
+
+    if (dom.workspaceUnitSelect) {
+      dom.workspaceUnitSelect.addEventListener('change', (e) => {
+        state.workspace.displayUnit = e.target.value;
+        saveWorkspace();
+        renderWorkspace();
+        AudioService.playTick();
+      });
+    }
+
+    if (dom.workspaceQuickChips) {
+      dom.workspaceQuickChips.querySelectorAll('.scale-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          const r = parseFloat(chip.dataset.scale);
+          if (!isNaN(r) && r > 0) {
+            state.workspace.scaleRatio = r;
+            saveWorkspace();
+            renderWorkspace();
+            AudioService.playTick();
+          }
+        });
+      });
+    }
+
+    if (dom.workspaceAddForm) {
+      dom.workspaceAddForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const rawInput = dom.workspaceAddInput?.value?.trim() || '';
+        if (!rawInput) return;
+
+        const name = dom.workspaceAddName?.value?.trim() || 'Dimension';
+        const defaultUnit = dom.workspaceAddUnit?.value || state.workspace.displayUnit || 'mm';
+        const notes = dom.workspaceAddNotes?.value?.trim() || '';
+
+        const newEntry = createDimensionEntry({ name, rawInput, defaultUnit, notes }, defaultUnit);
+        state.workspace.entries.push(newEntry);
+        saveWorkspace();
+        renderWorkspace();
+        AudioService.playTick();
+
+        if (dom.workspaceAddInput) dom.workspaceAddInput.value = '';
+        if (dom.workspaceAddName) dom.workspaceAddName.value = '';
+        if (dom.workspaceAddNotes) dom.workspaceAddNotes.value = '';
+        if (dom.workspaceAddInput) dom.workspaceAddInput.focus();
+
+        if (newEntry.isValid) {
+          showToast(`Added "${newEntry.name}" (${newEntry.rawInput})`);
+        } else {
+          showToast(`Added "${newEntry.name}" ⚠️ (Check measurement syntax)`, 'warning');
+        }
+      });
+    }
+
+    if (dom.workspaceLoadSamplesBtn) {
+      dom.workspaceLoadSamplesBtn.addEventListener('click', () => {
+        state.workspace = createDefaultWorkspace();
+        saveWorkspace();
+        renderWorkspace();
+        AudioService.playTick();
+        showToast('Loaded sample architectural dimension schedule');
+      });
+    }
+
+    if (dom.workspaceCopyAllBtn) {
+      dom.workspaceCopyAllBtn.addEventListener('click', () => {
+        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, 'both');
+        copyToClipboard(text, 'Full Dimension Schedule');
+      });
+    }
+
+    if (dom.workspaceCopyDrawingBtn) {
+      dom.workspaceCopyDrawingBtn.addEventListener('click', () => {
+        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, 'drawing');
+        copyToClipboard(text, `Drawing Values (@ 1:${state.workspace.scaleRatio})`);
+      });
+    }
+
+    if (dom.workspaceExportTsvBtn) {
+      dom.workspaceExportTsvBtn.addEventListener('click', () => {
+        const tsv = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, 'tsv');
+        downloadFile(tsv, `dimension-schedule-1to${state.workspace.scaleRatio}-${Date.now()}.tsv`, 'text/tab-separated-values');
+        showToast('Exported schedule as TSV spreadsheet');
+      });
+    }
+
+    if (dom.workspaceSaveJournalBtn) {
+      dom.workspaceSaveJournalBtn.addEventListener('click', () => {
+        logCurrentCalculationToHistory('workspace');
+      });
+    }
+
+    if (dom.workspaceClearBtn) {
+      dom.workspaceClearBtn.addEventListener('click', () => {
+        if (state.workspace.entries.length === 0) {
+          showToast('Workspace is already empty', 'warning');
+          return;
+        }
+        if (window.confirm('Clear all dimensions from the workspace?')) {
+          state.workspace.entries = [];
+          saveWorkspace();
+          renderWorkspace();
+          AudioService.playTick();
+          showToast('Dimension workspace cleared');
+        }
+      });
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -2675,6 +3158,7 @@ export function initializeApp() {
       else if (e.key === '4') { e.preventDefault(); switchMode('area_volume'); }
       else if (e.key === '5') { e.preventDefault(); switchMode('furniture'); }
       else if (e.key === '6') { e.preventDefault(); switchMode('reference'); }
+      else if (e.key === '7') { e.preventDefault(); switchMode('workspace'); }
       else if (e.key === 's' || e.key === 'S') { e.preventDefault(); swapDirection(); }
       else if (e.key === 'h' || e.key === 'H') { e.preventDefault(); toggleHistoryDrawer(); }
       else if (e.key === '?') {

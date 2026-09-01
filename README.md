@@ -176,6 +176,13 @@ This repository serves as:
 * **Triangle**: Three-side calculations using Heron's formula ($s = \frac{a+b+c}{2}$, $A = \sqrt{s(s-a)(s-b)(s-c)}$).
 * **Arbitrary Polygon**: Multi-vertex 2D coordinates using the Shoelace formula (Gauss area algorithm) with signed clockwise/counter-clockwise orientation and collinearity detection.
 
+### 8. Dimension Workspace & Dynamic Schedule
+* **Persistent Architectural Scratchpad**: Enter multiple measurements (walls, openings, partitions, structural grids) and view them simultaneously.
+* **Simultaneous Live Scaling**: Switch drawing scales ($1:20, 1:50, 1:100, 1:200$, custom) to update drawing representations instantly across all rows.
+* **Independent Display Units**: Switch output units between metric ($mm, cm, m$) and imperial ($in, ft$, Architectural $ft\text{-}in$) on the fly.
+* **Live Cumulative Totals**: Instant sum of real-world and drawing lengths for all enabled valid rows.
+* **Row-Level Controls & Exports**: Duplicate rows, reorder ($\uparrow / \downarrow$), enable/disable, export TSV schedules, and save to Calculation Journal.
+
 ---
 
 ## 📐 Architectural Scale Presets (All 28 Presets)
@@ -332,6 +339,7 @@ $$\text{Area} = \frac{1}{2} \left| \sum_{i=1}^{n} (x_i y_{i+1} - x_{i+1} y_i) \r
 | <kbd>4</kbd> | Switch to **Area & Volume Scaler** |
 | <kbd>5</kbd> | Switch to **Furniture Scales & Standards** |
 | <kbd>6</kbd> | Switch to **Reference Chart Sheet** |
+| <kbd>7</kbd> | Switch to **Dimension Workspace** |
 | <kbd>H</kbd> | Toggle Calculation History Drawer |
 | <kbd>?</kbd> | Open Keyboard Shortcuts Modal |
 | <kbd>Esc</kbd> | Close Palette / Modal / Drawer / Unfocus Inputs |

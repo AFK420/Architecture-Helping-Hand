@@ -32,6 +32,7 @@ export function generateBundleContent() {
     { name: 'Calculator', file: path.join(srcDir, 'core', 'calculator.js') },
     { name: 'Geometry', file: path.join(srcDir, 'core', 'geometry.js') },
     { name: 'Furniture', file: path.join(srcDir, 'core', 'furniture.js') },
+    { name: 'DimensionWorkspace', file: path.join(srcDir, 'core', 'dimension-workspace.js') },
     { name: 'Storage', file: path.join(srcDir, 'services', 'storage.js') },
     { name: 'Audio', file: path.join(srcDir, 'services', 'audio.js') },
     { name: 'History', file: path.join(srcDir, 'services', 'history.js') },

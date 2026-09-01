@@ -152,6 +152,17 @@
         <span>Reference Chart</span>
         <span class="mode-key-hint">6</span>
       </button>
+
+      <button class="mode-tab" data-mode="workspace" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3h18v18H3z"></path>
+          <path d="M3 9h18"></path>
+          <path d="M9 21V9"></path>
+          <path d="M15 9v12"></path>
+        </svg>
+        <span>Dimension Workspace</span>
+        <span class="mode-key-hint">7</span>
+      </button>
     </nav>
 
     <!-- ======================================================== -->
@@ -1107,6 +1118,210 @@
 
       </div>
     </section>
+
+    <!-- ======================================================== -->
+    <!-- MODE 7: DIMENSION WORKSPACE & SCHEDULE                   -->
+    <!-- ======================================================== -->
+    <section id="mode-view-workspace" class="tool-mode-view" aria-labelledby="heading-workspace">
+      <div class="calculator-card workspace-card">
+        
+        <!-- Workspace Header & State -->
+        <div class="workspace-header-bar">
+          <div class="workspace-title-group">
+            <h2 id="heading-workspace" class="card-title">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3h18v18H3z"></path>
+                <path d="M3 9h18"></path>
+                <path d="M9 21V9"></path>
+                <path d="M15 9v12"></path>
+              </svg>
+              Dimension Workspace
+            </h2>
+            <p class="card-subtitle">Architectural Scratchpad, Multi-Measurement Scaling Schedule & Batch Totals</p>
+          </div>
+          <div class="workspace-header-controls">
+            <span id="workspace-state-badge" class="state-badge state-ready">READY</span>
+          </div>
+        </div>
+
+        <!-- Global Workspace Configuration Bar -->
+        <div class="workspace-config-bar">
+          <div class="config-item">
+            <label for="workspace-scale-select" class="field-label">Drawing Scale</label>
+            <select id="workspace-scale-select" class="form-select" aria-label="Workspace drawing scale">
+              <option value="1">1:1 (Full Size)</option>
+              <option value="2">1:2 (Half Scale)</option>
+              <option value="5">1:5 (Detail Scale)</option>
+              <option value="10">1:10 (Detail Scale)</option>
+              <option value="20">1:20 (Interior/Joinery)</option>
+              <option value="25">1:25 (Interior Scale)</option>
+              <option value="50" selected>1:50 (Standard Floor Plan)</option>
+              <option value="100">1:100 (General Arrangement)</option>
+              <option value="200">1:200 (Site Layout Plan)</option>
+              <option value="500">1:500 (Master Plan / Urban)</option>
+              <option value="1000">1:1000 (Geographical / Context)</option>
+              <option value="custom">Custom Scale 1:X...</option>
+            </select>
+          </div>
+
+          <div id="workspace-custom-scale-group" class="config-item" style="display: none;">
+            <label for="workspace-custom-scale-input" class="field-label">Custom Denominator</label>
+            <input type="number" id="workspace-custom-scale-input" class="form-input" min="0.001" step="any" placeholder="e.g. 75 for 1:75" aria-label="Custom scale ratio">
+          </div>
+
+          <div class="config-item">
+            <label for="workspace-unit-select" class="field-label">Display Unit</label>
+            <select id="workspace-unit-select" class="form-select" aria-label="Workspace display unit">
+              <option value="mm" selected>Millimeters (mm)</option>
+              <option value="cm">Centimeters (cm)</option>
+              <option value="m">Meters (m)</option>
+              <option value="in">Inches (in)</option>
+              <option value="ft">Decimal Feet (ft)</option>
+              <option value="ft_in">Architectural (Ft-In)</option>
+            </select>
+          </div>
+
+          <div class="config-item chips-item">
+            <span class="field-label">Quick Scales</span>
+            <div id="workspace-quick-chips" class="workspace-chips-row">
+              <button type="button" class="scale-chip" data-scale="20">1:20</button>
+              <button type="button" class="scale-chip active" data-scale="50">1:50</button>
+              <button type="button" class="scale-chip" data-scale="100">1:100</button>
+              <button type="button" class="scale-chip" data-scale="200">1:200</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add Dimension Input Form -->
+        <div class="workspace-add-section">
+          <form id="workspace-add-form" class="workspace-add-form" autocomplete="off">
+            <div class="form-row-grid">
+              <div class="form-group col-name">
+                <label for="workspace-add-name" class="field-label">Item / Member Name</label>
+                <input type="text" id="workspace-add-name" class="form-input" placeholder="e.g. Wall A, Door Opening, Beam" aria-label="Dimension item name">
+              </div>
+              <div class="form-group col-input">
+                <label for="workspace-add-input" class="field-label">Measurement Input</label>
+                <input type="text" id="workspace-add-input" class="form-input" placeholder="e.g. 2.4m, 900, 7' 10&quot;, 3 1/2&quot;" aria-label="Raw measurement input" required>
+              </div>
+              <div class="form-group col-unit">
+                <label for="workspace-add-unit" class="field-label">Default Unit</label>
+                <select id="workspace-add-unit" class="form-select" aria-label="Default unit if unstated">
+                  <option value="mm" selected>mm</option>
+                  <option value="cm">cm</option>
+                  <option value="m">m</option>
+                  <option value="in">in</option>
+                  <option value="ft">ft</option>
+                </select>
+              </div>
+              <div class="form-group col-notes">
+                <label for="workspace-add-notes" class="field-label">Notes (Optional)</label>
+                <input type="text" id="workspace-add-notes" class="form-input" placeholder="e.g. Verify on site, Structural" aria-label="Optional notes">
+              </div>
+              <div class="form-group col-btn">
+                <label class="field-label">&nbsp;</label>
+                <button type="submit" id="workspace-add-btn" class="calc-btn primary-action">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  <span>Add Dimension</span>
+                </button>
+              </div>
+            </div>
+          </form>
+          <div id="workspace-add-error" class="workspace-inline-error" style="display: none;"></div>
+        </div>
+
+        <!-- Dimension Schedule Table (Desktop & Tablet) -->
+        <div class="workspace-schedule-container">
+          <div class="table-scroll-container">
+            <table class="workspace-table" id="workspace-table">
+              <thead>
+                <tr>
+                  <th style="width: 44px; text-align: center;">On</th>
+                  <th>Item Name</th>
+                  <th>Raw Input</th>
+                  <th>Real Dimension</th>
+                  <th id="workspace-th-drawing">Drawing @ 1:50</th>
+                  <th>Notes</th>
+                  <th style="text-align: right; width: 170px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="workspace-table-body">
+                <!-- Dynamically populated by JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Mobile Cards Container -->
+          <div id="workspace-cards-list" class="workspace-cards-list">
+            <!-- Dynamically populated for mobile viewports -->
+          </div>
+
+          <!-- Empty Workspace State -->
+          <div id="workspace-empty-state" class="workspace-empty-state" style="display: none;">
+            <div class="empty-icon">📐</div>
+            <div class="empty-title">No Dimensions in Workspace</div>
+            <div class="empty-desc">Enter measurements in the form above or load a sample architectural dimension schedule to get started.</div>
+            <button type="button" id="workspace-load-samples-btn" class="hist-btn" style="margin-top: 0.5rem;">
+              Load Sample Architectural Schedule
+            </button>
+          </div>
+        </div>
+
+        <!-- Live Totals Hero Panel -->
+        <div class="workspace-totals-card" id="workspace-totals-card">
+          <div class="totals-info">
+            <span class="totals-label">WORKSPACE SUMMARY TOTALS</span>
+            <span id="workspace-active-count" class="totals-count-badge">0 active measurements</span>
+          </div>
+          <div class="totals-hero-values">
+            <div class="total-metric-block">
+              <span class="total-type-label">TOTAL REAL-WORLD</span>
+              <div class="total-val-wrap">
+                <span id="workspace-total-real-val" class="result-hero-number">0</span>
+              </div>
+            </div>
+            <div class="total-divider">➔</div>
+            <div class="total-metric-block">
+              <span class="total-type-label" id="workspace-total-drawing-label">TOTAL DRAWING @ 1:50</span>
+              <div class="total-val-wrap">
+                <span id="workspace-total-drawing-val" class="result-hero-number">0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Workspace Actions Toolbar -->
+        <div class="workspace-actions-toolbar" id="workspace-actions-toolbar">
+          <div class="toolbar-left">
+            <button type="button" id="workspace-copy-all-btn" class="hist-btn" title="Copy formatted dimension schedule to clipboard">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+              <span>Copy All</span>
+            </button>
+            <button type="button" id="workspace-copy-drawing-btn" class="hist-btn" title="Copy drawing scaled values only">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+              <span>Copy Drawing Values</span>
+            </button>
+            <button type="button" id="workspace-export-tsv-btn" class="hist-btn" title="Export schedule as TSV spreadsheet format">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <span>Export TSV</span>
+            </button>
+            <button type="button" id="workspace-save-journal-btn" class="hist-btn" title="Save workspace summary to calculation journal">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+              <span>Save to Journal</span>
+            </button>
+          </div>
+          <div class="toolbar-right">
+            <button type="button" id="workspace-clear-btn" class="hist-btn danger" title="Clear all dimensions in workspace">
+              <span>Clear Workspace</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
   </main>
 
   <!-- History Drawer Side Panel -->
@@ -1210,8 +1425,8 @@
           <span class="kbd-badge">S</span>
         </div>
         <div class="shortcut-row">
-          <span>Switch Tool Modes (1-6)</span>
-          <span class="kbd-badge">1 — 6</span>
+          <span>Switch Tool Modes (1-7)</span>
+          <span class="kbd-badge">1 — 7</span>
         </div>
         <div class="shortcut-row">
           <span>Toggle Calculation History Drawer</span>
