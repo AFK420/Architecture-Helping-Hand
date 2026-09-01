@@ -14,7 +14,7 @@ const rootDir = path.resolve(__dirname, '..');
 const srcDir = path.join(rootDir, 'src');
 const distFile = path.join(rootDir, 'js', 'app.js');
 
-function stripImportsAndExports(code) {
+export function stripImportsAndExports(code) {
   return code
     .replace(/^\s*import\s+.*?from\s+['"].*?['"];?\s*$/gm, '')
     .replace(/^\s*import\s+['"].*?['"];?\s*$/gm, '')
@@ -23,9 +23,7 @@ function stripImportsAndExports(code) {
     .replace(/^\s*export\s*\{[^}]*\};?\s*$/gm, '');
 }
 
-function build() {
-  console.log('📦 Building Architecture Helping Hand standalone bundle...');
-
+export function generateBundleContent() {
   const modules = [
     { name: 'Units', file: path.join(srcDir, 'core', 'units.js') },
     { name: 'Presets', file: path.join(srcDir, 'core', 'presets.js') },
@@ -43,7 +41,6 @@ function build() {
   let bundleContent = `/**
  * Architecture Helping Hand - Standalone Bundle v2.0.0
  * Compiled automatically from src/ modules. Works with file:/// and http:// protocols.
- * Generated on: ${new Date().toISOString()}
  */
 
 (function() {
@@ -74,9 +71,32 @@ function build() {
 })();
 `;
 
+  return bundleContent;
+}
+
+export function build() {
+  console.log('📦 Building Architecture Helping Hand standalone bundle...');
+  const bundleContent = generateBundleContent();
   fs.mkdirSync(path.dirname(distFile), { recursive: true });
   fs.writeFileSync(distFile, bundleContent, 'utf-8');
   console.log(`✅ Built successfully to ${distFile} (${(bundleContent.length / 1024).toFixed(1)} KB)`);
 }
 
-build();
+// Execute if run directly
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  if (process.argv.includes('--check')) {
+    if (!fs.existsSync(distFile)) {
+      console.error(`❌ Bundle ${distFile} does not exist.`);
+      process.exit(1);
+    }
+    const current = fs.readFileSync(distFile, 'utf-8');
+    const expected = generateBundleContent();
+    if (current.trim() !== expected.trim()) {
+      console.error(`❌ Bundle ${distFile} is out of sync with src/. Run "node scripts/build.js" to update it.`);
+      process.exit(1);
+    }
+    console.log(`✅ Bundle ${distFile} is in sync with src/.`);
+  } else {
+    build();
+  }
+}

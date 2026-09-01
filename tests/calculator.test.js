@@ -32,7 +32,7 @@ function approxEqual(a, b, epsilon = 0.000001) {
 
 console.log('🧪 Running tests/calculator.test.js...');
 
-// 1. Drawing to Real-World Tests
+// 1. Drawing to Real-World Tests (Various Scales & Units)
 {
   const r1 = drawingToReal({ drawingVal: 10, drawingUnitKey: 'cm', scaleRatio: 50, realUnitKey: 'm' });
   assert(approxEqual(r1.realValue, 5.0), '10 cm @ 1:50 = 5.0 m', r1.realValue);
@@ -48,9 +48,21 @@ console.log('🧪 Running tests/calculator.test.js...');
 
   const r5 = drawingToReal({ drawingVal: 3, drawingUnitKey: 'in', scaleRatio: 48, realUnitKey: 'ft' });
   assert(approxEqual(r5.realValue, 12.0), '3 in @ 1:48 (1/4"=1\') = 12 ft', r5.realValue);
+
+  const r6 = drawingToReal({ drawingVal: 50, drawingUnitKey: 'mm', scaleRatio: 1, realUnitKey: 'mm' });
+  assert(approxEqual(r6.realValue, 50.0), '50 mm @ 1:1 = 50.0 mm', r6.realValue);
+
+  const r7 = drawingToReal({ drawingVal: 20, drawingUnitKey: 'cm', scaleRatio: 2, realUnitKey: 'cm' });
+  assert(approxEqual(r7.realValue, 40.0), '20 cm @ 1:2 = 40.0 cm', r7.realValue);
+
+  const r8 = drawingToReal({ drawingVal: 10, drawingUnitKey: 'cm', scaleRatio: 500, realUnitKey: 'm' });
+  assert(approxEqual(r8.realValue, 50.0), '10 cm @ 1:500 = 50.0 m', r8.realValue);
+
+  const r9 = drawingToReal({ drawingVal: 10, drawingUnitKey: 'cm', scaleRatio: 10000, realUnitKey: 'km' });
+  assert(approxEqual(r9.realValue, 1.0), '10 cm @ 1:10000 = 1.0 km', r9.realValue);
 }
 
-// 2. Real-World to Drawing Tests
+// 2. Real-World to Drawing Tests & Round-Trips
 {
   const r1 = realToDrawing({ realVal: 5.0, realUnitKey: 'm', scaleRatio: 50, drawingUnitKey: 'cm' });
   assert(approxEqual(r1.drawingValue, 10.0), '5.0 m @ 1:50 = 10.0 cm', r1.drawingValue);
@@ -60,6 +72,12 @@ console.log('🧪 Running tests/calculator.test.js...');
 
   const r3 = realToDrawing({ realVal: 24.0, realUnitKey: 'ft', scaleRatio: 48, drawingUnitKey: 'in' });
   assert(approxEqual(r3.drawingValue, 6.0), '24 ft @ 1:48 = 6.0 in', r3.drawingValue);
+
+  // Round-trip: Drawing -> Real -> Drawing
+  const originalDrawing = 14.75;
+  const computedReal = drawingToReal({ drawingVal: originalDrawing, drawingUnitKey: 'cm', scaleRatio: 50, realUnitKey: 'm' }).realValue;
+  const backToDrawing = realToDrawing({ realVal: computedReal, realUnitKey: 'm', scaleRatio: 50, drawingUnitKey: 'cm' }).drawingValue;
+  assert(approxEqual(originalDrawing, backToDrawing), 'Round-trip drawing (14.75cm) -> real -> drawing preserves dimension', backToDrawing);
 }
 
 // 3. Rescaling Tests (Scale A -> Scale B)
@@ -85,19 +103,26 @@ console.log('🧪 Running tests/calculator.test.js...');
   assert(r2.closestPreset?.id === '1:50', 'Closest preset identified as 1:50', r2.closestPreset?.id);
 }
 
-// 5. Area & Volume Scaler Tests
+// 5. Area & Volume Scaler Tests (Bidirectional: Drawing <-> Real)
 {
-  const r1 = scaleArea({ areaVal: 4, inputUnitKey: 'cm2', scaleRatio: 100, outputUnitKey: 'm2', isDrawingToReal: true });
-  assert(approxEqual(r1.resultValue, 4.0), '4 cm² @ 1:100 = 4.0 m²', r1.resultValue);
+  // Area Drawing -> Real
+  const a1 = scaleArea({ areaVal: 4, inputUnitKey: 'cm2', scaleRatio: 100, outputUnitKey: 'm2', isDrawingToReal: true });
+  assert(approxEqual(a1.resultValue, 4.0), '4 cm² @ 1:100 (Drawing->Real) = 4.0 m²', a1.resultValue);
 
-  const r2 = scaleArea({ areaVal: 50, inputUnitKey: 'm2', scaleRatio: 50, outputUnitKey: 'cm2', isDrawingToReal: false });
-  assert(approxEqual(r2.resultValue, 200.0), '50 m² @ 1:50 = 200 cm²', r2.resultValue);
+  // Area Real -> Drawing
+  const a2 = scaleArea({ areaVal: 4, inputUnitKey: 'm2', scaleRatio: 100, outputUnitKey: 'cm2', isDrawingToReal: false });
+  assert(approxEqual(a2.resultValue, 4.0), '4 m² @ 1:100 (Real->Drawing) = 4.0 cm²', a2.resultValue);
 
-  const r3 = scaleVolume({ volumeVal: 1000, inputUnitKey: 'cm3', scaleRatio: 50, outputUnitKey: 'm3', isDrawingToReal: true });
-  assert(approxEqual(r3.resultValue, 125.0), '1000 cm³ @ 1:50 = 125.0 m³', r3.resultValue);
+  // Volume Drawing -> Real
+  const v1 = scaleVolume({ volumeVal: 1000, inputUnitKey: 'cm3', scaleRatio: 50, outputUnitKey: 'm3', isDrawingToReal: true });
+  assert(approxEqual(v1.resultValue, 125.0), '1000 cm³ @ 1:50 (Drawing->Real) = 125.0 m³', v1.resultValue);
+
+  // Volume Real -> Drawing
+  const v2 = scaleVolume({ volumeVal: 125, inputUnitKey: 'm3', scaleRatio: 50, outputUnitKey: 'cm3', isDrawingToReal: false });
+  assert(approxEqual(v2.resultValue, 1000.0), '125 m³ @ 1:50 (Real->Drawing) = 1000.0 cm³', v2.resultValue);
 }
 
-// 6. Zero Values & Boundary Tests
+// 6. Zero Values & Precision Boundary Tests
 {
   const rZero = drawingToReal({ drawingVal: 0, drawingUnitKey: 'cm', scaleRatio: 50, realUnitKey: 'm' });
   assert(rZero.realValue === 0, 'Zero drawing dimension produces zero real dimension', rZero.realValue);
@@ -107,17 +132,29 @@ console.log('🧪 Running tests/calculator.test.js...');
 
   const rSmall = drawingToReal({ drawingVal: 0.1, drawingUnitKey: 'mm', scaleRatio: 1, realUnitKey: 'mm' });
   assert(approxEqual(rSmall.realValue, 0.1), '0.1mm @ 1:1 = 0.1 mm', rSmall.realValue);
+
+  // Floating point test (0.1 + 0.2 precision)
+  const rFloat = drawingToReal({ drawingVal: 0.3, drawingUnitKey: 'm', scaleRatio: 1, realUnitKey: 'm' });
+  assert(approxEqual(rFloat.realValue, 0.3), 'Floating point 0.3m @ 1:1 = 0.3m', rFloat.realValue);
 }
 
-// 7. Error Handling for Invalid Ratios
+// 7. Error Handling for Invalid Inputs & Ratios
 {
-  let errorCaught = false;
+  let ratioZeroThrew = false;
   try {
     scaleDimension({ value: 10, unitKey: 'cm', ratio: 0, direction: 'drawing_to_real' });
   } catch (e) {
-    errorCaught = true;
+    ratioZeroThrew = true;
   }
-  assert(errorCaught, 'Throws error on ratio <= 0', errorCaught);
+  assert(ratioZeroThrew, 'Throws error on ratio <= 0', ratioZeroThrew);
+
+  let invalidUnitThrew = false;
+  try {
+    scaleDimension({ value: 10, unitKey: 'invalid_unit', ratio: 50 });
+  } catch (e) {
+    invalidUnitThrew = true;
+  }
+  assert(invalidUnitThrew, 'Throws error on invalid unit key "invalid_unit"', invalidUnitThrew);
 }
 
 console.log(`Summary: ${passed} passed, ${failed} failed.\n`);

@@ -42,9 +42,35 @@ export const VOLUME_UNITS = Object.freeze({
 
 /**
  * Get unit definition safely by key across all dimension types
+ * @param {string} key
+ * @returns {Object|null}
  */
 export function getUnit(key) {
+  if (!key || typeof key !== 'string') return null;
   return UNITS[key] || AREA_UNITS[key] || VOLUME_UNITS[key] || null;
+}
+
+/**
+ * Validates and returns a unit object. Throws an explicit Error if unit is unknown or dimension mismatches.
+ * @param {string} key - Unit key
+ * @param {'length'|'area'|'volume'} [expectedDimension] - Optional dimension check
+ * @returns {Object}
+ */
+export function requireUnit(key, expectedDimension) {
+  if (!key || typeof key !== 'string') {
+    throw new Error(`Unit key is required and must be a string (received: ${JSON.stringify(key)})`);
+  }
+
+  const unit = getUnit(key);
+  if (!unit) {
+    throw new Error(`Unknown measurement unit: "${key}"`);
+  }
+
+  if (expectedDimension && unit.dimension !== expectedDimension) {
+    throw new Error(`Unit "${key}" is of dimension "${unit.dimension}", expected "${expectedDimension}"`);
+  }
+
+  return unit;
 }
 
 /**
@@ -54,11 +80,11 @@ export function convertUnit(value, fromKey, toKey) {
   if (value === 0) return 0;
   if (fromKey === toKey) return value;
 
-  const fromUnit = getUnit(fromKey);
-  const toUnit = getUnit(toKey);
+  const fromUnit = requireUnit(fromKey);
+  const toUnit = requireUnit(toKey);
 
-  if (!fromUnit || !toUnit || fromUnit.dimension !== toUnit.dimension) {
-    throw new Error(`Incompatible unit conversion from "${fromKey}" to "${toKey}"`);
+  if (fromUnit.dimension !== toUnit.dimension) {
+    throw new Error(`Incompatible unit conversion from "${fromKey}" (${fromUnit.dimension}) to "${toKey}" (${toUnit.dimension})`);
   }
 
   if (fromUnit.dimension === 'length') {

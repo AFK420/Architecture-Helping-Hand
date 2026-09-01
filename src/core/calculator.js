@@ -3,7 +3,7 @@
  * Pure mathematical scaling, rescaling, scale detection, area, and volume algorithms.
  */
 
-import { UNITS, AREA_UNITS, VOLUME_UNITS } from './units.js';
+import { UNITS, AREA_UNITS, VOLUME_UNITS, requireUnit } from './units.js';
 import { SCALE_PRESETS } from './presets.js';
 import { formatFeetInches } from './formatter.js';
 
@@ -11,10 +11,10 @@ import { formatFeetInches } from './formatter.js';
  * Scale linear dimension between Drawing (paper) and Real-World measurements
  * @param {Object} params
  * @param {number} params.value - Measured value
- * @param {string} params.unitKey - Unit key of the input (e.g. 'cm', 'm', 'in')
- * @param {number} params.ratio - Scale denominator ratio (e.g. 50 for 1:50)
+ * @param {string} [params.unitKey='cm'] - Unit key of the input (e.g. 'cm', 'm', 'in')
+ * @param {number} [params.ratio=50] - Scale denominator ratio (e.g. 50 for 1:50)
  * @param {'drawing_to_real'|'real_to_drawing'} [params.direction='drawing_to_real']
- * @param {string} [params.targetUnitKey] - Desired output unit key
+ * @param {string} [params.targetUnitKey] - Desired output unit key (defaults to 'm' for drawing_to_real, 'cm' for real_to_drawing)
  * @returns {Object} Normalized result object with realMeters, drawingMeters, targetValue, etc.
  */
 export function scaleDimension(params) {
@@ -23,29 +23,30 @@ export function scaleDimension(params) {
     unitKey = 'cm',
     ratio = 50,
     direction = 'drawing_to_real',
-    targetUnitKey
+    targetUnitKey = direction === 'drawing_to_real' ? 'm' : 'cm'
   } = params;
 
   if (ratio <= 0 || isNaN(ratio) || !isFinite(ratio)) {
-    throw new Error('Scale ratio must be a positive finite number greater than 0');
+    throw new Error(`Scale ratio must be a positive finite number greater than 0 (received: ${ratio})`);
   }
 
-  const inputUnit = UNITS[unitKey] || UNITS.cm;
-  let targetUnit;
+  const inputUnit = requireUnit(unitKey, 'length');
+  const targetUnit = requireUnit(targetUnitKey, 'length');
+
   let realMeters = 0;
   let drawingMeters = 0;
   let targetValue = 0;
 
   if (direction === 'drawing_to_real') {
-    targetUnit = UNITS[targetUnitKey] || UNITS.m;
     drawingMeters = value * inputUnit.toMeters;
     realMeters = drawingMeters * ratio;
     targetValue = realMeters / targetUnit.toMeters;
-  } else {
-    targetUnit = UNITS[targetUnitKey] || UNITS.cm;
+  } else if (direction === 'real_to_drawing') {
     realMeters = value * inputUnit.toMeters;
     drawingMeters = realMeters / ratio;
     targetValue = drawingMeters / targetUnit.toMeters;
+  } else {
+    throw new Error(`Invalid scaling direction: "${direction}"`);
   }
 
   return {
@@ -62,7 +63,7 @@ export function scaleDimension(params) {
 /**
  * Shorthand Drawing -> Real calculation
  */
-export function drawingToReal({ drawingVal, drawingUnitKey = 'cm', scaleRatio = 50, realUnitKey = 'm' }) {
+export function drawingToReal({ drawingVal = 0, drawingUnitKey = 'cm', scaleRatio = 50, realUnitKey = 'm' }) {
   const res = scaleDimension({
     value: drawingVal,
     unitKey: drawingUnitKey,
@@ -83,7 +84,7 @@ export function drawingToReal({ drawingVal, drawingUnitKey = 'cm', scaleRatio = 
 /**
  * Shorthand Real -> Drawing calculation
  */
-export function realToDrawing({ realVal, realUnitKey = 'm', scaleRatio = 50, drawingUnitKey = 'cm' }) {
+export function realToDrawing({ realVal = 0, realUnitKey = 'm', scaleRatio = 50, drawingUnitKey = 'cm' }) {
   const res = scaleDimension({
     value: realVal,
     unitKey: realUnitKey,
@@ -105,12 +106,12 @@ export function realToDrawing({ realVal, realUnitKey = 'm', scaleRatio = 50, dra
  * Rescale drawing dimension between two different sheet scales (Scale A -> Scale B)
  */
 export function rescaleDrawing({ originalVal = 0, originalUnitKey = 'cm', originalRatio = 50, targetRatio = 200, targetUnitKey = 'cm' }) {
-  if (originalRatio <= 0 || targetRatio <= 0) {
-    throw new Error('Scale ratios must be greater than 0');
+  if (originalRatio <= 0 || targetRatio <= 0 || !isFinite(originalRatio) || !isFinite(targetRatio)) {
+    throw new Error('Scale ratios must be positive finite numbers greater than 0');
   }
 
-  const origUnit = UNITS[originalUnitKey] || UNITS.cm;
-  const targetUnit = UNITS[targetUnitKey] || UNITS.cm;
+  const origUnit = requireUnit(originalUnitKey, 'length');
+  const targetUnit = requireUnit(targetUnitKey, 'length');
 
   // Real dimension in meters
   const realMeters = (originalVal * origUnit.toMeters) * originalRatio;
@@ -133,13 +134,13 @@ export function rescaleDrawing({ originalVal = 0, originalUnitKey = 'cm', origin
  * Detect unknown scale ratio from measured paper distance and known real-world dimension
  */
 export function detectScale({ paperVal = 0, paperUnitKey = 'cm', realVal = 0, realUnitKey = 'm' }) {
-  const paperUnit = UNITS[paperUnitKey] || UNITS.cm;
-  const realUnit = UNITS[realUnitKey] || UNITS.m;
+  const paperUnit = requireUnit(paperUnitKey, 'length');
+  const realUnit = requireUnit(realUnitKey, 'length');
 
   const paperMeters = paperVal * paperUnit.toMeters;
   const realMeters = realVal * realUnit.toMeters;
 
-  if (paperMeters <= 0 || realMeters <= 0 || isNaN(paperMeters) || isNaN(realMeters)) {
+  if (paperMeters <= 0 || realMeters <= 0 || !isFinite(paperMeters) || !isFinite(realMeters)) {
     return { ratio: 0, ratioString: 'N/A', closestPreset: null, error: 'Dimensions must be positive numbers greater than 0' };
   }
 
@@ -181,10 +182,12 @@ export function detectScale({ paperVal = 0, paperUnitKey = 'cm', realVal = 0, re
  * Area Scaling (Scale Ratio squared: S^2)
  */
 export function scaleArea({ areaVal = 0, inputUnitKey = 'cm2', scaleRatio = 100, outputUnitKey = 'm2', isDrawingToReal = true }) {
-  if (scaleRatio <= 0) throw new Error('Scale ratio must be greater than 0');
+  if (scaleRatio <= 0 || !isFinite(scaleRatio)) {
+    throw new Error(`Scale ratio must be greater than 0 (received: ${scaleRatio})`);
+  }
 
-  const inputUnit = AREA_UNITS[inputUnitKey] || AREA_UNITS.cm2;
-  const outputUnit = AREA_UNITS[outputUnitKey] || AREA_UNITS.m2;
+  const inputUnit = requireUnit(inputUnitKey, 'area');
+  const outputUnit = requireUnit(outputUnitKey, 'area');
   const inputSqMeters = areaVal * inputUnit.toSqMeters;
   const scaleFactorSq = Math.pow(scaleRatio, 2);
 
@@ -203,10 +206,12 @@ export function scaleArea({ areaVal = 0, inputUnitKey = 'cm2', scaleRatio = 100,
  * Volume Scaling (Scale Ratio cubed: S^3)
  */
 export function scaleVolume({ volumeVal = 0, inputUnitKey = 'cm3', scaleRatio = 100, outputUnitKey = 'm3', isDrawingToReal = true }) {
-  if (scaleRatio <= 0) throw new Error('Scale ratio must be greater than 0');
+  if (scaleRatio <= 0 || !isFinite(scaleRatio)) {
+    throw new Error(`Scale ratio must be greater than 0 (received: ${scaleRatio})`);
+  }
 
-  const inputUnit = VOLUME_UNITS[inputUnitKey] || VOLUME_UNITS.cm3;
-  const outputUnit = VOLUME_UNITS[outputUnitKey] || VOLUME_UNITS.m3;
+  const inputUnit = requireUnit(inputUnitKey, 'volume');
+  const outputUnit = requireUnit(outputUnitKey, 'volume');
   const inputCuMeters = volumeVal * inputUnit.toCuMeters;
   const scaleFactorCube = Math.pow(scaleRatio, 3);
 

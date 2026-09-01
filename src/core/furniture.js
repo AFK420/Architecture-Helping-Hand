@@ -3,7 +3,7 @@
  */
 
 import { scaleDimension } from './calculator.js';
-import { UNITS } from './units.js';
+import { UNITS, requireUnit } from './units.js';
 import { formatNumber, formatFeetInches } from './formatter.js';
 
 export const FURNITURE_DATABASE = Object.freeze([
@@ -87,7 +87,7 @@ export const FURNITURE_DATABASE = Object.freeze([
  * Calculate scaled dimensions for a furniture piece using the central calculator engine
  */
 export function getScaledFurnitureDimensions(item, ratio = 50, paperUnitKey = 'cm') {
-  const paperUnit = UNITS[paperUnitKey] || UNITS.cm;
+  const paperUnit = requireUnit(paperUnitKey, 'length');
 
   const wRes = scaleDimension({
     value: item.wCm,

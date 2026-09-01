@@ -4,24 +4,42 @@
 
 import { StorageService } from './storage.js';
 
-const HISTORY_STORAGE_KEY = 'archiscale_calculation_history';
+export const HISTORY_STORAGE_KEY = 'archiscale_calculation_history';
 let historyList = [];
 
-try {
-  const saved = StorageService.getItem(HISTORY_STORAGE_KEY);
-  if (saved) {
-    historyList = JSON.parse(saved);
+function loadHistoryFromStorage() {
+  try {
+    const saved = StorageService.getItem(HISTORY_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        // Validate items
+        return parsed.filter(item => item && typeof item === 'object' && item.id);
+      }
+    }
+  } catch (e) {
+    // Corrupted data handling
   }
-} catch (e) {
-  historyList = [];
+  return [];
 }
+
+historyList = loadHistoryFromStorage();
 
 export const HistoryService = {
   getHistory() {
     return [...historyList];
   },
 
+  reload() {
+    historyList = loadHistoryFromStorage();
+    return [...historyList];
+  },
+
   addEntry(entry) {
+    if (!entry || typeof entry !== 'object') {
+      throw new Error('History entry must be a valid object');
+    }
+
     const item = {
       id: 'hist_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -57,8 +75,8 @@ export const HistoryService = {
     if (historyList.length === 0) return null;
     const headers = ['Timestamp', 'Date', 'Mode', 'Scale', 'Input', 'Result', 'Notes'];
     const rows = historyList.map(h => [
-      `"${h.timestamp}"`,
-      `"${h.date}"`,
+      `"${h.timestamp || ''}"`,
+      `"${h.date || ''}"`,
       `"${h.mode || 'Scale'}"`,
       `"${h.scaleStr || ''}"`,
       `"${h.inputStr || ''}"`,
@@ -75,7 +93,7 @@ export const HistoryService = {
     md += '| Time | Mode | Scale | Input | Result |\n';
     md += '| :--- | :--- | :--- | :--- | :--- |\n';
     historyList.forEach(h => {
-      md += `| ${h.timestamp} | ${h.mode || 'Scale'} | ${h.scaleStr || '-'} | ${h.inputStr || '-'} | **${h.outputStr || '-'}** |\n`;
+      md += `| ${h.timestamp || ''} | ${h.mode || 'Scale'} | ${h.scaleStr || '-'} | ${h.inputStr || '-'} | **${h.outputStr || '-'}** |\n`;
     });
     return md;
   }

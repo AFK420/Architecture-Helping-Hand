@@ -15,7 +15,9 @@ const testFiles = [
   'parser.test.js',
   'units.test.js',
   'formatter.test.js',
-  'furniture.test.js'
+  'furniture.test.js',
+  'services.test.js',
+  'data-integrity.test.js'
 ];
 
 console.log('=================================================================');

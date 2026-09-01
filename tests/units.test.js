@@ -2,7 +2,7 @@
  * Architecture Helping Hand - Unit Conversion System Tests
  */
 
-import { UNITS, AREA_UNITS, VOLUME_UNITS, convertUnit, getUnit } from '../src/core/units.js';
+import { UNITS, AREA_UNITS, VOLUME_UNITS, convertUnit, getUnit, requireUnit } from '../src/core/units.js';
 
 let passed = 0;
 let failed = 0;
@@ -40,28 +40,62 @@ console.log('🧪 Running tests/units.test.js...');
   assert(approxEqual(convertUnit(1, 'm', 'ft'), 3.280839895), '1 m = 3.28084 ft');
 }
 
-// 3. Area Conversions
+// 3. Round-Trip Conversions (Metric <-> Imperial)
+{
+  const origMeters = 25.4;
+  const inFeet = convertUnit(origMeters, 'm', 'ft');
+  const backToMeters = convertUnit(inFeet, 'ft', 'm');
+  assert(approxEqual(origMeters, backToMeters), 'Round-trip meters -> feet -> meters preserves value within 1e-6 epsilon');
+
+  const origInches = 144;
+  const inCm = convertUnit(origInches, 'in', 'cm');
+  const backToInches = convertUnit(inCm, 'cm', 'in');
+  assert(approxEqual(origInches, backToInches), 'Round-trip inches -> cm -> inches preserves value within 1e-6 epsilon');
+}
+
+// 4. Area Conversions
 {
   assert(approxEqual(convertUnit(10000, 'cm2', 'm2'), 1.0), '10,000 cm² = 1.0 m²');
   assert(approxEqual(convertUnit(1, 'ha', 'm2'), 10000.0), '1 ha = 10,000 m²');
   assert(approxEqual(convertUnit(1, 'sq_ft', 'sq_in'), 144.0), '1 sq ft = 144 sq in');
+  assert(approxEqual(convertUnit(1, 'km2', 'ha'), 100.0), '1 km² = 100 ha');
 }
 
-// 4. Volume Conversions
+// 5. Volume Conversions
 {
   assert(approxEqual(convertUnit(1000, 'liters', 'm3'), 1.0), '1000 L = 1.0 m³');
   assert(approxEqual(convertUnit(1000000, 'cm3', 'm3'), 1.0), '1,000,000 cm³ = 1.0 m³');
+  assert(approxEqual(convertUnit(27, 'cu_ft', 'cu_yd'), 1.0), '27 cu ft = 1.0 cu yd');
 }
 
-// 5. Incompatible Dimension Safety
+// 6. Unit Validation & Invalid Unit Errors (No Silent Fallback)
 {
-  let errorCaught = false;
+  const invalidUnits = ['xyz', 'foobar', 'CMX', 'unknown', null, undefined];
+  for (const bad of invalidUnits) {
+    let threw = false;
+    try {
+      requireUnit(bad);
+    } catch (e) {
+      threw = true;
+    }
+    assert(threw, `requireUnit rejects invalid unit ${JSON.stringify(bad)}`);
+  }
+
+  let dimMismatchThrew = false;
+  try {
+    requireUnit('m', 'area');
+  } catch (e) {
+    dimMismatchThrew = true;
+  }
+  assert(dimMismatchThrew, 'requireUnit throws when unit dimension mismatches expected dimension');
+
+  let convertMismatchThrew = false;
   try {
     convertUnit(10, 'cm', 'm2');
   } catch (e) {
-    errorCaught = true;
+    convertMismatchThrew = true;
   }
-  assert(errorCaught, 'Throws error when converting length to area', errorCaught);
+  assert(convertMismatchThrew, 'convertUnit throws when converting between incompatible dimensions (length to area)');
 }
 
 console.log(`Summary: ${passed} passed, ${failed} failed.\n`);
