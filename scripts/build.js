@@ -51,9 +51,11 @@ export const BUNDLE_MODULES = [
   { name: 'Ramps', file: path.join(srcDir, 'core', 'ramps.js') },
   { name: 'Slopes', file: path.join(srcDir, 'core', 'slopes.js') },
   { name: 'Project', file: path.join(srcDir, 'core', 'project.js') },
+  { name: 'ExportModel', file: path.join(srcDir, 'core', 'export', 'export-model.js') },
 
   // --- Services ---
   { name: 'Storage', file: path.join(srcDir, 'services', 'storage.js') },
+  { name: 'ExportServices', file: path.join(srcDir, 'services', 'export.js') },
   { name: 'ProjectStore', file: path.join(srcDir, 'services', 'store.js') },
   { name: 'Audio', file: path.join(srcDir, 'services', 'audio.js') },
   { name: 'History', file: path.join(srcDir, 'services', 'history.js') },
@@ -75,6 +77,7 @@ export const BUNDLE_MODULES = [
   { name: 'ViewStairs', file: path.join(srcDir, 'ui', 'views', 'stairs.js') },
   { name: 'ViewRamps', file: path.join(srcDir, 'ui', 'views', 'ramps.js') },
   { name: 'ViewSlopes', file: path.join(srcDir, 'ui', 'views', 'slopes.js') },
+  { name: 'ViewExportCenter', file: path.join(srcDir, 'ui', 'views', 'export-center.js') },
   { name: 'App', file: path.join(srcDir, 'ui', 'app.js') }
 ];
 

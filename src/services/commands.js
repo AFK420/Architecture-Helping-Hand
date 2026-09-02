@@ -232,6 +232,16 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
+    id: 'nav-export',
+    title: 'Export Center',
+    description: 'One universal export architecture: JSON (round-trip), TXT, CSV, TSV, SVG, DXF — preview before download',
+    category: 'Navigation',
+    icon: '📤',
+    keywords: ['export', 'json', 'csv', 'tsv', 'svg', 'dxf', 'download', 'print', 'backup', 'mode 17'],
+    actionType: 'navigation',
+    available: true
+  },
+  {
     id: 'nav-cad-clipboard',
     title: 'CAD Clipboard & Formats',
     description: 'Instant CAD-ready copy formatting for AutoCAD, Rhino, Revit, SketchUp, and Spreadsheets',

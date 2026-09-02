@@ -34,7 +34,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
 // 1. Verify Mode Navigation Targets in HTML
 {
-  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff', 'stairs', 'ramps', 'slopes'];
+  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff', 'stairs', 'ramps', 'slopes', 'export'];
   
   for (const mode of expectedModes) {
     const hasTab = htmlContent.includes(`data-mode="${mode}"`);
@@ -519,6 +519,23 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'slopes-send-workspace-btn',
     'slopes-save-journal-btn',
     'slopes-save-project-btn',
+    // Export Center (Mode 17)
+    'export-source-select',
+    'export-format-select',
+    'export-format-info',
+    'export-diagram-group',
+    'export-diagram-select',
+    'export-dxf-scale-group',
+    'export-dxf-scale',
+    'export-error-msg',
+    'export-result-panel',
+    'export-state-badge',
+    'export-summary-badge',
+    'export-provenance',
+    'export-preview-box',
+    'btn-export-download',
+    'btn-export-copy',
+    'btn-export-print',
 
     // Quick Dimension Strip IDs
     'quick-dimension-strip',
@@ -604,6 +621,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'btn-run-stairs',
     'btn-run-ramps',
     'btn-run-slopes',
+    'btn-run-export',
     'btn-run-quick-dim'
   ];
 

@@ -105,6 +105,7 @@ import { createHistoryView } from './views/history.js';
 import { createStairsView } from './views/stairs.js';
 import { createRampsView } from './views/ramps.js';
 import { createSlopesView } from './views/slopes.js';
+import { createExportCenterView } from './views/export-center.js';
 import { StorageService } from '../services/storage.js';
 import { createProjectStore } from '../services/store.js';
 import { AudioService } from '../services/audio.js';
@@ -349,6 +350,11 @@ export function initializeApp() {
     slopes: {
       mode: 'rise_run',
       displayUnit: 'm',
+      lastResult: null
+    },
+
+    // Mode 17: Export Center
+    exportCenter: {
       lastResult: null
     }
   };
@@ -899,7 +905,26 @@ export function initializeApp() {
     slopesSendCadBtn: document.getElementById('slopes-send-cad-btn'),
     slopesSendWorkspaceBtn: document.getElementById('slopes-send-workspace-btn'),
     slopesSaveJournalBtn: document.getElementById('slopes-save-journal-btn'),
-    slopesSaveProjectBtn: document.getElementById('slopes-save-project-btn')
+    slopesSaveProjectBtn: document.getElementById('slopes-save-project-btn'),
+
+    // Mode 17: Export Center Elements
+    exportSourceSelect: document.getElementById('export-source-select'),
+    exportFormatSelect: document.getElementById('export-format-select'),
+    exportFormatInfo: document.getElementById('export-format-info'),
+    exportDiagramGroup: document.getElementById('export-diagram-group'),
+    exportDiagramSelect: document.getElementById('export-diagram-select'),
+    exportDxfScaleGroup: document.getElementById('export-dxf-scale-group'),
+    exportDxfScale: document.getElementById('export-dxf-scale'),
+    btnRunExport: document.getElementById('btn-run-export'),
+    exportErrorMsg: document.getElementById('export-error-msg'),
+    exportResultPanel: document.getElementById('export-result-panel'),
+    exportStateBadge: document.getElementById('export-state-badge'),
+    exportSummaryBadge: document.getElementById('export-summary-badge'),
+    exportProvenance: document.getElementById('export-provenance'),
+    exportPreviewBox: document.getElementById('export-preview-box'),
+    btnExportDownload: document.getElementById('btn-export-download'),
+    btnExportCopy: document.getElementById('btn-export-copy'),
+    btnExportPrint: document.getElementById('btn-export-print')
   };
 
   // ---------------------------------------------------------------------------
@@ -1089,6 +1114,9 @@ export function initializeApp() {
     }
     else if (targetMode === 'slopes') {
       views.callController('slopes', 'calculate');
+    }
+    else if (targetMode === 'export') {
+      views.callController('export', 'build');
     }
   }
 
@@ -2494,6 +2522,9 @@ export function initializeApp() {
         break;
       case 'nav-slopes':
         switchMode('slopes');
+        break;
+      case 'nav-export':
+        switchMode('export');
         break;
       case 'nav-cad-clipboard':
         switchMode('cad_clipboard');
@@ -4609,6 +4640,38 @@ export function initializeApp() {
       dom.slopesSaveProjectBtn.addEventListener('click', () => views.callController('slopes', 'saveToProject'));
     }
 
+    // Mode 17: Export Center Listeners
+    if (dom.exportSourceSelect) {
+      dom.exportSourceSelect.addEventListener('change', () => views.callController('export', 'build', true));
+    }
+    if (dom.exportFormatSelect) {
+      dom.exportFormatSelect.addEventListener('change', () => views.callController('export', 'build', true));
+    }
+    if (dom.exportDiagramSelect) {
+      dom.exportDiagramSelect.addEventListener('change', () => views.callController('export', 'build', true));
+    }
+    if (dom.exportDxfScale) {
+      dom.exportDxfScale.addEventListener('change', () => views.callController('export', 'build', true));
+    }
+    if (dom.btnRunExport) {
+      dom.btnRunExport.addEventListener('click', () => views.callController('export', 'build', true));
+      dom.btnRunExport.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          views.callController('export', 'build', true);
+        }
+      });
+    }
+    if (dom.btnExportDownload) {
+      dom.btnExportDownload.addEventListener('click', () => views.callController('export', 'download'));
+    }
+    if (dom.btnExportCopy) {
+      dom.btnExportCopy.addEventListener('click', () => views.callController('export', 'copy'));
+    }
+    if (dom.btnExportPrint) {
+      dom.btnExportPrint.addEventListener('click', () => views.callController('export', 'print'));
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -4822,6 +4885,7 @@ export function initializeApp() {
   views.register(createStairsView(viewContext));
   views.register(createRampsView(viewContext));
   views.register(createSlopesView(viewContext));
+  views.register(createExportCenterView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();

@@ -30,6 +30,7 @@ const testFiles = [
   'stairs.test.js',
   'ramps.test.js',
   'slopes.test.js',
+  'export.test.js',
   'services.test.js',
   'commands.test.js',
   'data-integrity.test.js',

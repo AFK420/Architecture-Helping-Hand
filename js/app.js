@@ -8290,6 +8290,523 @@ function parseProject(json) {
 
 
   // =========================================================================
+  // MODULE: ExportModel
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Universal Export Model
+ * Phase: Universal Export Center.
+ *
+ * One normalized export architecture for the whole application. Tools
+ * produce (or already hold) project data; this module shapes it into a
+ * provenance-stamped export document and provides PURE serializers for
+ * every supported format. Side effects (download/clipboard/print) live in
+ * services/export.js — nothing here touches the DOM.
+ *
+ * Formats: JSON (round-trip), TXT (human-readable), CSV, TSV, SVG (vector),
+ * DXF (conservative 2D subset). PDF is handled by the print stylesheet +
+ * window.print() (services), not by a heavy library.
+ *
+ * Every export carries provenance: source, format, timestamp, projectId.
+ */
+
+
+
+
+/** Format identifiers. */
+const EXPORT_FORMATS = Object.freeze({
+  JSON: 'json',
+  TXT: 'txt',
+  CSV: 'csv',
+  TSV: 'tsv',
+  SVG: 'svg',
+  DXF: 'dxf'
+});
+
+/** Content-type mapping for downloads. */
+const EXPORT_CONTENT_TYPES = Object.freeze({
+  json: 'application/json',
+  txt: 'text/plain',
+  csv: 'text/csv',
+  tsv: 'text/tab-separated-values',
+  svg: 'image/svg+xml',
+  dxf: 'application/dxf'
+});
+
+/** Human-readable format descriptions for the export UI. */
+const EXPORT_FORMAT_INFO = Object.freeze({
+  json: 'Full structured export — round-trips back into the project system.',
+  txt: 'Human-readable report of the exported data.',
+  csv: 'Comma-separated schedule (RFC-4180 escaping).',
+  tsv: 'Tab-separated schedule — CAD/spreadsheet friendly.',
+  svg: 'Vector drawing of geometry (chains, plans, diagrams).',
+  dxf: 'AutoCAD DXF (ASCII R12 subset: LINE, POLYLINE, TEXT). Conservative 2D only.'
+});
+
+/** Provenance stamp embedded in every export document. */
+function createExportProvenance(source, format, projectId = null, extra = {}) {
+  return {
+    application: 'Architecture Helping Hand',
+    source,
+    format,
+    projectId,
+    exportedAt: new Date().toISOString(),
+    ...extra
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Data collection: normalized table shape used by tabular serializers
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalizes arbitrary exportable content into a table description:
+ * { title, columns: [{key,label}], rows: [{...}] } — consumed by CSV/TSV/TXT.
+ *
+ * @param {string} title
+ * @param {Array<{key:string,label:string}>} columns
+ * @param {Array<Object>} rows
+ */
+function createExportTable(title, columns, rows) {
+  return { title, columns, rows };
+}
+
+/** Collects the workspace (dimensions) as a normalized table. */
+function workspaceToTable(workspace) {
+  if (!workspace || !Array.isArray(workspace.entries)) return null;
+  return createExportTable(
+    'Dimension Schedule',
+    [
+      { key: 'name', label: 'Name' },
+      { key: 'rawInput', label: 'Input' },
+      { key: 'type', label: 'Type' },
+      { key: 'realMeters', label: 'Real (m)' },
+      { key: 'drawingMeters', label: 'Drawing (m)' },
+      { key: 'notes', label: 'Notes' }
+    ],
+    workspace.entries.map(e => ({
+      name: e.name || 'Dimension',
+      rawInput: e.rawInput || '',
+      type: (e.dimensionType || 'segment').toUpperCase(),
+      realMeters: typeof e.realMeters === 'number' ? e.realMeters : '',
+      drawingMeters: typeof e.realMeters === 'number' && workspace.scaleRatio ? e.realMeters / workspace.scaleRatio : '',
+      notes: e.notes || ''
+    }))
+  );
+}
+
+/** Collects chain segments as a normalized table. */
+function chainToTable(calculatedChain) {
+  if (!calculatedChain || !Array.isArray(calculatedChain.segments)) return null;
+  return createExportTable(
+    `Dimension Chain — ${calculatedChain.name || 'Chain'}`,
+    [
+      { key: 'index', label: '#' },
+      { key: 'name', label: 'Segment' },
+      { key: 'startMeters', label: 'Start (m)' },
+      { key: 'endMeters', label: 'End (m)' },
+      { key: 'lengthMeters', label: 'Length (m)' },
+      { key: 'type', label: 'Type' }
+    ],
+    calculatedChain.segments
+      .filter(s => s.enabled !== false && s.isValid !== false)
+      .map((s, idx) => ({
+        index: idx + 1,
+        name: s.name || `Segment ${idx + 1}`,
+        startMeters: s.startMeters,
+        endMeters: s.endMeters,
+        lengthMeters: typeof s.lengthMeters === 'number' ? s.lengthMeters : (typeof s.realMeters === 'number' ? s.realMeters : 0),
+        type: (s.dimensionType || 'segment').toUpperCase()
+      }))
+  );
+}
+
+/** Collects a stair result as a normalized single-row table. */
+function stairToTable(stairResult) {
+  if (!stairResult || !stairResult.valid) return null;
+  const g = stairResult.geometry;
+  return createExportTable(
+    'Stair Calculation',
+    [
+      { key: 'risers', label: 'Risers' },
+      { key: 'goings', label: 'Goings' },
+      { key: 'riserHeight', label: 'Riser (m)' },
+      { key: 'treadDepth', label: 'Going (m)' },
+      { key: 'totalRise', label: 'Total Rise (m)' },
+      { key: 'totalRun', label: 'Total Run (m)' },
+      { key: 'angle', label: 'Angle (°)' },
+      { key: 'twoRPlusT', label: '2R+T (m)' }
+    ],
+    [{
+      risers: stairResult.risers.count,
+      goings: stairResult.treads.count,
+      riserHeight: stairResult.risers.heightMeters,
+      treadDepth: stairResult.treads.depthMeters,
+      totalRise: stairResult.input.totalRiseMeters,
+      totalRun: g.totalRunMeters,
+      angle: g.angleDegrees,
+      twoRPlusT: stairResult.proportion.twoRPlusTMeters
+    }]
+  );
+}
+
+/** Collects a ramp/slope result (shared geometry shape) as a table. */
+function slopeToTable(geometryResult, kindLabel) {
+  if (!geometryResult || !geometryResult.valid || !geometryResult.geometry) return null;
+  const g = geometryResult.geometry;
+  return createExportTable(
+    kindLabel || 'Slope Calculation',
+    [
+      { key: 'rise', label: 'Rise (m)' },
+      { key: 'run', label: 'Run (m)' },
+      { key: 'slopePercent', label: 'Slope (%)' },
+      { key: 'ratio', label: 'Ratio (1:X)' },
+      { key: 'angle', label: 'Angle (°)' },
+      { key: 'flight', label: 'Flight Length (m)' }
+    ],
+    [{
+      rise: g.riseMeters,
+      run: g.runMeters,
+      slopePercent: g.slopePercent,
+      ratio: g.ratioValue,
+      angle: g.angleDegrees,
+      flight: g.flightLengthMeters !== undefined ? g.flightLengthMeters : (g.slopedLengthMeters !== undefined ? g.slopedLengthMeters : '')
+    }]
+  );
+}
+
+/** Collects project decisions as a normalized table. */
+function decisionsToTable(project) {
+  if (!project || !Array.isArray(project.decisions)) return null;
+  return createExportTable(
+    'Design Decisions',
+    [
+      { key: 'id', label: 'ID' },
+      { key: 'kind', label: 'Kind' },
+      { key: 'name', label: 'Name' },
+      { key: 'createdAt', label: 'Created' },
+      { key: 'data', label: 'Result Data (JSON)' }
+    ],
+    project.decisions.map(d => ({
+      id: d.id || '',
+      kind: d.kind || '',
+      name: d.name || '',
+      createdAt: d.createdAt || '',
+      data: d.result ? JSON.stringify(d.result) : ''
+    }))
+  );
+}
+
+/** Collects project notes as a normalized table. */
+function notesToTable(project) {
+  if (!project || !Array.isArray(project.notes)) return null;
+  return createExportTable(
+    'Project Notes',
+    [
+      { key: 'id', label: 'ID' },
+      { key: 'title', label: 'Title' },
+      { key: 'body', label: 'Note' },
+      { key: 'createdAt', label: 'Created' }
+    ],
+    project.notes.map(n => ({
+      id: n.id || '',
+      title: n.title || 'Note',
+      body: n.body || n.text || '',
+      createdAt: n.createdAt || ''
+    }))
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pure serializers
+// ---------------------------------------------------------------------------
+
+/** Serializes a table to TSV (with header). Reuses CAD-safe escaping. */
+function tableToTSV(table) {
+  if (!table) return '';
+  const header = table.columns.map(c => escapeTSV(c.label)).join('\t');
+  const rows = table.rows.map(row => table.columns.map(c => escapeTSV(row[c.key])).join('\t'));
+  return [table.title, header, ...rows].join('\n');
+}
+
+/** Serializes a table to CSV (with header). Reuses RFC-4180 escaping. */
+function tableToCSV(table) {
+  if (!table) return '';
+  const header = table.columns.map(c => escapeCSV(c.label)).join(',');
+  const rows = table.rows.map(row => table.columns.map(c => escapeCSV(row[c.key])).join(','));
+  return [escapeCSV(table.title), header, ...rows].join('\n');
+}
+
+/** Serializes a table to human-readable TXT. */
+function tableToTXT(table) {
+  if (!table) return '';
+  const lines = [table.title.toUpperCase(), '='.repeat(Math.max(table.title.length, 8)), ''];
+  for (const row of table.rows) {
+    for (const col of table.columns) {
+      const val = row[col.key];
+      lines.push(`${col.label}: ${val === '' ? '—' : val}`);
+    }
+    lines.push('');
+  }
+  return lines.join('\n').trimEnd() + '\n';
+}
+
+/**
+ * Full JSON export of a project document (round-trip capable).
+ * Provenance lives in a sibling envelope, never inside the project itself,
+ * so the project part re-imports cleanly.
+ */
+function serializeProjectJSON(project, provenance) {
+  const check = validateProject(project);
+  if (!check.ok) {
+    throw new Error(`Cannot export invalid project: ${check.errors[0]}`);
+  }
+  return JSON.stringify({
+    _provenance: provenance || createExportProvenance('project', EXPORT_FORMATS.JSON, project.id),
+    project
+  }, null, 2);
+}
+
+/**
+ * Parses a JSON export back into a validated project document.
+ * Throws on malformed input; callers decide recovery policy.
+ */
+function deserializeProjectJSON(json) {
+  const parsed = JSON.parse(json);
+  const project = parsed && typeof parsed === 'object' && parsed.project ? parsed.project : parsed;
+  const check = validateProject(project);
+  if (!check.ok) {
+    throw new Error(`Imported document is not a valid project: ${check.errors[0]}`);
+  }
+  return project;
+}
+
+// ---------------------------------------------------------------------------
+// DXF writer — conservative ASCII R12 subset
+// ---------------------------------------------------------------------------
+
+/**
+ * DXF scope (documented limitation): ASCII R12, ENTITIES section only with
+ * LINE, POLYLINE (as LWPOLLINE-free classic VERTEX chain), TEXT, and CIRCLE.
+ * Coordinates are plain 2D (X, Y); no layers beyond '0', no blocks, no dims,
+ * no 3D. Units are interpreted by the recipient — exported values are the
+ * canonical meters multiplied by the caller's scale (mm by default).
+ */
+
+function dxfPair(code, value) {
+  return `${code}\n${value}`;
+}
+
+function dxfLine(x1, y1, x2, y2, layer = '0') {
+  return [
+    dxfPair(0, 'LINE'),
+    dxfPair(8, layer),
+    dxfPair(10, x1), dxfPair(20, y1),
+    dxfPair(11, x2), dxfPair(21, y2)
+  ].join('\n');
+}
+
+function dxfPolyline(points, layer = '0', closed = false) {
+  const parts = [
+    dxfPair(0, 'POLYLINE'),
+    dxfPair(8, layer),
+    dxfPair(66, 1),
+    dxfPair(70, closed ? 1 : 0)
+  ];
+  for (const [x, y] of points) {
+    parts.push(dxfPair(0, 'VERTEX'));
+    parts.push(dxfPair(8, layer));
+    parts.push(dxfPair(10, x));
+    parts.push(dxfPair(20, y));
+  }
+  parts.push(dxfPair(0, 'SEQEND'));
+  return parts.join('\n');
+}
+
+function dxfText(x, y, text, height = 0.2, layer = '0') {
+  const safe = String(text).replace(/[\r\n]+/g, ' ');
+  return [
+    dxfPair(0, 'TEXT'),
+    dxfPair(8, layer),
+    dxfPair(10, x), dxfPair(20, y),
+    dxfPair(40, height),
+    dxfPair(1, safe)
+  ].join('\n');
+}
+
+/**
+ * Builds a DXF document from a normalized entity list.
+ *
+ * @param {Array<Object>} entities - { type: 'line'|'polyline'|'text'|'circle', ... }
+ *   line: { x1, y1, x2, y2 }
+ *   polyline: { points: [[x,y]...], closed }
+ *   text: { x, y, text, height }
+ *   circle: { x, y, r }
+ * @param {Object} [options] - { scale (default 1000 → m to mm), header }
+ * @returns {string} DXF text
+ */
+function buildDXF(entities, options = {}) {
+  const scale = typeof options.scale === 'number' && options.scale > 0 ? options.scale : 1000;
+  const list = Array.isArray(entities) ? entities : [];
+  const S = v => (v * scale).toFixed(4);
+
+  const body = [];
+  for (const e of list) {
+    if (!e || typeof e !== 'object') continue;
+    if (e.type === 'line') {
+      body.push(dxfLine(S(e.x1), S(e.y1), S(e.x2), S(e.y2), e.layer || '0'));
+    } else if (e.type === 'polyline' && Array.isArray(e.points) && e.points.length >= 2) {
+      body.push(dxfPolyline(e.points.map(p => [S(p[0]), S(p[1])]), e.layer || '0', !!e.closed));
+    } else if (e.type === 'text') {
+      body.push(dxfText(S(e.x), S(e.y), e.text || '', (e.height || 0.2) * scale, e.layer || '0'));
+    } else if (e.type === 'circle') {
+      body.push([
+        dxfPair(0, 'CIRCLE'),
+        dxfPair(8, e.layer || '0'),
+        dxfPair(10, S(e.x)), dxfPair(20, S(e.y)),
+        dxfPair(40, S(e.r || 0))
+      ].join('\n'));
+    }
+  }
+
+  return [
+    dxfPair(0, 'SECTION'),
+    dxfPair(2, 'HEADER'),
+    dxfPair(9, '$ACADVER'), dxfPair(1, 'AC1009'),
+    dxfPair(9, '$INSUNITS'), dxfPair(70, 4), // 4 = millimeters
+    dxfPair(0, 'ENDSEC'),
+    dxfPair(0, 'SECTION'),
+    dxfPair(2, 'ENTITIES'),
+    body.join('\n'),
+    dxfPair(0, 'ENDSEC'),
+    dxfPair(0, 'EOF')
+  ].join('\n');
+}
+
+/** Chain geometry → DXF entities (closed room-style outline of cumulative points). */
+function chainToDXFEntities(calculatedChain) {
+  if (!calculatedChain || !Array.isArray(calculatedChain.segments)) return [];
+  const entities = [];
+  for (const s of calculatedChain.segments) {
+    if (s.enabled === false || s.isValid === false) continue;
+    entities.push({
+      type: 'line',
+      x1: s.startMeters, y1: 0,
+      x2: s.endMeters, y2: 0,
+      layer: (s.dimensionType || 'segment') === 'reference' ? 'REF' : 'CHAIN'
+    });
+  }
+  return entities;
+}
+
+/** Room rectangles → DXF entities (initial rectilinear scope). */
+function roomsToDXFEntities(rooms) {
+  if (!Array.isArray(rooms)) return [];
+  const entities = [];
+  for (const room of rooms) {
+    if (!room || typeof room.x !== 'number' || typeof room.y !== 'number') continue;
+    const w = room.widthMeters ?? room.width ?? 0;
+    const h = room.depthMeters ?? room.depth ?? 0;
+    if (w <= 0 || h <= 0) continue;
+    entities.push({
+      type: 'polyline',
+      closed: true,
+      layer: 'ROOM',
+      points: [
+        [room.x, room.y],
+        [room.x + w, room.y],
+        [room.x + w, room.y + h],
+        [room.x, room.y + h]
+      ]
+    });
+    if (room.name) {
+      entities.push({ type: 'text', x: room.x + w / 2 - 0.4, y: room.y + h / 2, text: room.name, height: 0.2 });
+    }
+  }
+  return entities;
+}
+
+// ---------------------------------------------------------------------------
+// SVG export (wraps existing diagram generators' output into a standalone file)
+// ---------------------------------------------------------------------------
+
+/**
+ * Wraps SVG markup (from generateChainSVG / generateStairSVG / generateRampSVG
+ * / generateSlopeSVG / the plan canvas) into a standalone, namespaced SVG
+ * document with provenance metadata.
+ */
+function wrapSVGDocument(svgMarkup, provenance) {
+  if (typeof svgMarkup !== 'string' || !svgMarkup.includes('<svg')) {
+    throw new Error('wrapSVGDocument requires valid SVG markup containing an <svg> element.');
+  }
+  const meta = provenance || createExportProvenance('diagram', EXPORT_FORMATS.SVG);
+  const comment = `<!-- ${meta.application} | source: ${meta.source} | exported: ${meta.exportedAt} -->`;
+  // Ensure xmlns exists on the root element
+  const withNs = svgMarkup.includes('xmlns=')
+    ? svgMarkup
+    : svgMarkup.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${comment}\n${withNs}\n`;
+}
+
+/**
+ * Master entry: serializes any supported export request.
+ *
+ * @param {Object} request
+ * @param {string} request.format - one of EXPORT_FORMATS
+ * @param {string} request.source - provenance label (e.g. 'dimension-workspace')
+ * @param {Object} [request.project] - project document (JSON format / provenance)
+ * @param {Array<Object>} [request.tables] - normalized tables (CSV/TSV/TXT)
+ * @param {string} [request.svgMarkup] - SVG markup (SVG format)
+ * @param {Array<Object>} [request.dxfEntities] - DXF entities (DXF format)
+ * @param {string} [request.projectId]
+ * @returns {{ content: string, contentType: string, fileName: string, provenance: Object }}
+ */
+function buildExport(request) {
+  const format = request && request.format;
+  if (!Object.values(EXPORT_FORMATS).includes(format)) {
+    throw new Error(`Unknown export format: "${format}". Supported: ${Object.values(EXPORT_FORMATS).join(', ')}`);
+  }
+  const provenance = createExportProvenance(request.source || 'unknown', format, request.projectId || null);
+  const stamp = provenance.exportedAt.replace(/[:.]/g, '-').slice(0, 19);
+  const baseName = (request.source || 'export').replace(/[^a-z0-9_-]+/gi, '-').toLowerCase();
+
+  switch (format) {
+    case EXPORT_FORMATS.JSON: {
+      if (!request.project) throw new Error('JSON export requires a project document.');
+      const content = serializeProjectJSON(request.project, provenance);
+      return { content, contentType: EXPORT_CONTENT_TYPES.json, fileName: `${baseName}-${stamp}.json`, provenance };
+    }
+    case EXPORT_FORMATS.TXT: {
+      const tables = (request.tables || []).filter(Boolean);
+      if (tables.length === 0) throw new Error('TXT export requires at least one table.');
+      return { content: tables.map(tableToTXT).join('\n'), contentType: EXPORT_CONTENT_TYPES.txt, fileName: `${baseName}-${stamp}.txt`, provenance };
+    }
+    case EXPORT_FORMATS.CSV: {
+      const tables = (request.tables || []).filter(Boolean);
+      if (tables.length === 0) throw new Error('CSV export requires at least one table.');
+      return { content: tables.map(tableToCSV).join('\n'), contentType: EXPORT_CONTENT_TYPES.csv, fileName: `${baseName}-${stamp}.csv`, provenance };
+    }
+    case EXPORT_FORMATS.TSV: {
+      const tables = (request.tables || []).filter(Boolean);
+      if (tables.length === 0) throw new Error('TSV export requires at least one table.');
+      return { content: tables.map(tableToTSV).join('\n'), contentType: EXPORT_CONTENT_TYPES.tsv, fileName: `${baseName}-${stamp}.tsv`, provenance };
+    }
+    case EXPORT_FORMATS.SVG: {
+      if (!request.svgMarkup) throw new Error('SVG export requires svgMarkup.');
+      return { content: wrapSVGDocument(request.svgMarkup, provenance), contentType: EXPORT_CONTENT_TYPES.svg, fileName: `${baseName}-${stamp}.svg`, provenance };
+    }
+    case EXPORT_FORMATS.DXF: {
+      const entities = request.dxfEntities || [];
+      const content = buildDXF(entities, { scale: request.dxfScale || 1000 });
+      return { content, contentType: EXPORT_CONTENT_TYPES.dxf, fileName: `${baseName}-${stamp}.dxf`, provenance };
+    }
+    default:
+      throw new Error('Unhandled export format.');
+  }
+}
+
+
+  // =========================================================================
   // MODULE: Storage
   // =========================================================================
 
@@ -8341,6 +8858,81 @@ const StorageService = {
     memoryStore.clear();
   }
 };
+
+
+  // =========================================================================
+  // MODULE: ExportServices
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Export Services
+ * Phase: Universal Export Center — side-effect layer.
+ *
+ * Download, clipboard, and print behavior. All pure serialization lives in
+ * core/export/export-model.js; nothing here computes content.
+ */
+
+
+
+/**
+ * Triggers a browser download of text content. Returns a promise-like
+ * result the caller can toast about. Safe for file:// (uses Blob + anchor).
+ */
+function downloadExport(content, fileName, format) {
+  const contentType = EXPORT_CONTENT_TYPES[format] || 'text/plain';
+  try {
+    const blob = new Blob([content], { type: `${contentType};charset=utf-8` });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/** Copies export content through the app's existing clipboard helper. */
+function copyExport(text, copyFn, label) {
+  if (typeof copyFn !== 'function') return false;
+  copyFn(text, label || 'Export copied');
+  return true;
+}
+
+/**
+ * Opens a print-focused window with the export content and calls print().
+ * PDF export strategy: browser print-to-PDF via a print stylesheet — no
+ * heavy PDF runtime dependency.
+ */
+function printExport(title, content) {
+  const win = window.open('', '_blank', 'width=900,height=700');
+  if (!win) return false;
+  const safeTitle = String(title || 'Export').replace(/</g, '&lt;');
+  const safeBody = String(content)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <title>${safeTitle}</title>
+  <style>
+    body { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 11pt; padding: 1.5rem; white-space: pre-wrap; color: #111; background: #fff; }
+    h1 { font-size: 13pt; border-bottom: 1px solid #333; padding-bottom: 0.4rem; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body><h1>${safeTitle}</h1>${safeBody}</body>
+</html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { try { win.print(); } catch (e) {} }, 250);
+  return true;
+}
 
 
   // =========================================================================
@@ -9193,6 +9785,16 @@ const DEFAULT_COMMANDS = [
     category: 'Navigation',
     icon: '🚀',
     keywords: ['cad', 'handoff', 'send', 'rhino', 'autocad', 'sketchup', 'paste', 'copy', 'helper', 'mode 13'],
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-export',
+    title: 'Export Center',
+    description: 'One universal export architecture: JSON (round-trip), TXT, CSV, TSV, SVG, DXF — preview before download',
+    category: 'Navigation',
+    icon: '📤',
+    keywords: ['export', 'json', 'csv', 'tsv', 'svg', 'dxf', 'download', 'print', 'backup', 'mode 17'],
     actionType: 'navigation',
     available: true
   },
@@ -14635,6 +15237,222 @@ function createSlopesView(context) {
 
 
   // =========================================================================
+  // MODULE: ViewExportCenter
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Export Center View (Mode 17)
+ * Phase 1: Universal Export Center. Owns the export picker, preview,
+ * provenance display, and download/copy/print actions. All serialization is
+ * delegated to core/export/export-model.js; side effects to services/export.js.
+ */
+
+
+
+
+
+
+
+
+function createExportCenterView(context) {
+  const {
+    state, dom, showToast, setUnifiedResultState, AudioService,
+    switchMode, views, projectStore
+  } = context;
+
+  function requireProject() {
+    if (!projectStore) return null;
+    try {
+      return projectStore.getProject();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function collectTables(source) {
+    switch (source) {
+      case 'workspace':
+        return [workspaceToTable(state.workspace)];
+      case 'chain':
+        return [chainToTable(state.lastValidChain)];
+      case 'stair':
+        return [stairToTable(state.stairs.lastResult)];
+      case 'ramp':
+        return [slopeToTable(state.ramps.lastResult, 'Ramp Calculation')];
+      case 'slope':
+        return [slopeToTable(state.slopes.lastResult, 'Slope Analysis')];
+      case 'decisions':
+        return [decisionsToTable(requireProject())];
+      case 'notes':
+        return [notesToTable(requireProject())];
+      default:
+        return [];
+    }
+  }
+
+  function collectSvgMarkup(source, diagramKey) {
+    const key = diagramKey || source;
+    try {
+      if (key === 'chain' && state.lastValidChain) {
+        return generateChainSVG(state.lastValidChain, { svgWidth: 860, svgHeight: 180 });
+      }
+      if (key === 'stair' && state.stairs.lastResult) {
+        return generateStairSVG(state.stairs.lastResult, { width: 520, height: 240 });
+      }
+      if (key === 'ramp' && state.ramps.lastResult) {
+        return generateRampSVG(state.ramps.lastResult, { width: 520, height: 220 });
+      }
+      if (key === 'slope' && state.slopes.lastResult) {
+        return generateSlopeSVG(state.slopes.lastResult, { width: 520, height: 220 });
+      }
+    } catch (e) {
+      // Diagram generators return safe empty SVG for invalid states
+    }
+    return null;
+  }
+
+  function collectDxfEntities(source, diagramKey) {
+    const key = diagramKey || source;
+    if (key === 'chain') return chainToDXFEntities(state.lastValidChain);
+    if (key === 'rooms' || key === 'project') return roomsToDXFEntities(requireProject()?.rooms);
+    return [];
+  }
+
+  function showError(message) {
+    if (dom.exportErrorMsg) {
+      dom.exportErrorMsg.textContent = `⚠️ ${message}`;
+      dom.exportErrorMsg.style.display = 'block';
+    }
+    setUnifiedResultState({ toolPrefix: 'export', status: 'error', errorText: `⚠️ ${message}` });
+  }
+
+  function clearError() {
+    if (dom.exportErrorMsg) {
+      dom.exportErrorMsg.style.display = 'none';
+      dom.exportErrorMsg.textContent = '';
+    }
+  }
+
+  function build(isExplicitRun = false) {
+    const source = dom.exportSourceSelect?.value || 'project';
+    const format = dom.exportFormatSelect?.value || EXPORT_FORMATS.JSON;
+    const diagramKey = dom.exportDiagramSelect?.value || null;
+
+    if (dom.exportFormatInfo) dom.exportFormatInfo.textContent = EXPORT_FORMAT_INFO[format] || '';
+    if (dom.exportDiagramGroup) {
+      dom.exportDiagramGroup.style.display = ['svg', 'dxf'].includes(format) ? 'block' : 'none';
+    }
+    if (dom.exportDxfScaleGroup) {
+      dom.exportDxfScaleGroup.style.display = format === 'dxf' ? 'block' : 'none';
+    }
+
+    const request = { format, source, projectId: state.slopes ? null : null };
+    const project = requireProject();
+    if (project) request.projectId = project.id;
+
+    if (format === 'json') {
+      if (!project) {
+        renderInvalid(isExplicitRun, 'No project available — run the project system first.');
+        return;
+      }
+      request.project = project;
+    } else if (format === 'svg') {
+      request.svgMarkup = collectSvgMarkup(source, diagramKey);
+      if (!request.svgMarkup) {
+        renderInvalid(isExplicitRun, 'No diagram available for the selected geometry source — run that tool first.');
+        return;
+      }
+    } else if (format === 'dxf') {
+      request.dxfEntities = collectDxfEntities(source, diagramKey);
+      request.dxfScale = parseFloat(dom.exportDxfScale?.value) || 1000;
+    } else {
+      request.tables = collectTables(source);
+      if (!request.tables || request.tables.filter(Boolean).length === 0) {
+        renderInvalid(isExplicitRun, 'No exportable data for this source — run the source tool first.');
+        return;
+      }
+    }
+
+    // DXF scale is applied through the model's option path
+    let result;
+    try {
+      result = buildExport(request);
+    } catch (e) {
+      renderInvalid(isExplicitRun, e.message);
+      return;
+    }
+
+    clearError();
+    state.exportCenter.lastResult = result;
+
+    if (dom.exportPreviewBox) dom.exportPreviewBox.value = result.content;
+    if (dom.exportSummaryBadge) {
+      dom.exportSummaryBadge.textContent = `${result.content.length} chars · ${result.fileName}`;
+    }
+    if (dom.exportProvenance) {
+      dom.exportProvenance.textContent =
+        `source: ${result.provenance.source} · format: ${result.provenance.format} · exported: ${result.provenance.exportedAt}${result.provenance.projectId ? ` · project: ${result.provenance.projectId}` : ''}`;
+    }
+
+    setUnifiedResultState({ toolPrefix: 'export', status: 'success' });
+    if (isExplicitRun) AudioService.playTick();
+  }
+
+  function renderInvalid(isExplicitRun, message) {
+    if (dom.exportPreviewBox) dom.exportPreviewBox.value = '';
+    if (dom.exportSummaryBadge) dom.exportSummaryBadge.textContent = '—';
+    showError(message);
+    if (isExplicitRun) AudioService.playTick();
+  }
+
+  function download() {
+    const r = state.exportCenter.lastResult;
+    if (!r) {
+      showToast('Build an export preview first', 'warning');
+      return;
+    }
+    const ok = downloadExport(r.content, r.fileName, r.provenance.format);
+    if (ok) {
+      showToast(`Downloaded ${r.fileName}`);
+      AudioService.playSuccess();
+    } else {
+      showToast('Download failed', 'warning');
+    }
+  }
+
+  function copy() {
+    const r = state.exportCenter.lastResult;
+    if (!r) {
+      showToast('Build an export preview first', 'warning');
+      return;
+    }
+    context.copyToClipboard(r.content, 'Export content');
+  }
+
+  function print() {
+    const r = state.exportCenter.lastResult;
+    if (!r) {
+      showToast('Build an export preview first', 'warning');
+      return;
+    }
+    const ok = printExport(r.fileName, r.content);
+    if (ok) showToast('Print window opened');
+    else showToast('Print blocked — allow popups for this page', 'warning');
+  }
+
+  return {
+    id: 'export',
+    mount() {
+      build(false);
+    },
+    getController() {
+      return { build, download, copy, print };
+    }
+  };
+}
+
+
+  // =========================================================================
   // MODULE: App
   // =========================================================================
 
@@ -14656,6 +15474,7 @@ function createSlopesView(context) {
 // NOTE: cad-clipboard / batch-cad / cad-targets core engines are imported by
 // their view modules (src/ui/views/*) — app.js only needs the storage keys
 // and the small helpers still referenced by listeners/state below.
+
 
 
 
@@ -14917,6 +15736,11 @@ function initializeApp() {
     slopes: {
       mode: 'rise_run',
       displayUnit: 'm',
+      lastResult: null
+    },
+
+    // Mode 17: Export Center
+    exportCenter: {
       lastResult: null
     }
   };
@@ -15467,7 +16291,26 @@ function initializeApp() {
     slopesSendCadBtn: document.getElementById('slopes-send-cad-btn'),
     slopesSendWorkspaceBtn: document.getElementById('slopes-send-workspace-btn'),
     slopesSaveJournalBtn: document.getElementById('slopes-save-journal-btn'),
-    slopesSaveProjectBtn: document.getElementById('slopes-save-project-btn')
+    slopesSaveProjectBtn: document.getElementById('slopes-save-project-btn'),
+
+    // Mode 17: Export Center Elements
+    exportSourceSelect: document.getElementById('export-source-select'),
+    exportFormatSelect: document.getElementById('export-format-select'),
+    exportFormatInfo: document.getElementById('export-format-info'),
+    exportDiagramGroup: document.getElementById('export-diagram-group'),
+    exportDiagramSelect: document.getElementById('export-diagram-select'),
+    exportDxfScaleGroup: document.getElementById('export-dxf-scale-group'),
+    exportDxfScale: document.getElementById('export-dxf-scale'),
+    btnRunExport: document.getElementById('btn-run-export'),
+    exportErrorMsg: document.getElementById('export-error-msg'),
+    exportResultPanel: document.getElementById('export-result-panel'),
+    exportStateBadge: document.getElementById('export-state-badge'),
+    exportSummaryBadge: document.getElementById('export-summary-badge'),
+    exportProvenance: document.getElementById('export-provenance'),
+    exportPreviewBox: document.getElementById('export-preview-box'),
+    btnExportDownload: document.getElementById('btn-export-download'),
+    btnExportCopy: document.getElementById('btn-export-copy'),
+    btnExportPrint: document.getElementById('btn-export-print')
   };
 
   // ---------------------------------------------------------------------------
@@ -15657,6 +16500,9 @@ function initializeApp() {
     }
     else if (targetMode === 'slopes') {
       views.callController('slopes', 'calculate');
+    }
+    else if (targetMode === 'export') {
+      views.callController('export', 'build');
     }
   }
 
@@ -17062,6 +17908,9 @@ function initializeApp() {
         break;
       case 'nav-slopes':
         switchMode('slopes');
+        break;
+      case 'nav-export':
+        switchMode('export');
         break;
       case 'nav-cad-clipboard':
         switchMode('cad_clipboard');
@@ -19177,6 +20026,38 @@ function initializeApp() {
       dom.slopesSaveProjectBtn.addEventListener('click', () => views.callController('slopes', 'saveToProject'));
     }
 
+    // Mode 17: Export Center Listeners
+    if (dom.exportSourceSelect) {
+      dom.exportSourceSelect.addEventListener('change', () => views.callController('export', 'build', true));
+    }
+    if (dom.exportFormatSelect) {
+      dom.exportFormatSelect.addEventListener('change', () => views.callController('export', 'build', true));
+    }
+    if (dom.exportDiagramSelect) {
+      dom.exportDiagramSelect.addEventListener('change', () => views.callController('export', 'build', true));
+    }
+    if (dom.exportDxfScale) {
+      dom.exportDxfScale.addEventListener('change', () => views.callController('export', 'build', true));
+    }
+    if (dom.btnRunExport) {
+      dom.btnRunExport.addEventListener('click', () => views.callController('export', 'build', true));
+      dom.btnRunExport.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          views.callController('export', 'build', true);
+        }
+      });
+    }
+    if (dom.btnExportDownload) {
+      dom.btnExportDownload.addEventListener('click', () => views.callController('export', 'download'));
+    }
+    if (dom.btnExportCopy) {
+      dom.btnExportCopy.addEventListener('click', () => views.callController('export', 'copy'));
+    }
+    if (dom.btnExportPrint) {
+      dom.btnExportPrint.addEventListener('click', () => views.callController('export', 'print'));
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -19390,6 +20271,7 @@ function initializeApp() {
   views.register(createStairsView(viewContext));
   views.register(createRampsView(viewContext));
   views.register(createSlopesView(viewContext));
+  views.register(createExportCenterView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();
