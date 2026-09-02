@@ -50,6 +50,7 @@ export const BUNDLE_MODULES = [
 
   // --- Services ---
   { name: 'Storage', file: path.join(srcDir, 'services', 'storage.js') },
+  { name: 'ProjectStore', file: path.join(srcDir, 'services', 'store.js') },
   { name: 'Audio', file: path.join(srcDir, 'services', 'audio.js') },
   { name: 'History', file: path.join(srcDir, 'services', 'history.js') },
   { name: 'Commands', file: path.join(srcDir, 'services', 'commands.js') },
