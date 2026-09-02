@@ -274,15 +274,14 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
-    id: 'future-slope-calc',
-    title: 'General Slope Converter',
-    description: 'Convert between slope percentages, ratios, and angles for site grading and terrain studies',
-    category: 'Upcoming Tool',
+    id: 'nav-slopes',
+    title: 'Slope Analyzer',
+    description: 'General rise/run analysis: signed slopes, percentage, 1:X ratio, angle, consistency checks, and study targets',
+    category: 'Navigation',
     icon: '📉',
-    keywords: ['slope', 'grade', 'gradient', 'terrain', 'grading', 'phase 2.5'],
-    actionType: 'placeholder',
-    available: false,
-    badge: 'Phase 2.5'
+    keywords: ['slope', 'analyzer', 'grade', 'gradient', 'terrain', 'drainage', 'roof', 'ratio', 'angle', 'mode 16'],
+    actionType: 'navigation',
+    available: true
   },
   {
     id: 'future-space-planner',

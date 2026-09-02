@@ -30,6 +30,7 @@
 import { requireFiniteNumber } from './calculator.js';
 import { requireUnit, UNITS } from './units.js';
 import { formatNumber, formatFeetInches } from './formatter.js';
+import { slopeFromGeometry } from './slope-math.js';
 
 /**
  * Configurable reference defaults. Labels are explicit: these are
@@ -86,14 +87,14 @@ export const MAX_SLOPE_PERCENT = 100;
 /**
  * The single canonical slope-conversion source. Given rise and run in meters
  * it derives every representation. All modes funnel through here.
+ * (Since the Slope Analyzer milestone, the implementation lives in the
+ * shared pure module slope-math.js — this alias keeps the ramps call sites
+ * unchanged while guaranteeing ONE mathematical definition app-wide.)
  * @private
  */
 function slopeConversions(riseMeters, runMeters) {
-  const slopePercent = (riseMeters / runMeters) * 100;
-  const ratioValue = runMeters / riseMeters;
-  const angleRadians = Math.atan2(riseMeters, runMeters);
-  const angleDegrees = angleRadians * (180 / Math.PI);
-  return { slopePercent, ratioValue, angleRadians, angleDegrees };
+  const s = slopeFromGeometry(riseMeters, runMeters);
+  return { slopePercent: s.slopePercent, ratioValue: s.ratioValue, angleRadians: s.angleRadians, angleDegrees: s.angleDegrees };
 }
 
 /**

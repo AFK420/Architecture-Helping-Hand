@@ -34,7 +34,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
 // 1. Verify Mode Navigation Targets in HTML
 {
-  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff', 'stairs', 'ramps'];
+  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff', 'stairs', 'ramps', 'slopes'];
   
   for (const mode of expectedModes) {
     const hasTab = htmlContent.includes(`data-mode="${mode}"`);
@@ -486,6 +486,39 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'ramps-send-workspace-btn',
     'ramps-save-journal-btn',
     'ramps-save-project-btn',
+    // Slope Analyzer (Mode 16)
+    'slopes-mode-select',
+    'slopes-rise-group',
+    'slopes-rise',
+    'slopes-run-group',
+    'slopes-run',
+    'slopes-percent-group',
+    'slopes-percent',
+    'slopes-ratio-group',
+    'slopes-ratio',
+    'slopes-angle-group',
+    'slopes-angle',
+    'slopes-error-msg',
+    'slopes-result-panel',
+    'slopes-state-badge',
+    'slopes-direction-badge',
+    'slopes-rise-val',
+    'slopes-run-val',
+    'slopes-slope-val',
+    'slopes-ratio-val',
+    'slopes-angle-val',
+    'slopes-flight-val',
+    'slopes-svg-wrap',
+    'slopes-consistency-row',
+    'slopes-consistency-body',
+    'slopes-explanation',
+    'slopes-targets-body',
+    'slopes-copy-result-btn',
+    'slopes-copy-schedule-btn',
+    'slopes-send-cad-btn',
+    'slopes-send-workspace-btn',
+    'slopes-save-journal-btn',
+    'slopes-save-project-btn',
 
     // Quick Dimension Strip IDs
     'quick-dimension-strip',
@@ -570,6 +603,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'btn-run-cad-handoff',
     'btn-run-stairs',
     'btn-run-ramps',
+    'btn-run-slopes',
     'btn-run-quick-dim'
   ];
 

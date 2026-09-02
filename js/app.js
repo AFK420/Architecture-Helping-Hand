@@ -6360,6 +6360,152 @@ void UNITS;
 
 
   // =========================================================================
+  // MODULE: SlopeMath
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Shared Slope Math
+ * Architectural Tools Phase: the ONE canonical rise/run → slope conversion.
+ *
+ * This module exists because two real features (Ramps, Slopes) — and
+ * conceptually Stairs — need the identical conversion from a rise/run
+ * geometry to percentage, ratio, and angle. Extracting it removes the last
+ * duplicated formula in the application: every tool now consumes this
+ * single definition, so the representations can never diverge.
+ *
+ * Pure, deterministic, zero-DOM. Canonical meters in, plain numbers out.
+ *
+ * CONVENTIONS (documented contract):
+ *  - slopePercent = rise / run × 100
+ *  - ratioValue   = |run / rise|       (displayed "1 : X" — 1 unit rise per X run;
+ *                 the magnitude is always positive; the direction word
+ *                 ascending/descending carries the sign)
+ *  - angleDegrees = atan2(rise, run) × 180/π
+ *  - Zero run with nonzero rise is VERTICAL: percent is ±Infinity, ratio 0,
+ *    angle ±90° — represented structurally, never fabricated as a normal slope.
+ *  - Zero rise with nonzero run is FLAT: percent 0, angle 0; ratio is
+ *    Infinity (undefined as "1 : X") and is represented as such.
+ *  - Signs carry direction: positive rise = ascending, negative = descending.
+ */
+
+/** Direction classification for a rise/run geometry. */
+const SLOPE_DIRECTIONS = Object.freeze({
+  ASCENDING: 'ascending',
+  DESCENDING: 'descending',
+  FLAT: 'flat',
+  VERTICAL: 'vertical'
+});
+
+/**
+ * The canonical conversion: rise/run geometry → every slope representation.
+ * This is the single mathematical definition used by Ramps and the Slope
+ * Analyzer (and available to Stairs/any future geometry tool).
+ *
+ * @param {number} riseMeters - signed rise (positive = ascending)
+ * @param {number} runMeters - signed run (positive = forward)
+ * @returns {{
+ *   kind: 'normal'|'flat'|'vertical'|'invalid',
+ *   direction: string,
+ *   slopePercent: number|Infinity|-Infinity|null,
+ *   ratioValue: number|Infinity|null,
+ *   angleRadians: number,
+ *   angleDegrees: number
+ * }}
+ */
+function slopeFromGeometry(riseMeters, runMeters) {
+  if (typeof riseMeters !== 'number' || !isFinite(riseMeters) ||
+      typeof runMeters !== 'number' || !isFinite(runMeters)) {
+    return { kind: 'invalid', direction: SLOPE_DIRECTIONS.FLAT, slopePercent: null, ratioValue: null, angleRadians: NaN, angleDegrees: NaN };
+  }
+
+  const angleRadians = Math.atan2(riseMeters, runMeters);
+  const angleDegrees = angleRadians * (180 / Math.PI);
+
+  // Vertical: no horizontal run to divide by (run exactly 0)
+  if (runMeters === 0) {
+    if (riseMeters === 0) {
+      return { kind: 'invalid', direction: SLOPE_DIRECTIONS.FLAT, slopePercent: null, ratioValue: null, angleRadians: 0, angleDegrees: 0 };
+    }
+    return {
+      kind: 'vertical',
+      direction: SLOPE_DIRECTIONS.VERTICAL,
+      slopePercent: riseMeters > 0 ? Infinity : -Infinity,
+      ratioValue: 0,
+      angleRadians,
+      angleDegrees
+    };
+  }
+
+  // Flat: run exists, rise is zero
+  if (riseMeters === 0) {
+    return {
+      kind: 'flat',
+      direction: SLOPE_DIRECTIONS.FLAT,
+      slopePercent: 0,
+      ratioValue: Infinity,
+      angleRadians: 0,
+      angleDegrees: 0
+    };
+  }
+
+  const slopePercent = (riseMeters / runMeters) * 100;
+  // Ratio is reported as a positive magnitude (1 : |X|); the direction word
+  // (ascending/descending) carries the sign — see formatSlopeRatio. This
+  // avoids confusing outputs like "-1 : 10".
+  const ratioValue = Math.abs(runMeters / riseMeters);
+  return {
+    kind: 'normal',
+    direction: riseMeters > 0 ? SLOPE_DIRECTIONS.ASCENDING : SLOPE_DIRECTIONS.DESCENDING,
+    slopePercent,
+    ratioValue,
+    angleRadians,
+    angleDegrees
+  };
+}
+
+/**
+ * Inverse conversions from a slope representation back to rise/run geometry.
+ * All of these route their result back through slopeFromGeometry so every
+ * representation agrees by construction.
+ *
+ * run from rise + percent:  run = rise / (percent / 100)
+ * rise from run + percent:  rise = run × (percent / 100)
+ * run from rise + ratio:    run = rise × ratioValue
+ * rise from run + ratio:    rise = run / ratioValue
+ * run from rise + angle:    run = rise / tan(angle)
+ * rise from run + angle:    rise = run × tan(angle)
+ *
+ * Angle is accepted in degrees. tan(90°) is infinite → vertical, which
+ * the caller must treat as the structured vertical case, not a number.
+ */
+function runFromRiseAndPercent(riseMeters, percent) {
+  return riseMeters / (percent / 100);
+}
+
+function riseFromRunAndPercent(runMeters, percent) {
+  return runMeters * (percent / 100);
+}
+
+function runFromRiseAndRatio(riseMeters, ratioValue) {
+  return riseMeters * ratioValue;
+}
+
+function riseFromRunAndRatio(runMeters, ratioValue) {
+  return runMeters / ratioValue;
+}
+
+function runFromRiseAndAngle(riseMeters, angleDegrees) {
+  const radians = angleDegrees * (Math.PI / 180);
+  return riseMeters / Math.tan(radians);
+}
+
+function riseFromRunAndAngle(runMeters, angleDegrees) {
+  const radians = angleDegrees * (Math.PI / 180);
+  return runMeters * Math.tan(radians);
+}
+
+
+  // =========================================================================
   // MODULE: Stairs
   // =========================================================================
 
@@ -7020,6 +7166,7 @@ function generateStairSVG(result, options = {}) {
 
 
 
+
 /**
  * Configurable reference defaults. Labels are explicit: these are
  * educational/design heuristics, NOT universal legal requirements.
@@ -7075,14 +7222,14 @@ const MAX_SLOPE_PERCENT = 100;
 /**
  * The single canonical slope-conversion source. Given rise and run in meters
  * it derives every representation. All modes funnel through here.
+ * (Since the Slope Analyzer milestone, the implementation lives in the
+ * shared pure module slope-math.js — this alias keeps the ramps call sites
+ * unchanged while guaranteeing ONE mathematical definition app-wide.)
  * @private
  */
 function slopeConversions(riseMeters, runMeters) {
-  const slopePercent = (riseMeters / runMeters) * 100;
-  const ratioValue = runMeters / riseMeters;
-  const angleRadians = Math.atan2(riseMeters, runMeters);
-  const angleDegrees = angleRadians * (180 / Math.PI);
-  return { slopePercent, ratioValue, angleRadians, angleDegrees };
+  const s = slopeFromGeometry(riseMeters, runMeters);
+  return { slopePercent: s.slopePercent, ratioValue: s.ratioValue, angleRadians: s.angleRadians, angleDegrees: s.angleDegrees };
 }
 
 /**
@@ -7416,6 +7563,469 @@ function generateRampSVG(result, options = {}) {
     <text x="${((originX + topX) / 2).toFixed(2)}" y="${(topY - 10).toFixed(2)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${result.formatted.slopePercent} · ${result.formatted.ratio} · ${result.formatted.angle}</text>
   </g>
   <text x="${pad}" y="18" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">SIDE ELEVATION — proportional to calculated geometry</text>
+</svg>`.trim();
+
+  return svg;
+}
+
+
+  // =========================================================================
+  // MODULE: Slopes
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Slope Analyzer Core
+ * Architectural Tools Phase: Slopes (general rise/run analysis).
+ *
+ * Purpose: a universal "I have a rise/run relationship and I want to
+ * understand it" tool — site studies, terrain, roof slopes, drainage
+ * direction, path gradients, ramp/stair analysis. It is deliberately NOT a
+ * civil engineering, grading, terrain, or compliance application.
+ *
+ * Key behaviors (documented contract, see SLOPES.md):
+ *  - ONE canonical math source: all conversions come from slope-math.js,
+ *    which the Ramp Calculator also consumes. No second formula exists.
+ *  - SIGNED geometry: positive rise = ascending, negative = descending.
+ *    Unlike the Ramp Calculator (ascent-only), negative values are valid
+ *    here because drainage/terrain direction is architecturally meaningful.
+ *  - Structured singularities: vertical (run = 0) and flat (rise = 0) are
+ *    classified explicitly — never fabricated as normal slopes.
+ *  - CONSISTENCY CHECK: when redundant inputs are supplied they are compared
+ *    against the calculated geometry with a documented deterministic
+ *    tolerance; conflicts are reported with numeric differences.
+ *
+ * Supported definitions (each solves the missing geometry, then routes
+ * through the canonical conversion so all representations agree):
+ *   rise+run, rise+percent, rise+ratio, rise+angle,
+ *   run+percent, run+ratio, run+angle
+ * Redundant pairs (percent+ratio, percent+angle, ratio+angle) are NOT
+ * separate modes: they are rise/run definitions plus consistency checks —
+ * a redundant pair without a rise or run has no absolute geometry.
+ */
+
+
+
+
+
+
+/** Input definition identifiers (primary + alternates; advanced pairs are consistency checks). */
+const SLOPE_INPUT_MODES = Object.freeze({
+  RISE_RUN: 'rise_run',
+  RISE_PERCENT: 'rise_percent',
+  RISE_RATIO: 'rise_ratio',
+  RISE_ANGLE: 'rise_angle',
+  RUN_PERCENT: 'run_percent',
+  RUN_RATIO: 'run_ratio',
+  RUN_ANGLE: 'run_angle'
+});
+
+/** Stable validation error codes. */
+const SLOPE_ERROR_CODES = Object.freeze({
+  INVALID_RISE: 'INVALID_RISE',
+  INVALID_RUN: 'INVALID_RUN',
+  INVALID_PERCENT: 'INVALID_PERCENT',
+  INVALID_RATIO: 'INVALID_RATIO',
+  INVALID_ANGLE: 'INVALID_ANGLE',
+  INVALID_UNIT: 'INVALID_UNIT',
+  MISSING_INPUT: 'MISSING_INPUT',
+  NON_FINITE_RESULT: 'NON_FINITE_RESULT'
+});
+
+/** Explicit, documented consistency tolerance: 0.05% relative difference. */
+const CONSISTENCY_TOLERANCE = 0.0005;
+
+/** Fixed study targets for the comparison table (design values, not laws). */
+const SLOPE_TARGETS = Object.freeze([
+  Object.freeze({ percent: 1.0, note: 'Drainage fall — minimum usable fall for water' }),
+  Object.freeze({ percent: 2.0, note: 'Typical minimum drainage / pavement crossfall' }),
+  Object.freeze({ percent: 5.0, note: 'Gentle site path / ramp study bound' }),
+  Object.freeze({ percent: 8.33, note: '1:12 — widely taught accessibility reference' }),
+  Object.freeze({ percent: 12.5, note: '1:8 — steep ramp study bound' }),
+  Object.freeze({ percent: 45, note: '1:1 — 45°; practical limit for planted slopes' }),
+  Object.freeze({ percent: 100, note: '1:1 rise/run at 45°… actually 100% = 45°; 200% = 63.4°' })
+]);
+
+/** Practical bound on |run| for the analyzer (500 m). */
+const MAX_SLOPE_RUN_METERS = 500;
+
+/** Angle input bound: |angle| ≤ 89.9° avoids the tan(90°) singularity. */
+const MAX_ANGLE_DEGREES = 89.9;
+
+function requireLengthSigned(input, paramName, errorCode, { allowZero = false } = {}) {
+  if (input && typeof input === 'object' && !Array.isArray(input)) {
+    const unitDef = requireUnit(input.unitKey, 'length');
+    if (typeof input.value !== 'number' || !isFinite(input.value) || (!allowZero && input.value === 0)) {
+      const err = new Error(`${paramName} must be a finite non-zero number.`);
+      err.code = errorCode;
+      throw err;
+    }
+    if (input.value < 0 && !allowZero) {
+      // signed values are fine; only magnitude-0 rejected here
+    }
+    return input.value * unitDef.toMeters;
+  }
+  if (typeof input !== 'number' || !isFinite(input) || (!allowZero && input === 0)) {
+    const err = new Error(`${paramName} must be a finite non-zero number.`);
+    err.code = errorCode;
+    throw err;
+  }
+  return input;
+}
+
+/**
+ * Consistency comparison with a documented relative tolerance.
+ * @returns {{ consistent: boolean, difference: number }}
+ */
+function checkConsistency(calculated, provided) {
+  if (typeof calculated !== 'number' || !isFinite(calculated) ||
+      typeof provided !== 'number' || !isFinite(provided)) {
+    return { consistent: false, difference: NaN };
+  }
+  const difference = calculated - provided;
+  const denominator = Math.max(Math.abs(calculated), Math.abs(provided), 1e-9);
+  const relativeDiff = Math.abs(difference) / denominator;
+  return { consistent: relativeDiff <= CONSISTENCY_TOLERANCE, difference };
+}
+
+/**
+ * Main slope analysis entry point.
+ *
+ * @param {Object} input
+ * @param {string} input.mode - one of SLOPE_INPUT_MODES
+ * @param {number|{value,unitKey}} [input.rise] - signed rise
+ * @param {number|{value,unitKey}} [input.run] - signed run
+ * @param {number} [input.slopePercent] - signed percent
+ * @param {number} [input.ratioValue] - ratio as a number X (of 1 : X); positive
+ * @param {number} [input.angleDegrees] - signed angle
+ * @param {number} [input.checkSlopePercent] - optional redundant percent for consistency check
+ * @param {number} [input.checkRatioValue] - optional redundant ratio for consistency check
+ * @param {number} [input.checkAngleDegrees] - optional redundant angle for consistency check
+ * @param {string} [input.displayUnit='m']
+ * @param {number} [input.precision=2]
+ * @returns {Object} structured result or { valid: false, errorCode, errorMessage }
+ */
+function analyzeSlope(input = {}) {
+  const mode = input.mode || SLOPE_INPUT_MODES.RISE_RUN;
+  const displayUnit = input.displayUnit || 'm';
+  const precision = typeof input.precision === 'number' ? Math.max(0, Math.min(4, input.precision)) : 2;
+
+  if (!Object.values(SLOPE_INPUT_MODES).includes(mode)) {
+    return { valid: false, errorCode: SLOPE_ERROR_CODES.MISSING_INPUT, errorMessage: `Unknown slope input mode: "${mode}"` };
+  }
+
+  let riseMeters = null;
+  let runMeters = null;
+
+  // ---- resolve the rise/run geometry from the definition ----
+  try {
+    if (mode === SLOPE_INPUT_MODES.RISE_RUN) {
+      if (input.rise === undefined || input.run === undefined) {
+        const err = new Error('This definition requires both rise and run.');
+        err.code = SLOPE_ERROR_CODES.MISSING_INPUT;
+        throw err;
+      }
+      riseMeters = requireLengthSigned(input.rise, 'Rise', SLOPE_ERROR_CODES.INVALID_RISE);
+      runMeters = requireLengthSigned(input.run, 'Run', SLOPE_ERROR_CODES.INVALID_RUN);
+    } else if (mode === SLOPE_INPUT_MODES.RISE_PERCENT) {
+      if (input.rise === undefined || input.slopePercent === undefined) {
+        const err = new Error('This definition requires rise and slope percent.');
+        err.code = SLOPE_ERROR_CODES.MISSING_INPUT;
+        throw err;
+      }
+      riseMeters = requireLengthSigned(input.rise, 'Rise', SLOPE_ERROR_CODES.INVALID_RISE);
+      if (typeof input.slopePercent !== 'number' || !isFinite(input.slopePercent)) {
+        const err = new Error('Slope percent must be a finite number.');
+        err.code = SLOPE_ERROR_CODES.INVALID_PERCENT;
+        throw err;
+      }
+      if (input.slopePercent === 0) {
+        // 0% with a nonzero rise is contradictory — treat as invalid percent
+        const err = new Error('A 0% slope cannot produce a non-zero rise. Use the Rise + Run definition for flat geometry.');
+        err.code = SLOPE_ERROR_CODES.INVALID_PERCENT;
+        throw err;
+      }
+      runMeters = runFromRiseAndPercent(riseMeters, input.slopePercent);
+    } else if (mode === SLOPE_INPUT_MODES.RISE_RATIO) {
+      if (input.rise === undefined || input.ratioValue === undefined) {
+        const err = new Error('This definition requires rise and ratio (1 : X).');
+        err.code = SLOPE_ERROR_CODES.MISSING_INPUT;
+        throw err;
+      }
+      riseMeters = requireLengthSigned(input.rise, 'Rise', SLOPE_ERROR_CODES.INVALID_RISE);
+      if (typeof input.ratioValue !== 'number' || !isFinite(input.ratioValue) || input.ratioValue <= 0) {
+        const err = new Error('Ratio must be a finite positive number X (of 1 : X).');
+        err.code = SLOPE_ERROR_CODES.INVALID_RATIO;
+        throw err;
+      }
+      runMeters = runFromRiseAndRatio(riseMeters, input.ratioValue);
+    } else if (mode === SLOPE_INPUT_MODES.RISE_ANGLE) {
+      if (input.rise === undefined || input.angleDegrees === undefined) {
+        const err = new Error('This definition requires rise and angle.');
+        err.code = SLOPE_ERROR_CODES.MISSING_INPUT;
+        throw err;
+      }
+      riseMeters = requireLengthSigned(input.rise, 'Rise', SLOPE_ERROR_CODES.INVALID_RISE);
+      if (typeof input.angleDegrees !== 'number' || !isFinite(input.angleDegrees) ||
+          Math.abs(input.angleDegrees) === 0 || Math.abs(input.angleDegrees) >= 90) {
+        const err = new Error(`Angle must be finite and strictly between -90° and +90° (±${MAX_ANGLE_DEGREES}° supported).`);
+        err.code = SLOPE_ERROR_CODES.INVALID_ANGLE;
+        throw err;
+      }
+      runMeters = runFromRiseAndAngle(riseMeters, input.angleDegrees);
+      if (!isFinite(runMeters)) {
+        const err = new Error('The supplied angle produces an undefined run (vertical limit).');
+        err.code = SLOPE_ERROR_CODES.NON_FINITE_RESULT;
+        throw err;
+      }
+    } else if (mode === SLOPE_INPUT_MODES.RUN_PERCENT) {
+      if (input.run === undefined || input.slopePercent === undefined) {
+        const err = new Error('This definition requires run and slope percent.');
+        err.code = SLOPE_ERROR_CODES.MISSING_INPUT;
+        throw err;
+      }
+      runMeters = requireLengthSigned(input.run, 'Run', SLOPE_ERROR_CODES.INVALID_RUN);
+      if (typeof input.slopePercent !== 'number' || !isFinite(input.slopePercent) || input.slopePercent === 0) {
+        const err = new Error('Slope percent must be a finite non-zero number.');
+        err.code = SLOPE_ERROR_CODES.INVALID_PERCENT;
+        throw err;
+      }
+      riseMeters = riseFromRunAndPercent(runMeters, input.slopePercent);
+    } else if (mode === SLOPE_INPUT_MODES.RUN_RATIO) {
+      if (input.run === undefined || input.ratioValue === undefined) {
+        const err = new Error('This definition requires run and ratio (1 : X).');
+        err.code = SLOPE_ERROR_CODES.MISSING_INPUT;
+        throw err;
+      }
+      runMeters = requireLengthSigned(input.run, 'Run', SLOPE_ERROR_CODES.INVALID_RUN);
+      if (typeof input.ratioValue !== 'number' || !isFinite(input.ratioValue) || input.ratioValue <= 0) {
+        const err = new Error('Ratio must be a finite positive number X (of 1 : X).');
+        err.code = SLOPE_ERROR_CODES.INVALID_RATIO;
+        throw err;
+      }
+      riseMeters = riseFromRunAndRatio(runMeters, input.ratioValue);
+    } else if (mode === SLOPE_INPUT_MODES.RUN_ANGLE) {
+      if (input.run === undefined || input.angleDegrees === undefined) {
+        const err = new Error('This definition requires run and angle.');
+        err.code = SLOPE_ERROR_CODES.MISSING_INPUT;
+        throw err;
+      }
+      runMeters = requireLengthSigned(input.run, 'Run', SLOPE_ERROR_CODES.INVALID_RUN);
+      if (typeof input.angleDegrees !== 'number' || !isFinite(input.angleDegrees) ||
+          Math.abs(input.angleDegrees) === 0 || Math.abs(input.angleDegrees) >= 90) {
+        const err = new Error(`Angle must be finite and strictly between -90° and +90° (±${MAX_ANGLE_DEGREES}° supported).`);
+        err.code = SLOPE_ERROR_CODES.INVALID_ANGLE;
+        throw err;
+      }
+      riseMeters = riseFromRunAndAngle(runMeters, input.angleDegrees);
+      if (!isFinite(riseMeters)) {
+        const err = new Error('The supplied angle produces an undefined rise (vertical limit).');
+        err.code = SLOPE_ERROR_CODES.NON_FINITE_RESULT;
+        throw err;
+      }
+    }
+  } catch (e) {
+    if (e.code === undefined && /measurement unit/i.test(e.message)) {
+      return { valid: false, errorCode: SLOPE_ERROR_CODES.INVALID_UNIT, errorMessage: e.message };
+    }
+    return { valid: false, errorCode: e.code || SLOPE_ERROR_CODES.INVALID_RISE, errorMessage: e.message };
+  }
+
+  // ---- post-derivation sanity ----
+  if (!isFinite(riseMeters) || !isFinite(runMeters)) {
+    return { valid: false, errorCode: SLOPE_ERROR_CODES.NON_FINITE_RESULT, errorMessage: 'No valid result can be calculated from the supplied inputs.' };
+  }
+  if (Math.abs(runMeters) > MAX_SLOPE_RUN_METERS) {
+    return { valid: false, errorCode: SLOPE_ERROR_CODES.INVALID_RUN, errorMessage: `Run magnitude exceeds the supported analyzer bound (${MAX_SLOPE_RUN_METERS} m).` };
+  }
+
+  // ---- canonical conversion (ONE source) ----
+  const canonical = slopeFromGeometry(riseMeters, runMeters);
+  if (canonical.kind === 'invalid') {
+    return { valid: false, errorCode: SLOPE_ERROR_CODES.NON_FINITE_RESULT, errorMessage: 'No valid result can be calculated from the supplied inputs.' };
+  }
+
+  // ---- optional consistency checks on redundant inputs ----
+  const checks = [];
+  if (input.checkSlopePercent !== undefined && canonical.kind === 'normal') {
+    const c = checkConsistency(canonical.slopePercent, input.checkSlopePercent);
+    checks.push({ field: 'slopePercent', calculated: canonical.slopePercent, provided: input.checkSlopePercent, ...c });
+  }
+  if (input.checkRatioValue !== undefined && canonical.kind === 'normal') {
+    const c = checkConsistency(canonical.ratioValue, input.checkRatioValue);
+    checks.push({ field: 'ratioValue', calculated: canonical.ratioValue, provided: input.checkRatioValue, ...c });
+  }
+  if (input.checkAngleDegrees !== undefined && isFinite(canonical.angleDegrees)) {
+    const c = checkConsistency(canonical.angleDegrees, input.checkAngleDegrees);
+    checks.push({ field: 'angleDegrees', calculated: canonical.angleDegrees, provided: input.checkAngleDegrees, ...c });
+  }
+  const conflict = checks.find(c => !c.consistent);
+
+  const result = {
+    valid: true,
+    mode,
+    input: { displayUnit, precision },
+    geometry: {
+      riseMeters,
+      runMeters,
+      slopePercent: canonical.slopePercent,
+      ratioValue: canonical.ratioValue,
+      angleDegrees: canonical.angleDegrees,
+      flightLengthMeters: Math.sqrt(riseMeters * riseMeters + runMeters * runMeters),
+      kind: canonical.kind,
+      direction: canonical.direction
+    },
+    consistency: {
+      tolerance: CONSISTENCY_TOLERANCE,
+      checks,
+      status: checks.length === 0 ? 'not_applicable' : (conflict ? 'CONFLICT' : 'CONSISTENT'),
+      conflict: conflict || null
+    }
+  };
+  result.formatted = formatSlopeResult(result, displayUnit, precision);
+  return result;
+}
+
+/**
+ * Comparison table for the fixed study targets: for a |rise| magnitude, the
+ * run each target percent demands (magnitude; direction carried separately).
+ */
+function buildSlopeTargetComparison(riseMagnitudeMeters) {
+  if (typeof riseMagnitudeMeters !== 'number' || !isFinite(riseMagnitudeMeters) || riseMagnitudeMeters <= 0) {
+    return [];
+  }
+  return SLOPE_TARGETS.map(t => ({
+    percent: t.percent,
+    note: t.note,
+    ratioValue: 100 / t.percent,
+    runMeters: riseMagnitudeMeters / (t.percent / 100)
+  }));
+}
+
+/** Formats canonical meters in the requested display unit. */
+function fmt(meters, displayUnitKey, precision) {
+  const unitDef = requireUnit(displayUnitKey, 'length');
+  if (displayUnitKey === 'ft-in') {
+    return formatFeetInches(Math.abs(meters) / UNITS.in.toMeters);
+  }
+  return `${formatNumber(meters / unitDef.toMeters, precision)} ${unitDef.symbol}`;
+}
+
+/** Ratio display with documented sign convention: "1 : X ascending/descending". */
+function formatSlopeRatio(ratioValue, direction) {
+  if (typeof ratioValue !== 'number' || !isFinite(ratioValue) || ratioValue <= 0) {
+    return direction === SLOPE_DIRECTIONS.VERTICAL ? '1 : 0' : '—';
+  }
+  const rounded = Math.round(ratioValue);
+  const magnitude = Math.abs(ratioValue - rounded) < 1e-9
+    ? `${rounded}`
+    : `${formatNumber(ratioValue, ratioValue < 1.05 ? 3 : 2)}`;
+  if (direction === SLOPE_DIRECTIONS.DESCENDING) return `1 : ${magnitude} descending`;
+  if (direction === SLOPE_DIRECTIONS.ASCENDING) return `1 : ${magnitude} ascending`;
+  return `1 : ${magnitude}`;
+}
+
+/**
+ * Formats a slope result into UI strings; raw values stay on the result.
+ */
+function formatSlopeResult(result, displayUnit = 'm', precision = 2) {
+  const g = result.geometry;
+  const isVertical = g.kind === 'vertical';
+  const f = {
+    rise: fmt(g.riseMeters, displayUnit, precision),
+    run: fmt(g.runMeters, displayUnit, precision),
+    flightLength: fmt(g.flightLengthMeters, displayUnit, precision),
+    slopePercent: isVertical
+      ? (g.slopePercent > 0 ? 'Undefined / Infinite (vertical)' : 'Undefined / −Infinite (vertical)')
+      : `${formatNumber(g.slopePercent, 2)}%`,
+    ratio: formatSlopeRatio(g.ratioValue, g.direction),
+    angle: `${formatNumber(g.angleDegrees, 2)}°`,
+    direction: g.kind === 'vertical'
+      ? (g.riseMeters > 0 ? 'VERTICAL (up)' : 'VERTICAL (down)')
+      : (g.kind === 'flat' ? 'FLAT' : (g.direction === SLOPE_DIRECTIONS.ASCENDING ? '↑ ASCENDING' : '↓ DESCENDING'))
+  };
+  if (result.consistency && result.consistency.status === 'CONFLICT' && result.consistency.conflict) {
+    const c = result.consistency.conflict;
+    f.conflict = `CONFLICT — calculated ${c.field} = ${formatNumber(c.calculated, 4)}, provided = ${formatNumber(c.provided, 4)} (difference ${formatNumber(c.difference, 4)})`;
+  }
+  return f;
+}
+
+/**
+ * Educational explanation of the slope: "For every X units horizontally,
+ * the surface rises 1 unit." Built from the actual geometry.
+ */
+function explainSlope(result) {
+  if (!result || !result.valid) return '';
+  const g = result.geometry;
+  if (g.kind === 'vertical') {
+    return 'A vertical relationship: all rise, no run. Percentage slope is undefined (infinite).';
+  }
+  if (g.kind === 'flat') {
+    return 'A flat relationship: all run, no rise. Slope is 0% and the angle is 0°.';
+  }
+  const ratioAbs = Math.abs(g.ratioValue);
+  const dir = g.direction === SLOPE_DIRECTIONS.DESCENDING ? 'falls' : 'rises';
+  return `For every ${formatNumber(ratioAbs, ratioAbs % 1 === 0 ? 0 : 2)} units horizontally, the surface ${dir} 1 unit.`;
+}
+
+/**
+ * Generates a proportional SVG side-elevation diagram from the actual
+ * calculated geometry. Handles signed rise (descending slopes render
+ * downward) and visually normalizes extreme ratios with an explicit note.
+ *
+ * @param {Object} result - valid result from analyzeSlope
+ * @param {Object} [options] - { width, height }
+ */
+function generateSlopeSVG(result, options = {}) {
+  if (!result || !result.valid || !result.geometry) {
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80"></svg>';
+  }
+
+  const width = typeof options.width === 'number' && options.width > 0 ? options.width : 520;
+  const height = typeof options.height === 'number' && options.height > 0 ? options.height : 220;
+  const pad = 46;
+  const drawW = width - pad * 2;
+  const drawH = height - pad * 2;
+
+  const rise = result.geometry.riseMeters;
+  const run = result.geometry.runMeters;
+  const absRise = Math.abs(rise);
+  const absRun = Math.abs(run);
+
+  // Visual normalization: when the slope is extreme (ratio beyond 20:1 or
+  // steeper than 1:1.2), scale the minor axis up to stay readable. The note
+  // discloses this; numeric labels remain exact.
+  const ratioAbs = absRise > 0 ? absRun / absRise : Infinity;
+  const visuallyNormalized = ratioAbs > 20 || ratioAbs < 0.833;
+  let drawRun = absRun;
+  let drawRise = absRise;
+  if (visuallyNormalized && absRise > 0 && absRun > 0) {
+    const targetRatio = 4; // readable ~1:4 visual
+    if (ratioAbs > targetRatio) { drawRun = absRise * targetRatio; }
+    else { drawRise = absRun / targetRatio; }
+  }
+  if (absRise === 0 || absRun === 0) {
+    drawRun = absRun || drawW * 0.8;
+    drawRise = absRise;
+  }
+
+  const scale = Math.min(drawW / drawRun, drawH / drawRise);
+  const originX = pad;
+  const originY = height - pad;
+  const topX = originX + drawRun * scale;
+  const topY = originY - drawRise * scale * (rise < 0 ? -1 : 1);
+
+  const noteY = visuallyNormalized ? 32 : 18;
+
+  const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Proportional slope diagram: rise ${result.formatted.rise}, run ${result.formatted.run}, ${result.formatted.direction}, angle ${result.formatted.angle}">
+  <line x1="${(originX - 14).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${(topX + 14).toFixed(2)}" y2="${originY.toFixed(2)}" stroke="var(--border-color, #444)" stroke-width="1.4"/>
+  <line x1="${originX.toFixed(2)}" y1="${originY.toFixed(2)}" x2="${topX.toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="2.4"/>
+  <text x="${((originX + topX) / 2).toFixed(2)}" y="${(originY + 18).toFixed(2)}" text-anchor="middle" font-size="11" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.run}</text>
+  <text x="${(topX + 10).toFixed(2)}" y="${((originY + topY) / 2).toFixed(2)}" font-size="11" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RISE ${result.formatted.rise}</text>
+  <text x="${((originX + topX) / 2).toFixed(2)}" y="${((originY + topY) / 2).toFixed(2)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)" transform="rotate(${(-result.geometry.angleDegrees).toFixed(2)} ${((originX + topX) / 2).toFixed(2)} ${((originY + topY) / 2).toFixed(2)})" dy="-6">${result.formatted.slopePercent} · ${result.formatted.angle}</text>
+  <text x="${pad}" y="${noteY}" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">${result.formatted.direction}</text>
+  ${visuallyNormalized ? `<text x="${pad}" y="18" font-size="9" fill="var(--text-muted, #777)" font-style="italic" font-family="var(--font-family-mono, monospace)">Diagram visually normalized for readability. Numeric values shown are exact.</text>` : ''}
 </svg>`.trim();
 
   return svg;
@@ -8629,15 +9239,14 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
-    id: 'future-slope-calc',
-    title: 'General Slope Converter',
-    description: 'Convert between slope percentages, ratios, and angles for site grading and terrain studies',
-    category: 'Upcoming Tool',
+    id: 'nav-slopes',
+    title: 'Slope Analyzer',
+    description: 'General rise/run analysis: signed slopes, percentage, 1:X ratio, angle, consistency checks, and study targets',
+    category: 'Navigation',
     icon: '📉',
-    keywords: ['slope', 'grade', 'gradient', 'terrain', 'grading', 'phase 2.5'],
-    actionType: 'placeholder',
-    available: false,
-    badge: 'Phase 2.5'
+    keywords: ['slope', 'analyzer', 'grade', 'gradient', 'terrain', 'drainage', 'roof', 'ratio', 'angle', 'mode 16'],
+    actionType: 'navigation',
+    available: true
   },
   {
     id: 'future-space-planner',
@@ -13648,6 +14257,384 @@ function createRampsView(context) {
 
 
   // =========================================================================
+  // MODULE: ViewSlopes
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Slope Analyzer View (Mode 16)
+ * Architectural Tools Phase: Slopes. General rise/run analysis with signed
+ * geometry, consistency checking, and target comparison. All math lives in
+ * src/core/slopes.js + the shared slope-math.js; this view only renders
+ * engine results and routes persistence through the shared context.
+ */
+
+
+
+
+
+
+const SLOPES_PREFS_KEY = 'archiscale_slopes_prefs'; // user preferences only
+
+function createSlopesView(context) {
+  const {
+    state, dom, showToast, setUnifiedResultState, AudioService,
+    HistoryService, switchMode, views, projectStore, StorageService, copyToClipboard
+  } = context;
+
+  function savePrefs() {
+    try {
+      StorageService.setItem(SLOPES_PREFS_KEY, JSON.stringify({
+        mode: state.slopes.mode,
+        displayUnit: state.slopes.displayUnit
+      }));
+    } catch (e) {}
+  }
+
+  function loadPrefs() {
+    try {
+      const raw = StorageService.getItem(SLOPES_PREFS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {}
+    return {};
+  }
+
+  /** Parses a signed user length field ("-1.2m", "1200mm") to meters. */
+  function parseSignedLengthField(el, fallbackUnit) {
+    if (!el) return null;
+    const raw = (el.value || '').trim();
+    if (!raw) return null;
+    const negative = raw.startsWith('-');
+    const res = parseInput(negative ? raw.slice(1) : raw, { allowNegative: false });
+    if (!res.isValid || res.value <= 0) return null;
+    const unitKey = res.detectedUnit || fallbackUnit;
+    const meters = res.value * UNITS[unitKey].toMeters;
+    return negative ? -meters : meters;
+  }
+
+  function syncModeVisibility() {
+    const mode = state.slopes.mode;
+    const show = (el, on) => { if (el) el.style.display = on ? 'block' : 'none'; };
+    show(dom.slopesRiseGroup, mode !== SLOPE_INPUT_MODES.RUN_PERCENT && mode !== SLOPE_INPUT_MODES.RUN_RATIO && mode !== SLOPE_INPUT_MODES.RUN_ANGLE);
+    show(dom.slopesRunGroup, mode !== SLOPE_INPUT_MODES.RISE_PERCENT && mode !== SLOPE_INPUT_MODES.RISE_RATIO && mode !== SLOPE_INPUT_MODES.RISE_ANGLE);
+    show(dom.slopesPercentGroup, mode === SLOPE_INPUT_MODES.RISE_PERCENT || mode === SLOPE_INPUT_MODES.RUN_PERCENT);
+    show(dom.slopesRatioGroup, mode === SLOPE_INPUT_MODES.RISE_RATIO || mode === SLOPE_INPUT_MODES.RUN_RATIO);
+    show(dom.slopesAngleGroup, mode === SLOPE_INPUT_MODES.RISE_ANGLE || mode === SLOPE_INPUT_MODES.RUN_ANGLE);
+  }
+
+  function showError(message) {
+    if (dom.slopesErrorMsg) {
+      dom.slopesErrorMsg.textContent = `⚠️ ${message}`;
+      dom.slopesErrorMsg.style.display = 'block';
+    }
+    setUnifiedResultState({ toolPrefix: 'slopes', status: 'error', errorText: `⚠️ ${message}` });
+  }
+
+  function clearError() {
+    if (dom.slopesErrorMsg) {
+      dom.slopesErrorMsg.style.display = 'none';
+      dom.slopesErrorMsg.textContent = '';
+    }
+  }
+
+  function calculate(isExplicitRun = false) {
+    const mode = state.slopes.mode;
+    const input = { mode, displayUnit: state.slopes.displayUnit };
+
+    if (mode === SLOPE_INPUT_MODES.RISE_RUN || mode === SLOPE_INPUT_MODES.RISE_PERCENT ||
+        mode === SLOPE_INPUT_MODES.RISE_RATIO || mode === SLOPE_INPUT_MODES.RISE_ANGLE) {
+      const riseM = parseSignedLengthField(dom.slopesRise, 'm');
+      if (riseM === null || riseM === 0) {
+        renderInvalid(isExplicitRun, 'Rise must be a non-zero value (use a negative value for descending slopes).');
+        return;
+      }
+      input.rise = riseM;
+    }
+    if (mode === SLOPE_INPUT_MODES.RISE_RUN || mode === SLOPE_INPUT_MODES.RUN_PERCENT ||
+        mode === SLOPE_INPUT_MODES.RUN_RATIO || mode === SLOPE_INPUT_MODES.RUN_ANGLE) {
+      const runM = parseSignedLengthField(dom.slopesRun, 'm');
+      if (runM === null || runM === 0) {
+        renderInvalid(isExplicitRun, 'Run must be a non-zero value.');
+        return;
+      }
+      input.run = runM;
+    }
+    if (mode === SLOPE_INPUT_MODES.RISE_PERCENT || mode === SLOPE_INPUT_MODES.RUN_PERCENT) {
+      const pct = parseFloat(dom.slopesPercent?.value);
+      if (!isFinite(pct)) {
+        renderInvalid(isExplicitRun, 'Slope percent must be a finite number (e.g. 8.33).');
+        return;
+      }
+      input.slopePercent = pct;
+    }
+    if (mode === SLOPE_INPUT_MODES.RISE_RATIO || mode === SLOPE_INPUT_MODES.RUN_RATIO) {
+      const ratio = parseFloat(dom.slopesRatio?.value);
+      if (!isFinite(ratio) || ratio <= 0) {
+        renderInvalid(isExplicitRun, 'Ratio must be a positive number X (of 1 : X).');
+        return;
+      }
+      input.ratioValue = ratio;
+    }
+    if (mode === SLOPE_INPUT_MODES.RISE_ANGLE || mode === SLOPE_INPUT_MODES.RUN_ANGLE) {
+      const angle = parseFloat(dom.slopesAngle?.value);
+      if (!isFinite(angle) || angle === 0 || Math.abs(angle) >= 90) {
+        renderInvalid(isExplicitRun, 'Angle must be strictly between -90° and +90°.');
+        return;
+      }
+      input.angleDegrees = angle;
+    }
+
+    const result = analyzeSlope(input);
+    if (!result.valid) {
+      state.slopes.lastResult = null;
+      renderInvalid(isExplicitRun, result.errorMessage);
+      return;
+    }
+
+    clearError();
+    state.slopes.lastResult = result;
+    renderResult(result);
+    renderTargets();
+
+    setUnifiedResultState({
+      toolPrefix: 'slopes',
+      status: 'success',
+      context: { 'Slope': result.formatted.slopePercent, 'Direction': result.geometry.direction }
+    });
+
+    if (isExplicitRun) AudioService.playTick();
+  }
+
+  function renderInvalid(isExplicitRun, message) {
+    clearResultPanels();
+    showError(message);
+    if (isExplicitRun) AudioService.playTick();
+  }
+
+  function clearResultPanels() {
+    ['slopesSlopeVal', 'slopesRatioVal', 'slopesAngleVal', 'slopesFlightVal'].forEach(k => {
+      if (dom[k]) dom[k].textContent = '—';
+    });
+    if (dom.slopesRiseVal) dom.slopesRiseVal.textContent = '—';
+    if (dom.slopesRunVal) dom.slopesRunVal.textContent = '—';
+    if (dom.slopesDirectionBadge) dom.slopesDirectionBadge.textContent = '—';
+    if (dom.slopesSvgWrap) dom.slopesSvgWrap.innerHTML = '';
+    if (dom.slopesExplanation) dom.slopesExplanation.textContent = '';
+    if (dom.slopesConsistencyRow) dom.slopesConsistencyRow.style.display = 'none';
+    if (dom.slopesTargetsBody) dom.slopesTargetsBody.innerHTML = '';
+  }
+
+  function renderResult(result) {
+    const f = result.formatted;
+    const g = result.geometry;
+
+    if (dom.slopesRiseVal) dom.slopesRiseVal.textContent = f.rise;
+    if (dom.slopesRunVal) dom.slopesRunVal.textContent = f.run;
+    if (dom.slopesSlopeVal) dom.slopesSlopeVal.textContent = f.slopePercent;
+    if (dom.slopesRatioVal) dom.slopesRatioVal.textContent = f.ratio;
+    if (dom.slopesAngleVal) dom.slopesAngleVal.textContent = f.angle;
+    if (dom.slopesFlightVal) dom.slopesFlightVal.textContent = f.flightLength;
+    if (dom.slopesDirectionBadge) dom.slopesDirectionBadge.textContent = f.direction;
+
+    if (dom.slopesSvgWrap) {
+      dom.slopesSvgWrap.innerHTML = generateSlopeSVG(result, { width: 520, height: 220 });
+    }
+    if (dom.slopesExplanation) {
+      dom.slopesExplanation.textContent = explainSlope(result);
+    }
+
+    // Consistency / conflict section
+    if (dom.slopesConsistencyRow) {
+      if (result.consistency.status === 'CONFLICT' && f.conflict) {
+        dom.slopesConsistencyRow.style.display = 'flex';
+        if (dom.slopesConsistencyBody) dom.slopesConsistencyBody.textContent = f.conflict;
+      } else if (result.consistency.status === 'CONSISTENT') {
+        dom.slopesConsistencyRow.style.display = 'flex';
+        if (dom.slopesConsistencyBody) dom.slopesConsistencyBody.textContent = 'CONSISTENT — redundant values match the calculated geometry within tolerance.';
+      } else {
+        dom.slopesConsistencyRow.style.display = 'none';
+      }
+    }
+  }
+
+  function renderTargets() {
+    if (!dom.slopesTargetsBody) return;
+    // Use the magnitude of the current rise (or derived rise) for the table
+    const riseMag = state.slopes.lastResult ? Math.abs(state.slopes.lastResult.geometry.riseMeters) : null;
+    if (riseMag === null) {
+      dom.slopesTargetsBody.innerHTML = '';
+      return;
+    }
+    const targets = buildSlopeTargetComparison(riseMag);
+    dom.slopesTargetsBody.innerHTML = targets.map(t => `
+      <button type="button" class="slopes-target-row" data-percent="${t.percent}"
+        style="display: grid; grid-template-columns: 80px 90px 1fr; gap: 0.5rem; text-align: left; padding: 0.4rem 0.6rem; border: 1px solid var(--border-color-light); border-radius: 5px; background: transparent; cursor: pointer; font-family: var(--font-family-mono); font-size: 0.78rem;">
+        <strong style="color: var(--accent-primary);">${t.percent}%</strong>
+        <span>1 : ${(100 / t.percent) % 1 === 0 ? (100 / t.percent) : (100 / t.percent).toFixed(2)}</span>
+        <span>run ${(t.runMeters).toFixed(2)} m</span>
+      </button>
+    `).join('');
+
+    dom.slopesTargetsBody.querySelectorAll('.slopes-target-row').forEach(row => {
+      row.addEventListener('click', () => {
+        // Apply the chosen percent to whichever definition uses percent
+        const usesPercent = state.slopes.mode === SLOPE_INPUT_MODES.RISE_PERCENT || state.slopes.mode === SLOPE_INPUT_MODES.RUN_PERCENT;
+        if (usesPercent) {
+          if (dom.slopesPercent) dom.slopesPercent.value = row.dataset.percent;
+          calculate(true);
+          showToast(`Applied ${row.dataset.percent}% target`);
+        } else {
+          showToast('Switch to a percent-based definition to apply a target', 'warning');
+        }
+      });
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Quick actions — reuse existing engines/views
+  // ------------------------------------------------------------------
+  function requireResult() {
+    const r = state.slopes.lastResult;
+    if (!r || !r.valid) {
+      showToast('Run a valid slope analysis first', 'warning');
+      return null;
+    }
+    return r;
+  }
+
+  function copyResult() {
+    const r = requireResult();
+    if (!r) return;
+    const f = r.formatted;
+    const explanation = explainSlope(r);
+    const text = [
+      `SLOPE — rise ${f.rise} · run ${f.run}`,
+      `Slope: ${f.slopePercent} | Ratio: ${f.ratio} | Angle: ${f.angle}`,
+      `Direction: ${f.direction.replace(/[↑↓] /, '')} | Flight: ${f.flightLength}`,
+      explanation
+    ].join('\n');
+    copyToClipboard(text, 'Slope Analysis');
+  }
+
+  function copySchedule() {
+    const r = requireResult();
+    if (!r) return;
+    const f = r.formatted;
+    const header = ['Rise', 'Run', 'Slope %', 'Ratio', 'Angle', 'Flight Length', 'Direction'].join('\t');
+    const row = [f.rise, f.run, f.slopePercent, f.ratio, f.angle, f.flightLength, r.geometry.direction].join('\t');
+    copyToClipboard(`${header}\n${row}`, 'Slope Schedule (TSV)');
+  }
+
+  function sendToCad() {
+    const r = requireResult();
+    if (!r) return;
+    const g = r.geometry;
+    const numbers = [
+      g.riseMeters * 1000,
+      g.runMeters * 1000,
+      g.flightLengthMeters * 1000
+    ].map(v => v.toFixed(0)).join(' ');
+    views.callController('cad_handoff', 'openCadHandoffWithSource', 'manual');
+    if (dom.handoffManualInput) dom.handoffManualInput.value = numbers;
+    state.cadHandoff.manualInput = numbers;
+    views.callController('cad_handoff', 'renderCadHandoff', true);
+    showToast('Slope values loaded into CAD Handoff');
+  }
+
+  function sendToWorkspace() {
+    const r = requireResult();
+    if (!r) return;
+    const g = r.geometry;
+    const entries = [
+      createDimensionEntry({ name: 'Slope Rise', rawInput: `${(g.riseMeters * 1000).toFixed(0)}mm`, dimensionType: 'reference', notes: `Slope Analyzer — ${r.formatted.slopePercent}` }, 'mm'),
+      createDimensionEntry({ name: 'Slope Run', rawInput: `${(g.runMeters * 1000).toFixed(0)}mm`, dimensionType: 'segment', notes: `Slope Analyzer — ${r.formatted.ratio}` }, 'mm')
+    ];
+    state.workspace.entries.push(...entries);
+    views.callController('workspace', 'saveWorkspace');
+    views.callController('workspace', 'renderWorkspace');
+    switchMode('workspace');
+    showToast('Slope rise/run added to Dimension Workspace');
+  }
+
+  function saveToJournal() {
+    const r = requireResult();
+    if (!r) return;
+    const f = r.formatted;
+    HistoryService.addEntry({
+      operation: 'Slope Analyzer',
+      mode: 'Slopes',
+      scaleStr: f.ratio,
+      inputStr: `Rise ${f.rise}`,
+      outputStr: `Run ${f.run} — ${f.slopePercent} — ${f.angle}`,
+      stateSnapshot: {
+        modeKey: 'slopes',
+        rise: dom.slopesRise?.value || '',
+        run: dom.slopesRun?.value || '',
+        mode: r.mode
+      }
+    });
+    views.callController('history', 'renderHistoryList');
+    AudioService.playTick();
+    showToast('Saved slope to Calculation Journal');
+  }
+
+  function saveToProject() {
+    const r = requireResult();
+    if (!r) return;
+    if (!projectStore) {
+      showToast('Project store unavailable', 'warning');
+      return;
+    }
+    const g = r.geometry;
+    const saved = projectStore.updateProject(draft => {
+      draft.decisions.push({
+        id: `dec-slope-${Date.now()}`,
+        kind: 'slope',
+        name: `Slope ${r.formatted.slopePercent}`,
+        createdAt: new Date().toISOString(),
+        result: {
+          mode: r.mode,
+          riseMeters: g.riseMeters,
+          runMeters: g.runMeters,
+          slopePercent: g.slopePercent,
+          ratioValue: g.ratioValue,
+          angleDegrees: g.angleDegrees,
+          flightLengthMeters: g.flightLengthMeters,
+          direction: g.direction,
+          kind: g.kind
+        }
+      });
+      return draft;
+    });
+    if (saved.ok) {
+      showToast('Slope saved to project document');
+      AudioService.playSuccess();
+    } else {
+      showToast(`Project save failed: ${saved.errors[0]}`, 'warning');
+    }
+  }
+
+  return {
+    id: 'slopes',
+    mount() {
+      const prefs = loadPrefs();
+      if (prefs.mode && Object.values(SLOPE_INPUT_MODES).includes(prefs.mode)) {
+        state.slopes.mode = prefs.mode;
+        if (dom.slopesModeSelect) dom.slopesModeSelect.value = prefs.mode;
+      }
+      syncModeVisibility();
+      calculate(false);
+    },
+    getController() {
+      return { calculate, syncModeVisibility, renderTargets, copyResult, copySchedule, sendToCad, sendToWorkspace, saveToJournal, saveToProject };
+    }
+  };
+}
+
+
+  // =========================================================================
   // MODULE: App
   // =========================================================================
 
@@ -13669,6 +14656,7 @@ function createRampsView(context) {
 // NOTE: cad-clipboard / batch-cad / cad-targets core engines are imported by
 // their view modules (src/ui/views/*) — app.js only needs the storage keys
 // and the small helpers still referenced by listeners/state below.
+
 
 
 
@@ -13921,6 +14909,13 @@ function initializeApp() {
     // Mode 15: Ramp Calculator
     ramps: {
       mode: 'rise_desired_slope',
+      displayUnit: 'm',
+      lastResult: null
+    },
+
+    // Mode 16: Slope Analyzer
+    slopes: {
+      mode: 'rise_run',
       displayUnit: 'm',
       lastResult: null
     }
@@ -14437,7 +15432,42 @@ function initializeApp() {
     rampsSendCadBtn: document.getElementById('ramps-send-cad-btn'),
     rampsSendWorkspaceBtn: document.getElementById('ramps-send-workspace-btn'),
     rampsSaveJournalBtn: document.getElementById('ramps-save-journal-btn'),
-    rampsSaveProjectBtn: document.getElementById('ramps-save-project-btn')
+    rampsSaveProjectBtn: document.getElementById('ramps-save-project-btn'),
+
+    // Mode 16: Slope Analyzer Elements
+    slopesModeSelect: document.getElementById('slopes-mode-select'),
+    slopesRiseGroup: document.getElementById('slopes-rise-group'),
+    slopesRise: document.getElementById('slopes-rise'),
+    slopesRunGroup: document.getElementById('slopes-run-group'),
+    slopesRun: document.getElementById('slopes-run'),
+    slopesPercentGroup: document.getElementById('slopes-percent-group'),
+    slopesPercent: document.getElementById('slopes-percent'),
+    slopesRatioGroup: document.getElementById('slopes-ratio-group'),
+    slopesRatio: document.getElementById('slopes-ratio'),
+    slopesAngleGroup: document.getElementById('slopes-angle-group'),
+    slopesAngle: document.getElementById('slopes-angle'),
+    btnRunSlopes: document.getElementById('btn-run-slopes'),
+    slopesErrorMsg: document.getElementById('slopes-error-msg'),
+    slopesResultPanel: document.getElementById('slopes-result-panel'),
+    slopesStateBadge: document.getElementById('slopes-state-badge'),
+    slopesDirectionBadge: document.getElementById('slopes-direction-badge'),
+    slopesRiseVal: document.getElementById('slopes-rise-val'),
+    slopesRunVal: document.getElementById('slopes-run-val'),
+    slopesSlopeVal: document.getElementById('slopes-slope-val'),
+    slopesRatioVal: document.getElementById('slopes-ratio-val'),
+    slopesAngleVal: document.getElementById('slopes-angle-val'),
+    slopesFlightVal: document.getElementById('slopes-flight-val'),
+    slopesSvgWrap: document.getElementById('slopes-svg-wrap'),
+    slopesConsistencyRow: document.getElementById('slopes-consistency-row'),
+    slopesConsistencyBody: document.getElementById('slopes-consistency-body'),
+    slopesExplanation: document.getElementById('slopes-explanation'),
+    slopesTargetsBody: document.getElementById('slopes-targets-body'),
+    slopesCopyResultBtn: document.getElementById('slopes-copy-result-btn'),
+    slopesCopyScheduleBtn: document.getElementById('slopes-copy-schedule-btn'),
+    slopesSendCadBtn: document.getElementById('slopes-send-cad-btn'),
+    slopesSendWorkspaceBtn: document.getElementById('slopes-send-workspace-btn'),
+    slopesSaveJournalBtn: document.getElementById('slopes-save-journal-btn'),
+    slopesSaveProjectBtn: document.getElementById('slopes-save-project-btn')
   };
 
   // ---------------------------------------------------------------------------
@@ -14624,6 +15654,9 @@ function initializeApp() {
     }
     else if (targetMode === 'ramps') {
       views.callController('ramps', 'calculate');
+    }
+    else if (targetMode === 'slopes') {
+      views.callController('slopes', 'calculate');
     }
   }
 
@@ -16026,6 +17059,9 @@ function initializeApp() {
         break;
       case 'nav-ramps':
         switchMode('ramps');
+        break;
+      case 'nav-slopes':
+        switchMode('slopes');
         break;
       case 'nav-cad-clipboard':
         switchMode('cad_clipboard');
@@ -18099,6 +19135,48 @@ function initializeApp() {
       dom.rampsSaveProjectBtn.addEventListener('click', () => views.callController('ramps', 'saveToProject'));
     }
 
+    // Mode 16: Slope Analyzer Listeners
+    if (dom.slopesModeSelect) {
+      dom.slopesModeSelect.addEventListener('change', () => {
+        state.slopes.mode = dom.slopesModeSelect.value;
+        views.callController('slopes', 'syncModeVisibility');
+        views.callController('slopes', 'calculate', true);
+      });
+    }
+    [dom.slopesRise, dom.slopesRun, dom.slopesPercent, dom.slopesRatio, dom.slopesAngle].forEach(el => {
+      if (el) {
+        el.addEventListener('input', () => views.callController('slopes', 'calculate'));
+        el.addEventListener('change', () => views.callController('slopes', 'calculate', true));
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            views.callController('slopes', 'calculate', true);
+          }
+        });
+      }
+    });
+    if (dom.btnRunSlopes) {
+      dom.btnRunSlopes.addEventListener('click', () => views.callController('slopes', 'calculate', true));
+    }
+    if (dom.slopesCopyResultBtn) {
+      dom.slopesCopyResultBtn.addEventListener('click', () => views.callController('slopes', 'copyResult'));
+    }
+    if (dom.slopesCopyScheduleBtn) {
+      dom.slopesCopyScheduleBtn.addEventListener('click', () => views.callController('slopes', 'copySchedule'));
+    }
+    if (dom.slopesSendCadBtn) {
+      dom.slopesSendCadBtn.addEventListener('click', () => views.callController('slopes', 'sendToCad'));
+    }
+    if (dom.slopesSendWorkspaceBtn) {
+      dom.slopesSendWorkspaceBtn.addEventListener('click', () => views.callController('slopes', 'sendToWorkspace'));
+    }
+    if (dom.slopesSaveJournalBtn) {
+      dom.slopesSaveJournalBtn.addEventListener('click', () => views.callController('slopes', 'saveToJournal'));
+    }
+    if (dom.slopesSaveProjectBtn) {
+      dom.slopesSaveProjectBtn.addEventListener('click', () => views.callController('slopes', 'saveToProject'));
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -18311,6 +19389,7 @@ function initializeApp() {
   }));
   views.register(createStairsView(viewContext));
   views.register(createRampsView(viewContext));
+  views.register(createSlopesView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();

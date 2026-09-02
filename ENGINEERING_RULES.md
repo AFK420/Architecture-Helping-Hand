@@ -42,7 +42,10 @@ src/
 Feature controllers live in one module per mode/tool under `src/ui/views/`:
 `converter.js`, `rescaler.js`, `detector.js`, `area-volume.js`,
 `expression-multiscale.js`, `dimension-chains.js`, `cad-clipboard-handoff.js`,
-`batch-cad.js`, `quick-dimension.js`, `history.js`, `stairs.js`, `ramps.js`.
+`batch-cad.js`, `quick-dimension.js`, `history.js`, `stairs.js`, `ramps.js`, `slopes.js`.
+
+### 1.6 Shared Slope Math (added Slope Analyzer milestone)
+`src/core/slope-math.js` is the application's **single** definition of the rise/run → slope conversion (`slopePercent = rise/run × 100`, `ratioValue = |run/rise|`, `angleDegrees = atan2(rise, run)`). The Ramp Calculator and the Slope Analyzer both consume it; no tool may re-implement these formulas. Signed geometry convention: the ratio is a positive magnitude, the direction word (ascending/descending) carries the sign. Vertical (run = 0) and flat (rise = 0) are structured classifications, never fabricated as normal slopes.
 
 * **Contract**: each view exports `createXView(context)` returning
   `{ id, mount(), getController() }` (optional `onModeEnter`/`onModeLeave`).

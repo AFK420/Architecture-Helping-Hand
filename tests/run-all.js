@@ -29,6 +29,7 @@ const testFiles = [
   'store.test.js',
   'stairs.test.js',
   'ramps.test.js',
+  'slopes.test.js',
   'services.test.js',
   'commands.test.js',
   'data-integrity.test.js',

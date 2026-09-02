@@ -104,6 +104,7 @@ import { createQuickDimensionView } from './views/quick-dimension.js';
 import { createHistoryView } from './views/history.js';
 import { createStairsView } from './views/stairs.js';
 import { createRampsView } from './views/ramps.js';
+import { createSlopesView } from './views/slopes.js';
 import { StorageService } from '../services/storage.js';
 import { createProjectStore } from '../services/store.js';
 import { AudioService } from '../services/audio.js';
@@ -340,6 +341,13 @@ export function initializeApp() {
     // Mode 15: Ramp Calculator
     ramps: {
       mode: 'rise_desired_slope',
+      displayUnit: 'm',
+      lastResult: null
+    },
+
+    // Mode 16: Slope Analyzer
+    slopes: {
+      mode: 'rise_run',
       displayUnit: 'm',
       lastResult: null
     }
@@ -856,7 +864,42 @@ export function initializeApp() {
     rampsSendCadBtn: document.getElementById('ramps-send-cad-btn'),
     rampsSendWorkspaceBtn: document.getElementById('ramps-send-workspace-btn'),
     rampsSaveJournalBtn: document.getElementById('ramps-save-journal-btn'),
-    rampsSaveProjectBtn: document.getElementById('ramps-save-project-btn')
+    rampsSaveProjectBtn: document.getElementById('ramps-save-project-btn'),
+
+    // Mode 16: Slope Analyzer Elements
+    slopesModeSelect: document.getElementById('slopes-mode-select'),
+    slopesRiseGroup: document.getElementById('slopes-rise-group'),
+    slopesRise: document.getElementById('slopes-rise'),
+    slopesRunGroup: document.getElementById('slopes-run-group'),
+    slopesRun: document.getElementById('slopes-run'),
+    slopesPercentGroup: document.getElementById('slopes-percent-group'),
+    slopesPercent: document.getElementById('slopes-percent'),
+    slopesRatioGroup: document.getElementById('slopes-ratio-group'),
+    slopesRatio: document.getElementById('slopes-ratio'),
+    slopesAngleGroup: document.getElementById('slopes-angle-group'),
+    slopesAngle: document.getElementById('slopes-angle'),
+    btnRunSlopes: document.getElementById('btn-run-slopes'),
+    slopesErrorMsg: document.getElementById('slopes-error-msg'),
+    slopesResultPanel: document.getElementById('slopes-result-panel'),
+    slopesStateBadge: document.getElementById('slopes-state-badge'),
+    slopesDirectionBadge: document.getElementById('slopes-direction-badge'),
+    slopesRiseVal: document.getElementById('slopes-rise-val'),
+    slopesRunVal: document.getElementById('slopes-run-val'),
+    slopesSlopeVal: document.getElementById('slopes-slope-val'),
+    slopesRatioVal: document.getElementById('slopes-ratio-val'),
+    slopesAngleVal: document.getElementById('slopes-angle-val'),
+    slopesFlightVal: document.getElementById('slopes-flight-val'),
+    slopesSvgWrap: document.getElementById('slopes-svg-wrap'),
+    slopesConsistencyRow: document.getElementById('slopes-consistency-row'),
+    slopesConsistencyBody: document.getElementById('slopes-consistency-body'),
+    slopesExplanation: document.getElementById('slopes-explanation'),
+    slopesTargetsBody: document.getElementById('slopes-targets-body'),
+    slopesCopyResultBtn: document.getElementById('slopes-copy-result-btn'),
+    slopesCopyScheduleBtn: document.getElementById('slopes-copy-schedule-btn'),
+    slopesSendCadBtn: document.getElementById('slopes-send-cad-btn'),
+    slopesSendWorkspaceBtn: document.getElementById('slopes-send-workspace-btn'),
+    slopesSaveJournalBtn: document.getElementById('slopes-save-journal-btn'),
+    slopesSaveProjectBtn: document.getElementById('slopes-save-project-btn')
   };
 
   // ---------------------------------------------------------------------------
@@ -1043,6 +1086,9 @@ export function initializeApp() {
     }
     else if (targetMode === 'ramps') {
       views.callController('ramps', 'calculate');
+    }
+    else if (targetMode === 'slopes') {
+      views.callController('slopes', 'calculate');
     }
   }
 
@@ -2445,6 +2491,9 @@ export function initializeApp() {
         break;
       case 'nav-ramps':
         switchMode('ramps');
+        break;
+      case 'nav-slopes':
+        switchMode('slopes');
         break;
       case 'nav-cad-clipboard':
         switchMode('cad_clipboard');
@@ -4518,6 +4567,48 @@ export function initializeApp() {
       dom.rampsSaveProjectBtn.addEventListener('click', () => views.callController('ramps', 'saveToProject'));
     }
 
+    // Mode 16: Slope Analyzer Listeners
+    if (dom.slopesModeSelect) {
+      dom.slopesModeSelect.addEventListener('change', () => {
+        state.slopes.mode = dom.slopesModeSelect.value;
+        views.callController('slopes', 'syncModeVisibility');
+        views.callController('slopes', 'calculate', true);
+      });
+    }
+    [dom.slopesRise, dom.slopesRun, dom.slopesPercent, dom.slopesRatio, dom.slopesAngle].forEach(el => {
+      if (el) {
+        el.addEventListener('input', () => views.callController('slopes', 'calculate'));
+        el.addEventListener('change', () => views.callController('slopes', 'calculate', true));
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            views.callController('slopes', 'calculate', true);
+          }
+        });
+      }
+    });
+    if (dom.btnRunSlopes) {
+      dom.btnRunSlopes.addEventListener('click', () => views.callController('slopes', 'calculate', true));
+    }
+    if (dom.slopesCopyResultBtn) {
+      dom.slopesCopyResultBtn.addEventListener('click', () => views.callController('slopes', 'copyResult'));
+    }
+    if (dom.slopesCopyScheduleBtn) {
+      dom.slopesCopyScheduleBtn.addEventListener('click', () => views.callController('slopes', 'copySchedule'));
+    }
+    if (dom.slopesSendCadBtn) {
+      dom.slopesSendCadBtn.addEventListener('click', () => views.callController('slopes', 'sendToCad'));
+    }
+    if (dom.slopesSendWorkspaceBtn) {
+      dom.slopesSendWorkspaceBtn.addEventListener('click', () => views.callController('slopes', 'sendToWorkspace'));
+    }
+    if (dom.slopesSaveJournalBtn) {
+      dom.slopesSaveJournalBtn.addEventListener('click', () => views.callController('slopes', 'saveToJournal'));
+    }
+    if (dom.slopesSaveProjectBtn) {
+      dom.slopesSaveProjectBtn.addEventListener('click', () => views.callController('slopes', 'saveToProject'));
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -4730,6 +4821,7 @@ export function initializeApp() {
   }));
   views.register(createStairsView(viewContext));
   views.register(createRampsView(viewContext));
+  views.register(createSlopesView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();

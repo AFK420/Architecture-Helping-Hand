@@ -3,7 +3,7 @@
 > **Professional Architectural Scale, Furniture Sizing & Multi-Unit Calculation Studio**  
 > *A high-precision, zero-dependency, tactile architectural conversion studio built for architects, interior designers, urban planners, physical model makers, and design students.*
 
-[![Tests](https://img.shields.io/badge/Tests-1904%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-2080%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-3--Tier%20Core%20%7C%20Frozen-10b981?style=flat-square)](ENGINEERING_RULES.md)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Vanilla)-f59e0b?style=flat-square)](package.json)
 [![License](https://img.shields.io/badge/License-MIT-6366f1?style=flat-square)](package.json)
@@ -33,6 +33,7 @@
    - [15. CAD Handoff — Rhino · AutoCAD · SketchUp Helpers (Mode 13)](#15-cad-handoff--rhino--autocad--sketchup-helpers-mode-13)
    - [16. Stair Calculator (Mode 14) — Architectural Tools](#16-stair-calculator-mode-14--architectural-tools)
    - [17. Ramp Calculator (Mode 15) — Architectural Tools](#17-ramp-calculator-mode-15--architectural-tools)
+   - [18. Slope Analyzer (Mode 16) — Architectural Tools](#18-slope-analyzer-mode-16--architectural-tools)
 5. [📐 Architectural Scale Presets (All 28 Presets)](#-architectural-scale-presets-all-28-presets)
 6. [🛋️ Architectural Furniture & Fixtures Database (179 Items Across 9 Domains)](#️-architectural-furniture--fixtures-database-179-items-across-9-domains)
 7. [📏 Supported Measurement Units](#-supported-measurement-units)
@@ -144,7 +145,7 @@ The codebase has evolved through rigorous engineering, auditing, hardening, and 
 This repository serves as:
 1. **An Open-Source Reference Studio**: A tactile, zero-friction architectural scaling studio for architects, interior designers, landscape architects, students, and educators.
 2. **Zero-Dependency Architecture**: No React, no Vue, no webpack, no runtime `node_modules`. Anyone can clone the repository, double-click `index.html`, and use it immediately offline via `file:///`.
-3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **1,904 automated test assertions across 24 test suites** (authoritative count emitted by `npm test`).
+3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **2,080 automated test assertions across 25 test suites** (authoritative count emitted by `npm test`).
 4. **An Extensible Platform**: Prepared for future architectural geometry engines, CAD vector exports (SVG/DXF), and stair/ramp calculations.
 
 ---
@@ -266,6 +267,17 @@ This repository serves as:
 * **Configurable Educational Reference**: 1:12 target inside a 1:8–1:20 study band, labelled *Educational Reference (configurable)* with an explicit "verify applicable local requirements" note. Negative slope is rejected (`NEGATIVE_SLOPE`) — this models ascent ramps only.
 * **Proportional SVG Diagram**: side elevation derived from the actual calculated geometry (rendered run:rise ratio pinned to the numeric result by tests).
 * **Persistence & Handoffs**: *Save to Project* writes a decision to the versioned Project Document via the project store (no ramp-specific silo); Journal / Workspace / CAD Handoff reuse the existing systems. See **RAMPS.md** for the full contract.
+
+### 18. Slope Analyzer (Mode 16) — Architectural Tools
+* **Universal Rise/Run Analysis**: "I have a rise/run relationship and I want to understand it" — site studies, terrain, roof slopes, drainage direction, path gradients, ramp/stair analysis.
+* **One Shared Math Source**: all slope representations come from `src/core/slope-math.js`, the same canonical converter the Ramp Calculator consumes — cross-engine regression tests prove identical numbers for identical geometry.
+* **Seven Input Definitions**: Rise + Run (primary) · Rise/Run + Slope % · Rise/Run + Ratio (1 : X) · Rise/Run + Angle — each solves the missing geometry, then routes through the canonical conversion so all representations agree.
+* **Signed Geometry**: positive rise = ↑ ASCENDING, negative rise = ↓ DESCENDING (drainage/terrain direction). Ratio displays as `1 : 12 ascending/descending` — the direction word carries the sign, never a confusing negative ratio. Unlike the Ramp Calculator, negative slope is intentionally supported here.
+* **Structured Singularities**: vertical (run = 0) is classified explicitly with "Undefined / Infinite (vertical)" and 1 : 0; flat (rise = 0) shows 0% with an honestly-undefined ratio — no fabricated `Infinity%`.
+* **Consistency Checking**: redundant values (e.g. rise + run + a claimed slope %) are compared against the calculated geometry with a documented 0.05% relative tolerance; mismatches surface as `CONFLICT — calculated 10, provided 8.33 (difference 1.67)` — never silently resolved.
+* **Educational Explanation**: every result explains itself in plain language ("For every 12 units horizontally, the surface rises 1 unit") built from the actual geometry.
+* **Study Targets & Diagram**: fixed target table (1% drainage → 100%) mapped to required runs; directional SVG side elevation with a visual-normalization disclosure for extreme ratios (numeric values always exact).
+* **Persistence & Handoffs**: *Save to Project* → versioned Project Document via the project store; Journal / Workspace / CAD Handoff reuse the existing systems. See **SLOPES.md** for the full contract.
 
 ---
 
@@ -454,7 +466,7 @@ python -m http.server 3500
 ### 3. Run Automated Test Suite
 ```bash
 npm test
-# Executes all 24 test suites (1,904 assertions, 100% passing).....
+# Executes all 25 test suites (2,080 assertions, 100% passing)......
 # The runner emits the authoritative total assertion count on completion.
 ```
 
@@ -495,8 +507,10 @@ node scripts/build.js --check
   - Multi-room space planning & net-to-gross area scheduler.
   - Wall thickness offset and clearance envelope calculator.
 * **Phase 4: Stair & Ramp Compliance Suite**:
-  - Blondel's rule stair riser/tread calculator ($2R + T \approx 63\text{cm}$).
-  - ADA ramp slope & gradient calculator with intermediate landing requirements.
+  - ✅ **Stair Calculator** (Mode 14) — implemented; see STAIRS.md.
+  - ✅ **Ramp Calculator** (Mode 15) — implemented; see RAMPS.md.
+  - ✅ **Slope Analyzer** (Mode 16) — implemented; see SLOPES.md.
+  - Landing/switchback configurations remain future work.
 * **Phase 5: CAD Vector Exports**:
   - Scaled SVG & DXF vector block export for AutoCAD, Rhino, Illustrator, and laser cutters.
 * **Note on Part 9 (CAD Handoff)**: Completed as clipboard workflow profiles (Mode 13). Direct AutoCAD / Rhino / SketchUp API or plugin integration remains out of scope by design.

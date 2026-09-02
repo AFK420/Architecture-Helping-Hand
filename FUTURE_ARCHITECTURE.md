@@ -17,7 +17,7 @@ The current design—where `src/core/` houses pure calculation engines, `src/cor
 
 ## 2. Planned Core Module Extensions (Future Phases)
 
-When feature development begins in subsequent phases, new calculations will be added as dedicated pure mathematical modules under `src/core/`. *(Update, September 2, 2026: `src/core/geometry.js`, `src/core/stairs.js`, and `src/core/ramps.js` already exist and are verified by their test suites — they are no longer future work. A general `slope.js` remains planned; the ramp engine's rise/run-based `slopeConversions()` is deliberately reusable for it. Any new module must be registered in `BUNDLE_MODULES` in `scripts/build.js` per the build contract in ENGINEERING_RULES.md §6.1. Contracts: STAIRS.md, RAMPS.md.)*
+When feature development begins in subsequent phases, new calculations will be added as dedicated pure mathematical modules under `src/core/`. *(Update, September 2, 2026: `src/core/geometry.js`, `src/core/stairs.js`, `src/core/ramps.js`, and `src/core/slopes.js` (Slope Analyzer) already exist and are verified by their test suites. The shared canonical rise/run conversion lives in `src/core/slope-math.js` — consumed by Ramps and Slopes. Contracts: STAIRS.md, RAMPS.md, SLOPES.md. Any new module must be registered in `BUNDLE_MODULES` in `scripts/build.js` per the build contract in ENGINEERING_RULES.md §6.1.)*
 
 ### 2.1 `src/core/geometry.js` (✅ IMPLEMENTED — verified by tests/geometry.test.js)
 * **Pure Functions**:
@@ -37,11 +37,12 @@ When feature development begins in subsequent phases, new calculations will be a
   - `resolveStairReferences(overrides)` — configurable, labelled reference ranges
 * **Original plan (superseded naming)**: `calcStairRisers`, Blondel 2R+T, incline angle.
 
-### 2.3 `src/core/slope.js` (Future — general slope/terrain tool)
-* **Pure Functions**:
-  - `calcSlope({ rise, run, angleDeg, gradePercent, ratio1InX })`
-  - Converts between ratios (`1:12`), percentage grades (`8.33%`), and angular degrees ($4.76^\circ$).
-* **Note**: the ramp engine (`src/core/ramps.js`) already implements the shared rise/run → percent/ratio/angle conversion as `slopeConversions()`; the future general slope tool should reuse it rather than re-deriving it.
+### 2.3 `src/core/slopes.js` (✅ IMPLEMENTED — Slope Analyzer, verified by tests/slopes.test.js; contract in SLOPES.md)
+* **Implemented API** (general signed rise/run analysis):
+  - `analyzeSlope({ mode, ... })` — seven input definitions incl. angle/ratio, signed geometry
+  - `checkConsistency()` — documented-tolerance redundant-value verification
+  - `generateSlopeSVG(result)` — directional diagram with visual-normalization disclosure
+* **Shared math**: `src/core/slope-math.js` (also consumed by the Ramp Calculator).
 
 ---
 

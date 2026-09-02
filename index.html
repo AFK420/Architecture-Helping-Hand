@@ -395,6 +395,17 @@
         <span>Ramps</span>
         <span class="mode-key-hint">—</span>
       </button>
+
+      <button class="mode-tab" data-mode="slopes" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 20h18"></path>
+          <path d="M3 20L21 8"></path>
+          <path d="M17 8h4"></path>
+          <path d="M21 8l-2.5-2.5"></path>
+        </svg>
+        <span>Slopes</span>
+        <span class="mode-key-hint">—</span>
+      </button>
     </nav>
 
     <!-- ======================================================== -->
@@ -3297,6 +3308,149 @@
               <span>Save to Journal</span>
             </button>
             <button type="button" id="ramps-save-project-btn" class="result-action-btn" title="Save this ramp into the project document (versioned project store)">
+              <span>💾 Save to Project</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- MODE 16: SLOPE ANALYZER (GENERAL)                        -->
+    <!-- ======================================================== -->
+    <section id="mode-view-slopes" class="tool-mode-view" aria-labelledby="heading-slopes" hidden>
+      <div class="tool-layout">
+        <!-- Left Column: Definition & Targets -->
+        <div class="archi-card main-calc-card">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <div class="card-header">
+            <div>
+              <span class="card-tag">MODE 16 • ARCHITECTURAL TOOLS</span>
+              <h2 id="heading-slopes" class="card-title">Slope Analyzer</h2>
+            </div>
+            <div class="status-indicator">
+              <span id="slopes-state-badge" class="badge-status-ready">READY</span>
+            </div>
+          </div>
+
+          <p class="tool-description">
+            General rise/run analysis for sites, terrain, roofs, drainage, and paths. Signed geometry: positive rise = ascending, negative = descending. All representations derive from one canonical math source shared with the Ramp Calculator.
+          </p>
+
+          <div class="input-row-group" style="margin-bottom: 1.1rem;">
+            <label for="slopes-mode-select" class="input-label">Define By</label>
+            <select id="slopes-mode-select" class="calc-select">
+              <optgroup label="Primary">
+                <option value="rise_run" selected>Rise + Run</option>
+              </optgroup>
+              <optgroup label="From Rise">
+                <option value="rise_percent">Rise + Slope %</option>
+                <option value="rise_ratio">Rise + Ratio (1 : X)</option>
+                <option value="rise_angle">Rise + Angle</option>
+              </optgroup>
+              <optgroup label="From Run">
+                <option value="run_percent">Run + Slope %</option>
+                <option value="run_ratio">Run + Ratio (1 : X)</option>
+                <option value="run_angle">Run + Angle</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <div class="slopes-inputs-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.1rem;">
+            <div class="input-group" id="slopes-rise-group">
+              <label for="slopes-rise" class="input-label">Rise (− = descending)</label>
+              <input type="text" id="slopes-rise" class="text-input" value="1.2m" placeholder="e.g. 1.2m or -0.5m" style="font-family: var(--font-family-mono);" />
+            </div>
+            <div class="input-group" id="slopes-run-group">
+              <label for="slopes-run" class="input-label">Run</label>
+              <input type="text" id="slopes-run" class="text-input" value="14.4m" placeholder="e.g. 14.4m" style="font-family: var(--font-family-mono);" />
+            </div>
+            <div class="input-group" id="slopes-percent-group" style="display: none;">
+              <label for="slopes-percent" class="input-label">Slope (%)</label>
+              <input type="number" id="slopes-percent" class="text-input" value="8.33" step="0.01" style="font-family: var(--font-family-mono);" />
+            </div>
+            <div class="input-group" id="slopes-ratio-group" style="display: none;">
+              <label for="slopes-ratio" class="input-label">Ratio X (of 1 : X)</label>
+              <input type="number" id="slopes-ratio" class="text-input" value="12" min="0" step="0.5" style="font-family: var(--font-family-mono);" />
+            </div>
+            <div class="input-group" id="slopes-angle-group" style="display: none;">
+              <label for="slopes-angle" class="input-label">Angle (°, −90 to +90)</label>
+              <input type="number" id="slopes-angle" class="text-input" value="4.76" step="0.01" style="font-family: var(--font-family-mono);" />
+            </div>
+          </div>
+
+          <div class="calc-actions-row" style="margin-top: 0.5rem;">
+            <button type="button" id="btn-run-slopes" class="btn-calc-primary" style="width: 100%;">
+              <span>⚡ ANALYZE SLOPE</span>
+              <kbd class="kbd-badge">↵</kbd>
+            </button>
+          </div>
+
+          <div id="slopes-error-msg" class="input-error-banner" style="display: none; margin-top: 0.75rem;" role="alert"></div>
+
+          <!-- Target comparison -->
+          <div class="slopes-targets-block" style="margin-top: 1rem;">
+            <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.4rem;">Study Targets (design values, not laws) — click to apply a % target</div>
+            <div id="slopes-targets-body" style="display: flex; flex-direction: column; gap: 0.35rem;"></div>
+          </div>
+        </div>
+
+        <!-- Right Column: Result + Diagram + Explanation -->
+        <div class="archi-card result-panel" id="slopes-result-panel" data-state="ready">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <div class="result-header">
+            <span class="result-label">SLOPE ANALYSIS</span>
+            <span id="slopes-direction-badge" class="unit-system-tag" style="font-size: 0.75rem; font-weight: 700;">—</span>
+          </div>
+
+          <div class="slopes-metrics-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.5rem; margin: 0.6rem 0 0.9rem;">
+            <div class="unit-chip"><span class="unit-label">Rise</span><span id="slopes-rise-val" class="unit-val">—</span></div>
+            <div class="unit-chip"><span class="unit-label">Run</span><span id="slopes-run-val" class="unit-val">—</span></div>
+            <div class="unit-chip"><span class="unit-label">Slope</span><span id="slopes-slope-val" class="unit-val">—</span></div>
+            <div class="unit-chip"><span class="unit-label">Ratio</span><span id="slopes-ratio-val" class="unit-val">—</span></div>
+            <div class="unit-chip"><span class="unit-label">Angle</span><span id="slopes-angle-val" class="unit-val">—</span></div>
+            <div class="unit-chip"><span class="unit-label">Flight Length</span><span id="slopes-flight-val" class="unit-val">—</span></div>
+          </div>
+
+          <!-- Consistency / conflict notice -->
+          <div id="slopes-consistency-row" style="display: none; border: 1px solid var(--border-color-light); border-radius: 6px; padding: 0.6rem 0.75rem; background: var(--bg-card-header); margin-bottom: 0.9rem;">
+            <div id="slopes-consistency-body" style="font-size: 0.8rem; font-family: var(--font-family-mono); line-height: 1.5;"></div>
+          </div>
+
+          <!-- Proportional diagram from actual geometry -->
+          <div id="slopes-svg-wrap" style="margin: 0.5rem 0 0.9rem; border: 1px solid var(--border-color-light); border-radius: 6px; background: var(--bg-card-header); padding: 0.5rem;" aria-live="polite"></div>
+
+          <!-- Educational explanation -->
+          <div class="slopes-explanation-block" style="border-left: 3px solid var(--accent-primary); padding: 0.4rem 0.75rem; margin-bottom: 0.9rem; background: var(--bg-card-header); border-radius: 0 5px 5px 0;">
+            <div style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.2rem;">What this means</div>
+            <div id="slopes-explanation" style="font-size: 0.82rem; color: var(--text-primary); line-height: 1.5;">—</div>
+          </div>
+
+          <div class="result-actions-strip" style="flex-wrap: wrap; gap: 0.5rem;">
+            <button type="button" id="slopes-copy-result-btn" class="result-action-btn" title="Copy the slope analysis summary">
+              <span>📋 Copy Result</span>
+            </button>
+            <button type="button" id="slopes-copy-schedule-btn" class="result-action-btn" title="Copy a tab-separated slope schedule">
+              <span>Copy Schedule</span>
+            </button>
+            <button type="button" id="slopes-send-cad-btn" class="result-action-btn" title="Send slope values to CAD Handoff (Mode 13)">
+              <span>🚀 Send to CAD</span>
+            </button>
+            <button type="button" id="slopes-send-workspace-btn" class="result-action-btn" title="Add rise/run values to Dimension Workspace">
+              <span>📐 To Workspace</span>
+            </button>
+            <button type="button" id="slopes-save-journal-btn" class="result-action-btn" title="Save slope result to Calculation Journal">
+              <span>Save to Journal</span>
+            </button>
+            <button type="button" id="slopes-save-project-btn" class="result-action-btn" title="Save this slope into the project document (versioned project store)">
               <span>💾 Save to Project</span>
             </button>
           </div>

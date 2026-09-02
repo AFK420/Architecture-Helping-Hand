@@ -2,7 +2,7 @@
 
 **Date**: September 2, 2026  
 **Repository**: [https://github.com/AFK420/Architecture-Helping-Hand.git](https://github.com/AFK420/Architecture-Helping-Hand.git)  
-**Status**: Verified & Hardened (Post Build-Pipeline Repair — 1,904 Assertions, 24 Suites)  
+**Status**: Verified & Hardened (Post Build-Pipeline Repair — 2,080 Assertions, 25 Suites)  
 
 ---
 
@@ -59,6 +59,8 @@ Architecture-Helping-Hand/
 │   │   ├── cad-targets.js         # CAD target profiles & send-to handoff payload builder (Part 9)
 │   │   ├── stairs.js              # Stair Calculator engine: modes, candidates, Blondel, SVG (Architectural Tools)
 │   │   ├── ramps.js               # Ramp Calculator engine: slope/ratio/angle, targets, SVG (Architectural Tools)
+│   │   ├── slope-math.js          # SHARED canonical slope math: rise/run → percent/ratio/angle (Ramps + Slopes)
+│   │   ├── slopes.js              # Slope Analyzer engine: signed geometry, consistency checks, targets (Architectural Tools)
 │   │   └── project.js             # Project Document Model: versioned, validated, serializable envelope (Stabilization 2)
 │   ├── services/
 │   │   ├── storage.js             # Safe LocalStorage wrapper with memory fallback
@@ -82,7 +84,8 @@ Architecture-Helping-Hand/
 │           ├── quick-dimension.js # Quick Dimension Strip micro-tool
 │           ├── history.js         # Calculation Journal drawer
 │           ├── stairs.js          # Mode 14: Stair Calculator
-│           └── ramps.js           # Mode 15: Ramp Calculator
+│           ├── ramps.js           # Mode 15: Ramp Calculator
+│           └── slopes.js          # Mode 16: Slope Analyzer
 ├── scripts/
 │   └── build.js                   # Deterministic bundler compiling src/ into standalone js/app.js
 │                                  #   (BUNDLE_MODULES manifest + --check flag; guarded by tests/build-integrity.test.js)
@@ -94,6 +97,7 @@ Architecture-Helping-Hand/
     ├── store.test.js              # Project store: migrations, recovery, pub/sub, legacy import (48 tests)
     ├── stairs.test.js             # Stair Calculator: 4 modes, candidates, validation, SVG-geometry, store round-trip (110 tests)
     ├── ramps.test.js              # Ramp Calculator: 4 modes, ratio/angle, targets, SVG-geometry, real-engine integrations (128 tests)
+    ├── slopes.test.js             # Slope Analyzer: 7 definitions, signed geometry, consistency, cross-engine regression (143 tests)
     ├── cad-targets.test.js        # CAD target profiles, all-source handoff payloads, order/selection/precision (106 tests)
     ├── ui-contracts.test.js       # Full DOM ID verification, Run buttons presence & bundle cleanliness (398 tests)
     ├── calculator.test.js         # Mathematical scaling, round-trip, boundary & error tests (40 tests)
@@ -158,7 +162,7 @@ Scaling formulas operate strictly on these normalized values:
 
 ## 4. Automated Testing & Verification Matrix
 
-The test suite consists of **24 automated test suites** containing **1,904 exact assertions**, all passing with zero failures. The authoritative total is emitted by `npm test` on every run — documentation should quote that output rather than hard-coded numbers.
+The test suite consists of **25 automated test suites** containing **2,080 exact assertions**, all passing with zero failures. The authoritative total is emitted by `npm test` on every run — documentation should quote that output rather than hard-coded numbers.
 
 | Test Suite File | Focus Area | Assertions | Result |
 | :--- | :--- | :---: | :---: |
@@ -168,6 +172,7 @@ The test suite consists of **24 automated test suites** containing **1,904 exact
 | `tests/store.test.js` | Stabilization 3+4: versioned store, migrations, recovery, pub/sub, legacy import | 48 | ✅ PASS |
 | `tests/stairs.test.js` | Stair Calculator: all 4 modes, deterministic candidates, validation codes, SVG-geometry correspondence, project-store round-trip | 110 | ✅ PASS |
 | `tests/ramps.test.js` | Ramp Calculator: all 4 modes, ratio stability, targets, validation, SVG geometry, real parser/store/journal/CAD integrations | 128 | ✅ PASS |
+| `tests/slopes.test.js` | Slope Analyzer: all 7 definitions, signed geometry, singularities, consistency tolerance, cross-engine regression | 143 | ✅ PASS |
 | `tests/commands.test.js` | Command registry: registration, execution, categories, favorites, dynamic commands | 178 | ✅ PASS |
 | `tests/dimension-workspace.test.js` | Dimension Workspace entries, groups, serialization, persistence | 103 | ✅ PASS |
 | `tests/dimension-expression.test.js` | Expression parser determinism, validation, error codes, scale integration | 79 | ✅ PASS |
@@ -186,7 +191,7 @@ The test suite consists of **24 automated test suites** containing **1,904 exact
 | `tests/units.test.js` | Metric (mm, cm, dm, m, km), imperial (in, ft, yd, mi), area & volume factors, round-trips, strict invalid unit rejection | 26 | ✅ PASS |
 | `tests/formatter.test.js` | Decimal precision rounding, epsilon stabilization, trailing zero elimination, scientific notation, feet-inches notation | 12 | ✅ PASS |
 | `tests/data-integrity.test.js`| 28 scale presets uniqueness & ratio validity, 179 furniture records positive dimensions & unique IDs, reference ranges continuity | 9 | ✅ PASS |
-| **Total** | **24 Comprehensive Test Suites** | **1,904 Assertions** | **100% Passing (0 Failures)** |
+| **Total** | **25 Comprehensive Test Suites** | **2,080 Assertions** | **100% Passing (0 Failures)** |
 
 ---
 

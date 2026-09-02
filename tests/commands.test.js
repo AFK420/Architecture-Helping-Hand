@@ -58,7 +58,7 @@ const availableCmds = CommandRegistry.getAvailableCommands();
 const upcomingCmds = allCmds.filter(c => !c.available);
 
 assert(availableCmds.length >= 12, `Available commands count is ${availableCmds.length} (>= 12)`);
-assert(upcomingCmds.length >= 2, `Upcoming tool placeholders count is ${upcomingCmds.length} (>= 2)`);
+assert(upcomingCmds.length >= 1, `Upcoming tool placeholders count is ${upcomingCmds.length} (>= 1)`);
 
 for (const up of upcomingCmds) {
   assertEqual(up.category, 'Upcoming Tool', `Upcoming tool ${up.id} has 'Upcoming Tool' category`);
