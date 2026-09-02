@@ -106,6 +106,14 @@ import {
   formatQuickDimensionClipboard,
   createQuickHandoffPayload
 } from '../core/quick-dimension.js';
+import {
+  CAD_TARGET_PROFILES,
+  CAD_TARGET_IDS,
+  CAD_HANDOFF_STORAGE_KEY,
+  buildCadHandoffPayload,
+  getCadHandoffSummary,
+  validateCadHandoffSelection
+} from '../core/cad-targets.js';
 import { StorageService } from '../services/storage.js';
 import { AudioService } from '../services/audio.js';
 import { HistoryService } from '../services/history.js';
@@ -297,6 +305,30 @@ export function initializeApp() {
         mode: 'real_to_drawing',
         showContext: true,
         lastResult: null
+      };
+    })(),
+
+    // Mode 13: CAD Application Helpers (Send-To Handoff)
+    cadHandoff: (() => {
+      try {
+        const stored = StorageService.getItem(CAD_HANDOFF_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && typeof parsed === 'object') return parsed;
+        }
+      } catch (e) {}
+      return {
+        source: 'chain',
+        target: 'rhino',
+        format: 'raw',
+        unit: null,          // null = follow target profile default
+        precision: null,     // null = follow target profile default
+        suffix: 'target',    // 'target' = follow profile/mode default
+        chainLayout: 'segments',
+        workspaceScope: 'all',
+        batchScope: 'all',
+        manualInput: '',
+        lastPayload: null
       };
     })(),
 
@@ -670,6 +702,12 @@ export function initializeApp() {
     batchCopyRawBtn: document.getElementById('batch-copy-raw-btn'),
     batchCopyTsvBtn: document.getElementById('batch-copy-tsv-btn'),
     batchOpenCadBtn: document.getElementById('batch-open-cad-btn'),
+    batchSendCadHandoffBtn: document.getElementById('batch-send-cad-handoff-btn'),
+    workspaceSendCadHandoffBtn: document.getElementById('workspace-send-cad-handoff-btn'),
+    expressionSendCadHandoffBtn: document.getElementById('expression-send-cad-handoff-btn'),
+    multiscaleSendCadHandoffBtn: document.getElementById('multiscale-send-cad-handoff-btn'),
+    chainsSendCadHandoffBtn: document.getElementById('chains-send-cad-handoff-btn'),
+    quickDimSendCadHandoffBtn: document.getElementById('quick-dim-send-cad-handoff-btn'),
     batchSendWorkspaceBtn: document.getElementById('batch-send-workspace-btn'),
     batchCompareMultiscaleBtn: document.getElementById('batch-compare-multiscale-btn'),
     batchCreateChainBtn: document.getElementById('batch-create-chain-btn'),
@@ -707,7 +745,34 @@ export function initializeApp() {
     quickDimSendMultiscaleBtn: document.getElementById('quick-dim-send-multiscale-btn'),
     quickDimSendChainBtn: document.getElementById('quick-dim-send-chain-btn'),
     quickDimSendCadBtn: document.getElementById('quick-dim-send-cad-btn'),
-    quickDimSaveJournalBtn: document.getElementById('quick-dim-save-journal-btn')
+    quickDimSaveJournalBtn: document.getElementById('quick-dim-save-journal-btn'),
+
+    // Mode 13: CAD Handoff Elements
+    handoffSourceSelect: document.getElementById('handoff-source-select'),
+    handoffSourceHint: document.getElementById('handoff-source-hint'),
+    handoffManualGroup: document.getElementById('handoff-manual-group'),
+    handoffManualInput: document.getElementById('handoff-manual-input'),
+    handoffTargetPills: document.getElementById('handoff-target-pills'),
+    handoffTargetDescription: document.getElementById('handoff-target-description'),
+    handoffFormatSelect: document.getElementById('handoff-format-select'),
+    handoffChainLayoutGroup: document.getElementById('handoff-chain-layout-group'),
+    handoffChainLayoutSelect: document.getElementById('handoff-chain-layout-select'),
+    handoffWorkspaceScopeGroup: document.getElementById('handoff-workspace-scope-group'),
+    handoffWorkspaceScopeSelect: document.getElementById('handoff-workspace-scope-select'),
+    handoffBatchScopeGroup: document.getElementById('handoff-batch-scope-group'),
+    handoffBatchScopeSelect: document.getElementById('handoff-batch-scope-select'),
+    handoffAdvancedDetails: document.getElementById('handoff-advanced-details'),
+    handoffUnitSelect: document.getElementById('handoff-unit-select'),
+    handoffPrecisionSelect: document.getElementById('handoff-precision-select'),
+    handoffSuffixSelect: document.getElementById('handoff-suffix-select'),
+    btnRunCadHandoff: document.getElementById('btn-run-cad-handoff'),
+    handoffResultPanel: document.getElementById('handoff-result-panel'),
+    handoffSummaryBadge: document.getElementById('handoff-summary-badge'),
+    handoffPreviewBox: document.getElementById('handoff-preview-box'),
+    btnHandoffCopy: document.getElementById('btn-handoff-copy'),
+    handoffCopyTargetLabel: document.getElementById('handoff-copy-target-label'),
+    btnHandoffExportTxt: document.getElementById('btn-handoff-export-txt'),
+    btnHandoffOpenCadClipboard: document.getElementById('btn-handoff-open-cad-clipboard')
   };
 
   // ---------------------------------------------------------------------------
@@ -885,6 +950,9 @@ export function initializeApp() {
     }
     else if (targetMode === 'batch_cad') {
       parseAndConvertBatch();
+    }
+    else if (targetMode === 'cad_handoff') {
+      renderCadHandoff();
     }
   }
 
@@ -3256,6 +3324,9 @@ export function initializeApp() {
       case 'nav-chains':
         switchMode('chains');
         break;
+      case 'nav-cad-handoff':
+        switchMode('cad_handoff');
+        break;
       case 'nav-cad-clipboard':
         switchMode('cad_clipboard');
         break;
@@ -4218,6 +4289,149 @@ export function initializeApp() {
     renderCadClipboard(true);
     AudioService.playTick();
     showToast(`Loaded ${sourceKey.toUpperCase()} data into CAD Clipboard`);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 13h'. Mode 13: CAD Application Helpers (Send-To Handoff)
+  // ---------------------------------------------------------------------------
+  function saveCadHandoffSettings() {
+    try {
+      const { lastPayload, ...serializable } = state.cadHandoff;
+      void lastPayload;
+      StorageService.setItem(CAD_HANDOFF_STORAGE_KEY, JSON.stringify(serializable));
+    } catch (e) {}
+  }
+
+  /**
+   * Collects the current source data for the handoff payload builder from
+   * whatever tool state is live. Never recomputes math — only reads the
+   * last valid results the tools already produced.
+   */
+  function getCadHandoffSourceData() {
+    const h = state.cadHandoff;
+    switch (h.source) {
+      case 'workspace':
+        return {
+          workspace: state.workspace,
+          scope: h.workspaceScope || 'all',
+          selectedIds: state.workspaceSelectedIds
+        };
+      case 'expression':
+        return { result: state.lastValidExpression };
+      case 'multiscale':
+        return { result: state.lastValidMultiScale };
+      case 'chain':
+        return { result: state.lastValidChain, chainLayout: h.chainLayout || 'segments' };
+      case 'batch':
+        return {
+          result: state.batchCad.lastResult,
+          selectedOnly: h.batchScope === 'selected',
+          selectedIds: state.batchCad.selectedIds
+        };
+      case 'quick':
+        return { result: state.quickDimension.lastResult };
+      case 'manual':
+        return { rawText: dom.handoffManualInput?.value || h.manualInput || '' };
+      default:
+        return {};
+    }
+  }
+
+  function renderCadHandoff(isExplicitRun = false) {
+    const h = state.cadHandoff;
+
+    // Sync form controls into state
+    if (dom.handoffSourceSelect) h.source = dom.handoffSourceSelect.value || h.source;
+    if (dom.handoffFormatSelect) h.format = dom.handoffFormatSelect.value || h.format;
+    if (dom.handoffChainLayoutSelect) h.chainLayout = dom.handoffChainLayoutSelect.value || h.chainLayout;
+    if (dom.handoffWorkspaceScopeSelect) h.workspaceScope = dom.handoffWorkspaceScopeSelect.value || h.workspaceScope;
+    if (dom.handoffBatchScopeSelect) h.batchScope = dom.handoffBatchScopeSelect.value || h.batchScope;
+    if (dom.handoffUnitSelect) h.unit = dom.handoffUnitSelect.value === 'auto' ? null : dom.handoffUnitSelect.value;
+    if (dom.handoffPrecisionSelect) h.precision = dom.handoffPrecisionSelect.value === 'auto' ? null : parseInt(dom.handoffPrecisionSelect.value, 10);
+    if (dom.handoffSuffixSelect) h.suffix = dom.handoffSuffixSelect.value || h.suffix;
+
+    // Conditional groups
+    if (dom.handoffManualGroup) dom.handoffManualGroup.style.display = h.source === 'manual' ? 'block' : 'none';
+    if (dom.handoffChainLayoutGroup) dom.handoffChainLayoutGroup.style.display = h.source === 'chain' ? 'block' : 'none';
+    if (dom.handoffWorkspaceScopeGroup) dom.handoffWorkspaceScopeGroup.style.display = h.source === 'workspace' ? 'block' : 'none';
+    if (dom.handoffBatchScopeGroup) dom.handoffBatchScopeGroup.style.display = h.source === 'batch' ? 'block' : 'none';
+
+    // Target pills sync + description
+    dom.handoffTargetPills?.querySelectorAll('.cad-source-pill').forEach(pill => {
+      const isActive = pill.dataset.target === h.target;
+      pill.classList.toggle('active', isActive);
+      pill.setAttribute('aria-checked', isActive ? 'true' : 'false');
+    });
+    const profile = CAD_TARGET_PROFILES[h.target];
+    if (dom.handoffTargetDescription && profile) {
+      dom.handoffTargetDescription.textContent = profile.description;
+    }
+    if (dom.handoffCopyTargetLabel && profile) {
+      dom.handoffCopyTargetLabel.textContent = profile.label.toUpperCase();
+    }
+
+    // Build payload via the single core entry point
+    let payload;
+    const validation = validateCadHandoffSelection(h.target, h.format, h.source);
+    if (!validation.ok) {
+      payload = { text: '', count: 0, empty: true, targetLabel: '', modeLabel: '' };
+      if (dom.handoffSummaryBadge) dom.handoffSummaryBadge.textContent = validation.error;
+    } else {
+      payload = buildCadHandoffPayload(h.source, getCadHandoffSourceData(), {
+        targetId: h.target,
+        modeId: h.format,
+        unit: h.unit || undefined,
+        precision: typeof h.precision === 'number' ? h.precision : undefined,
+        suffix: h.suffix,
+        scaleRatio: state.workspace?.scaleRatio || state.lastValidChain?.scaleRatio || 50,
+        chainLayout: h.chainLayout
+      });
+      if (dom.handoffSummaryBadge) {
+        dom.handoffSummaryBadge.textContent = payload.empty
+          ? 'No values available — run the source tool first'
+          : getCadHandoffSummary(payload);
+      }
+    }
+
+    h.lastPayload = payload;
+
+    if (dom.handoffPreviewBox) {
+      dom.handoffPreviewBox.value = payload.text;
+    }
+
+    setUnifiedResultState({
+      toolPrefix: 'handoff',
+      status: payload.empty ? (validation.ok ? 'ready' : 'error') : 'success',
+      errorText: validation.ok ? '' : validation.error
+    });
+
+    saveCadHandoffSettings();
+
+    if (isExplicitRun) {
+      AudioService.playTick();
+    }
+  }
+
+  function copyCadHandoffPayload() {
+    const payload = state.cadHandoff.lastPayload;
+    const profile = CAD_TARGET_PROFILES[state.cadHandoff.target];
+    const label = profile ? `Payload for ${profile.label}` : 'CAD payload';
+
+    if (!payload || payload.empty || !payload.text || !payload.text.trim()) {
+      showToast('No CAD payload to copy — run the source tool first', 'warning');
+      return;
+    }
+
+    copyToClipboard(payload.text, label);
+  }
+
+  function openCadHandoffWithSource(sourceKey) {
+    state.cadHandoff.source = sourceKey;
+    if (dom.handoffSourceSelect) dom.handoffSourceSelect.value = sourceKey;
+    switchMode('cad_handoff');
+    renderCadHandoff(true);
+    AudioService.playTick();
+    showToast(`Loaded ${sourceKey.toUpperCase()} data into CAD Handoff`);
   }
 
   // ---------------------------------------------------------------------------
@@ -6238,6 +6452,81 @@ export function initializeApp() {
       });
     }
 
+    // Mode 13: CAD Handoff Listeners
+    if (dom.handoffSourceSelect) {
+      dom.handoffSourceSelect.addEventListener('change', () => renderCadHandoff(true));
+    }
+    if (dom.handoffManualInput) {
+      dom.handoffManualInput.addEventListener('input', () => {
+        state.cadHandoff.manualInput = dom.handoffManualInput.value;
+        renderCadHandoff();
+      });
+      dom.handoffManualInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          renderCadHandoff(true);
+        }
+      });
+    }
+    if (dom.handoffTargetPills) {
+      dom.handoffTargetPills.querySelectorAll('.cad-source-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+          state.cadHandoff.target = pill.dataset.target;
+          renderCadHandoff(true);
+        });
+      });
+    }
+    if (dom.handoffFormatSelect) {
+      dom.handoffFormatSelect.addEventListener('change', () => renderCadHandoff(true));
+    }
+    if (dom.handoffChainLayoutSelect) {
+      dom.handoffChainLayoutSelect.addEventListener('change', () => renderCadHandoff(true));
+    }
+    if (dom.handoffWorkspaceScopeSelect) {
+      dom.handoffWorkspaceScopeSelect.addEventListener('change', () => renderCadHandoff(true));
+    }
+    if (dom.handoffBatchScopeSelect) {
+      dom.handoffBatchScopeSelect.addEventListener('change', () => renderCadHandoff(true));
+    }
+    if (dom.handoffUnitSelect) {
+      dom.handoffUnitSelect.addEventListener('change', () => renderCadHandoff(true));
+    }
+    if (dom.handoffPrecisionSelect) {
+      dom.handoffPrecisionSelect.addEventListener('change', () => renderCadHandoff(true));
+    }
+    if (dom.handoffSuffixSelect) {
+      dom.handoffSuffixSelect.addEventListener('change', () => renderCadHandoff(true));
+    }
+    if (dom.btnRunCadHandoff) {
+      dom.btnRunCadHandoff.addEventListener('click', () => renderCadHandoff(true));
+      dom.btnRunCadHandoff.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          renderCadHandoff(true);
+        }
+      });
+    }
+    if (dom.btnHandoffCopy) {
+      dom.btnHandoffCopy.addEventListener('click', copyCadHandoffPayload);
+    }
+    if (dom.btnHandoffExportTxt) {
+      dom.btnHandoffExportTxt.addEventListener('click', () => {
+        const payload = state.cadHandoff.lastPayload;
+        if (!payload || payload.empty || !payload.text.trim()) {
+          showToast('No CAD payload to export', 'warning');
+          return;
+        }
+        downloadFile(payload.text, `cad-handoff-${state.cadHandoff.target}-${Date.now()}.txt`, 'text/plain');
+        showToast('CAD payload exported as .txt');
+      });
+    }
+    if (dom.btnHandoffOpenCadClipboard) {
+      dom.btnHandoffOpenCadClipboard.addEventListener('click', () => {
+        const sourceMap = { workspace: 'workspace', expression: 'expression', multiscale: 'multiscale', chain: 'chain', batch: 'workspace', quick: 'manual', manual: 'manual' };
+        openCadClipboardWithSource(sourceMap[state.cadHandoff.source] || 'workspace');
+      });
+    }
+
     // Mode 12: Batch CAD Conversion Listeners
     if (dom.batchQuickChips) {
       dom.batchQuickChips.querySelectorAll('.cad-preset-chip').forEach(chip => {
@@ -6397,6 +6686,42 @@ export function initializeApp() {
     if (dom.batchOpenCadBtn) {
       dom.batchOpenCadBtn.addEventListener('click', () => {
         sendBatchToCadClipboard();
+      });
+    }
+
+    if (dom.batchSendCadHandoffBtn) {
+      dom.batchSendCadHandoffBtn.addEventListener('click', () => {
+        openCadHandoffWithSource('batch');
+      });
+    }
+
+    if (dom.workspaceSendCadHandoffBtn) {
+      dom.workspaceSendCadHandoffBtn.addEventListener('click', () => {
+        openCadHandoffWithSource('workspace');
+      });
+    }
+
+    if (dom.expressionSendCadHandoffBtn) {
+      dom.expressionSendCadHandoffBtn.addEventListener('click', () => {
+        openCadHandoffWithSource('expression');
+      });
+    }
+
+    if (dom.multiscaleSendCadHandoffBtn) {
+      dom.multiscaleSendCadHandoffBtn.addEventListener('click', () => {
+        openCadHandoffWithSource('multiscale');
+      });
+    }
+
+    if (dom.chainsSendCadHandoffBtn) {
+      dom.chainsSendCadHandoffBtn.addEventListener('click', () => {
+        openCadHandoffWithSource('chain');
+      });
+    }
+
+    if (dom.quickDimSendCadHandoffBtn) {
+      dom.quickDimSendCadHandoffBtn.addEventListener('click', () => {
+        openCadHandoffWithSource('quick');
       });
     }
 

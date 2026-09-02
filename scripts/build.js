@@ -45,6 +45,7 @@ export const BUNDLE_MODULES = [
   { name: 'DimensionChains', file: path.join(srcDir, 'core', 'dimension-chains.js') },
   { name: 'BatchCad', file: path.join(srcDir, 'core', 'batch-cad.js') },
   { name: 'QuickDimension', file: path.join(srcDir, 'core', 'quick-dimension.js') },
+  { name: 'CadTargets', file: path.join(srcDir, 'core', 'cad-targets.js') },
 
   // --- Services ---
   { name: 'Storage', file: path.join(srcDir, 'services', 'storage.js') },
@@ -72,6 +73,8 @@ export function stripImportsAndExports(code) {
     .replace(/import\s+['"][^'"]+['"];?/g, '')
     .replace(/export\s+default\s+/g, '')
     .replace(/export\s+(const|let|var|function|class)\s+/g, '$1 ')
+    // Re-exports: `export { A, B } from './module.js';` (must run before bare export-braces form)
+    .replace(/export\s*\{[^}]*\}\s*from\s*['"][^'"]+['"];?/g, '')
     .replace(/export\s*\{[\s\S]*?\};?/g, '');
 }
 

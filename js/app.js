@@ -3219,6 +3219,20 @@ function formatCadChain(calculatedChain, options = {}) {
     return { text: '', count: 0 };
   }
 
+  // Normalize segment meter fields: calculateChain() emits lengthMeters /
+  // drawingLengthMeters, while tests and hand-built chains may use the
+  // realMeters / drawingMeters aliases. Accept both, prefer the engine names.
+  const segLengthM = s => {
+    if (typeof s.lengthMeters === 'number' && isFinite(s.lengthMeters)) return s.lengthMeters;
+    if (typeof s.realMeters === 'number' && isFinite(s.realMeters)) return s.realMeters;
+    return 0;
+  };
+  const segDrawingM = s => {
+    if (typeof s.drawingLengthMeters === 'number' && isFinite(s.drawingLengthMeters)) return s.drawingLengthMeters;
+    if (typeof s.drawingMeters === 'number' && isFinite(s.drawingMeters)) return s.drawingMeters;
+    return segLengthM(s) / scaleRatio;
+  };
+
   // 1. Cumulative Running Coordinates (e.g. 0 1200 3000 3900 5400)
   if (chainOutputMode === 'cumulative') {
     const runningCoords = [0];
@@ -3226,7 +3240,7 @@ function formatCadChain(calculatedChain, options = {}) {
 
     activeSegments.forEach(s => {
       if (s.dimensionType !== 'reference') {
-        runningMeters += s.realMeters;
+        runningMeters += segLengthM(s);
         runningCoords.push(targetValue === 'drawing' ? runningMeters / scaleRatio : runningMeters);
       }
     });
@@ -3240,14 +3254,14 @@ function formatCadChain(calculatedChain, options = {}) {
   if (chainOutputMode === 'table' || chainOutputMode === 'schedule') {
     const header = ['#', 'Segment Name', `Start (${unit})`, `End (${unit})`, `Length (${unit})`, `Drawing @ 1:${scaleRatio}`, 'Type'].join('\t');
     const rows = activeSegments.map((s, idx) => {
-      const lenM = targetValue === 'drawing' ? s.realMeters / scaleRatio : s.realMeters;
+      const lenM = targetValue === 'drawing' ? segLengthM(s) / scaleRatio : segLengthM(s);
       const startM = targetValue === 'drawing' ? s.startMeters / scaleRatio : s.startMeters;
       const endM = targetValue === 'drawing' ? s.endMeters / scaleRatio : s.endMeters;
 
       const startStr = formatCadValue(startM, { unit, precision, suffix: 'none' });
       const endStr = formatCadValue(endM, { unit, precision, suffix: 'none' });
       const lenStr = formatCadValue(lenM, { unit, precision, suffix: 'none' });
-      const drawStr = formatCadValue(s.drawingMeters, { unit, precision, suffix: 'none' });
+      const drawStr = formatCadValue(segDrawingM(s), { unit, precision, suffix: 'none' });
       const typeStr = (s.dimensionType || 'segment').toUpperCase();
 
       return [
@@ -3269,7 +3283,7 @@ function formatCadChain(calculatedChain, options = {}) {
 
   // 3. Segment Lengths (Default)
   const segmentValues = activeSegments.map(s => {
-    const valM = targetValue === 'drawing' ? s.realMeters / scaleRatio : s.realMeters;
+    const valM = targetValue === 'drawing' ? segLengthM(s) / scaleRatio : segLengthM(s);
     return formatCadValue(valM, { unit, precision, suffix });
   });
 
@@ -3285,11 +3299,17 @@ function formatCadChain(calculatedChain, options = {}) {
  * @returns {{ text: string, count: number }}
  */
 function formatCadMultiScale(calculatedMultiScale, options = {}) {
-  if (!calculatedMultiScale || !Array.isArray(calculatedMultiScale.results) || calculatedMultiScale.results.length === 0) {
+  // compareAcrossScales() emits its per-scale rows as `.scales`; accept the
+  // `.results` alias too so hand-built/mocked results keep working.
+  const scaleRows = calculatedMultiScale && Array.isArray(calculatedMultiScale.scales)
+    ? calculatedMultiScale.scales
+    : (calculatedMultiScale && Array.isArray(calculatedMultiScale.results) ? calculatedMultiScale.results : null);
+
+  if (!scaleRows || scaleRows.length === 0) {
     return { text: '', count: 0 };
   }
 
-  const unit = options.unit || calculatedMultiScale.input.displayUnit || 'mm';
+  const unit = options.unit || (calculatedMultiScale.input && calculatedMultiScale.input.displayUnit) || 'mm';
   const precision = typeof options.precision === 'number' ? options.precision : 2;
   const suffix = options.suffix || 'none';
   const delimiter = options.delimiter || 'space';
@@ -3297,27 +3317,30 @@ function formatCadMultiScale(calculatedMultiScale, options = {}) {
 
   if (format === 'spreadsheet' || delimiter === 'tsv') {
     const header = ['Scale', 'Ratio', `Drawing Length (${unit})`, 'Paper Usable Check'].join('\t');
-    const rows = calculatedMultiScale.results.map(r => {
+    const rows = scaleRows.map(r => {
       const drawStr = formatCadValue(r.drawingMeters, { unit, precision, suffix: 'none' });
+      const fitsStr = r.fitsPaper === true
+        ? `Fits ${r.paperSize || 'paper'}`
+        : (r.fitsPaper === false ? 'Exceeds paper' : '—');
       return [
-        r.label,
+        r.label || `1:${r.ratio}`,
         `1:${r.ratio}`,
         drawStr,
-        r.fitsPaper ? `Fits ${r.paperSize}` : 'Exceeds paper'
+        fitsStr
       ].join('\t');
     });
     return {
       text: [header, ...rows].join('\n'),
-      count: calculatedMultiScale.results.length
+      count: scaleRows.length
     };
   }
 
-  const drawingValues = calculatedMultiScale.results.map(r => {
+  const drawingValues = scaleRows.map(r => {
     return formatCadValue(r.drawingMeters, { unit, precision, suffix });
   });
 
   const text = delimiter === 'newline' ? drawingValues.join('\n') : (delimiter === 'comma' ? drawingValues.join(', ') : drawingValues.join(' '));
-  return { text, count: calculatedMultiScale.results.length };
+  return { text, count: drawingValues.length };
 }
 
 /**
@@ -5809,6 +5832,534 @@ function createQuickHandoffPayload(evalResult, targetTool, options = {}) {
 
 
   // =========================================================================
+  // MODULE: CadTargets
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - CAD Application Helpers & Target Profiles
+ * Part 9: Daily Architect Toolkit — Rhino / AutoCAD / SketchUp Handoff
+ *
+ * Pure, deterministic, zero-DOM module that turns existing toolkit results
+ * (Workspace, Expression, Multi-Scale, Chains, Batch, Quick Dimension) into
+ * clipboard payloads shaped for a chosen CAD application target.
+ *
+ * IMPORTANT SCOPE NOTE: These are WORKFLOW PROFILES, not official product
+ * integrations. No proprietary CAD command syntax is generated or executed.
+ * Profiles describe output preferences (units, precision, suffix style,
+ * line layout) that make manual paste into each application's command
+ * prompt / Value Control Box fast and error-free.
+ *
+ * The module deliberately reuses the existing CAD formatting engine in
+ * cad-clipboard.js (formatCadValue / escapeTSV / escapeCSV / formatCad*)
+ * so there is exactly ONE formatting implementation, ONE unit system, and
+ * ONE scale system underneath every target.
+ */
+
+
+
+
+const CAD_HANDOFF_STORAGE_KEY = 'archiscale_cad_handoff_prefs';
+
+/**
+ * CAD Target Profiles (workflow preferences, NOT official integrations).
+ * Each profile encodes the conventions that make pasted values behave
+ * predictably in the target application's numeric input fields.
+ */
+const CAD_TARGET_PROFILES = Object.freeze({
+  generic: {
+    id: 'generic',
+    label: 'Generic CAD',
+    description: 'Neutral clean numbers that behave in any CAD command prompt or paste target.',
+    preferredUnit: 'mm',
+    preferredPrecision: 2,
+    preferredSuffix: 'none',
+    preferredDelimiter: 'newline'
+  },
+  rhino: {
+    id: 'rhino',
+    label: 'Rhino',
+    description: 'Clean decimal command-prompt values; Rhino accepts plain numbers in its units.',
+    preferredUnit: 'mm',
+    preferredPrecision: 3,
+    preferredSuffix: 'none',
+    preferredDelimiter: 'newline'
+  },
+  autocad: {
+    id: 'autocad',
+    label: 'AutoCAD',
+    description: 'Plain drawing-unit numbers for command-line entry and dimension schedules.',
+    preferredUnit: 'mm',
+    preferredPrecision: 2,
+    preferredSuffix: 'none',
+    preferredDelimiter: 'newline'
+  },
+  sketchup: {
+    id: 'sketchup',
+    label: 'SketchUp',
+    description: 'Values with unit identifiers for the Value Control Box (VCB), e.g. 2400mm.',
+    preferredUnit: 'mm',
+    preferredPrecision: 1,
+    preferredSuffix: 'symbol',
+    preferredDelimiter: 'newline'
+  }
+});
+
+/** Valid CAD target ids. */
+const CAD_TARGET_IDS = Object.freeze(Object.keys(CAD_TARGET_PROFILES));
+
+/**
+ * Copy/format modes exposed by the handoff UI. Each maps onto the single
+ * underlying formatter with different options — no per-mode math exists.
+ */
+const CAD_COPY_MODES = Object.freeze({
+  raw: {
+    id: 'raw',
+    label: 'Raw Numbers',
+    description: 'One clean number per line, no suffix.',
+    suffix: 'none',
+    delimiter: 'newline'
+  },
+  formatted: {
+    id: 'formatted',
+    label: 'Formatted Dimensions',
+    description: 'Numbers with the chosen unit suffix style.',
+    suffix: 'target',   // resolved against target profile
+    delimiter: 'newline'
+  },
+  drawing: {
+    id: 'drawing',
+    label: 'Drawing Values',
+    description: 'Values converted to drawing scale (paper dimensions).',
+    suffix: 'none',
+    delimiter: 'newline',
+    targetValue: 'drawing'
+  },
+  schedule: {
+    id: 'schedule',
+    label: 'Schedule (Named Table)',
+    description: 'Named rows with values, tab-separated.',
+    suffix: 'none',
+    delimiter: 'tsv'
+  },
+  tsv: {
+    id: 'tsv',
+    label: 'TSV',
+    description: 'Tab-separated values only (spreadsheet friendly).',
+    suffix: 'none',
+    delimiter: 'tsv'
+  },
+  csv: {
+    id: 'csv',
+    label: 'CSV',
+    description: 'Comma-separated values with RFC-4180 escaping.',
+    suffix: 'none',
+    delimiter: 'csv'
+  }
+});
+
+const CAD_COPY_MODE_IDS = Object.freeze(Object.keys(CAD_COPY_MODES));
+
+/**
+ * Source descriptors: what each supported handoff source is called and
+ * whether it supports the richer output shapes (schedule rows, cumulative).
+ */
+const CAD_SOURCE_IDS = Object.freeze([
+  'workspace', 'expression', 'multiscale', 'chain', 'batch', 'quick', 'manual'
+]);
+
+/**
+ * Resolves the effective formatting options for a target + copy mode.
+ * User-explicit values (unit/precision) always win over profile defaults.
+ *
+ * @param {string} targetId - CAD target profile id
+ * @param {string} modeId - copy mode id
+ * @param {Object} [overrides] - { unit, precision, suffix, scaleRatio }
+ * @returns {{ target: Object, mode: Object, unit: string, precision: number, suffix: string, delimiter: string, targetValue: 'real'|'drawing', scaleRatio: number }}
+ */
+function resolveCadHandoffOptions(targetId, modeId, overrides = {}) {
+  const target = CAD_TARGET_PROFILES[targetId];
+  if (!target) {
+    throw new Error(`Unknown CAD target profile: "${targetId}". Valid targets: ${CAD_TARGET_IDS.join(', ')}`);
+  }
+  const mode = CAD_COPY_MODES[modeId];
+  if (!mode) {
+    throw new Error(`Unknown CAD copy mode: "${modeId}". Valid modes: ${CAD_COPY_MODE_IDS.join(', ')}`);
+  }
+
+  const suffix = overrides.suffix && overrides.suffix !== 'target'
+    ? overrides.suffix
+    : (mode.suffix === 'target' ? target.preferredSuffix : mode.suffix);
+  const delimiter = mode.delimiter;
+  const targetValue = mode.targetValue || 'real';
+  const scaleRatio = typeof overrides.scaleRatio === 'number' && overrides.scaleRatio > 0
+    ? overrides.scaleRatio
+    : 50;
+
+  return {
+    target,
+    mode,
+    unit: overrides.unit || target.preferredUnit,
+    precision: typeof overrides.precision === 'number' ? overrides.precision : target.preferredPrecision,
+    suffix,
+    delimiter,
+    targetValue,
+    scaleRatio
+  };
+}
+
+/**
+ * Normalizes a chain-handoff layout selection for the chain source.
+ * 'segments' (default) | 'cumulative' | 'pipe' | 'schedule'
+ */
+function normalizeChainLayout(layout) {
+  return ['segments', 'cumulative', 'pipe', 'schedule'].includes(layout) ? layout : 'segments';
+}
+
+/**
+ * Builds the schedule rows for a calculated chain: one row per active
+ * segment with start / end / length values (real or drawing scale).
+ *
+ * @param {Object} calculatedChain - result of calculateChain()
+ * @param {Object} opts - resolved options from resolveCadHandoffOptions
+ * @returns {Array<{ name: string, start: number, end: number, length: number, drawing: number, type: string }>} values in meters
+ */
+function chainScheduleRows(calculatedChain, opts) {
+  const active = calculatedChain.segments.filter(s => s.enabled !== false && s.isValid !== false);
+  const toVal = m => (opts.targetValue === 'drawing' ? m / opts.scaleRatio : m);
+  return active.map((s, idx) => ({
+    name: s.name || `Segment ${idx + 1}`,
+    start: toVal(s.startMeters),
+    end: toVal(s.endMeters),
+    length: toVal(segLengthM(s)),
+    drawing: segDrawingM(s, opts.scaleRatio),
+    type: (s.dimensionType || 'segment').toUpperCase()
+  }));
+}
+
+/**
+ * Normalizes a calculated chain segment's length in meters.
+ * calculateChain() emits `lengthMeters`; hand-built/mock chains may carry the
+ * `realMeters` alias. Both are accepted, engine names take precedence.
+ */
+function segLengthM(s) {
+  if (typeof s.lengthMeters === 'number' && isFinite(s.lengthMeters)) return s.lengthMeters;
+  if (typeof s.realMeters === 'number' && isFinite(s.realMeters)) return s.realMeters;
+  return 0;
+}
+
+function segDrawingM(s, scaleRatio) {
+  if (typeof s.drawingLengthMeters === 'number' && isFinite(s.drawingLengthMeters)) return s.drawingLengthMeters;
+  if (typeof s.drawingMeters === 'number' && isFinite(s.drawingMeters)) return s.drawingMeters;
+  return segLengthM(s) / scaleRatio;
+}
+
+function joinNumbers(values, delimiter) {
+  if (delimiter === 'tsv') return values.join('\t');
+  if (delimiter === 'csv') return values.join(',');
+  if (delimiter === 'comma') return values.join(', ');
+  if (delimiter === 'pipe') return values.join(' | ');
+  return values.join('\n');
+}
+
+function formatNumberList(meterList, opts) {
+  const formatted = meterList.map(m => formatCadValue(m, {
+    unit: opts.unit,
+    precision: opts.precision,
+    suffix: opts.suffix
+  }));
+  return joinNumbers(formatted, opts.delimiter);
+}
+
+/**
+ * Builds a CAD handoff payload from any supported source result.
+ * This is the single entry point used by the UI for every source; per-source
+ * branches only differ in which existing core values they read.
+ *
+ * @param {string} sourceId - 'workspace' | 'expression' | 'multiscale' | 'chain' | 'batch' | 'quick' | 'manual'
+ * @param {Object} sourceData - source-specific payload (see per-branch docs)
+ * @param {Object} options - { targetId, modeId, unit, precision, suffix, scaleRatio, chainLayout, workspaceScope, selectedIds }
+ * @returns {{ text: string, count: number, targetLabel: string, modeLabel: string, empty: boolean }}
+ */
+function buildCadHandoffPayload(sourceId, sourceData, options = {}) {
+  const targetId = options.targetId || 'generic';
+  const modeId = options.modeId || 'raw';
+  const opts = resolveCadHandoffOptions(targetId, modeId, {
+    unit: options.unit,
+    precision: options.precision,
+    suffix: options.suffix,
+    scaleRatio: options.scaleRatio
+  });
+
+  const meta = {
+    targetLabel: opts.target.label,
+    modeLabel: opts.mode.label,
+    empty: false
+  };
+
+  const emptyResult = () => ({ text: '', count: 0, ...meta, empty: true });
+
+  if (!CAD_SOURCE_IDS.includes(sourceId)) {
+    throw new Error(`Unknown CAD handoff source: "${sourceId}". Valid sources: ${CAD_SOURCE_IDS.join(', ')}`);
+  }
+
+  // ------------------------------------------------------------------
+  // WORKSPACE — full format parity with CAD Clipboard (formatCadWorkspace)
+  // ------------------------------------------------------------------
+  if (sourceId === 'workspace') {
+    const ws = sourceData && sourceData.workspace;
+    if (!ws || !Array.isArray(ws.entries)) return emptyResult();
+
+    const scope = sourceData.scope || 'all';
+    const selectedIds = sourceData.selectedIds instanceof Set ? sourceData.selectedIds : new Set();
+
+    const filtered = ws.entries.filter(e => {
+      if (e.enabled === false) return false;
+      if (scope === 'selected') return selectedIds.has(e.id);
+      if (scope === 'segments') return e.dimensionType === 'segment' || !e.dimensionType;
+      if (scope === 'references') return e.dimensionType === 'reference';
+      if (scope === 'allowances') return e.dimensionType === 'allowance';
+      return true;
+    });
+    if (filtered.length === 0) return emptyResult();
+
+    const toVal = m => (opts.targetValue === 'drawing' ? m / opts.scaleRatio : m);
+
+    if (opts.delimiter === 'tsv' || opts.delimiter === 'csv') {
+      const esc = opts.delimiter === 'csv' ? escapeCSV : escapeTSV;
+      const sep = opts.delimiter === 'csv' ? ',' : '\t';
+      const header = ['#', 'Name', `Value (${opts.unit})`, `Drawing @ 1:${opts.scaleRatio} (${opts.unit})`, 'Type', 'Notes'].map(esc).join(sep);
+      const rows = filtered.map((e, idx) => {
+        const realM = typeof e.realMeters === 'number' && isFinite(e.realMeters) ? e.realMeters : 0;
+        return [
+          idx + 1,
+          esc(e.name || `Dimension ${idx + 1}`),
+          formatCadValue(toVal(realM), { unit: opts.unit, precision: opts.precision, suffix: 'none' }),
+          formatCadValue(realM / opts.scaleRatio, { unit: opts.unit, precision: opts.precision, suffix: 'none' }),
+          (e.dimensionType || 'segment').toUpperCase(),
+          esc(e.notes || '')
+        ].join(sep);
+      });
+      return { text: [header, ...rows].join('\n'), count: filtered.length, ...meta, empty: false };
+    }
+
+    const numbers = filtered.map(e => {
+      const realM = typeof e.realMeters === 'number' && isFinite(e.realMeters) ? e.realMeters : 0;
+      return formatCadValue(toVal(realM), { unit: opts.unit, precision: opts.precision, suffix: opts.suffix });
+    });
+    return { text: numbers.join('\n'), count: numbers.length, ...meta, empty: false };
+  }
+
+  // ------------------------------------------------------------------
+  // EXPRESSION — single canonical value
+  // ------------------------------------------------------------------
+  if (sourceId === 'expression') {
+    const expr = sourceData && sourceData.result;
+    if (!expr || !expr.isValid || typeof expr.canonicalMeters !== 'number') return emptyResult();
+    const valM = opts.targetValue === 'drawing'
+      ? expr.canonicalMeters / opts.scaleRatio
+      : expr.canonicalMeters;
+    const text = formatCadValue(valM, { unit: opts.unit, precision: opts.precision, suffix: opts.suffix });
+    return { text, count: 1, ...meta, empty: false };
+  }
+
+  // ------------------------------------------------------------------
+  // MULTI-SCALE — one drawing value per compared scale
+  // ------------------------------------------------------------------
+  if (sourceId === 'multiscale') {
+    const ms = sourceData && sourceData.result;
+    // compareAcrossScales() emits `.scales`; accept `.results` alias.
+    const scaleRows = ms && Array.isArray(ms.scales) ? ms.scales : (ms && Array.isArray(ms.results) ? ms.results : null);
+    if (!scaleRows || scaleRows.length === 0) return emptyResult();
+
+    if (opts.delimiter === 'tsv' || opts.delimiter === 'csv') {
+      const esc = opts.delimiter === 'csv' ? escapeCSV : escapeTSV;
+      const sep = opts.delimiter === 'csv' ? ',' : '\t';
+      const header = ['Scale', `Drawing Length (${opts.unit})`, 'Paper'].map(esc).join(sep);
+      const rows = scaleRows.map(r => [
+        esc(r.label || `1:${r.ratio}`),
+        formatCadValue(r.drawingMeters, { unit: opts.unit, precision: opts.precision, suffix: 'none' }),
+        esc(r.fitsPaper === true ? `Fits ${r.paperSize || 'paper'}` : (r.fitsPaper === false ? 'Exceeds paper' : '—'))
+      ].join(sep));
+      return { text: [header, ...rows].join('\n'), count: scaleRows.length, ...meta, empty: false };
+    }
+
+    const values = scaleRows.map(r =>
+      formatCadValue(r.drawingMeters, { unit: opts.unit, precision: opts.precision, suffix: opts.suffix })
+    );
+    return { text: values.join('\n'), count: values.length, ...meta, empty: false };
+  }
+
+  // ------------------------------------------------------------------
+  // CHAIN — segments / cumulative / pipe / schedule (reuses chain engine output)
+  // ------------------------------------------------------------------
+  if (sourceId === 'chain') {
+    const chain = sourceData && sourceData.result;
+    if (!chain || !Array.isArray(chain.segments)) return emptyResult();
+
+    const active = chain.segments.filter(s => s.enabled !== false && s.isValid !== false);
+    if (active.length === 0) return emptyResult();
+
+    const layout = normalizeChainLayout(sourceData.chainLayout || options.chainLayout);
+
+    // Named pipe-formatted summary: 1200 | 1800 | 900
+    if (layout === 'pipe') {
+      return {
+        text: formatNumberList(active.map(s => segLengthM(s)), { ...opts, delimiter: 'pipe', suffix: 'none' }),
+        count: active.length,
+        ...meta,
+        empty: false
+      };
+    }
+
+    // Full named schedule: name / start / end / length / drawing / type
+    if (layout === 'schedule' || opts.delimiter === 'tsv' || opts.delimiter === 'csv') {
+      const rows = chainScheduleRows(chain, opts);
+      const esc = opts.delimiter === 'csv' ? escapeCSV : escapeTSV;
+      const sep = opts.delimiter === 'csv' ? ',' : '\t';
+      const header = ['#', 'Segment', `Start (${opts.unit})`, `End (${opts.unit})`, `Length (${opts.unit})`, `Drawing @ 1:${opts.scaleRatio}`, 'Type']
+        .map(esc).join(sep);
+      const body = rows.map((r, idx) => [
+        idx + 1,
+        esc(r.name),
+        formatCadValue(r.start, { unit: opts.unit, precision: opts.precision, suffix: 'none' }),
+        formatCadValue(r.end, { unit: opts.unit, precision: opts.precision, suffix: 'none' }),
+        formatCadValue(r.length, { unit: opts.unit, precision: opts.precision, suffix: 'none' }),
+        formatCadValue(r.drawing, { unit: opts.unit, precision: opts.precision, suffix: 'none' }),
+        r.type
+      ].join(sep));
+      return { text: [header, ...body].join('\n'), count: rows.length, ...meta, empty: false };
+    }
+
+    // Cumulative running coordinates: 0 1200 3000 ...
+    if (layout === 'cumulative') {
+      const coords = [0];
+      let running = 0;
+      active.forEach(s => {
+        if (s.dimensionType !== 'reference') {
+          running += segLengthM(s);
+          coords.push(opts.targetValue === 'drawing' ? running / opts.scaleRatio : running);
+        }
+      });
+      return {
+        text: formatNumberList(coords, { ...opts, suffix: 'none' }),
+        count: coords.length,
+        ...meta,
+        empty: false
+      };
+    }
+
+    // Default: segment lengths in chain order (order is preserved — pinned by tests)
+    return {
+      text: formatNumberList(active.map(s => segLengthM(s)), opts),
+      count: active.length,
+      ...meta,
+      empty: false
+    };
+  }
+
+  // ------------------------------------------------------------------
+  // BATCH — preserves batch row order and names; valid-only filtering
+  // ------------------------------------------------------------------
+  if (sourceId === 'batch') {
+    const batch = sourceData && sourceData.result;
+    if (!batch || !Array.isArray(batch.rows)) return emptyResult();
+
+    let rows = batch.rows;
+    if (sourceData.selectedOnly && sourceData.selectedIds instanceof Set && sourceData.selectedIds.size > 0) {
+      rows = rows.filter(r => sourceData.selectedIds.has(r.id));
+    }
+    const validRows = rows.filter(r => r.valid);
+    if (validRows.length === 0) return emptyResult();
+
+    if (opts.delimiter === 'tsv' || opts.delimiter === 'csv') {
+      const esc = opts.delimiter === 'csv' ? escapeCSV : escapeTSV;
+      const sep = opts.delimiter === 'csv' ? ',' : '\t';
+      const header = ['#', 'Name', `Value (${opts.unit})`, 'Type'].map(esc).join(sep);
+      const body = validRows.map((r, idx) => [
+        idx + 1,
+        esc(r.name || `Dimension ${idx + 1}`),
+        formatCadValue(r.targetCanonicalMeters, { unit: opts.unit, precision: opts.precision, suffix: 'none' }),
+        (r.semanticRole || 'reference').toUpperCase()
+      ].join(sep));
+      return { text: [header, ...body].join('\n'), count: validRows.length, ...meta, empty: false };
+    }
+
+    const numbers = validRows.map(r =>
+      formatCadValue(r.targetCanonicalMeters, { unit: opts.unit, precision: opts.precision, suffix: opts.suffix })
+    );
+    return { text: numbers.join('\n'), count: numbers.length, ...meta, empty: false };
+  }
+
+  // ------------------------------------------------------------------
+  // QUICK DIMENSION — single evaluated value (real or drawing)
+  // ------------------------------------------------------------------
+  if (sourceId === 'quick') {
+    const res = sourceData && sourceData.result;
+    if (!res || !res.valid || typeof res.canonicalMeters !== 'number') return emptyResult();
+    const valM = opts.targetValue === 'drawing'
+      ? res.canonicalMeters / opts.scaleRatio
+      : res.canonicalMeters;
+    const text = formatCadValue(valM, { unit: opts.unit, precision: opts.precision, suffix: opts.suffix });
+    return { text, count: 1, ...meta, empty: false };
+  }
+
+  // ------------------------------------------------------------------
+  // MANUAL — free numeric text (reuse existing manual formatter behavior)
+  // ------------------------------------------------------------------
+  if (sourceId === 'manual') {
+    const raw = sourceData && sourceData.rawText;
+    if (typeof raw !== 'string' || !raw.trim()) return emptyResult();
+    const unitDef = requireUnit(opts.unit === 'ft-in' ? 'mm' : opts.unit, 'length');
+    const tokens = raw.trim().split(/[\s,+/]+/).filter(t => t.length > 0);
+    const meters = [];
+    tokens.forEach(tok => {
+      const num = parseFloat(tok);
+      if (!isNaN(num) && isFinite(num)) {
+        meters.push(num * unitDef.toMeters);
+      }
+    });
+    if (meters.length === 0) return emptyResult();
+    return { text: formatNumberList(meters, opts), count: meters.length, ...meta, empty: false };
+  }
+
+  return emptyResult();
+}
+
+/**
+ * Builds a human-readable summary line for the handoff UI.
+ */
+function getCadHandoffSummary(payload) {
+  if (!payload || payload.empty) return 'No values available for the selected source';
+  const unit = payload.unit || '';
+  return `${payload.count} ${payload.count === 1 ? 'value' : 'values'} → ${payload.targetLabel} • ${payload.modeLabel}${unit ? ` (${unit})` : ''}`;
+}
+
+/**
+ * Validates that a proposed target/mode pair is usable; returns a controlled
+ * error object instead of throwing for invalid user selections.
+ *
+ * @returns {{ ok: boolean, error: string|null }}
+ */
+function validateCadHandoffSelection(targetId, modeId, sourceId) {
+  if (!CAD_TARGET_PROFILES[targetId]) {
+    return { ok: false, error: `Unknown CAD target "${targetId}". Choose one of: ${CAD_TARGET_IDS.join(', ')}.` };
+  }
+  if (!CAD_COPY_MODES[modeId]) {
+    return { ok: false, error: `Unknown copy mode "${modeId}". Choose one of: ${CAD_COPY_MODE_IDS.join(', ')}.` };
+  }
+  if (sourceId && !CAD_SOURCE_IDS.includes(sourceId)) {
+    return { ok: false, error: `Unknown source "${sourceId}".` };
+  }
+  return { ok: true, error: null };
+}
+
+// Re-export for UI convenience so the UI never imports two CAD modules.
+
+
+void UNITS;
+
+
+  // =========================================================================
   // MODULE: Storage
   // =========================================================================
 
@@ -6356,6 +6907,16 @@ const DEFAULT_COMMANDS = [
     icon: '🔗',
     keywords: ['chain', 'dimension string', 'cumulative', 'running totals', 'grid', 'sequence', 'offsets', 'mode 10', '0'],
     shortcut: '0',
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-cad-handoff',
+    title: 'CAD Handoff (Rhino · AutoCAD · SketchUp)',
+    description: 'Send dimensions from any tool into Rhino, AutoCAD, or SketchUp with target-specific clipboard payloads and preview',
+    category: 'Navigation',
+    icon: '🚀',
+    keywords: ['cad', 'handoff', 'send', 'rhino', 'autocad', 'sketchup', 'paste', 'copy', 'helper', 'mode 13'],
     actionType: 'navigation',
     available: true
   },
@@ -7546,6 +8107,7 @@ function getFurniturePlanSVG(item) {
 
 
 
+
 function initializeApp() {
   const state = {
     currentMode: 'converter',
@@ -7731,6 +8293,30 @@ function initializeApp() {
         mode: 'real_to_drawing',
         showContext: true,
         lastResult: null
+      };
+    })(),
+
+    // Mode 13: CAD Application Helpers (Send-To Handoff)
+    cadHandoff: (() => {
+      try {
+        const stored = StorageService.getItem(CAD_HANDOFF_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && typeof parsed === 'object') return parsed;
+        }
+      } catch (e) {}
+      return {
+        source: 'chain',
+        target: 'rhino',
+        format: 'raw',
+        unit: null,          // null = follow target profile default
+        precision: null,     // null = follow target profile default
+        suffix: 'target',    // 'target' = follow profile/mode default
+        chainLayout: 'segments',
+        workspaceScope: 'all',
+        batchScope: 'all',
+        manualInput: '',
+        lastPayload: null
       };
     })(),
 
@@ -8104,6 +8690,12 @@ function initializeApp() {
     batchCopyRawBtn: document.getElementById('batch-copy-raw-btn'),
     batchCopyTsvBtn: document.getElementById('batch-copy-tsv-btn'),
     batchOpenCadBtn: document.getElementById('batch-open-cad-btn'),
+    batchSendCadHandoffBtn: document.getElementById('batch-send-cad-handoff-btn'),
+    workspaceSendCadHandoffBtn: document.getElementById('workspace-send-cad-handoff-btn'),
+    expressionSendCadHandoffBtn: document.getElementById('expression-send-cad-handoff-btn'),
+    multiscaleSendCadHandoffBtn: document.getElementById('multiscale-send-cad-handoff-btn'),
+    chainsSendCadHandoffBtn: document.getElementById('chains-send-cad-handoff-btn'),
+    quickDimSendCadHandoffBtn: document.getElementById('quick-dim-send-cad-handoff-btn'),
     batchSendWorkspaceBtn: document.getElementById('batch-send-workspace-btn'),
     batchCompareMultiscaleBtn: document.getElementById('batch-compare-multiscale-btn'),
     batchCreateChainBtn: document.getElementById('batch-create-chain-btn'),
@@ -8141,7 +8733,34 @@ function initializeApp() {
     quickDimSendMultiscaleBtn: document.getElementById('quick-dim-send-multiscale-btn'),
     quickDimSendChainBtn: document.getElementById('quick-dim-send-chain-btn'),
     quickDimSendCadBtn: document.getElementById('quick-dim-send-cad-btn'),
-    quickDimSaveJournalBtn: document.getElementById('quick-dim-save-journal-btn')
+    quickDimSaveJournalBtn: document.getElementById('quick-dim-save-journal-btn'),
+
+    // Mode 13: CAD Handoff Elements
+    handoffSourceSelect: document.getElementById('handoff-source-select'),
+    handoffSourceHint: document.getElementById('handoff-source-hint'),
+    handoffManualGroup: document.getElementById('handoff-manual-group'),
+    handoffManualInput: document.getElementById('handoff-manual-input'),
+    handoffTargetPills: document.getElementById('handoff-target-pills'),
+    handoffTargetDescription: document.getElementById('handoff-target-description'),
+    handoffFormatSelect: document.getElementById('handoff-format-select'),
+    handoffChainLayoutGroup: document.getElementById('handoff-chain-layout-group'),
+    handoffChainLayoutSelect: document.getElementById('handoff-chain-layout-select'),
+    handoffWorkspaceScopeGroup: document.getElementById('handoff-workspace-scope-group'),
+    handoffWorkspaceScopeSelect: document.getElementById('handoff-workspace-scope-select'),
+    handoffBatchScopeGroup: document.getElementById('handoff-batch-scope-group'),
+    handoffBatchScopeSelect: document.getElementById('handoff-batch-scope-select'),
+    handoffAdvancedDetails: document.getElementById('handoff-advanced-details'),
+    handoffUnitSelect: document.getElementById('handoff-unit-select'),
+    handoffPrecisionSelect: document.getElementById('handoff-precision-select'),
+    handoffSuffixSelect: document.getElementById('handoff-suffix-select'),
+    btnRunCadHandoff: document.getElementById('btn-run-cad-handoff'),
+    handoffResultPanel: document.getElementById('handoff-result-panel'),
+    handoffSummaryBadge: document.getElementById('handoff-summary-badge'),
+    handoffPreviewBox: document.getElementById('handoff-preview-box'),
+    btnHandoffCopy: document.getElementById('btn-handoff-copy'),
+    handoffCopyTargetLabel: document.getElementById('handoff-copy-target-label'),
+    btnHandoffExportTxt: document.getElementById('btn-handoff-export-txt'),
+    btnHandoffOpenCadClipboard: document.getElementById('btn-handoff-open-cad-clipboard')
   };
 
   // ---------------------------------------------------------------------------
@@ -8319,6 +8938,9 @@ function initializeApp() {
     }
     else if (targetMode === 'batch_cad') {
       parseAndConvertBatch();
+    }
+    else if (targetMode === 'cad_handoff') {
+      renderCadHandoff();
     }
   }
 
@@ -10690,6 +11312,9 @@ function initializeApp() {
       case 'nav-chains':
         switchMode('chains');
         break;
+      case 'nav-cad-handoff':
+        switchMode('cad_handoff');
+        break;
       case 'nav-cad-clipboard':
         switchMode('cad_clipboard');
         break;
@@ -11652,6 +12277,149 @@ function initializeApp() {
     renderCadClipboard(true);
     AudioService.playTick();
     showToast(`Loaded ${sourceKey.toUpperCase()} data into CAD Clipboard`);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 13h'. Mode 13: CAD Application Helpers (Send-To Handoff)
+  // ---------------------------------------------------------------------------
+  function saveCadHandoffSettings() {
+    try {
+      const { lastPayload, ...serializable } = state.cadHandoff;
+      void lastPayload;
+      StorageService.setItem(CAD_HANDOFF_STORAGE_KEY, JSON.stringify(serializable));
+    } catch (e) {}
+  }
+
+  /**
+   * Collects the current source data for the handoff payload builder from
+   * whatever tool state is live. Never recomputes math — only reads the
+   * last valid results the tools already produced.
+   */
+  function getCadHandoffSourceData() {
+    const h = state.cadHandoff;
+    switch (h.source) {
+      case 'workspace':
+        return {
+          workspace: state.workspace,
+          scope: h.workspaceScope || 'all',
+          selectedIds: state.workspaceSelectedIds
+        };
+      case 'expression':
+        return { result: state.lastValidExpression };
+      case 'multiscale':
+        return { result: state.lastValidMultiScale };
+      case 'chain':
+        return { result: state.lastValidChain, chainLayout: h.chainLayout || 'segments' };
+      case 'batch':
+        return {
+          result: state.batchCad.lastResult,
+          selectedOnly: h.batchScope === 'selected',
+          selectedIds: state.batchCad.selectedIds
+        };
+      case 'quick':
+        return { result: state.quickDimension.lastResult };
+      case 'manual':
+        return { rawText: dom.handoffManualInput?.value || h.manualInput || '' };
+      default:
+        return {};
+    }
+  }
+
+  function renderCadHandoff(isExplicitRun = false) {
+    const h = state.cadHandoff;
+
+    // Sync form controls into state
+    if (dom.handoffSourceSelect) h.source = dom.handoffSourceSelect.value || h.source;
+    if (dom.handoffFormatSelect) h.format = dom.handoffFormatSelect.value || h.format;
+    if (dom.handoffChainLayoutSelect) h.chainLayout = dom.handoffChainLayoutSelect.value || h.chainLayout;
+    if (dom.handoffWorkspaceScopeSelect) h.workspaceScope = dom.handoffWorkspaceScopeSelect.value || h.workspaceScope;
+    if (dom.handoffBatchScopeSelect) h.batchScope = dom.handoffBatchScopeSelect.value || h.batchScope;
+    if (dom.handoffUnitSelect) h.unit = dom.handoffUnitSelect.value === 'auto' ? null : dom.handoffUnitSelect.value;
+    if (dom.handoffPrecisionSelect) h.precision = dom.handoffPrecisionSelect.value === 'auto' ? null : parseInt(dom.handoffPrecisionSelect.value, 10);
+    if (dom.handoffSuffixSelect) h.suffix = dom.handoffSuffixSelect.value || h.suffix;
+
+    // Conditional groups
+    if (dom.handoffManualGroup) dom.handoffManualGroup.style.display = h.source === 'manual' ? 'block' : 'none';
+    if (dom.handoffChainLayoutGroup) dom.handoffChainLayoutGroup.style.display = h.source === 'chain' ? 'block' : 'none';
+    if (dom.handoffWorkspaceScopeGroup) dom.handoffWorkspaceScopeGroup.style.display = h.source === 'workspace' ? 'block' : 'none';
+    if (dom.handoffBatchScopeGroup) dom.handoffBatchScopeGroup.style.display = h.source === 'batch' ? 'block' : 'none';
+
+    // Target pills sync + description
+    dom.handoffTargetPills?.querySelectorAll('.cad-source-pill').forEach(pill => {
+      const isActive = pill.dataset.target === h.target;
+      pill.classList.toggle('active', isActive);
+      pill.setAttribute('aria-checked', isActive ? 'true' : 'false');
+    });
+    const profile = CAD_TARGET_PROFILES[h.target];
+    if (dom.handoffTargetDescription && profile) {
+      dom.handoffTargetDescription.textContent = profile.description;
+    }
+    if (dom.handoffCopyTargetLabel && profile) {
+      dom.handoffCopyTargetLabel.textContent = profile.label.toUpperCase();
+    }
+
+    // Build payload via the single core entry point
+    let payload;
+    const validation = validateCadHandoffSelection(h.target, h.format, h.source);
+    if (!validation.ok) {
+      payload = { text: '', count: 0, empty: true, targetLabel: '', modeLabel: '' };
+      if (dom.handoffSummaryBadge) dom.handoffSummaryBadge.textContent = validation.error;
+    } else {
+      payload = buildCadHandoffPayload(h.source, getCadHandoffSourceData(), {
+        targetId: h.target,
+        modeId: h.format,
+        unit: h.unit || undefined,
+        precision: typeof h.precision === 'number' ? h.precision : undefined,
+        suffix: h.suffix,
+        scaleRatio: state.workspace?.scaleRatio || state.lastValidChain?.scaleRatio || 50,
+        chainLayout: h.chainLayout
+      });
+      if (dom.handoffSummaryBadge) {
+        dom.handoffSummaryBadge.textContent = payload.empty
+          ? 'No values available — run the source tool first'
+          : getCadHandoffSummary(payload);
+      }
+    }
+
+    h.lastPayload = payload;
+
+    if (dom.handoffPreviewBox) {
+      dom.handoffPreviewBox.value = payload.text;
+    }
+
+    setUnifiedResultState({
+      toolPrefix: 'handoff',
+      status: payload.empty ? (validation.ok ? 'ready' : 'error') : 'success',
+      errorText: validation.ok ? '' : validation.error
+    });
+
+    saveCadHandoffSettings();
+
+    if (isExplicitRun) {
+      AudioService.playTick();
+    }
+  }
+
+  function copyCadHandoffPayload() {
+    const payload = state.cadHandoff.lastPayload;
+    const profile = CAD_TARGET_PROFILES[state.cadHandoff.target];
+    const label = profile ? `Payload for ${profile.label}` : 'CAD payload';
+
+    if (!payload || payload.empty || !payload.text || !payload.text.trim()) {
+      showToast('No CAD payload to copy — run the source tool first', 'warning');
+      return;
+    }
+
+    copyToClipboard(payload.text, label);
+  }
+
+  function openCadHandoffWithSource(sourceKey) {
+    state.cadHandoff.source = sourceKey;
+    if (dom.handoffSourceSelect) dom.handoffSourceSelect.value = sourceKey;
+    switchMode('cad_handoff');
+    renderCadHandoff(true);
+    AudioService.playTick();
+    showToast(`Loaded ${sourceKey.toUpperCase()} data into CAD Handoff`);
   }
 
   // ---------------------------------------------------------------------------
@@ -13672,6 +14440,81 @@ function initializeApp() {
       });
     }
 
+    // Mode 13: CAD Handoff Listeners
+    if (dom.handoffSourceSelect) {
+      dom.handoffSourceSelect.addEventListener('change', () => renderCadHandoff(true));
+    }
+    if (dom.handoffManualInput) {
+      dom.handoffManualInput.addEventListener('input', () => {
+        state.cadHandoff.manualInput = dom.handoffManualInput.value;
+        renderCadHandoff();
+      });
+      dom.handoffManualInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          renderCadHandoff(true);
+        }
+      });
+    }
+    if (dom.handoffTargetPills) {
+      dom.handoffTargetPills.querySelectorAll('.cad-source-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+          state.cadHandoff.target = pill.dataset.target;
+          renderCadHandoff(true);
+        });
+      });
+    }
+    if (dom.handoffFormatSelect) {
+      dom.handoffFormatSelect.addEventListener('change', () => renderCadHandoff(true));
+    }
+    if (dom.handoffChainLayoutSelect) {
+      dom.handoffChainLayoutSelect.addEventListener('change', () => renderCadHandoff(true));
+    }
+    if (dom.handoffWorkspaceScopeSelect) {
+      dom.handoffWorkspaceScopeSelect.addEventListener('change', () => renderCadHandoff(true));
+    }
+    if (dom.handoffBatchScopeSelect) {
+      dom.handoffBatchScopeSelect.addEventListener('change', () => renderCadHandoff(true));
+    }
+    if (dom.handoffUnitSelect) {
+      dom.handoffUnitSelect.addEventListener('change', () => renderCadHandoff(true));
+    }
+    if (dom.handoffPrecisionSelect) {
+      dom.handoffPrecisionSelect.addEventListener('change', () => renderCadHandoff(true));
+    }
+    if (dom.handoffSuffixSelect) {
+      dom.handoffSuffixSelect.addEventListener('change', () => renderCadHandoff(true));
+    }
+    if (dom.btnRunCadHandoff) {
+      dom.btnRunCadHandoff.addEventListener('click', () => renderCadHandoff(true));
+      dom.btnRunCadHandoff.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          renderCadHandoff(true);
+        }
+      });
+    }
+    if (dom.btnHandoffCopy) {
+      dom.btnHandoffCopy.addEventListener('click', copyCadHandoffPayload);
+    }
+    if (dom.btnHandoffExportTxt) {
+      dom.btnHandoffExportTxt.addEventListener('click', () => {
+        const payload = state.cadHandoff.lastPayload;
+        if (!payload || payload.empty || !payload.text.trim()) {
+          showToast('No CAD payload to export', 'warning');
+          return;
+        }
+        downloadFile(payload.text, `cad-handoff-${state.cadHandoff.target}-${Date.now()}.txt`, 'text/plain');
+        showToast('CAD payload exported as .txt');
+      });
+    }
+    if (dom.btnHandoffOpenCadClipboard) {
+      dom.btnHandoffOpenCadClipboard.addEventListener('click', () => {
+        const sourceMap = { workspace: 'workspace', expression: 'expression', multiscale: 'multiscale', chain: 'chain', batch: 'workspace', quick: 'manual', manual: 'manual' };
+        openCadClipboardWithSource(sourceMap[state.cadHandoff.source] || 'workspace');
+      });
+    }
+
     // Mode 12: Batch CAD Conversion Listeners
     if (dom.batchQuickChips) {
       dom.batchQuickChips.querySelectorAll('.cad-preset-chip').forEach(chip => {
@@ -13831,6 +14674,42 @@ function initializeApp() {
     if (dom.batchOpenCadBtn) {
       dom.batchOpenCadBtn.addEventListener('click', () => {
         sendBatchToCadClipboard();
+      });
+    }
+
+    if (dom.batchSendCadHandoffBtn) {
+      dom.batchSendCadHandoffBtn.addEventListener('click', () => {
+        openCadHandoffWithSource('batch');
+      });
+    }
+
+    if (dom.workspaceSendCadHandoffBtn) {
+      dom.workspaceSendCadHandoffBtn.addEventListener('click', () => {
+        openCadHandoffWithSource('workspace');
+      });
+    }
+
+    if (dom.expressionSendCadHandoffBtn) {
+      dom.expressionSendCadHandoffBtn.addEventListener('click', () => {
+        openCadHandoffWithSource('expression');
+      });
+    }
+
+    if (dom.multiscaleSendCadHandoffBtn) {
+      dom.multiscaleSendCadHandoffBtn.addEventListener('click', () => {
+        openCadHandoffWithSource('multiscale');
+      });
+    }
+
+    if (dom.chainsSendCadHandoffBtn) {
+      dom.chainsSendCadHandoffBtn.addEventListener('click', () => {
+        openCadHandoffWithSource('chain');
+      });
+    }
+
+    if (dom.quickDimSendCadHandoffBtn) {
+      dom.quickDimSendCadHandoffBtn.addEventListener('click', () => {
+        openCadHandoffWithSource('quick');
       });
     }
 

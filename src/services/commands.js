@@ -222,6 +222,16 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
+    id: 'nav-cad-handoff',
+    title: 'CAD Handoff (Rhino · AutoCAD · SketchUp)',
+    description: 'Send dimensions from any tool into Rhino, AutoCAD, or SketchUp with target-specific clipboard payloads and preview',
+    category: 'Navigation',
+    icon: '🚀',
+    keywords: ['cad', 'handoff', 'send', 'rhino', 'autocad', 'sketchup', 'paste', 'copy', 'helper', 'mode 13'],
+    actionType: 'navigation',
+    available: true
+  },
+  {
     id: 'nav-cad-clipboard',
     title: 'CAD Clipboard & Formats',
     description: 'Instant CAD-ready copy formatting for AutoCAD, Rhino, Revit, SketchUp, and Spreadsheets',

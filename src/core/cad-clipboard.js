@@ -378,6 +378,20 @@ export function formatCadChain(calculatedChain, options = {}) {
     return { text: '', count: 0 };
   }
 
+  // Normalize segment meter fields: calculateChain() emits lengthMeters /
+  // drawingLengthMeters, while tests and hand-built chains may use the
+  // realMeters / drawingMeters aliases. Accept both, prefer the engine names.
+  const segLengthM = s => {
+    if (typeof s.lengthMeters === 'number' && isFinite(s.lengthMeters)) return s.lengthMeters;
+    if (typeof s.realMeters === 'number' && isFinite(s.realMeters)) return s.realMeters;
+    return 0;
+  };
+  const segDrawingM = s => {
+    if (typeof s.drawingLengthMeters === 'number' && isFinite(s.drawingLengthMeters)) return s.drawingLengthMeters;
+    if (typeof s.drawingMeters === 'number' && isFinite(s.drawingMeters)) return s.drawingMeters;
+    return segLengthM(s) / scaleRatio;
+  };
+
   // 1. Cumulative Running Coordinates (e.g. 0 1200 3000 3900 5400)
   if (chainOutputMode === 'cumulative') {
     const runningCoords = [0];
@@ -385,7 +399,7 @@ export function formatCadChain(calculatedChain, options = {}) {
 
     activeSegments.forEach(s => {
       if (s.dimensionType !== 'reference') {
-        runningMeters += s.realMeters;
+        runningMeters += segLengthM(s);
         runningCoords.push(targetValue === 'drawing' ? runningMeters / scaleRatio : runningMeters);
       }
     });
@@ -399,14 +413,14 @@ export function formatCadChain(calculatedChain, options = {}) {
   if (chainOutputMode === 'table' || chainOutputMode === 'schedule') {
     const header = ['#', 'Segment Name', `Start (${unit})`, `End (${unit})`, `Length (${unit})`, `Drawing @ 1:${scaleRatio}`, 'Type'].join('\t');
     const rows = activeSegments.map((s, idx) => {
-      const lenM = targetValue === 'drawing' ? s.realMeters / scaleRatio : s.realMeters;
+      const lenM = targetValue === 'drawing' ? segLengthM(s) / scaleRatio : segLengthM(s);
       const startM = targetValue === 'drawing' ? s.startMeters / scaleRatio : s.startMeters;
       const endM = targetValue === 'drawing' ? s.endMeters / scaleRatio : s.endMeters;
 
       const startStr = formatCadValue(startM, { unit, precision, suffix: 'none' });
       const endStr = formatCadValue(endM, { unit, precision, suffix: 'none' });
       const lenStr = formatCadValue(lenM, { unit, precision, suffix: 'none' });
-      const drawStr = formatCadValue(s.drawingMeters, { unit, precision, suffix: 'none' });
+      const drawStr = formatCadValue(segDrawingM(s), { unit, precision, suffix: 'none' });
       const typeStr = (s.dimensionType || 'segment').toUpperCase();
 
       return [
@@ -428,7 +442,7 @@ export function formatCadChain(calculatedChain, options = {}) {
 
   // 3. Segment Lengths (Default)
   const segmentValues = activeSegments.map(s => {
-    const valM = targetValue === 'drawing' ? s.realMeters / scaleRatio : s.realMeters;
+    const valM = targetValue === 'drawing' ? segLengthM(s) / scaleRatio : segLengthM(s);
     return formatCadValue(valM, { unit, precision, suffix });
   });
 
@@ -444,11 +458,17 @@ export function formatCadChain(calculatedChain, options = {}) {
  * @returns {{ text: string, count: number }}
  */
 export function formatCadMultiScale(calculatedMultiScale, options = {}) {
-  if (!calculatedMultiScale || !Array.isArray(calculatedMultiScale.results) || calculatedMultiScale.results.length === 0) {
+  // compareAcrossScales() emits its per-scale rows as `.scales`; accept the
+  // `.results` alias too so hand-built/mocked results keep working.
+  const scaleRows = calculatedMultiScale && Array.isArray(calculatedMultiScale.scales)
+    ? calculatedMultiScale.scales
+    : (calculatedMultiScale && Array.isArray(calculatedMultiScale.results) ? calculatedMultiScale.results : null);
+
+  if (!scaleRows || scaleRows.length === 0) {
     return { text: '', count: 0 };
   }
 
-  const unit = options.unit || calculatedMultiScale.input.displayUnit || 'mm';
+  const unit = options.unit || (calculatedMultiScale.input && calculatedMultiScale.input.displayUnit) || 'mm';
   const precision = typeof options.precision === 'number' ? options.precision : 2;
   const suffix = options.suffix || 'none';
   const delimiter = options.delimiter || 'space';
@@ -456,27 +476,30 @@ export function formatCadMultiScale(calculatedMultiScale, options = {}) {
 
   if (format === 'spreadsheet' || delimiter === 'tsv') {
     const header = ['Scale', 'Ratio', `Drawing Length (${unit})`, 'Paper Usable Check'].join('\t');
-    const rows = calculatedMultiScale.results.map(r => {
+    const rows = scaleRows.map(r => {
       const drawStr = formatCadValue(r.drawingMeters, { unit, precision, suffix: 'none' });
+      const fitsStr = r.fitsPaper === true
+        ? `Fits ${r.paperSize || 'paper'}`
+        : (r.fitsPaper === false ? 'Exceeds paper' : '—');
       return [
-        r.label,
+        r.label || `1:${r.ratio}`,
         `1:${r.ratio}`,
         drawStr,
-        r.fitsPaper ? `Fits ${r.paperSize}` : 'Exceeds paper'
+        fitsStr
       ].join('\t');
     });
     return {
       text: [header, ...rows].join('\n'),
-      count: calculatedMultiScale.results.length
+      count: scaleRows.length
     };
   }
 
-  const drawingValues = calculatedMultiScale.results.map(r => {
+  const drawingValues = scaleRows.map(r => {
     return formatCadValue(r.drawingMeters, { unit, precision, suffix });
   });
 
   const text = delimiter === 'newline' ? drawingValues.join('\n') : (delimiter === 'comma' ? drawingValues.join(', ') : drawingValues.join(' '));
-  return { text, count: calculatedMultiScale.results.length };
+  return { text, count: drawingValues.length };
 }
 
 /**

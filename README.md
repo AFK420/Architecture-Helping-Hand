@@ -3,7 +3,7 @@
 > **Professional Architectural Scale, Furniture Sizing & Multi-Unit Calculation Studio**  
 > *A high-precision, zero-dependency, tactile architectural conversion studio built for architects, interior designers, urban planners, physical model makers, and design students.*
 
-[![Tests](https://img.shields.io/badge/Tests-1329%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-1476%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-3--Tier%20Core%20%7C%20Frozen-10b981?style=flat-square)](ENGINEERING_RULES.md)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Vanilla)-f59e0b?style=flat-square)](package.json)
 [![License](https://img.shields.io/badge/License-MIT-6366f1?style=flat-square)](package.json)
@@ -30,6 +30,7 @@
    - [12. CAD Clipboard & Drafting Handoff](#12-cad-clipboard--drafting-handoff)
    - [13. Batch CAD Conversion (Bulk Scaling & Unit Engine)](#13-batch-cad-conversion-bulk-scaling--unit-engine)
    - [14. Quick Dimension Strip (Micro-Tool Glance Instrument)](#14-quick-dimension-strip-micro-tool-glance-instrument)
+   - [15. CAD Handoff — Rhino · AutoCAD · SketchUp Helpers (Mode 13)](#15-cad-handoff--rhino--autocad--sketchup-helpers-mode-13)
 5. [📐 Architectural Scale Presets (All 28 Presets)](#-architectural-scale-presets-all-28-presets)
 6. [🛋️ Architectural Furniture & Fixtures Database (179 Items Across 9 Domains)](#️-architectural-furniture--fixtures-database-179-items-across-9-domains)
 7. [📏 Supported Measurement Units](#-supported-measurement-units)
@@ -141,7 +142,7 @@ The codebase has evolved through rigorous engineering, auditing, hardening, and 
 This repository serves as:
 1. **An Open-Source Reference Studio**: A tactile, zero-friction architectural scaling studio for architects, interior designers, landscape architects, students, and educators.
 2. **Zero-Dependency Architecture**: No React, no Vue, no webpack, no runtime `node_modules`. Anyone can clone the repository, double-click `index.html`, and use it immediately offline via `file:///`.
-3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **1,329 automated test assertions across 19 test suites** (authoritative count emitted by `npm test`).
+3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **1,476 automated test assertions across 20 test suites** (authoritative count emitted by `npm test`).
 4. **An Extensible Platform**: Prepared for future architectural geometry engines, CAD vector exports (SVG/DXF), and stair/ramp calculations.
 
 ---
@@ -236,6 +237,15 @@ This repository serves as:
 * **Common Unit Readouts**: Instant equivalents across Millimeters (`mm`), Centimeters (`cm`), Meters (`m`), Decimal Inches (`in`), and Architectural Feet-Inches (`ft-in`).
 * **Verified Standard Context**: Evaluates dimensions against physical building standards (doors, circulation, stairs, counters, ceiling heights) and returns explicit no-reference notices for unindexed values.
 * **1-Click Copy & Cross-Tool Handoffs**: Fast exports to clipboard (Real, Drawing, All Scales, CAD Numbers, TSV row) and direct transfers to Dimension Workspace, Multi-Scale, Chains, CAD Clipboard, and Journal.
+
+### 15. CAD Handoff — Rhino · AutoCAD · SketchUp Helpers (Mode 13)
+* **One Send-To Workflow for Every Tool**: A final handoff layer that turns the last valid result from any toolkit tool (Dimension Workspace, Expression, Multi-Scale, Chains, Batch CAD, Quick Dimension, or manual values) into a target-specific clipboard payload. Every source exposes a **🚀 Send to CAD** action; the Command Palette exposes `CAD Handoff (Rhino · AutoCAD · SketchUp)`.
+* **CAD Target Profiles**: Choose Rhino, AutoCAD, SketchUp, or Generic CAD. Each profile encodes output conventions (default unit, precision, suffix style) — e.g. plain decimals for Rhino/AutoCAD command prompts, unit-suffixed values for the SketchUp Value Control Box.
+* **Copy Formats**: Raw Numbers (one per line), Formatted Dimensions (with unit), Drawing Values (@ scale), named Schedule tables, TSV, and CSV. Advanced unit/precision/suffix controls are tucked into a collapsed section.
+* **Chain-Aware Outputs**: Dimension Chains hand off as segment lengths (`1200 / 1800 / 900 / 1500`), cumulative positions (`0 / 1200 / 3000 / 3900 / 5400`), pipe summaries (`1200 | 1800 | 900`), or full named schedules with start/end/length/drawing columns.
+* **Selection Semantics Preserved**: Workspace scope (all / selected / segments / references / allowances) and Batch row selection carry through to the payload; batch order and chain order are preserved and pinned by tests.
+* **Preview Before Copy**: The exact clipboard text is always visible in a read-only preview with a live summary (count → target • format • unit) before copying or exporting as `.txt`.
+* **Scope Note — Workflow Profiles, Not Integrations**: These are clipboard formatting conventions for fast manual pasting. Part 9 does **not** provide direct AutoCAD, Rhino, or SketchUp API/plugin integration, generates no proprietary command syntax, and never executes copied content.
 
 ---
 
@@ -399,6 +409,7 @@ $$\text{Area} = \frac{1}{2} \left| \sum_{i=1}^{n} (x_i y_{i+1} - x_{i+1} y_i) \r
 | <kbd>0</kbd> | Switch to **Dimension Chains** (Mode 10) |
 | <kbd>C</kbd> / <kbd>Ctrl+Shift+C</kbd> | Switch to **CAD Clipboard** (Mode 11) |
 | <kbd>B</kbd> | Switch to **Batch CAD Converter** (Mode 12) |
+| Command Palette (<kbd>Ctrl+K</kbd> → "CAD Handoff") / 🚀 **Send to CAD** buttons | Open **CAD Handoff** (Mode 13) — deliberately has no single-letter shortcut to avoid conflicts; reachable from Modes 7–12, Quick Dimension Strip, and the palette |
 | <kbd>Q</kbd> | Toggle **Quick Dimension Strip** (Micro-Tool) |
 | <kbd>H</kbd> | Toggle Calculation History Drawer |
 | <kbd>?</kbd> | Open Keyboard Shortcuts Modal |
@@ -423,7 +434,7 @@ python -m http.server 3500
 ### 3. Run Automated Test Suite
 ```bash
 npm test
-# Executes all 19 test suites (1,329 assertions, 100% passing).
+# Executes all 20 test suites (1,476 assertions, 100% passing)..
 # The runner emits the authoritative total assertion count on completion.
 ```
 
@@ -464,6 +475,7 @@ node scripts/build.js --check
   - ADA ramp slope & gradient calculator with intermediate landing requirements.
 * **Phase 5: CAD Vector Exports**:
   - Scaled SVG & DXF vector block export for AutoCAD, Rhino, Illustrator, and laser cutters.
+* **Note on Part 9 (CAD Handoff)**: Completed as clipboard workflow profiles (Mode 13). Direct AutoCAD / Rhino / SketchUp API or plugin integration remains out of scope by design.
 
 ---
 

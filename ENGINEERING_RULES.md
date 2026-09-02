@@ -128,6 +128,7 @@ $$\text{Scale Ratio} = \frac{\text{Real Measurement (Meters)}}{\text{Paper Measu
 * **Deterministic Bundler**: `node scripts/build.js` concatenates `src/` modules in manifest order into `js/app.js`.
 * **Bundle Check**: `node scripts/build.js --check` verifies that `js/app.js` is identical to the compiled `src/`.
 * **Bundle Verification (automatic, part of `npm test`)**: `tests/build-integrity.test.js` enforces three layers — (1) manifest coverage: every `src/**/*.js` file is registered, exactly once, dependency-first; (2) bundle content: the generated bundle contains the distinctive definitions of every module and is byte-identical to a fresh regeneration; (3) runtime smoke: the bundle boots end-to-end against a minimal mocked browser environment without unresolved references.
+* **Bundler Strip Contract**: `stripImportsAndExports` handles named imports/exports, default exports, and re-exports (`export { A } from './m.js'`). Modules using exotic syntax that the stripper cannot transform must not be added; keep src modules in the supported subset. Verified per-module by the build-integrity suite.
 * **Rule**: NEVER edit `js/app.js` manually.
 
 ### 6.1 How to Add a New Source Module Safely

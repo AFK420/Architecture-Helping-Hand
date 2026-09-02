@@ -202,6 +202,9 @@
           <button type="button" id="quick-dim-copy-cad-btn" class="result-action-btn" title="Copy clean CAD numbers">
             <span>Copy CAD</span>
           </button>
+          <button type="button" id="quick-dim-send-cad-handoff-btn" class="result-action-btn" title="Send to CAD Handoff (Mode 13)">
+            <span>🚀 Send to CAD</span>
+          </button>
           <button type="button" id="quick-dim-copy-matrix-btn" class="result-action-btn" title="Copy all scales breakdown">
             <span>Copy All Scales</span>
           </button>
@@ -362,6 +365,17 @@
         </svg>
         <span>Batch CAD</span>
         <span class="mode-key-hint">B</span>
+      </button>
+
+      <button class="mode-tab" data-mode="cad_handoff" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1" ry="1"></rect>
+          <rect x="14" y="3" width="7" height="7" rx="1" ry="1"></rect>
+          <rect x="14" y="14" width="7" height="7" rx="1" ry="1"></rect>
+          <rect x="3" y="14" width="7" height="7" rx="1" ry="1"></rect>
+        </svg>
+        <span>CAD Handoff</span>
+        <span class="mode-key-hint">⇧C</span>
       </button>
     </nav>
 
@@ -1599,6 +1613,10 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>
               <span>📋 CAD Clipboard</span>
             </button>
+            <button type="button" id="workspace-send-cad-handoff-btn" class="hist-btn" title="Send dimensions to CAD Handoff (Mode 13)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              <span>🚀 Send to CAD</span>
+            </button>
           </div>
           <div class="toolbar-right">
             <button type="button" id="workspace-clear-btn" class="hist-btn danger" title="Clear all dimensions in workspace">
@@ -1777,6 +1795,9 @@
               <button type="button" id="expression-cad-handoff-btn" class="result-action-btn" title="Open in CAD Clipboard (Mode 11)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>
                 <span>CAD Clipboard</span>
+              </button>
+              <button type="button" id="expression-send-cad-handoff-btn" class="result-action-btn" title="Send to CAD Handoff (Mode 13)">
+                <span>🚀 Send to CAD</span>
               </button>
             </div>
           </div>
@@ -2058,6 +2079,9 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>
                 <span>CAD Clipboard</span>
               </button>
+              <button type="button" id="multiscale-send-cad-handoff-btn" class="result-action-btn" title="Send to CAD Handoff (Mode 13)">
+                <span>🚀 Send to CAD</span>
+              </button>
             </div>
           </div>
         </div>
@@ -2301,6 +2325,9 @@
             <button type="button" id="chains-cad-handoff-btn" class="result-action-btn" title="Open in CAD Clipboard (Mode 11)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>
               <span>CAD Clipboard</span>
+            </button>
+            <button type="button" id="chains-send-cad-handoff-btn" class="result-action-btn" title="Send to CAD Handoff (Mode 13)">
+              <span>🚀 Send to CAD</span>
             </button>
           </div>
         </div>
@@ -2722,6 +2749,9 @@
             <button type="button" id="batch-open-cad-btn" class="result-action-btn" title="Open in CAD Clipboard (Mode 11)">
               <span>📋 CAD Clipboard</span>
             </button>
+            <button type="button" id="batch-send-cad-handoff-btn" class="result-action-btn" title="Send converted batch to CAD Handoff (Mode 13)">
+              <span>🚀 Send to CAD</span>
+            </button>
             <button type="button" id="batch-send-workspace-btn" class="result-action-btn" title="Add rows to Dimension Workspace">
               <span>📐 Add to Workspace</span>
             </button>
@@ -2734,6 +2764,200 @@
             <button type="button" id="batch-save-journal-btn" class="result-action-btn" title="Save batch summary to calculation journal">
               <span>📜 Save Journal</span>
             </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- MODE 13: CAD APPLICATION HELPERS (SEND-TO HANDOFF)      -->
+    <!-- ======================================================== -->
+    <section id="mode-view-cad_handoff" class="tool-mode-view" aria-labelledby="heading-cad-handoff" hidden>
+      <div class="tool-layout">
+        <!-- Left Column: Source / Target / Format Configuration -->
+        <div class="archi-card main-calc-card">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <div class="card-header">
+            <div>
+              <span class="card-tag">MODE 13 • CAD APPLICATION HELPERS</span>
+              <h2 id="heading-cad-handoff" class="card-title">CAD Handoff (Rhino · AutoCAD · SketchUp)</h2>
+            </div>
+            <div class="status-indicator">
+              <span id="handoff-state-badge" class="badge-status-ready">READY</span>
+            </div>
+          </div>
+
+          <p class="tool-description">
+            Send dimensions from any toolkit tool into Rhino, AutoCAD, or SketchUp as clean clipboard payloads.
+            Workflow profiles only — these are not official product integrations. Preview the exact text before copying.
+          </p>
+
+          <!-- Source Selection -->
+          <div class="input-row-group" style="margin-bottom: 1.25rem;">
+            <label for="handoff-source-select" class="input-label">Source</label>
+            <select id="handoff-source-select" class="calc-select" aria-describedby="handoff-source-hint">
+              <option value="workspace" selected>📐 Dimension Workspace</option>
+              <option value="expression">🧮 Dimension Expression</option>
+              <option value="multiscale">📊 Multi-Scale Comparison</option>
+              <option value="chain">🔗 Dimension Chains</option>
+              <option value="batch">⚡ Batch CAD Conversion</option>
+              <option value="quick">✨ Quick Dimension</option>
+              <option value="manual">✍️ Manual Values</option>
+            </select>
+            <span id="handoff-source-hint" class="field-hint" style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 0.3rem;">
+              Values come from the tool's last valid calculation — run the tool first.
+            </span>
+          </div>
+
+          <!-- Manual input (only for manual source) -->
+          <div id="handoff-manual-group" class="input-row-group" style="display: none; margin-bottom: 1.25rem;">
+            <label for="handoff-manual-input" class="input-label" style="font-size: 0.75rem;">Manual Dimension Sequence (Space / Comma / Plus delimited)</label>
+            <input type="text" id="handoff-manual-input" class="text-input" placeholder="e.g. 2400 1800 900 1500 or 2.4m, 1.8m" style="font-family: var(--font-family-mono); font-weight: 600;" />
+          </div>
+
+          <!-- Target Selection -->
+          <div class="input-row-group" style="margin-bottom: 1.25rem;">
+            <label for="handoff-target-select" class="input-label">CAD Target</label>
+            <div id="handoff-target-pills" class="cad-source-pills" role="radiogroup" aria-label="CAD target application" style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+              <button type="button" class="cad-source-pill active" data-target="rhino" role="radio" aria-checked="false">🦏 Rhino</button>
+              <button type="button" class="cad-source-pill" data-target="autocad" role="radio" aria-checked="false">🅰 AutoCAD</button>
+              <button type="button" class="cad-source-pill" data-target="sketchup" role="radio" aria-checked="false">🔺 SketchUp</button>
+              <button type="button" class="cad-source-pill" data-target="generic" role="radio" aria-checked="false">⚙ Generic CAD</button>
+            </div>
+            <span id="handoff-target-description" class="field-hint" style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 0.35rem;"></span>
+          </div>
+
+          <!-- Copy Format -->
+          <div class="input-row-group" style="margin-bottom: 1.25rem;">
+            <label for="handoff-format-select" class="input-label">Copy Format</label>
+            <select id="handoff-format-select" class="calc-select">
+              <option value="raw" selected>Raw Numbers (one per line)</option>
+              <option value="formatted">Formatted Dimensions (with unit)</option>
+              <option value="drawing">Drawing Values (@ scale)</option>
+              <option value="schedule">Schedule (named table)</option>
+              <option value="tsv">TSV</option>
+              <option value="csv">CSV</option>
+            </select>
+          </div>
+
+          <!-- Chain layout (only for chain source) -->
+          <div id="handoff-chain-layout-group" class="input-row-group" style="display: none; margin-bottom: 1.25rem;">
+            <label for="handoff-chain-layout-select" class="input-label">Chain Output</label>
+            <select id="handoff-chain-layout-select" class="calc-select">
+              <option value="segments" selected>Segment Lengths (1200 / 1800 / 900)</option>
+              <option value="cumulative">Cumulative Positions (0 / 1200 / 3000…)</option>
+              <option value="pipe">Pipe Summary (1200 | 1800 | 900)</option>
+              <option value="schedule">Named Schedule (start/end/length)</option>
+            </select>
+          </div>
+
+          <!-- Workspace scope (only for workspace source) -->
+          <div id="handoff-workspace-scope-group" class="input-row-group" style="display: none; margin-bottom: 1.25rem;">
+            <label for="handoff-workspace-scope-select" class="input-label">Workspace Selection</label>
+            <select id="handoff-workspace-scope-select" class="calc-select">
+              <option value="all" selected>All Active</option>
+              <option value="selected">Selected Rows Only</option>
+              <option value="segments">Segments Only (SEG)</option>
+              <option value="references">References Only (REF)</option>
+              <option value="allowances">Allowances Only (ALW)</option>
+            </select>
+          </div>
+
+          <!-- Batch scope (only for batch source) -->
+          <div id="handoff-batch-scope-group" class="input-row-group" style="display: none; margin-bottom: 1.25rem;">
+            <label for="handoff-batch-scope-select" class="input-label">Batch Rows</label>
+            <select id="handoff-batch-scope-select" class="calc-select">
+              <option value="all" selected>All Valid Rows (batch order preserved)</option>
+              <option value="selected">Selected Rows Only</option>
+            </select>
+          </div>
+
+          <!-- Advanced Formatting Controls (collapsed by default) -->
+          <details id="handoff-advanced-details" style="margin-bottom: 1.25rem; border: 1px solid var(--border-color-light); border-radius: 6px; padding: 0.6rem 0.75rem; background: var(--bg-card-header);">
+            <summary style="cursor: pointer; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.04em;">Advanced Formatting</summary>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin-top: 0.75rem;">
+              <div class="input-group">
+                <label for="handoff-unit-select" class="input-label" style="font-size: 0.75rem;">Unit</label>
+                <select id="handoff-unit-select" class="calc-select" style="font-size: 0.82rem;">
+                  <option value="mm" selected>Millimeters (mm)</option>
+                  <option value="cm">Centimeters (cm)</option>
+                  <option value="m">Meters (m)</option>
+                  <option value="in">Inches (in)</option>
+                  <option value="ft">Feet (ft)</option>
+                  <option value="ft-in">Feet-Inches (7'-6")</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="handoff-precision-select" class="input-label" style="font-size: 0.75rem;">Precision</label>
+                <select id="handoff-precision-select" class="calc-select" style="font-size: 0.82rem;">
+                  <option value="0">0 decimals</option>
+                  <option value="1">1 decimal</option>
+                  <option value="2">2 decimals</option>
+                  <option value="3">3 decimals</option>
+                  <option value="4">4 decimals</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="handoff-suffix-select" class="input-label" style="font-size: 0.75rem;">Unit Suffix</label>
+                <select id="handoff-suffix-select" class="calc-select" style="font-size: 0.82rem;">
+                  <option value="target" selected>Target default</option>
+                  <option value="none">None (raw)</option>
+                  <option value="symbol">Symbol (2400 mm)</option>
+                  <option value="full">Full Name (2400 Millimeters)</option>
+                </select>
+              </div>
+            </div>
+          </details>
+
+          <!-- Refresh -->
+          <div class="calc-actions-row" style="margin-top: 1rem;">
+            <button type="button" id="btn-run-cad-handoff" class="btn-calc-primary" style="width: 100%;">
+              <span>⚡ REFRESH PREVIEW</span>
+              <kbd class="kbd-badge">↵</kbd>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right Column: Preview & Copy -->
+        <div class="archi-card result-panel" id="handoff-result-panel" data-state="ready">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <div class="result-header">
+            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+              <span class="result-label">PAYLOAD PREVIEW</span>
+              <span id="handoff-summary-badge" class="unit-system-tag" style="font-size: 0.7rem;">No values</span>
+            </div>
+          </div>
+
+          <div class="cad-preview-container" style="margin: 0.75rem 0;">
+            <textarea id="handoff-preview-box" class="cad-preview-textarea" readonly spellcheck="false" placeholder="Exact clipboard text will appear here..." aria-label="CAD payload preview (read-only)" style="width: 100%; min-height: 220px; font-family: var(--font-family-mono); font-size: 0.88rem; line-height: 1.5; padding: 0.85rem; background: var(--bg-card-header); color: var(--accent-primary); border: 1px solid var(--border-color); border-radius: 6px; resize: vertical; tab-size: 4;"></textarea>
+          </div>
+
+          <div class="cad-action-buttons" style="display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.75rem;">
+            <button type="button" id="btn-handoff-copy" class="btn-calc-action primary" style="justify-content: center; padding: 0.85rem 1rem; font-size: 0.95rem; font-weight: 700; background: var(--accent-primary); color: #0f141c;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+              <span>📋 COPY FOR <span id="handoff-copy-target-label">RHINO</span></span>
+            </button>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.5rem;">
+              <button type="button" id="btn-handoff-export-txt" class="result-action-btn" title="Download payload as .txt file">
+                <span>Export .txt</span>
+              </button>
+              <button type="button" id="btn-handoff-open-cad-clipboard" class="result-action-btn" title="Open Mode 11 CAD Clipboard with the same source">
+                <span>Open CAD Clipboard</span>
+              </button>
+            </div>
+
+            <p class="field-hint" style="font-size: 0.72rem; color: var(--text-muted); margin: 0.25rem 0 0;">
+              Workflow profiles are conventions for pasting values — not official Rhino, AutoCAD, or SketchUp integrations. Always verify pasted values in the target application.
+            </p>
           </div>
         </div>
       </div>
@@ -2851,6 +3075,10 @@
         <div class="shortcut-row">
           <span>Open Batch CAD Converter</span>
           <span class="kbd-badge">B</span>
+        </div>
+        <div class="shortcut-row">
+          <span>CAD Handoff (Rhino · AutoCAD · SketchUp)</span>
+          <span class="kbd-badge">Ctrl+K → "CAD Handoff" / 🚀 Send to CAD buttons</span>
         </div>
         <div class="shortcut-row">
           <span>Quick Dimension Strip</span>

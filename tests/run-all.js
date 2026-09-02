@@ -24,6 +24,7 @@ const testFiles = [
   'cad-clipboard.test.js',
   'batch-cad.test.js',
   'quick-dimension.test.js',
+  'cad-targets.test.js',
   'services.test.js',
   'commands.test.js',
   'data-integrity.test.js',

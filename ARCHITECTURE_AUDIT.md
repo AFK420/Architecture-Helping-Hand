@@ -2,7 +2,7 @@
 
 **Date**: September 2, 2026  
 **Repository**: [https://github.com/AFK420/Architecture-Helping-Hand.git](https://github.com/AFK420/Architecture-Helping-Hand.git)  
-**Status**: Verified & Hardened (Post Build-Pipeline Repair — 1,329 Assertions, 19 Suites)  
+**Status**: Verified & Hardened (Post Build-Pipeline Repair — 1,476 Assertions, 20 Suites)  
 
 ---
 
@@ -55,7 +55,8 @@ Architecture-Helping-Hand/
 │   │   ├── multi-scale.js         # Multi-scale comparison engine (Part 4)
 │   │   ├── dimension-chains.js    # Ordered additive dimension chain engine (Part 5)
 │   │   ├── batch-cad.js           # Batch CAD conversion engine (Part 7)
-│   │   └── quick-dimension.js     # Quick Dimension Strip engine (Part 8)
+│   │   ├── quick-dimension.js     # Quick Dimension Strip engine (Part 8)
+│   │   └── cad-targets.js         # CAD target profiles & send-to handoff payload builder (Part 9)
 │   ├── services/
 │   │   ├── storage.js             # Safe LocalStorage wrapper with memory fallback
 │   │   ├── history.js             # Calculation history manager with JSON validation & CSV/Markdown export
@@ -71,6 +72,7 @@ Architecture-Helping-Hand/
 │   └── app.js                     # Standalone browser bundle (compatible with file:/// and http:// protocols)
 └── tests/
     ├── build-integrity.test.js    # Manifest coverage, bundle content & runtime smoke verification (31 tests)
+    ├── cad-targets.test.js        # CAD target profiles, all-source handoff payloads, order/selection/precision (106 tests)
     ├── ui-contracts.test.js       # Full DOM ID verification, Run buttons presence & bundle cleanliness (398 tests)
     ├── calculator.test.js         # Mathematical scaling, round-trip, boundary & error tests (40 tests)
     ├── geometry.test.js           # Geometry engine: Rectangle, Circle, Triangle, Shoelace Polygon tests (40 tests)
@@ -134,11 +136,12 @@ Scaling formulas operate strictly on these normalized values:
 
 ## 4. Automated Testing & Verification Matrix
 
-The test suite consists of **19 automated test suites** containing **1,329 exact assertions**, all passing with zero failures. The authoritative total is emitted by `npm test` on every run — documentation should quote that output rather than hard-coded numbers.
+The test suite consists of **20 automated test suites** containing **1,476 exact assertions**, all passing with zero failures. The authoritative total is emitted by `npm test` on every run — documentation should quote that output rather than hard-coded numbers.
 
 | Test Suite File | Focus Area | Assertions | Result |
 | :--- | :--- | :---: | :---: |
 | `tests/ui-contracts.test.js` | Full DOM ID verification, mode switching targets, Run buttons presence, bundle cleanliness & zero-syntax error parsing | 398 | ✅ PASS |
+| `tests/cad-targets.test.js` | Part 9 CAD target profiles, all-source handoff payloads with real engine outputs, order/selection/precision pins | 106 | ✅ PASS |
 | `tests/commands.test.js` | Command registry: registration, execution, categories, favorites, dynamic commands | 178 | ✅ PASS |
 | `tests/dimension-workspace.test.js` | Dimension Workspace entries, groups, serialization, persistence | 103 | ✅ PASS |
 | `tests/dimension-expression.test.js` | Expression parser determinism, validation, error codes, scale integration | 79 | ✅ PASS |
@@ -157,7 +160,7 @@ The test suite consists of **19 automated test suites** containing **1,329 exact
 | `tests/units.test.js` | Metric (mm, cm, dm, m, km), imperial (in, ft, yd, mi), area & volume factors, round-trips, strict invalid unit rejection | 26 | ✅ PASS |
 | `tests/formatter.test.js` | Decimal precision rounding, epsilon stabilization, trailing zero elimination, scientific notation, feet-inches notation | 12 | ✅ PASS |
 | `tests/data-integrity.test.js`| 28 scale presets uniqueness & ratio validity, 179 furniture records positive dimensions & unique IDs, reference ranges continuity | 9 | ✅ PASS |
-| **Total** | **19 Comprehensive Test Suites** | **1,329 Assertions** | **100% Passing (0 Failures)** |
+| **Total** | **20 Comprehensive Test Suites** | **1,476 Assertions** | **100% Passing (0 Failures)** |
 
 ---
 
@@ -171,4 +174,4 @@ The application is verified to run out of the box in modern web browsers under b
 
 ## 6. Readiness for Feature Development
 
-The architectural foundation is verified, fully tested, and free of formula duplication. The build pipeline is guarded end-to-end (manifest → bundle → runtime). The codebase is ready for the next feature phase (Part 9 — Rhino/AutoCAD/SketchUp helpers) under the documented build contract in Section 0.
+The architectural foundation is verified, fully tested, and free of formula duplication. The build pipeline is guarded end-to-end (manifest → bundle → runtime). The Daily Architect Toolkit is complete through Part 9 (CAD Application Helpers — Rhino/AutoCAD/SketchUp handoff via `src/core/cad-targets.js` and Mode 13). These are clipboard workflow profiles, not official product integrations. The codebase is ready for the next phase under the documented build contract in Section 0.

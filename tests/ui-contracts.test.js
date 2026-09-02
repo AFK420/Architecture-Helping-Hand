@@ -34,7 +34,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
 // 1. Verify Mode Navigation Targets in HTML
 {
-  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad'];
+  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff'];
   
   for (const mode of expectedModes) {
     const hasTab = htmlContent.includes(`data-mode="${mode}"`);
@@ -377,6 +377,39 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'batch-compare-multiscale-btn',
     'batch-create-chain-btn',
     'batch-save-journal-btn',
+    'batch-send-cad-handoff-btn',
+    // Part 9: Mode 13 CAD Handoff
+    'handoff-source-select',
+    'handoff-source-hint',
+    'handoff-manual-group',
+    'handoff-manual-input',
+    'handoff-target-pills',
+    'handoff-target-description',
+    'handoff-format-select',
+    'handoff-chain-layout-group',
+    'handoff-chain-layout-select',
+    'handoff-workspace-scope-group',
+    'handoff-workspace-scope-select',
+    'handoff-batch-scope-group',
+    'handoff-batch-scope-select',
+    'handoff-advanced-details',
+    'handoff-unit-select',
+    'handoff-precision-select',
+    'handoff-suffix-select',
+    'btn-run-cad-handoff',
+    'handoff-result-panel',
+    'handoff-state-badge',
+    'handoff-summary-badge',
+    'handoff-preview-box',
+    'btn-handoff-copy',
+    'handoff-copy-target-label',
+    'btn-handoff-export-txt',
+    'btn-handoff-open-cad-clipboard',
+    'workspace-send-cad-handoff-btn',
+    'expression-send-cad-handoff-btn',
+    'multiscale-send-cad-handoff-btn',
+    'chains-send-cad-handoff-btn',
+    'quick-dim-send-cad-handoff-btn',
 
     // Quick Dimension Strip IDs
     'quick-dimension-strip',
@@ -458,6 +491,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'btn-run-chains',
     'btn-run-cad-clipboard',
     'btn-run-batch-cad',
+    'btn-run-cad-handoff',
     'btn-run-quick-dim'
   ];
 
