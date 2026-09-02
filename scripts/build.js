@@ -46,6 +46,7 @@ export const BUNDLE_MODULES = [
   { name: 'BatchCad', file: path.join(srcDir, 'core', 'batch-cad.js') },
   { name: 'QuickDimension', file: path.join(srcDir, 'core', 'quick-dimension.js') },
   { name: 'CadTargets', file: path.join(srcDir, 'core', 'cad-targets.js') },
+  { name: 'Project', file: path.join(srcDir, 'core', 'project.js') },
 
   // --- Services ---
   { name: 'Storage', file: path.join(srcDir, 'services', 'storage.js') },
