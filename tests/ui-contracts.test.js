@@ -34,7 +34,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
 // 1. Verify Mode Navigation Targets in HTML
 {
-  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff', 'stairs'];
+  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff', 'stairs', 'ramps'];
   
   for (const mode of expectedModes) {
     const hasTab = htmlContent.includes(`data-mode="${mode}"`);
@@ -450,6 +450,42 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'stairs-send-workspace-btn',
     'stairs-save-journal-btn',
     'stairs-save-project-btn',
+    // Ramp Calculator (Mode 15)
+    'ramps-mode-select',
+    'ramps-rise-group',
+    'ramps-rise',
+    'ramps-slope-group',
+    'ramps-slope',
+    'ramps-run-group',
+    'ramps-run',
+    'ramps-error-msg',
+    'ramps-ref-target',
+    'ramps-ref-min',
+    'ramps-ref-max',
+    'ramps-reference-note',
+    'ramps-result-panel',
+    'ramps-state-badge',
+    'ramps-summary-badge',
+    'ramps-hero-val',
+    'ramps-hero-label',
+    'ramps-rise-val',
+    'ramps-run-val',
+    'ramps-slope-val',
+    'ramps-ratio-val',
+    'ramps-angle-val',
+    'ramps-flight-val',
+    'ramps-svg-wrap',
+    'ramps-run-analysis',
+    'ramps-run-analysis-body',
+    'ramps-ref-status',
+    'ramps-ref-detail',
+    'ramps-targets-body',
+    'ramps-copy-result-btn',
+    'ramps-copy-schedule-btn',
+    'ramps-send-cad-btn',
+    'ramps-send-workspace-btn',
+    'ramps-save-journal-btn',
+    'ramps-save-project-btn',
 
     // Quick Dimension Strip IDs
     'quick-dimension-strip',
@@ -533,6 +569,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'btn-run-batch-cad',
     'btn-run-cad-handoff',
     'btn-run-stairs',
+    'btn-run-ramps',
     'btn-run-quick-dim'
   ];
 

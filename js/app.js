@@ -6984,6 +6984,445 @@ function generateStairSVG(result, options = {}) {
 
 
   // =========================================================================
+  // MODULE: Ramps
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Ramp Calculator Core
+ * Architectural Tools Phase: Ramps (straight ramp, no landings).
+ *
+ * Pure, deterministic, zero-DOM ramp slope/geometry engine.
+ * One canonical geometry source feeds all three slope representations
+ * (percentage, ratio, angle) so they can never disagree.
+ *
+ * SCOPE & SEMANTICS (documented contract, see RAMPS.md):
+ *  - Educational/design calculation tool. Reference values are configurable
+ *    heuristics with explicit labels — NOT jurisdiction-specific code
+ *    compliance. Nothing here emits "code compliant" language.
+ *  - RATIO CONVENTION: 1 : (run / rise) — "1 unit of rise per X units of
+ *    run". Ratio noise is normalized against the existing formatter's
+ *    epsilon-stabilized rounding; non-integer ratios are shown as controlled
+ *    decimals, never as fabricated exact integers.
+ *  - NEGATIVE SLOPE: rejected. This is an ascent ramp calculator; a
+ *    downhill/terrain mode does not exist yet. Documented decision.
+ *  - The three representations come from ONE geometry block:
+ *      slopePercent = rise / run × 100
+ *      ratio        = run / rise        (displayed as 1 : ratio)
+ *      angleDegrees = atan2(rise, run) × 180/π
+ *
+ * Future Slopes tool note: percentage/ratio/angle conversion lives in
+ * slopeConversions() and is deliberately generic (rise+run based) so a
+ * future general Slope tool can reuse it without this module growing
+ * speculative terrain/grading features.
+ */
+
+
+
+
+
+/**
+ * Configurable reference defaults. Labels are explicit: these are
+ * educational/design heuristics, NOT universal legal requirements.
+ * The well-known 1:12 (8.33%) accessibility figure is included as a
+ * study reference because it is architecturally pervasive; the UI and
+ * this module always present it as "verify applicable local requirements".
+ */
+const RAMP_REFERENCE_DEFAULTS = Object.freeze({
+  slope: Object.freeze({
+    label: 'Educational Reference (configurable)',
+    targetRatio: 12,           // 1:12 → 8.33%
+    minRatio: 8,               // 1:8  → 12.5% (steeper bound of the study band)
+    maxRatio: 20,              // 1:20 → 5%    (shallower bound)
+    note: '1:12 (8.33%) is the widely taught accessibility reference. Treat it as a study value — verify applicable local requirements for real projects.'
+  })
+});
+
+/** Common study targets for the comparison table. Deterministic, fixed order. */
+const RAMP_TARGET_SLOPES = Object.freeze([
+  Object.freeze({ percent: 5, note: 'Gentle — long ramps, site approaches' }),
+  Object.freeze({ percent: 8.33, note: '1:12 — the widely taught accessibility reference' }),
+  Object.freeze({ percent: 10, note: 'Steeper — tight sites, short rises' }),
+  Object.freeze({ percent: 12.5, note: '1:8 — upper bound of the study band' }),
+  Object.freeze({ percent: 16.67, note: '1:6 — very steep; study/wheelchair-limit illustration' }),
+  Object.freeze({ percent: 20, note: '1:5 — beyond typical ramp use; spatial-cost illustration' })
+]);
+
+/** Input mode identifiers. */
+const RAMP_INPUT_MODES = Object.freeze({
+  RISE_DESIRED_SLOPE: 'rise_desired_slope',
+  RISE_AVAILABLE_RUN: 'rise_available_run',
+  RUN_DESIRED_SLOPE: 'run_desired_slope',
+  RISE_RUN_DIRECT: 'rise_run_direct'
+});
+
+/** Structured validation error codes (stable contract for UI/tests). */
+const RAMP_ERROR_CODES = Object.freeze({
+  INVALID_RISE: 'INVALID_RISE',
+  INVALID_RUN: 'INVALID_RUN',
+  INVALID_SLOPE: 'INVALID_SLOPE',
+  NEGATIVE_SLOPE: 'NEGATIVE_SLOPE',
+  INVALID_UNIT: 'INVALID_UNIT',
+  MISSING_INPUT: 'MISSING_INPUT',
+  NON_FINITE_RESULT: 'NON_FINITE_RESULT'
+});
+
+/** Practical bound: a single straight ramp run longer than 200 m is out of scope. */
+const MAX_RUN_METERS = 200;
+
+/** Hard bound on the slope percentage accepted as a "ramp" for study purposes. */
+const MAX_SLOPE_PERCENT = 100;
+
+/**
+ * The single canonical slope-conversion source. Given rise and run in meters
+ * it derives every representation. All modes funnel through here.
+ * @private
+ */
+function slopeConversions(riseMeters, runMeters) {
+  const slopePercent = (riseMeters / runMeters) * 100;
+  const ratioValue = runMeters / riseMeters;
+  const angleRadians = Math.atan2(riseMeters, runMeters);
+  const angleDegrees = angleRadians * (180 / Math.PI);
+  return { slopePercent, ratioValue, angleRadians, angleDegrees };
+}
+
+/**
+ * Validates and converts a length input to canonical meters.
+ * Accepts a number (already meters) or a { value, unitKey } pair.
+ * @private
+ */
+function requireLengthMeters(input, paramName, errorCode) {
+  if (input && typeof input === 'object' && !Array.isArray(input)) {
+    const unitDef = requireUnit(input.unitKey, 'length');
+    if (typeof input.value !== 'number' || !isFinite(input.value) || input.value <= 0) {
+      const err = new Error(`${paramName} must be a finite number greater than zero.`);
+      err.code = errorCode;
+      throw err;
+    }
+    return input.value * unitDef.toMeters;
+  }
+  if (typeof input !== 'number' || !isFinite(input) || input <= 0) {
+    const err = new Error(`${paramName} must be a finite number greater than zero.`);
+    err.code = errorCode;
+    throw err;
+  }
+  return input;
+}
+
+/**
+ * Validates a slope-percentage input: must be finite, > 0, and within the
+ * supported ramp band. Negative slope is explicitly rejected (documented
+ * decision: no downhill/terrain mode in the standard ramp calculator).
+ * @private
+ */
+function requireSlopePercent(input) {
+  if (typeof input !== 'number' || isNaN(input) || !isFinite(input)) {
+    const err = new Error('Slope must be a finite number greater than zero.');
+    err.code = RAMP_ERROR_CODES.INVALID_SLOPE;
+    throw err;
+  }
+  if (input < 0) {
+    const err = new Error('Negative slope is not supported — the ramp calculator models ascent ramps only.');
+    err.code = RAMP_ERROR_CODES.NEGATIVE_SLOPE;
+    throw err;
+  }
+  if (input === 0) {
+    const err = new Error('Slope must be greater than zero.');
+    err.code = RAMP_ERROR_CODES.INVALID_SLOPE;
+    throw err;
+  }
+  if (input > MAX_SLOPE_PERCENT) {
+    const err = new Error(`Slope exceeds the supported ramp study band (max ${MAX_SLOPE_PERCENT}%).`);
+    err.code = RAMP_ERROR_CODES.INVALID_SLOPE;
+    throw err;
+  }
+  return input;
+}
+
+/** Normalizes reference overrides over RAMP_REFERENCE_DEFAULTS. */
+function resolveRampReferences(overrides = {}) {
+  const base = RAMP_REFERENCE_DEFAULTS.slope;
+  const o = overrides && typeof overrides === 'object' ? overrides.slope : null;
+  return Object.freeze({
+    slope: Object.freeze({
+      label: o && typeof o.label === 'string' ? o.label : base.label,
+      targetRatio: o && typeof o.targetRatio === 'number' && isFinite(o.targetRatio) && o.targetRatio > 0 ? o.targetRatio : base.targetRatio,
+      minRatio: o && typeof o.minRatio === 'number' && isFinite(o.minRatio) && o.minRatio > 0 ? o.minRatio : base.minRatio,
+      maxRatio: o && typeof o.maxRatio === 'number' && isFinite(o.maxRatio) && o.maxRatio > 0 ? o.maxRatio : base.maxRatio,
+      note: o && typeof o.note === 'string' ? o.note : base.note
+    })
+  });
+}
+
+/**
+ * Classifies a computed ratio against the configured study band.
+ * @returns {'within'|'steeper'|'shallower'}
+ */
+function evaluateRatioStatus(ratioValue, reference) {
+  if (ratioValue < reference.minRatio) return 'steeper';
+  if (ratioValue > reference.maxRatio) return 'shallower';
+  return 'within';
+}
+
+/** Formats canonical meters in the requested display unit (reuses app formatter). */
+function fmt(meters, displayUnitKey, precision) {
+  const unitDef = requireUnit(displayUnitKey, 'length');
+  if (displayUnitKey === 'ft-in') {
+    return formatFeetInches(meters / UNITS.in.toMeters);
+  }
+  return `${formatNumber(meters / unitDef.toMeters, precision)} ${unitDef.symbol}`;
+}
+
+/**
+ * Formats a ratio value as a stable human-readable "1 : X" string.
+ * Integer ratios display exactly (1 : 12); non-integer ratios show two
+ * controlled decimals (1 : 8.33) or three for values below 1.05 — no
+ * floating-point noise, no fabricated exactness.
+ */
+function formatRatio(ratioValue) {
+  if (typeof ratioValue !== 'number' || !isFinite(ratioValue) || ratioValue <= 0) {
+    return '1 : —';
+  }
+  const rounded = Math.round(ratioValue);
+  if (Math.abs(ratioValue - rounded) < 1e-9) {
+    return `1 : ${rounded}`;
+  }
+  const decimals = ratioValue < 1.05 ? 3 : 2;
+  return `1 : ${formatNumber(ratioValue, decimals)}`;
+}
+
+/**
+ * Builds the geometric core shared by every mode.
+ * @private
+ */
+function buildGeometry(riseMeters, runMeters) {
+  const { slopePercent, ratioValue, angleDegrees } = slopeConversions(riseMeters, runMeters);
+  const flightLengthMeters = Math.sqrt(riseMeters * riseMeters + runMeters * runMeters);
+  return { riseMeters, runMeters, slopePercent, ratioValue, angleDegrees, flightLengthMeters };
+}
+
+/**
+ * Main ramp calculation entry point.
+ *
+ * @param {Object} input
+ * @param {string} input.mode - one of RAMP_INPUT_MODES
+ * @param {number|{value,unitKey}} input.rise - rise (meters or value+unit)
+ * @param {number|{value,unitKey}} [input.run] - run / available run
+ * @param {number} [input.slopePercent] - desired slope (e.g. 8.33)
+ * @param {string} [input.displayUnit='m']
+ * @param {number} [input.precision=2]
+ * @param {Object} [input.references] - overrides for RAMP_REFERENCE_DEFAULTS
+ * @returns {Object} structured numeric result, or
+ *   { valid: false, errorCode, errorMessage } for controlled failures
+ */
+function calculateRamp(input = {}) {
+  const mode = input.mode || RAMP_INPUT_MODES.RISE_DESIRED_SLOPE;
+  const references = resolveRampReferences(input.references);
+  const displayUnit = input.displayUnit || 'm';
+  const precision = typeof input.precision === 'number' ? Math.max(0, Math.min(4, input.precision)) : 2;
+
+  if (!Object.values(RAMP_INPUT_MODES).includes(mode)) {
+    return { valid: false, errorCode: RAMP_ERROR_CODES.MISSING_INPUT, errorMessage: `Unknown ramp input mode: "${mode}"` };
+  }
+
+  let riseMeters = null;
+  let runMeters = null;
+  let slopePercent = null;
+
+  // ---- per-mode input validation and resolution ----
+  try {
+    if (mode === RAMP_INPUT_MODES.RISE_DESIRED_SLOPE) {
+      if (input.rise === undefined || input.slopePercent === undefined) {
+        const err = new Error('This mode requires both rise and desired slope.');
+        err.code = RAMP_ERROR_CODES.MISSING_INPUT;
+        throw err;
+      }
+      riseMeters = requireLengthMeters(input.rise, 'Rise', RAMP_ERROR_CODES.INVALID_RISE);
+      slopePercent = requireSlopePercent(input.slopePercent);
+      runMeters = riseMeters / (slopePercent / 100);
+    } else if (mode === RAMP_INPUT_MODES.RISE_AVAILABLE_RUN) {
+      if (input.rise === undefined || input.run === undefined) {
+        const err = new Error('This mode requires both rise and available run.');
+        err.code = RAMP_ERROR_CODES.MISSING_INPUT;
+        throw err;
+      }
+      riseMeters = requireLengthMeters(input.rise, 'Rise', RAMP_ERROR_CODES.INVALID_RISE);
+      runMeters = requireLengthMeters(input.run, 'Available run', RAMP_ERROR_CODES.INVALID_RUN);
+    } else if (mode === RAMP_INPUT_MODES.RUN_DESIRED_SLOPE) {
+      if (input.run === undefined || input.slopePercent === undefined) {
+        const err = new Error('This mode requires both run and desired slope.');
+        err.code = RAMP_ERROR_CODES.MISSING_INPUT;
+        throw err;
+      }
+      runMeters = requireLengthMeters(input.run, 'Run', RAMP_ERROR_CODES.INVALID_RUN);
+      slopePercent = requireSlopePercent(input.slopePercent);
+      riseMeters = runMeters * (slopePercent / 100);
+    } else if (mode === RAMP_INPUT_MODES.RISE_RUN_DIRECT) {
+      if (input.rise === undefined || input.run === undefined) {
+        const err = new Error('This mode requires both rise and run.');
+        err.code = RAMP_ERROR_CODES.MISSING_INPUT;
+        throw err;
+      }
+      riseMeters = requireLengthMeters(input.rise, 'Rise', RAMP_ERROR_CODES.INVALID_RISE);
+      runMeters = requireLengthMeters(input.run, 'Run', RAMP_ERROR_CODES.INVALID_RUN);
+    }
+  } catch (e) {
+    if (e.code === undefined && /measurement unit/i.test(e.message)) {
+      return { valid: false, errorCode: RAMP_ERROR_CODES.INVALID_UNIT, errorMessage: e.message };
+    }
+    return { valid: false, errorCode: e.code || RAMP_ERROR_CODES.INVALID_RISE, errorMessage: e.message };
+  }
+
+  // ---- post-derivation sanity (non-finite guard) ----
+  if (!isFinite(riseMeters) || !isFinite(runMeters) || riseMeters <= 0 || runMeters <= 0) {
+    return {
+      valid: false,
+      errorCode: RAMP_ERROR_CODES.NON_FINITE_RESULT,
+      errorMessage: 'No valid result can be calculated from the supplied inputs.'
+    };
+  }
+  if (runMeters > MAX_RUN_METERS) {
+    return {
+      valid: false,
+      errorCode: RAMP_ERROR_CODES.INVALID_RUN,
+      errorMessage: `Required run exceeds the supported bound for a single straight ramp (${MAX_RUN_METERS} m).`
+    };
+  }
+
+  const geometry = buildGeometry(riseMeters, runMeters);
+  const ratioStatus = evaluateRatioStatus(geometry.ratioValue, references.slope);
+
+  const result = {
+    valid: true,
+    mode,
+    input: { riseMeters, runMeters, slopePercent, displayUnit, precision, references },
+    geometry,
+    reference: {
+      ...references.slope,
+      status: ratioStatus,
+      targetRunMeters: riseMeters * references.slope.targetRatio,
+      targetSlopePercent: (1 / references.slope.targetRatio) * 100
+    }
+  };
+  result.formatted = formatRampResult(result, displayUnit, precision);
+  return result;
+}
+
+/**
+ * Available-run analysis: compares the achieved slope with the configured
+ * reference target and reports the spatial shortfall deterministically.
+ * Returns a standalone block usable by any mode that knows rise + run.
+ */
+function analyzeAvailableRun(riseMeters, availableRunMeters, references = resolveRampReferences()) {
+  const targetRunMeters = riseMeters * references.slope.targetRatio;
+  const targetSlopePercent = (1 / references.slope.targetRatio) * 100;
+  const achieved = slopeConversions(riseMeters, availableRunMeters);
+  const differenceMeters = targetRunMeters - availableRunMeters;
+  return {
+    availableRunMeters,
+    targetRatio: references.slope.targetRatio,
+    targetSlopePercent,
+    targetRunMeters,
+    differenceMeters,
+    sufficient: differenceMeters <= 1e-9,
+    achievedSlopePercent: achieved.slopePercent,
+    achievedRatioValue: achieved.ratioValue,
+    summary: differenceMeters <= 1e-9
+      ? 'Sufficient run for the reference target slope.'
+      : `Insufficient run for the reference target slope (${formatNumber(targetSlopePercent, 2)}%, ${formatRatio(references.slope.targetRatio)}): ${formatNumber(differenceMeters, 2)} m short.`
+  };
+}
+
+/**
+ * Comparison table for the fixed study targets: for a given rise, what run
+ * does each target slope demand? Deterministic order = RAMP_TARGET_SLOPES.
+ */
+function buildTargetComparison(riseMeters, references = resolveRampReferences()) {
+  return RAMP_TARGET_SLOPES.map(t => {
+    const runMeters = riseMeters / (t.percent / 100);
+    const ratioValue = 100 / t.percent;
+    return {
+      percent: t.percent,
+      note: t.note,
+      runMeters,
+      ratioValue,
+      fitsReference: ratioValue >= references.slope.minRatio && ratioValue <= references.slope.maxRatio
+    };
+  });
+}
+
+/**
+ * Formats a ramp result into UI strings. Raw numeric values stay on the
+ * result object; every formatted string is produced here from them.
+ */
+function formatRampResult(result, displayUnit = 'm', precision = 2) {
+  const g = result.geometry;
+  const f = {
+    rise: fmt(g.riseMeters, displayUnit, precision),
+    run: fmt(g.runMeters, displayUnit, precision),
+    flightLength: fmt(g.flightLengthMeters, displayUnit, precision),
+    slopePercent: `${formatNumber(g.slopePercent, 2)}%`,
+    ratio: formatRatio(g.ratioValue),
+    angle: `${formatNumber(g.angleDegrees, 2)}°`
+  };
+  if (result.reference) {
+    f.referenceStatus = result.reference.status === 'within'
+      ? 'Within configured reference'
+      : (result.reference.status === 'steeper' ? 'Steeper than configured reference' : 'Shallower than configured reference');
+    f.referenceLabel = result.reference.label;
+    f.referenceNote = result.reference.note;
+    f.referenceTargetRatio = formatRatio(result.reference.targetRatio);
+    f.referenceTargetRun = fmt(result.reference.targetRunMeters, displayUnit, precision);
+  }
+  return f;
+}
+
+/**
+ * Generates a proportional SVG side-elevation diagram from the actual
+ * calculated geometry. Deterministic: identical geometry → identical markup.
+ *
+ * @param {Object} result - valid result from calculateRamp
+ * @param {Object} [options] - { width, height }
+ */
+function generateRampSVG(result, options = {}) {
+  if (!result || !result.valid || !result.geometry) {
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80"></svg>';
+  }
+
+  const width = typeof options.width === 'number' && options.width > 0 ? options.width : 520;
+  const height = typeof options.height === 'number' && options.height > 0 ? options.height : 220;
+  const pad = 46;
+  const drawW = width - pad * 2;
+  const drawH = height - pad * 2;
+
+  const rise = result.geometry.riseMeters;
+  const run = result.geometry.runMeters;
+  const scale = Math.min(drawW / run, drawH / rise);
+
+  const originX = pad;
+  const originY = height - pad;
+  const topX = originX + run * scale;
+  const topY = originY - rise * scale;
+
+  const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Proportional ramp side elevation: rise ${result.formatted.rise}, run ${result.formatted.run}, slope ${result.formatted.slopePercent}, ratio ${result.formatted.ratio}, angle ${result.formatted.angle}">
+  <g class="ramp-baseline">
+    <line x1="${(originX - 14).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${(topX + 14).toFixed(2)}" y2="${originY.toFixed(2)}" stroke="var(--border-color, #444)" stroke-width="1.4"/>
+  </g>
+  <line x1="${originX.toFixed(2)}" y1="${originY.toFixed(2)}" x2="${topX.toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="2.4"/>
+  <g class="ramp-dims">
+    <line x1="${(topX + 18).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${(topX + 18).toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="1" stroke-dasharray="3 3"/>
+    <text x="${(topX + 24).toFixed(2)}" y="${((originY + topY) / 2).toFixed(2)}" font-size="11" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)" transform="rotate(90 ${(topX + 24).toFixed(2)} ${((originY + topY) / 2).toFixed(2)})" text-anchor="middle">RISE ${result.formatted.rise}</text>
+    <text x="${((originX + topX) / 2).toFixed(2)}" y="${(originY + 18).toFixed(2)}" text-anchor="middle" font-size="11" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.run}</text>
+    <text x="${((originX + topX) / 2).toFixed(2)}" y="${(topY - 10).toFixed(2)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${result.formatted.slopePercent} · ${result.formatted.ratio} · ${result.formatted.angle}</text>
+  </g>
+  <text x="${pad}" y="18" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">SIDE ELEVATION — proportional to calculated geometry</text>
+</svg>`.trim();
+
+  return svg;
+}
+
+
+  // =========================================================================
   // MODULE: Project
   // =========================================================================
 
@@ -8180,12 +8619,22 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
-    id: 'future-ramp-calc',
-    title: 'ADA Ramp Slope Calculator',
-    description: 'Calculate ramp run, total rise, landings, and ADA 1:12 slope standard',
+    id: 'nav-ramps',
+    title: 'Ramp Calculator',
+    description: 'Straight-ramp slope geometry: rise, run, percentage, 1:X ratio, angle, and target comparison',
+    category: 'Navigation',
+    icon: '📐',
+    keywords: ['ramp', 'slope', 'ratio', 'angle', 'run', 'rise', 'accessibility', '1:12', 'mode 15'],
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'future-slope-calc',
+    title: 'General Slope Converter',
+    description: 'Convert between slope percentages, ratios, and angles for site grading and terrain studies',
     category: 'Upcoming Tool',
-    icon: '♿',
-    keywords: ['ramp', 'slope', 'ada', 'incline', 'gradient', 'accessibility', 'phase 2.5'],
+    icon: '📉',
+    keywords: ['slope', 'grade', 'gradient', 'terrain', 'grading', 'phase 2.5'],
     actionType: 'placeholder',
     available: false,
     badge: 'Phase 2.5'
@@ -12806,6 +13255,399 @@ function createStairsView(context) {
 
 
   // =========================================================================
+  // MODULE: ViewRamps
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Ramp Calculator View (Mode 15)
+ * Architectural Tools Phase: Ramps. Owns the ramp mode's input handling,
+ * result rendering, SVG diagram injection, target comparison table,
+ * available-run analysis display, and quick actions. All math lives in
+ * src/core/ramps.js; persistence routes through the shared context
+ * (ProjectStore, Journal, Workspace, CAD views).
+ */
+
+
+
+
+
+
+const RAMPS_PREFS_KEY = 'archiscale_ramps_prefs'; // user preferences only
+
+function createRampsView(context) {
+  const {
+    state, dom, showToast, setUnifiedResultState, AudioService,
+    HistoryService, switchMode, views, projectStore, StorageService, copyToClipboard
+  } = context;
+
+  function savePrefs() {
+    try {
+      StorageService.setItem(RAMPS_PREFS_KEY, JSON.stringify({
+        mode: state.ramps.mode,
+        displayUnit: state.ramps.displayUnit
+      }));
+    } catch (e) {}
+  }
+
+  function loadPrefs() {
+    try {
+      const raw = StorageService.getItem(RAMPS_PREFS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {}
+    return {};
+  }
+
+  /** Parses a user length field ("1.2m", "1200mm", "4'6\"") to meters. */
+  function parseLengthField(el, fallbackUnit) {
+    if (!el) return null;
+    const raw = (el.value || '').trim();
+    if (!raw) return null;
+    const res = parseInput(raw, { allowNegative: false });
+    if (!res.isValid || res.value <= 0) return null;
+    const unitKey = res.detectedUnit || fallbackUnit;
+    return res.value * UNITS[unitKey].toMeters;
+  }
+
+  function currentReferences() {
+    const readRatio = (el, fallback) => {
+      const n = parseFloat(el?.value);
+      return isFinite(n) && n > 0 ? n : fallback;
+    };
+    return {
+      slope: {
+        targetRatio: readRatio(dom.rampsRefTarget, RAMP_REFERENCE_DEFAULTS.slope.targetRatio),
+        minRatio: readRatio(dom.rampsRefMin, RAMP_REFERENCE_DEFAULTS.slope.minRatio),
+        maxRatio: readRatio(dom.rampsRefMax, RAMP_REFERENCE_DEFAULTS.slope.maxRatio)
+      }
+    };
+  }
+
+  function syncModeVisibility() {
+    const mode = state.ramps.mode;
+    const show = (el, on) => { if (el) el.style.display = on ? 'block' : 'none'; };
+    show(dom.rampsRiseGroup, mode !== RAMP_INPUT_MODES.RUN_DESIRED_SLOPE);
+    show(dom.rampsSlopeGroup, mode === RAMP_INPUT_MODES.RISE_DESIRED_SLOPE || mode === RAMP_INPUT_MODES.RUN_DESIRED_SLOPE);
+    show(dom.rampsRunGroup, mode !== RAMP_INPUT_MODES.RISE_DESIRED_SLOPE);
+  }
+
+  function showError(message) {
+    if (dom.rampsErrorMsg) {
+      dom.rampsErrorMsg.textContent = `⚠️ ${message}`;
+      dom.rampsErrorMsg.style.display = 'block';
+    }
+    setUnifiedResultState({ toolPrefix: 'ramps', status: 'error', errorText: `⚠️ ${message}` });
+  }
+
+  function clearError() {
+    if (dom.rampsErrorMsg) {
+      dom.rampsErrorMsg.style.display = 'none';
+      dom.rampsErrorMsg.textContent = '';
+    }
+  }
+
+  function calculate(isExplicitRun = false) {
+    const mode = state.ramps.mode;
+    const input = { mode, displayUnit: state.ramps.displayUnit };
+
+    if (mode !== RAMP_INPUT_MODES.RUN_DESIRED_SLOPE) {
+      const riseM = parseLengthField(dom.rampsRise, 'm');
+      if (riseM === null) {
+        renderInvalid(isExplicitRun, 'Rise must be greater than zero (e.g. 1.2m or 1200mm).');
+        return;
+      }
+      input.rise = riseM;
+    }
+    if (mode === RAMP_INPUT_MODES.RISE_DESIRED_SLOPE || mode === RAMP_INPUT_MODES.RUN_DESIRED_SLOPE) {
+      const pct = parseFloat(dom.rampsSlope?.value);
+      if (!isFinite(pct) || pct <= 0) {
+        renderInvalid(isExplicitRun, 'Slope must be greater than zero (e.g. 8.33 for 1:12).');
+        return;
+      }
+      input.slopePercent = pct;
+    }
+    if (mode !== RAMP_INPUT_MODES.RISE_DESIRED_SLOPE) {
+      const runM = parseLengthField(dom.rampsRun, 'm');
+      if (runM === null) {
+        renderInvalid(isExplicitRun, 'Run must be greater than zero (e.g. 14.4m).');
+        return;
+      }
+      input.run = runM;
+    }
+    input.references = currentReferences();
+
+    const result = calculateRamp(input);
+    if (!result.valid) {
+      state.ramps.lastResult = null;
+      renderInvalid(isExplicitRun, result.errorMessage);
+      return;
+    }
+
+    clearError();
+    state.ramps.lastResult = result;
+    renderResult(result);
+    renderTargets();
+
+    setUnifiedResultState({
+      toolPrefix: 'ramps',
+      status: 'success',
+      context: { 'Slope': result.formatted.slopePercent, 'Ratio': result.formatted.ratio }
+    });
+
+    if (isExplicitRun) AudioService.playTick();
+  }
+
+  function renderInvalid(isExplicitRun, message) {
+    clearResultPanels();
+    showError(message);
+    if (isExplicitRun) AudioService.playTick();
+  }
+
+  function clearResultPanels() {
+    if (dom.rampsHeroVal) dom.rampsHeroVal.textContent = '—';
+    if (dom.rampsSummaryBadge) dom.rampsSummaryBadge.textContent = '—';
+    ['rampsRiseVal', 'rampsRunVal', 'rampsSlopeVal', 'rampsRatioVal', 'rampsAngleVal', 'rampsFlightVal'].forEach(k => {
+      if (dom[k]) dom[k].textContent = '—';
+    });
+    if (dom.rampsSvgWrap) dom.rampsSvgWrap.innerHTML = '';
+    if (dom.rampsRunAnalysis) dom.rampsRunAnalysis.style.display = 'none';
+    if (dom.rampsRefStatus) {
+      dom.rampsRefStatus.textContent = '—';
+      dom.rampsRefStatus.className = 'type-badge badge-seg';
+    }
+    if (dom.rampsRefDetail) dom.rampsRefDetail.textContent = '';
+  }
+
+  function renderResult(result) {
+    const f = result.formatted;
+    const isRunMode = result.mode === RAMP_INPUT_MODES.RISE_DESIRED_SLOPE || result.mode === RAMP_INPUT_MODES.RUN_DESIRED_SLOPE;
+
+    // Hero: the value the mode solved for
+    if (dom.rampsHeroVal) dom.rampsHeroVal.textContent = isRunMode ? f.run : (result.mode === RAMP_INPUT_MODES.RUN_DESIRED_SLOPE ? f.rise : f.slopePercent);
+    if (dom.rampsHeroLabel) {
+      dom.rampsHeroLabel.textContent = isRunMode ? 'REQUIRED RUN' : (result.mode === RAMP_INPUT_MODES.RUN_DESIRED_SLOPE ? 'REQUIRED RISE' : 'ACHIEVED SLOPE');
+    }
+    if (dom.rampsSummaryBadge) {
+      dom.rampsSummaryBadge.textContent = `${f.slopePercent} · ${f.ratio} · ${f.angle}`;
+    }
+
+    if (dom.rampsRiseVal) dom.rampsRiseVal.textContent = f.rise;
+    if (dom.rampsRunVal) dom.rampsRunVal.textContent = f.run;
+    if (dom.rampsSlopeVal) dom.rampsSlopeVal.textContent = f.slopePercent;
+    if (dom.rampsRatioVal) dom.rampsRatioVal.textContent = f.ratio;
+    if (dom.rampsAngleVal) dom.rampsAngleVal.textContent = f.angle;
+    if (dom.rampsFlightVal) dom.rampsFlightVal.textContent = f.flightLength;
+
+    // SVG diagram from actual geometry
+    if (dom.rampsSvgWrap) {
+      dom.rampsSvgWrap.innerHTML = generateRampSVG(result, { width: 520, height: 220 });
+    }
+
+    // Available-run analysis for modes with an explicit available run
+    if (dom.rampsRunAnalysis && dom.rampsRunAnalysisBody) {
+      if (result.mode === RAMP_INPUT_MODES.RISE_AVAILABLE_RUN) {
+        const analysis = analyzeAvailableRun(result.geometry.riseMeters, result.geometry.runMeters, result.input.references);
+        dom.rampsRunAnalysis.style.display = 'block';
+        dom.rampsRunAnalysisBody.innerHTML = [
+          `<div>Available run: <strong>${f.run}</strong></div>`,
+          `<div>Required for ${analysis.targetSlopePercent.toFixed(2)}% (1 : ${analysis.targetRatio}): <strong>${(analysis.targetRunMeters).toFixed(2)} m</strong></div>`,
+          `<div>Difference: <strong>${Math.abs(analysis.differenceMeters).toFixed(2)} m ${analysis.sufficient ? 'surplus' : 'short'}</strong></div>`,
+          `<div style="color: ${analysis.sufficient ? 'var(--color-success, #4ade80)' : 'var(--color-error, #ef4444)'}; font-weight: 700;">${analysis.sufficient ? 'Result: Sufficient run for the target slope.' : 'Result: Insufficient run for the target slope.'}</div>`
+        ].join('');
+      } else {
+        dom.rampsRunAnalysis.style.display = 'none';
+      }
+    }
+
+    // Reference status
+    if (dom.rampsRefStatus) {
+      dom.rampsRefStatus.textContent = f.referenceStatus;
+      dom.rampsRefStatus.className = result.reference.status === 'within'
+        ? 'type-badge badge-seg'
+        : 'type-badge badge-alw';
+    }
+    if (dom.rampsRefDetail) {
+      dom.rampsRefDetail.textContent = `${f.referenceLabel} · target ${f.referenceTargetRatio} · needs run ${f.referenceTargetRun}. Verify applicable local requirements.`;
+    }
+  }
+
+  function renderTargets() {
+    if (!dom.rampsTargetsBody) return;
+    const riseM = parseLengthField(dom.rampsRise, 'm');
+    if (riseM === null) {
+      dom.rampsTargetsBody.innerHTML = '';
+      return;
+    }
+    const targets = buildTargetComparison(riseM, currentReferences());
+    dom.rampsTargetsBody.innerHTML = targets.map(t => `
+      <button type="button" class="ramps-target-row" data-percent="${t.percent}"
+        style="display: grid; grid-template-columns: 70px 70px 1fr; gap: 0.5rem; text-align: left; padding: 0.45rem 0.6rem; border: 1px solid var(--border-color-light); border-radius: 5px; background: transparent; cursor: pointer; font-family: var(--font-family-mono); font-size: 0.78rem;">
+        <strong style="color: var(--accent-primary);">${t.percent}%</strong>
+        <span>1 : ${t.ratioValue % 1 === 0 ? t.ratioValue : t.ratioValue.toFixed(2)}</span>
+        <span>run ${(t.runMeters).toFixed(2)} m</span>
+      </button>
+    `).join('');
+
+    dom.rampsTargetsBody.querySelectorAll('.ramps-target-row').forEach(row => {
+      row.addEventListener('click', () => {
+        // Switch to Mode A with the chosen target slope
+        state.ramps.mode = RAMP_INPUT_MODES.RISE_DESIRED_SLOPE;
+        if (dom.rampsModeSelect) dom.rampsModeSelect.value = state.ramps.mode;
+        if (dom.rampsSlope) dom.rampsSlope.value = row.dataset.percent;
+        syncModeVisibility();
+        calculate(true);
+        showToast(`Switched to ${row.dataset.percent}% target`);
+      });
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Quick actions — reuse existing engines/views, no duplicated logic
+  // ------------------------------------------------------------------
+  function requireResult() {
+    const r = state.ramps.lastResult;
+    if (!r || !r.valid) {
+      showToast('Run a valid ramp calculation first', 'warning');
+      return null;
+    }
+    return r;
+  }
+
+  function copyResult() {
+    const r = requireResult();
+    if (!r) return;
+    const f = r.formatted;
+    const text = [
+      `RAMP — rise ${f.rise} · run ${f.run}`,
+      `Slope: ${f.slopePercent} | Ratio: ${f.ratio} | Angle: ${f.angle}`,
+      `Flight length: ${f.flightLength}`,
+      `${f.referenceStatus} — ${f.referenceLabel}. Educational reference only; verify applicable local requirements.`
+    ].join('\n');
+    copyToClipboard(text, 'Ramp Result');
+  }
+
+  function copySchedule() {
+    const r = requireResult();
+    if (!r) return;
+    const f = r.formatted;
+    const header = ['Rise', 'Run', 'Slope %', 'Ratio', 'Angle', 'Flight Length'].join('\t');
+    const row = [f.rise, f.run, f.slopePercent, f.ratio, f.angle, f.flightLength].join('\t');
+    copyToClipboard(`${header}\n${row}`, 'Ramp Schedule (TSV)');
+  }
+
+  function sendToCad() {
+    const r = requireResult();
+    if (!r) return;
+    const g = r.geometry;
+    const numbers = [
+      g.riseMeters * 1000,
+      g.runMeters * 1000,
+      g.flightLengthMeters * 1000
+    ].map(v => v.toFixed(0)).join(' ');
+    views.callController('cad_handoff', 'openCadHandoffWithSource', 'manual');
+    if (dom.handoffManualInput) dom.handoffManualInput.value = numbers;
+    state.cadHandoff.manualInput = numbers;
+    views.callController('cad_handoff', 'renderCadHandoff', true);
+    showToast('Ramp values loaded into CAD Handoff');
+  }
+
+  function sendToWorkspace() {
+    const r = requireResult();
+    if (!r) return;
+    const g = r.geometry;
+    const entries = [
+      createDimensionEntry({ name: 'Ramp Rise', rawInput: `${(g.riseMeters * 1000).toFixed(0)}mm`, dimensionType: 'reference', notes: `Ramp Calculator — ${r.formatted.slopePercent}` }, 'mm'),
+      createDimensionEntry({ name: 'Ramp Run', rawInput: `${(g.runMeters * 1000).toFixed(0)}mm`, dimensionType: 'segment', notes: `Ramp Calculator — ${r.formatted.ratio}` }, 'mm')
+    ];
+    state.workspace.entries.push(...entries);
+    views.callController('workspace', 'saveWorkspace');
+    views.callController('workspace', 'renderWorkspace');
+    switchMode('workspace');
+    showToast('Ramp rise/run added to Dimension Workspace');
+  }
+
+  function saveToJournal() {
+    const r = requireResult();
+    if (!r) return;
+    const f = r.formatted;
+    HistoryService.addEntry({
+      operation: 'Ramp Calculator',
+      mode: 'Ramps',
+      scaleStr: f.ratio,
+      inputStr: `Rise ${f.rise}`,
+      outputStr: `Run ${f.run} — ${f.slopePercent} — ${f.angle}`,
+      stateSnapshot: {
+        modeKey: 'ramps',
+        rise: dom.rampsRise?.value || '',
+        run: dom.rampsRun?.value || '',
+        mode: r.mode
+      }
+    });
+    views.callController('history', 'renderHistoryList');
+    AudioService.playTick();
+    showToast('Saved ramp to Calculation Journal');
+  }
+
+  function saveToProject() {
+    const r = requireResult();
+    if (!r) return;
+    if (!projectStore) {
+      showToast('Project store unavailable', 'warning');
+      return;
+    }
+    const g = r.geometry;
+    const saved = projectStore.updateProject(draft => {
+      draft.decisions.push({
+        id: `dec-ramp-${Date.now()}`,
+        kind: 'ramp',
+        name: `Ramp ${r.formatted.ratio}`,
+        createdAt: new Date().toISOString(),
+        result: {
+          mode: r.mode,
+          riseMeters: g.riseMeters,
+          runMeters: g.runMeters,
+          slopePercent: g.slopePercent,
+          ratioValue: g.ratioValue,
+          angleDegrees: g.angleDegrees,
+          flightLengthMeters: g.flightLengthMeters,
+          referenceStatus: r.reference.status,
+          referenceLabel: r.reference.label
+        }
+      });
+      return draft;
+    });
+    if (saved.ok) {
+      showToast('Ramp saved to project document');
+      AudioService.playSuccess();
+    } else {
+      showToast(`Project save failed: ${saved.errors[0]}`, 'warning');
+    }
+  }
+
+  return {
+    id: 'ramps',
+    mount() {
+      const prefs = loadPrefs();
+      if (prefs.mode && Object.values(RAMP_INPUT_MODES).includes(prefs.mode)) {
+        state.ramps.mode = prefs.mode;
+        if (dom.rampsModeSelect) dom.rampsModeSelect.value = prefs.mode;
+      }
+      if (dom.rampsReferenceNote) {
+        dom.rampsReferenceNote.textContent = RAMP_REFERENCE_DEFAULTS.slope.note;
+      }
+      syncModeVisibility();
+      calculate(false);
+    },
+    getController() {
+      return { calculate, syncModeVisibility, renderTargets, copyResult, copySchedule, sendToCad, sendToWorkspace, saveToJournal, saveToProject };
+    }
+  };
+}
+
+
+  // =========================================================================
   // MODULE: App
   // =========================================================================
 
@@ -12827,6 +13669,7 @@ function createStairsView(context) {
 // NOTE: cad-clipboard / batch-cad / cad-targets core engines are imported by
 // their view modules (src/ui/views/*) — app.js only needs the storage keys
 // and the small helpers still referenced by listeners/state below.
+
 
 
 
@@ -13072,6 +13915,13 @@ function initializeApp() {
       mode: 'rise_desired_riser',
       objective: 'comfortable_proportion',
       displayUnit: 'mm',
+      lastResult: null
+    },
+
+    // Mode 15: Ramp Calculator
+    ramps: {
+      mode: 'rise_desired_slope',
+      displayUnit: 'm',
       lastResult: null
     }
   };
@@ -13550,7 +14400,44 @@ function initializeApp() {
     stairsSendCadBtn: document.getElementById('stairs-send-cad-btn'),
     stairsSendWorkspaceBtn: document.getElementById('stairs-send-workspace-btn'),
     stairsSaveJournalBtn: document.getElementById('stairs-save-journal-btn'),
-    stairsSaveProjectBtn: document.getElementById('stairs-save-project-btn')
+    stairsSaveProjectBtn: document.getElementById('stairs-save-project-btn'),
+
+    // Mode 15: Ramp Calculator Elements
+    rampsModeSelect: document.getElementById('ramps-mode-select'),
+    rampsRiseGroup: document.getElementById('ramps-rise-group'),
+    rampsRise: document.getElementById('ramps-rise'),
+    rampsSlopeGroup: document.getElementById('ramps-slope-group'),
+    rampsSlope: document.getElementById('ramps-slope'),
+    rampsRunGroup: document.getElementById('ramps-run-group'),
+    rampsRun: document.getElementById('ramps-run'),
+    btnRunRamps: document.getElementById('btn-run-ramps'),
+    rampsErrorMsg: document.getElementById('ramps-error-msg'),
+    rampsRefTarget: document.getElementById('ramps-ref-target'),
+    rampsRefMin: document.getElementById('ramps-ref-min'),
+    rampsRefMax: document.getElementById('ramps-ref-max'),
+    rampsReferenceNote: document.getElementById('ramps-reference-note'),
+    rampsResultPanel: document.getElementById('ramps-result-panel'),
+    rampsSummaryBadge: document.getElementById('ramps-summary-badge'),
+    rampsHeroVal: document.getElementById('ramps-hero-val'),
+    rampsHeroLabel: document.getElementById('ramps-hero-label'),
+    rampsRiseVal: document.getElementById('ramps-rise-val'),
+    rampsRunVal: document.getElementById('ramps-run-val'),
+    rampsSlopeVal: document.getElementById('ramps-slope-val'),
+    rampsRatioVal: document.getElementById('ramps-ratio-val'),
+    rampsAngleVal: document.getElementById('ramps-angle-val'),
+    rampsFlightVal: document.getElementById('ramps-flight-val'),
+    rampsSvgWrap: document.getElementById('ramps-svg-wrap'),
+    rampsRunAnalysis: document.getElementById('ramps-run-analysis'),
+    rampsRunAnalysisBody: document.getElementById('ramps-run-analysis-body'),
+    rampsRefStatus: document.getElementById('ramps-ref-status'),
+    rampsRefDetail: document.getElementById('ramps-ref-detail'),
+    rampsTargetsBody: document.getElementById('ramps-targets-body'),
+    rampsCopyResultBtn: document.getElementById('ramps-copy-result-btn'),
+    rampsCopyScheduleBtn: document.getElementById('ramps-copy-schedule-btn'),
+    rampsSendCadBtn: document.getElementById('ramps-send-cad-btn'),
+    rampsSendWorkspaceBtn: document.getElementById('ramps-send-workspace-btn'),
+    rampsSaveJournalBtn: document.getElementById('ramps-save-journal-btn'),
+    rampsSaveProjectBtn: document.getElementById('ramps-save-project-btn')
   };
 
   // ---------------------------------------------------------------------------
@@ -13734,6 +14621,9 @@ function initializeApp() {
     }
     else if (targetMode === 'stairs') {
       views.callController('stairs', 'calculate');
+    }
+    else if (targetMode === 'ramps') {
+      views.callController('ramps', 'calculate');
     }
   }
 
@@ -15133,6 +16023,9 @@ function initializeApp() {
         break;
       case 'nav-stairs':
         switchMode('stairs');
+        break;
+      case 'nav-ramps':
+        switchMode('ramps');
         break;
       case 'nav-cad-clipboard':
         switchMode('cad_clipboard');
@@ -17161,6 +18054,51 @@ function initializeApp() {
       dom.stairsSaveProjectBtn.addEventListener('click', () => views.callController('stairs', 'saveToProject'));
     }
 
+    // Mode 15: Ramp Calculator Listeners
+    if (dom.rampsModeSelect) {
+      dom.rampsModeSelect.addEventListener('change', () => {
+        state.ramps.mode = dom.rampsModeSelect.value;
+        views.callController('ramps', 'syncModeVisibility');
+        views.callController('ramps', 'calculate', true);
+      });
+    }
+    [dom.rampsRise, dom.rampsSlope, dom.rampsRun].forEach(el => {
+      if (el) {
+        el.addEventListener('input', () => views.callController('ramps', 'calculate'));
+        el.addEventListener('change', () => views.callController('ramps', 'calculate', true));
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            views.callController('ramps', 'calculate', true);
+          }
+        });
+      }
+    });
+    [dom.rampsRefTarget, dom.rampsRefMin, dom.rampsRefMax].forEach(el => {
+      if (el) el.addEventListener('input', () => views.callController('ramps', 'calculate'));
+    });
+    if (dom.btnRunRamps) {
+      dom.btnRunRamps.addEventListener('click', () => views.callController('ramps', 'calculate', true));
+    }
+    if (dom.rampsCopyResultBtn) {
+      dom.rampsCopyResultBtn.addEventListener('click', () => views.callController('ramps', 'copyResult'));
+    }
+    if (dom.rampsCopyScheduleBtn) {
+      dom.rampsCopyScheduleBtn.addEventListener('click', () => views.callController('ramps', 'copySchedule'));
+    }
+    if (dom.rampsSendCadBtn) {
+      dom.rampsSendCadBtn.addEventListener('click', () => views.callController('ramps', 'sendToCad'));
+    }
+    if (dom.rampsSendWorkspaceBtn) {
+      dom.rampsSendWorkspaceBtn.addEventListener('click', () => views.callController('ramps', 'sendToWorkspace'));
+    }
+    if (dom.rampsSaveJournalBtn) {
+      dom.rampsSaveJournalBtn.addEventListener('click', () => views.callController('ramps', 'saveToJournal'));
+    }
+    if (dom.rampsSaveProjectBtn) {
+      dom.rampsSaveProjectBtn.addEventListener('click', () => views.callController('ramps', 'saveToProject'));
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -17372,6 +18310,7 @@ function initializeApp() {
     toggleHistoryDrawerRef: () => views.callController('history', 'toggleHistoryDrawer')
   }));
   views.register(createStairsView(viewContext));
+  views.register(createRampsView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();

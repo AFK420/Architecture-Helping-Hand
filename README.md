@@ -3,7 +3,7 @@
 > **Professional Architectural Scale, Furniture Sizing & Multi-Unit Calculation Studio**  
 > *A high-precision, zero-dependency, tactile architectural conversion studio built for architects, interior designers, urban planners, physical model makers, and design students.*
 
-[![Tests](https://img.shields.io/badge/Tests-1732%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-1904%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-3--Tier%20Core%20%7C%20Frozen-10b981?style=flat-square)](ENGINEERING_RULES.md)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Vanilla)-f59e0b?style=flat-square)](package.json)
 [![License](https://img.shields.io/badge/License-MIT-6366f1?style=flat-square)](package.json)
@@ -31,6 +31,8 @@
    - [13. Batch CAD Conversion (Bulk Scaling & Unit Engine)](#13-batch-cad-conversion-bulk-scaling--unit-engine)
    - [14. Quick Dimension Strip (Micro-Tool Glance Instrument)](#14-quick-dimension-strip-micro-tool-glance-instrument)
    - [15. CAD Handoff — Rhino · AutoCAD · SketchUp Helpers (Mode 13)](#15-cad-handoff--rhino--autocad--sketchup-helpers-mode-13)
+   - [16. Stair Calculator (Mode 14) — Architectural Tools](#16-stair-calculator-mode-14--architectural-tools)
+   - [17. Ramp Calculator (Mode 15) — Architectural Tools](#17-ramp-calculator-mode-15--architectural-tools)
 5. [📐 Architectural Scale Presets (All 28 Presets)](#-architectural-scale-presets-all-28-presets)
 6. [🛋️ Architectural Furniture & Fixtures Database (179 Items Across 9 Domains)](#️-architectural-furniture--fixtures-database-179-items-across-9-domains)
 7. [📏 Supported Measurement Units](#-supported-measurement-units)
@@ -142,7 +144,7 @@ The codebase has evolved through rigorous engineering, auditing, hardening, and 
 This repository serves as:
 1. **An Open-Source Reference Studio**: A tactile, zero-friction architectural scaling studio for architects, interior designers, landscape architects, students, and educators.
 2. **Zero-Dependency Architecture**: No React, no Vue, no webpack, no runtime `node_modules`. Anyone can clone the repository, double-click `index.html`, and use it immediately offline via `file:///`.
-3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **1,732 automated test assertions across 23 test suites** (authoritative count emitted by `npm test`).
+3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **1,904 automated test assertions across 24 test suites** (authoritative count emitted by `npm test`).
 4. **An Extensible Platform**: Prepared for future architectural geometry engines, CAD vector exports (SVG/DXF), and stair/ramp calculations.
 
 ---
@@ -254,6 +256,16 @@ This repository serves as:
 * **Candidate Options**: up to eight ranked alternatives (e.g. 15/16/17 risers with their riser, going, run, and 2R+T), deterministic ordering, one click switches to an exact configuration. Objectives: comfortable proportion, minimize run, target riser, target tread.
 * **Proportional SVG Diagram**: side elevation drawn from the actual calculated geometry — rise, run, flight angle, and the step outline all match the numeric result (pinned by tests).
 * **Project Persistence**: *Save to Project* stores the stair as a decision in the versioned Project Document (`src/services/store.js`) — no stair-specific localStorage silo. Journal / Workspace / CAD Handoff handoffs reuse the existing systems. See **STAIRS.md** for the full contract.
+
+### 17. Ramp Calculator (Mode 15) — Architectural Tools
+* **One Canonical Geometry Source**: percentage (`rise/run × 100`), ratio (`1 : run/rise`), and angle (`atan2(rise, run)`) all derive from the same rise/run pair — they can never disagree. Angle is computed at full precision, then formatted.
+* **Four Input Modes**: Rise + Desired Slope (hero: *required run*) · Rise + Available Run · Run + Desired Slope (hero: *required rise*) · Rise + Run (direct geometry, nothing invented). Lengths accept the full application parser.
+* **Ratio Stability**: `1 : 12` renders exactly; float noise (`12.00000000002`) is normalized; non-integer ratios show controlled decimals (`1 : 8.5`) — never fabricated exactness.
+* **Available-Run Analysis**: for a given rise and available run the tool reports required run for the reference target, the surplus/shortfall in meters, and an explicit *Sufficient / Insufficient* result.
+* **Target Comparison**: fixed study values (5% / 8.33% / 10% / 12.5% / 16.67% / 20%) mapped to the run each demands — deterministic order, monotonic, labelled *Common Study Values (design targets, not legal requirements)*. One click switches the calculator to that target.
+* **Configurable Educational Reference**: 1:12 target inside a 1:8–1:20 study band, labelled *Educational Reference (configurable)* with an explicit "verify applicable local requirements" note. Negative slope is rejected (`NEGATIVE_SLOPE`) — this models ascent ramps only.
+* **Proportional SVG Diagram**: side elevation derived from the actual calculated geometry (rendered run:rise ratio pinned to the numeric result by tests).
+* **Persistence & Handoffs**: *Save to Project* writes a decision to the versioned Project Document via the project store (no ramp-specific silo); Journal / Workspace / CAD Handoff reuse the existing systems. See **RAMPS.md** for the full contract.
 
 ---
 
@@ -442,7 +454,7 @@ python -m http.server 3500
 ### 3. Run Automated Test Suite
 ```bash
 npm test
-# Executes all 23 test suites (1,732 assertions, 100% passing)....
+# Executes all 24 test suites (1,904 assertions, 100% passing).....
 # The runner emits the authoritative total assertion count on completion.
 ```
 

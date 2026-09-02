@@ -17,7 +17,7 @@ The current design—where `src/core/` houses pure calculation engines, `src/cor
 
 ## 2. Planned Core Module Extensions (Future Phases)
 
-When feature development begins in subsequent phases, new calculations will be added as dedicated pure mathematical modules under `src/core/`. *(Update, September 2, 2026: `src/core/geometry.js` and `src/core/stairs.js` already exist and are verified by `tests/geometry.test.js` / `tests/stairs.test.js` — they are no longer future work. `slope.js`/ramps remain planned. Any new module must be registered in `BUNDLE_MODULES` in `scripts/build.js` per the build contract in ENGINEERING_RULES.md §6.1. Stair contract details: STAIRS.md.)*
+When feature development begins in subsequent phases, new calculations will be added as dedicated pure mathematical modules under `src/core/`. *(Update, September 2, 2026: `src/core/geometry.js`, `src/core/stairs.js`, and `src/core/ramps.js` already exist and are verified by their test suites — they are no longer future work. A general `slope.js` remains planned; the ramp engine's rise/run-based `slopeConversions()` is deliberately reusable for it. Any new module must be registered in `BUNDLE_MODULES` in `scripts/build.js` per the build contract in ENGINEERING_RULES.md §6.1. Contracts: STAIRS.md, RAMPS.md.)*
 
 ### 2.1 `src/core/geometry.js` (✅ IMPLEMENTED — verified by tests/geometry.test.js)
 * **Pure Functions**:
@@ -37,10 +37,11 @@ When feature development begins in subsequent phases, new calculations will be a
   - `resolveStairReferences(overrides)` — configurable, labelled reference ranges
 * **Original plan (superseded naming)**: `calcStairRisers`, Blondel 2R+T, incline angle.
 
-### 2.3 `src/core/slope.js` (Future)
+### 2.3 `src/core/slope.js` (Future — general slope/terrain tool)
 * **Pure Functions**:
   - `calcSlope({ rise, run, angleDeg, gradePercent, ratio1InX })`
-  - Converts between ADA ramp ratios (`1:12`), percentage grades (`8.33%`), and angular degrees ($4.76^\circ$).
+  - Converts between ratios (`1:12`), percentage grades (`8.33%`), and angular degrees ($4.76^\circ$).
+* **Note**: the ramp engine (`src/core/ramps.js`) already implements the shared rise/run → percent/ratio/angle conversion as `slopeConversions()`; the future general slope tool should reuse it rather than re-deriving it.
 
 ---
 

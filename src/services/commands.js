@@ -264,12 +264,22 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
-    id: 'future-ramp-calc',
-    title: 'ADA Ramp Slope Calculator',
-    description: 'Calculate ramp run, total rise, landings, and ADA 1:12 slope standard',
+    id: 'nav-ramps',
+    title: 'Ramp Calculator',
+    description: 'Straight-ramp slope geometry: rise, run, percentage, 1:X ratio, angle, and target comparison',
+    category: 'Navigation',
+    icon: '📐',
+    keywords: ['ramp', 'slope', 'ratio', 'angle', 'run', 'rise', 'accessibility', '1:12', 'mode 15'],
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'future-slope-calc',
+    title: 'General Slope Converter',
+    description: 'Convert between slope percentages, ratios, and angles for site grading and terrain studies',
     category: 'Upcoming Tool',
-    icon: '♿',
-    keywords: ['ramp', 'slope', 'ada', 'incline', 'gradient', 'accessibility', 'phase 2.5'],
+    icon: '📉',
+    keywords: ['slope', 'grade', 'gradient', 'terrain', 'grading', 'phase 2.5'],
     actionType: 'placeholder',
     available: false,
     badge: 'Phase 2.5'

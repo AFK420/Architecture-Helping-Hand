@@ -385,6 +385,16 @@
         <span>Stairs</span>
         <span class="mode-key-hint">—</span>
       </button>
+
+      <button class="mode-tab" data-mode="ramps" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 20h18"></path>
+          <path d="M3 20L21 6"></path>
+          <path d="M7 20V16"></path>
+        </svg>
+        <span>Ramps</span>
+        <span class="mode-key-hint">—</span>
+      </button>
     </nav>
 
     <!-- ======================================================== -->
@@ -3134,6 +3144,159 @@
               <span>Save to Journal</span>
             </button>
             <button type="button" id="stairs-save-project-btn" class="result-action-btn" title="Save this stair into the project document (versioned project store)">
+              <span>💾 Save to Project</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- MODE 15: RAMP CALCULATOR                                 -->
+    <!-- ======================================================== -->
+    <section id="mode-view-ramps" class="tool-mode-view" aria-labelledby="heading-ramps" hidden>
+      <div class="tool-layout">
+        <!-- Left Column: Inputs & Targets -->
+        <div class="archi-card main-calc-card">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <div class="card-header">
+            <div>
+              <span class="card-tag">MODE 15 • ARCHITECTURAL TOOLS</span>
+              <h2 id="heading-ramps" class="card-title">Ramp Calculator</h2>
+            </div>
+            <div class="status-indicator">
+              <span id="ramps-state-badge" class="badge-status-ready">READY</span>
+            </div>
+          </div>
+
+          <p class="tool-description">
+            Straight-ramp slope geometry: rise, run, percentage, ratio (1:X), and angle from one canonical calculation source. Educational reference values are configurable heuristics — not a jurisdiction-specific compliance engine.
+          </p>
+
+          <div class="input-row-group" style="margin-bottom: 1.1rem;">
+            <label for="ramps-mode-select" class="input-label">Input Mode</label>
+            <select id="ramps-mode-select" class="calc-select">
+              <option value="rise_desired_slope" selected>Rise + Desired Slope</option>
+              <option value="rise_available_run">Rise + Available Run</option>
+              <option value="run_desired_slope">Run + Desired Slope</option>
+              <option value="rise_run_direct">Rise + Run (Direct Geometry)</option>
+            </select>
+          </div>
+
+          <div class="ramps-inputs-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.1rem;">
+            <div class="input-group" id="ramps-rise-group">
+              <label for="ramps-rise" class="input-label">Rise</label>
+              <input type="text" id="ramps-rise" class="text-input" value="1.2m" placeholder="e.g. 1.2m or 1200mm" style="font-family: var(--font-family-mono);" />
+            </div>
+            <div class="input-group" id="ramps-slope-group">
+              <label for="ramps-slope" class="input-label">Desired Slope (%)</label>
+              <input type="number" id="ramps-slope" class="text-input" value="8.33" min="0" step="0.01" style="font-family: var(--font-family-mono);" />
+            </div>
+            <div class="input-group" id="ramps-run-group" style="display: none;">
+              <label for="ramps-run" class="input-label">Run</label>
+              <input type="text" id="ramps-run" class="text-input" value="14.4m" placeholder="e.g. 14.4m" style="font-family: var(--font-family-mono);" />
+            </div>
+          </div>
+
+          <div class="calc-actions-row" style="margin-top: 0.5rem;">
+            <button type="button" id="btn-run-ramps" class="btn-calc-primary" style="width: 100%;">
+              <span>⚡ CALCULATE RAMP</span>
+              <kbd class="kbd-badge">↵</kbd>
+            </button>
+          </div>
+
+          <div id="ramps-error-msg" class="input-error-banner" style="display: none; margin-top: 0.75rem;" role="alert"></div>
+
+          <!-- Reference configuration -->
+          <details style="margin-top: 1rem; border: 1px solid var(--border-color-light); border-radius: 6px; padding: 0.6rem 0.75rem; background: var(--bg-card-header);">
+            <summary style="cursor: pointer; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.04em;">Educational Reference (configurable)</summary>
+            <p style="font-size: 0.74rem; color: var(--text-muted); margin: 0.5rem 0 0.75rem; line-height: 1.5;" id="ramps-reference-note"></p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+              <div class="input-group">
+                <label for="ramps-ref-target" class="input-label" style="font-size: 0.72rem;">Target ratio (1 : X)</label>
+                <input type="number" id="ramps-ref-target" class="text-input" value="12" min="1" step="0.5" style="font-family: var(--font-family-mono);" />
+              </div>
+              <div class="input-group">
+                <label for="ramps-ref-min" class="input-label" style="font-size: 0.72rem;">Band min (1 : X)</label>
+                <input type="number" id="ramps-ref-min" class="text-input" value="8" min="1" step="0.5" style="font-family: var(--font-family-mono);" />
+              </div>
+              <div class="input-group">
+                <label for="ramps-ref-max" class="input-label" style="font-size: 0.72rem;">Band max (1 : X)</label>
+                <input type="number" id="ramps-ref-max" class="text-input" value="20" min="1" step="0.5" style="font-family: var(--font-family-mono);" />
+              </div>
+            </div>
+          </details>
+
+          <!-- Target comparison -->
+          <div class="ramps-targets-block" style="margin-top: 1rem;">
+            <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.4rem;">Target Slopes — Common Study Values (design targets, not legal requirements)</div>
+            <div id="ramps-targets-body" style="display: flex; flex-direction: column; gap: 0.35rem;"></div>
+          </div>
+        </div>
+
+        <!-- Right Column: Result + Diagram + Reference -->
+        <div class="archi-card result-panel" id="ramps-result-panel" data-state="ready">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <div class="result-header">
+            <span class="result-label">RAMP GEOMETRY</span>
+            <span id="ramps-summary-badge" class="unit-system-tag" style="font-size: 0.7rem;">—</span>
+          </div>
+
+          <div class="ramps-result-hero" style="display: flex; align-items: baseline; gap: 0.6rem; margin: 0.6rem 0;">
+            <span id="ramps-hero-val" class="result-hero-value" style="font-size: clamp(1.8rem, 4.5vw, 2.6rem); font-weight: 800; color: var(--accent-primary); font-family: var(--font-family-mono);">—</span>
+            <span id="ramps-hero-label" style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 700;">RUN</span>
+          </div>
+
+          <div class="ramps-metrics-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.5rem; margin-bottom: 0.9rem;">
+            <div class="unit-chip"><span class="unit-label">Rise</span><span id="ramps-rise-val" class="unit-val">—</span></div>
+            <div class="unit-chip"><span class="unit-label">Run</span><span id="ramps-run-val" class="unit-val">—</span></div>
+            <div class="unit-chip"><span class="unit-label">Slope</span><span id="ramps-slope-val" class="unit-val">—</span></div>
+            <div class="unit-chip"><span class="unit-label">Ratio</span><span id="ramps-ratio-val" class="unit-val">—</span></div>
+            <div class="unit-chip"><span class="unit-label">Angle</span><span id="ramps-angle-val" class="unit-val">—</span></div>
+            <div class="unit-chip"><span class="unit-label">Flight Length</span><span id="ramps-flight-val" class="unit-val">—</span></div>
+          </div>
+
+          <!-- Proportional diagram from actual result geometry -->
+          <div id="ramps-svg-wrap" style="margin: 0.5rem 0 0.9rem; border: 1px solid var(--border-color-light); border-radius: 6px; background: var(--bg-card-header); padding: 0.5rem;" aria-live="polite"></div>
+
+          <!-- Available-run analysis (Mode B focus) -->
+          <div id="ramps-run-analysis" style="display: none; border: 1px solid var(--border-color-light); border-radius: 6px; padding: 0.6rem 0.75rem; background: var(--bg-card-header); margin-bottom: 0.9rem;">
+            <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.35rem;">Available-Run Analysis</div>
+            <div id="ramps-run-analysis-body" style="font-size: 0.8rem; color: var(--text-primary); line-height: 1.55; font-family: var(--font-family-mono);"></div>
+          </div>
+
+          <!-- Reference status -->
+          <div class="ramps-reference-row" style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.9rem;">
+            <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary);">Reference:</span>
+            <span id="ramps-ref-status" class="type-badge badge-seg" style="font-size: 0.68rem;">—</span>
+            <span id="ramps-ref-detail" style="font-size: 0.72rem; color: var(--text-muted);"></span>
+          </div>
+
+          <div class="result-actions-strip" style="flex-wrap: wrap; gap: 0.5rem;">
+            <button type="button" id="ramps-copy-result-btn" class="result-action-btn" title="Copy the ramp result summary">
+              <span>📋 Copy Result</span>
+            </button>
+            <button type="button" id="ramps-copy-schedule-btn" class="result-action-btn" title="Copy a tab-separated ramp schedule">
+              <span>Copy Schedule</span>
+            </button>
+            <button type="button" id="ramps-send-cad-btn" class="result-action-btn" title="Send ramp values to CAD Handoff (Mode 13)">
+              <span>🚀 Send to CAD</span>
+            </button>
+            <button type="button" id="ramps-send-workspace-btn" class="result-action-btn" title="Add rise/run values to Dimension Workspace">
+              <span>📐 To Workspace</span>
+            </button>
+            <button type="button" id="ramps-save-journal-btn" class="result-action-btn" title="Save ramp result to Calculation Journal">
+              <span>Save to Journal</span>
+            </button>
+            <button type="button" id="ramps-save-project-btn" class="result-action-btn" title="Save this ramp into the project document (versioned project store)">
               <span>💾 Save to Project</span>
             </button>
           </div>

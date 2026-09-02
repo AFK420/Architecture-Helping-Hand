@@ -103,6 +103,7 @@ import { createBatchCadView } from './views/batch-cad.js';
 import { createQuickDimensionView } from './views/quick-dimension.js';
 import { createHistoryView } from './views/history.js';
 import { createStairsView } from './views/stairs.js';
+import { createRampsView } from './views/ramps.js';
 import { StorageService } from '../services/storage.js';
 import { createProjectStore } from '../services/store.js';
 import { AudioService } from '../services/audio.js';
@@ -333,6 +334,13 @@ export function initializeApp() {
       mode: 'rise_desired_riser',
       objective: 'comfortable_proportion',
       displayUnit: 'mm',
+      lastResult: null
+    },
+
+    // Mode 15: Ramp Calculator
+    ramps: {
+      mode: 'rise_desired_slope',
+      displayUnit: 'm',
       lastResult: null
     }
   };
@@ -811,7 +819,44 @@ export function initializeApp() {
     stairsSendCadBtn: document.getElementById('stairs-send-cad-btn'),
     stairsSendWorkspaceBtn: document.getElementById('stairs-send-workspace-btn'),
     stairsSaveJournalBtn: document.getElementById('stairs-save-journal-btn'),
-    stairsSaveProjectBtn: document.getElementById('stairs-save-project-btn')
+    stairsSaveProjectBtn: document.getElementById('stairs-save-project-btn'),
+
+    // Mode 15: Ramp Calculator Elements
+    rampsModeSelect: document.getElementById('ramps-mode-select'),
+    rampsRiseGroup: document.getElementById('ramps-rise-group'),
+    rampsRise: document.getElementById('ramps-rise'),
+    rampsSlopeGroup: document.getElementById('ramps-slope-group'),
+    rampsSlope: document.getElementById('ramps-slope'),
+    rampsRunGroup: document.getElementById('ramps-run-group'),
+    rampsRun: document.getElementById('ramps-run'),
+    btnRunRamps: document.getElementById('btn-run-ramps'),
+    rampsErrorMsg: document.getElementById('ramps-error-msg'),
+    rampsRefTarget: document.getElementById('ramps-ref-target'),
+    rampsRefMin: document.getElementById('ramps-ref-min'),
+    rampsRefMax: document.getElementById('ramps-ref-max'),
+    rampsReferenceNote: document.getElementById('ramps-reference-note'),
+    rampsResultPanel: document.getElementById('ramps-result-panel'),
+    rampsSummaryBadge: document.getElementById('ramps-summary-badge'),
+    rampsHeroVal: document.getElementById('ramps-hero-val'),
+    rampsHeroLabel: document.getElementById('ramps-hero-label'),
+    rampsRiseVal: document.getElementById('ramps-rise-val'),
+    rampsRunVal: document.getElementById('ramps-run-val'),
+    rampsSlopeVal: document.getElementById('ramps-slope-val'),
+    rampsRatioVal: document.getElementById('ramps-ratio-val'),
+    rampsAngleVal: document.getElementById('ramps-angle-val'),
+    rampsFlightVal: document.getElementById('ramps-flight-val'),
+    rampsSvgWrap: document.getElementById('ramps-svg-wrap'),
+    rampsRunAnalysis: document.getElementById('ramps-run-analysis'),
+    rampsRunAnalysisBody: document.getElementById('ramps-run-analysis-body'),
+    rampsRefStatus: document.getElementById('ramps-ref-status'),
+    rampsRefDetail: document.getElementById('ramps-ref-detail'),
+    rampsTargetsBody: document.getElementById('ramps-targets-body'),
+    rampsCopyResultBtn: document.getElementById('ramps-copy-result-btn'),
+    rampsCopyScheduleBtn: document.getElementById('ramps-copy-schedule-btn'),
+    rampsSendCadBtn: document.getElementById('ramps-send-cad-btn'),
+    rampsSendWorkspaceBtn: document.getElementById('ramps-send-workspace-btn'),
+    rampsSaveJournalBtn: document.getElementById('ramps-save-journal-btn'),
+    rampsSaveProjectBtn: document.getElementById('ramps-save-project-btn')
   };
 
   // ---------------------------------------------------------------------------
@@ -995,6 +1040,9 @@ export function initializeApp() {
     }
     else if (targetMode === 'stairs') {
       views.callController('stairs', 'calculate');
+    }
+    else if (targetMode === 'ramps') {
+      views.callController('ramps', 'calculate');
     }
   }
 
@@ -2394,6 +2442,9 @@ export function initializeApp() {
         break;
       case 'nav-stairs':
         switchMode('stairs');
+        break;
+      case 'nav-ramps':
+        switchMode('ramps');
         break;
       case 'nav-cad-clipboard':
         switchMode('cad_clipboard');
@@ -4422,6 +4473,51 @@ export function initializeApp() {
       dom.stairsSaveProjectBtn.addEventListener('click', () => views.callController('stairs', 'saveToProject'));
     }
 
+    // Mode 15: Ramp Calculator Listeners
+    if (dom.rampsModeSelect) {
+      dom.rampsModeSelect.addEventListener('change', () => {
+        state.ramps.mode = dom.rampsModeSelect.value;
+        views.callController('ramps', 'syncModeVisibility');
+        views.callController('ramps', 'calculate', true);
+      });
+    }
+    [dom.rampsRise, dom.rampsSlope, dom.rampsRun].forEach(el => {
+      if (el) {
+        el.addEventListener('input', () => views.callController('ramps', 'calculate'));
+        el.addEventListener('change', () => views.callController('ramps', 'calculate', true));
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            views.callController('ramps', 'calculate', true);
+          }
+        });
+      }
+    });
+    [dom.rampsRefTarget, dom.rampsRefMin, dom.rampsRefMax].forEach(el => {
+      if (el) el.addEventListener('input', () => views.callController('ramps', 'calculate'));
+    });
+    if (dom.btnRunRamps) {
+      dom.btnRunRamps.addEventListener('click', () => views.callController('ramps', 'calculate', true));
+    }
+    if (dom.rampsCopyResultBtn) {
+      dom.rampsCopyResultBtn.addEventListener('click', () => views.callController('ramps', 'copyResult'));
+    }
+    if (dom.rampsCopyScheduleBtn) {
+      dom.rampsCopyScheduleBtn.addEventListener('click', () => views.callController('ramps', 'copySchedule'));
+    }
+    if (dom.rampsSendCadBtn) {
+      dom.rampsSendCadBtn.addEventListener('click', () => views.callController('ramps', 'sendToCad'));
+    }
+    if (dom.rampsSendWorkspaceBtn) {
+      dom.rampsSendWorkspaceBtn.addEventListener('click', () => views.callController('ramps', 'sendToWorkspace'));
+    }
+    if (dom.rampsSaveJournalBtn) {
+      dom.rampsSaveJournalBtn.addEventListener('click', () => views.callController('ramps', 'saveToJournal'));
+    }
+    if (dom.rampsSaveProjectBtn) {
+      dom.rampsSaveProjectBtn.addEventListener('click', () => views.callController('ramps', 'saveToProject'));
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -4633,6 +4729,7 @@ export function initializeApp() {
     toggleHistoryDrawerRef: () => views.callController('history', 'toggleHistoryDrawer')
   }));
   views.register(createStairsView(viewContext));
+  views.register(createRampsView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();
