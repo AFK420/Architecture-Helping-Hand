@@ -2219,7 +2219,17 @@ export function initializeApp() {
         if (dom.converterInputUnit) dom.converterInputUnit.value = snap.inUnit;
         if (dom.converterOutputUnit) dom.converterOutputUnit.value = snap.outUnit;
         state.direction = snap.direction || 'drawing_to_real';
-        updateDirectionUI();
+        if (state.direction === 'drawing_to_real') {
+          if (dom.converterInputBadge) dom.converterInputBadge.textContent = 'Drawing Measurement (Paper)';
+          if (dom.converterOutputBadge) dom.converterOutputBadge.textContent = 'Real-World Dimension';
+          if (dom.converterFlowFrom) dom.converterFlowFrom.textContent = '📐 Paper Drawing';
+          if (dom.converterFlowTo) dom.converterFlowTo.textContent = '🏛️ Real-World Site';
+        } else {
+          if (dom.converterInputBadge) dom.converterInputBadge.textContent = 'Real-World Dimension';
+          if (dom.converterOutputBadge) dom.converterOutputBadge.textContent = 'Drawing Measurement (Paper)';
+          if (dom.converterFlowFrom) dom.converterFlowFrom.textContent = '🏛️ Real-World Site';
+          if (dom.converterFlowTo) dom.converterFlowTo.textContent = '📐 Paper Drawing';
+        }
         calculateConverter();
         break;
       case 'rescale':
@@ -2245,8 +2255,8 @@ export function initializeApp() {
         if (dom.areavolInputVal) dom.areavolInputVal.value = snap.val;
         state.calcType = snap.type || 'area';
         state.calcDirection = snap.direction || 'drawing_to_real';
-        updateAreaVolumeTypeUI();
-        updateAreaVolumeDirUI();
+        dom.areavolTypeBtns.forEach(b => b.classList.toggle('active', b.dataset.type === state.calcType));
+        dom.areavolDirBtns.forEach(b => b.classList.toggle('active', b.dataset.dir === state.calcDirection));
         updateAreaVolumeUnitSelects();
         if (dom.areavolInputUnit) dom.areavolInputUnit.value = snap.inUnit;
         if (dom.areavolOutputUnit) dom.areavolOutputUnit.value = snap.outUnit;
@@ -4547,6 +4557,21 @@ export function initializeApp() {
     }
   }
 
+  /**
+   * Escapes user-entered batch text for safe interpolation into row HTML.
+   * Row names come from pasted user input, so `<`, `>`, `&`, quotes must be
+   * escaped before entering tr.innerHTML.
+   */
+  function escapeBatchCell(val) {
+    if (val === null || val === undefined) return '';
+    return String(val)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function renderBatchResults() {
     const batch = state.batchCad;
     const result = batch.lastResult || { rows: [], summary: { totalRows: 0, validRows: 0, invalidRows: 0, convertedRows: 0 } };
@@ -4608,10 +4633,10 @@ export function initializeApp() {
             <input type="checkbox" class="batch-row-checkbox" data-id="${row.id}" ${batch.selectedIds.has(row.id) ? 'checked' : ''} aria-label="Select row ${row.index}" />
           </td>
           <td style="font-family: var(--font-family-mono); font-size: 0.75rem; color: var(--text-muted);">${row.index}</td>
-          <td style="font-weight: 600; color: var(--text-primary);">${escapeHTML(row.name)}</td>
+          <td style="font-weight: 600; color: var(--text-primary);">${escapeBatchCell(row.name)}</td>
           <td><span class="type-badge ${roleBadgeClass}" style="font-size: 0.65rem;">${roleTag}</span></td>
-          <td style="font-family: var(--font-family-mono); font-size: 0.8rem; color: var(--text-secondary);">${escapeHTML(row.sourceFormatted)}</td>
-          <td style="font-family: var(--font-family-mono); font-size: 0.85rem; font-weight: 700; color: ${row.valid ? 'var(--accent-primary)' : 'var(--color-error, #ef4444)'};">${escapeHTML(row.targetFormatted)}</td>
+          <td style="font-family: var(--font-family-mono); font-size: 0.8rem; color: var(--text-secondary);">${escapeBatchCell(row.sourceFormatted)}</td>
+          <td style="font-family: var(--font-family-mono); font-size: 0.85rem; font-weight: 700; color: ${row.valid ? 'var(--accent-primary)' : 'var(--color-error, #ef4444)'};">${escapeBatchCell(row.targetFormatted)}</td>
           <td style="text-align: center;">
             <span class="batch-status-pill ${row.valid ? (row.status === 'UNCHANGED' ? 'unchanged' : 'valid') : 'invalid'}">
               ${row.valid ? (row.status === 'UNCHANGED' ? 'UNCHANGED' : '✓ VALID') : '⚠ INVALID'}
@@ -4999,20 +5024,22 @@ export function initializeApp() {
 
     if (targetTool === 'workspace') {
       state.workspace.entries.push(payload.entry);
-      saveWorkspaceState();
+      saveWorkspace();
       switchMode('workspace');
+      renderWorkspace();
       showToast(`Added "${payload.entry.name}" to Dimension Workspace`);
     } else if (targetTool === 'multiscale') {
       if (dom.multiscaleInput) {
         dom.multiscaleInput.value = payload.dimensionInput;
       }
       switchMode('multiscale');
-      runMultiScaleComparison(true);
+      calculateMultiScale(true);
       showToast('Loaded dimension in Multi-Scale Comparison');
     } else if (targetTool === 'chain') {
-      state.chains.segments.push(payload.segment);
-      saveChainState();
+      state.activeChain.segments.push(payload.segment);
+      saveChain();
       switchMode('chains');
+      calculateAndRenderChain(true);
       showToast(`Added "${payload.segment.name}" to Dimension Chain`);
     } else if (targetTool === 'cad_clipboard') {
       state.cadClipboard.manualInput = payload.manualInput;
@@ -5021,7 +5048,7 @@ export function initializeApp() {
       if (dom.cadManualGroup) dom.cadManualGroup.style.display = 'block';
       if (dom.cadManualInput) dom.cadManualInput.value = payload.manualInput;
       switchMode('cad_clipboard');
-      updateCadPreview();
+      renderCadClipboard();
       showToast('Transferred dimensions to CAD Clipboard');
     } else if (targetTool === 'journal') {
       HistoryService.addEntry(payload);

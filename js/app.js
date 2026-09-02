@@ -7203,6 +7203,141 @@ class CommandRegistryClass {
 const CommandRegistry = new CommandRegistryClass();
 
   // =========================================================================
+  // MODULE: ViewRegistry
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - UI View Registry & Shared View Context
+ * Stabilization 1: UI modularization infrastructure.
+ *
+ * Views own one feature's controller logic (state transitions, rendering,
+ * feature event wiring). The main app controller stays responsible for
+ * startup, global navigation, the command palette, global keyboard handling,
+ * and lifecycle. Views never import each other — cross-feature actions go
+ * through the shared context that the app passes in on mount.
+ *
+ * View contract (deliberately minimal — matches how the app already works):
+ *   createXView(context) -> {
+ *     id,                  // stable view id, e.g. 'converter'
+ *     mount(),             // called once at startup, after DOM is available
+ *     onModeEnter?(),      // called when the user switches into the mode
+ *     onModeLeave?(),      // called when the user switches out of the mode
+ *     getController?()     // returns named functions other code may call
+ *                          // via context.getController(viewId, name)
+ *   }
+ *
+ * The context is a single frozen object assembled by app.js:
+ *   { state, dom, showToast, copyToClipboard, downloadFile, setUnifiedResultState,
+ *     setRunButtonState, switchMode, getController, AudioService, StorageService,
+ *     HistoryService, CommandRegistry, logCurrentCalculationToHistory }
+ *
+ * No view may reach module-global mutable state; everything flows through the
+ * context so ownership stays explicit and testable.
+ */
+
+/**
+ * Creates the view registry. The registry enforces:
+ *  - unique view ids
+ *  - each view exposes mount
+ *  - controller lookups fail loudly (no silent undefined calls)
+ */
+function createViewRegistry() {
+  const views = new Map();
+
+  function register(view) {
+    if (!view || typeof view !== 'object') {
+      throw new Error('View must be an object');
+    }
+    if (typeof view.id !== 'string' || !view.id) {
+      throw new Error('View must have a string id');
+    }
+    if (typeof view.mount !== 'function') {
+      throw new Error(`View "${view.id}" must expose mount()`);
+    }
+    if (views.has(view.id)) {
+      throw new Error(`View "${view.id}" is already registered`);
+    }
+    views.set(view.id, view);
+    return view;
+  }
+
+  function get(id) {
+    return views.get(id) || null;
+  }
+
+  function requireView(id) {
+    const view = views.get(id);
+    if (!view) {
+      throw new Error(`Unknown view "${id}". Registered: ${ids().join(', ')}`);
+    }
+    return view;
+  }
+
+  /**
+   * Calls a named controller function exposed by a view. Throws when either
+   * the view or the function is missing so wiring mistakes surface at the
+   * call site instead of failing silently in an event handler.
+   */
+  function callController(id, fnName, ...args) {
+    const view = requireView(id);
+    const controller = typeof view.getController === 'function' ? view.getController() : null;
+    if (!controller || typeof controller[fnName] !== 'function') {
+      throw new Error(`View "${id}" does not expose controller function "${fnName}"`);
+    }
+    return controller[fnName](...args);
+  }
+
+  function hasController(id, fnName) {
+    const view = views.get(id);
+    if (!view) return false;
+    const controller = typeof view.getController === 'function' ? view.getController() : null;
+    return !!(controller && typeof controller[fnName] === 'function');
+  }
+
+  function ids() {
+    return Array.from(views.keys());
+  }
+
+  function mountAll() {
+    for (const id of ids()) {
+      views.get(id).mount();
+    }
+  }
+
+  /**
+   * Notifies the active and previous views of a mode switch. Views without
+   * the hooks are skipped silently — the hooks are optional by contract.
+   */
+  function notifyModeChange(previousMode, nextMode) {
+    const prev = views.get(previousMode);
+    if (prev && typeof prev.onModeLeave === 'function') prev.onModeLeave();
+    const next = views.get(nextMode);
+    if (next && typeof next.onModeEnter === 'function') next.onModeEnter();
+  }
+
+  return { register, get, requireView, callController, hasController, ids, mountAll, notifyModeChange };
+}
+
+/**
+ * Validates the shared context shape once at startup so a missing helper
+ * fails loudly during boot instead of inside a random event handler.
+ * Global services (AudioService etc.) are optional entries — some views
+ * may not need them, but the core interaction helpers must exist.
+ */
+function validateViewContext(context) {
+  const required = [
+    'state', 'dom', 'showToast', 'copyToClipboard', 'setUnifiedResultState',
+    'getController', 'views'
+  ];
+  const missing = required.filter(key => !context || context[key] === undefined);
+  if (missing.length > 0) {
+    throw new Error(`View context is missing required entries: ${missing.join(', ')}`);
+  }
+  return true;
+}
+
+
+  // =========================================================================
   // MODULE: Visualizer
   // =========================================================================
 
@@ -8076,6 +8211,229 @@ function getFurniturePlanSVG(item) {
         </svg>
       `;
   }
+}
+
+
+  // =========================================================================
+  // MODULE: ViewConverter
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Converter View (Mode 1)
+ * Extracted from ui/app.js during Stabilization 1. Owns Mode 1's calculation
+ * controller: result rendering, equivalents breakdown, direction swap.
+ * Event wiring for this feature remains in app.js's attachEventListeners via
+ * the shared context (controller lookups), keeping one wiring surface.
+ */
+
+
+
+
+
+
+
+function createConverterView(context) {
+  const { state, dom, setUnifiedResultState, AudioService } = context;
+
+  function calculateConverter() {
+    const rawRatio = parseFloat(dom.scaleRatioInput?.value);
+    const parsedRatio = isNaN(rawRatio) || rawRatio <= 0 ? 50 : rawRatio;
+    state.scaleRatio = parsedRatio;
+
+    const rawInput = dom.converterInputVal?.value || '';
+    state.converterInputVal = rawInput;
+    state.converterInputUnit = dom.converterInputUnit?.value || 'cm';
+    state.converterOutputUnit = dom.converterOutputUnit?.value || 'm';
+
+    // Actionable Empty Check
+    if (!rawInput || rawInput.trim() === '') {
+      setUnifiedResultState({
+        toolPrefix: 'converter',
+        status: 'error',
+        errorText: '⚠️ Drawing Measurement: Enter a measurement dimension (e.g. 10, 12.5, 3 1/2, or 12\'-6").',
+        btn: dom.btnRunConverter
+      });
+      if (dom.converterInputVal) dom.converterInputVal.classList.add('input-error');
+      if (state.lastValidConverter) {
+        if (dom.converterResultVal) dom.converterResultVal.textContent = state.lastValidConverter.val;
+        if (dom.converterResultUnit) dom.converterResultUnit.textContent = state.lastValidConverter.unit;
+      }
+      return;
+    }
+
+    const parseRes = parseInput(rawInput, { allowNegative: false });
+
+    // Handle Unit Suffix extraction if user typed e.g. "15.5cm"
+    if (parseRes.isValid && parseRes.detectedUnit) {
+      state.converterInputUnit = parseRes.detectedUnit;
+      if (dom.converterInputUnit) dom.converterInputUnit.value = parseRes.detectedUnit;
+    }
+
+    if (!parseRes.isValid || parseRes.value <= 0) {
+      setUnifiedResultState({
+        toolPrefix: 'converter',
+        status: 'error',
+        errorText: `⚠️ Drawing Measurement: Enter a positive dimension greater than zero (${parseRes.error || 'e.g. 10, 12.5, 3 1/2'}).`,
+        btn: dom.btnRunConverter
+      });
+      if (dom.converterInputVal) dom.converterInputVal.classList.add('input-error');
+
+      // Preserve previous valid result if available
+      if (state.lastValidConverter) {
+        if (dom.converterResultVal) dom.converterResultVal.textContent = state.lastValidConverter.val;
+        if (dom.converterResultUnit) dom.converterResultUnit.textContent = state.lastValidConverter.unit;
+      } else {
+        if (dom.converterResultVal) dom.converterResultVal.textContent = '---';
+      }
+      return;
+    }
+
+    if (dom.converterInputVal) dom.converterInputVal.classList.remove('input-error');
+
+    try {
+      const calcRes = scaleDimension({
+        value: parseRes.value,
+        unitKey: state.converterInputUnit,
+        ratio: state.scaleRatio,
+        direction: state.direction,
+        targetUnitKey: state.converterOutputUnit
+      });
+
+      const formattedVal = formatNumber(calcRes.value, state.precision);
+
+      // Cache valid result
+      state.lastValidConverter = {
+        val: formattedVal,
+        unit: state.converterOutputUnit,
+        realMeters: calcRes.realMeters
+      };
+
+      // Update Result Display
+      if (dom.converterResultVal) {
+        dom.converterResultVal.textContent = formattedVal;
+      }
+      if (dom.converterResultUnit) {
+        dom.converterResultUnit.textContent = state.converterOutputUnit;
+      }
+
+      // Update Secondary Architectural Readout
+      if (dom.converterSecondaryReadout) {
+        const isMetric = ['mm', 'cm', 'm', 'km'].includes(state.converterOutputUnit);
+        if (isMetric) {
+          const inInches = calcRes.realMeters / UNITS.in.toMeters;
+          const ftIn = formatFeetInches(inInches);
+          const decFt = formatNumber(calcRes.realMeters / UNITS.ft.toMeters, 2);
+          dom.converterSecondaryReadout.textContent = `${ftIn} (${decFt} ft)`;
+        } else {
+          const mVal = formatNumber(calcRes.realMeters, 3);
+          const cmVal = formatNumber(calcRes.realMeters * 100, 1);
+          dom.converterSecondaryReadout.textContent = `${mVal} m (${cmVal} cm)`;
+        }
+      }
+
+      // Update Math Transformation Microcopy
+      if (dom.converterMathFormula) {
+        if (state.direction === 'drawing_to_real') {
+          dom.converterMathFormula.innerHTML = `<strong>Formula:</strong> Real Site = Drawing (${formatNumber(parseRes.value, 2)} ${state.converterInputUnit}) × Scale (${state.scaleRatio}) = <strong>${formattedVal} ${state.converterOutputUnit}</strong>`;
+        } else {
+          dom.converterMathFormula.innerHTML = `<strong>Formula:</strong> Drawing Paper = Real Site (${formatNumber(parseRes.value, 2)} ${state.converterInputUnit}) ÷ Scale (${state.scaleRatio}) = <strong>${formattedVal} ${state.converterOutputUnit}</strong>`;
+        }
+      }
+
+      // Update Breakdown Equivalents Table
+      renderEquivalentsBreakdown(calcRes.realMeters);
+
+      // Update Visual Scale Bar & Silhouette
+      updateVisualization({
+        realMeters: calcRes.realMeters,
+        scaleRatio: state.scaleRatio,
+        drawingMeters: calcRes.drawingMeters,
+        containerId: 'visualizer-container'
+      });
+
+      // Update Unified Result Lifecycle State & Context Strip
+      const directionLabel = state.direction === 'drawing_to_real' ? 'Paper Drawing' : 'Real Site';
+      setUnifiedResultState({
+        toolPrefix: 'converter',
+        status: 'success',
+        context: {
+          'Scale': `1:${state.scaleRatio}`,
+          'Source Input': `${formatNumber(parseRes.value, 2)} ${state.converterInputUnit} (${directionLabel})`
+        },
+        btn: dom.btnRunConverter
+      });
+    } catch (err) {
+      setUnifiedResultState({
+        toolPrefix: 'converter',
+        status: 'error',
+        errorText: `⚠️ Conversion error: ${err.message}`,
+        btn: dom.btnRunConverter
+      });
+    }
+  }
+
+  function renderEquivalentsBreakdown(realMeters) {
+    if (!dom.metricBreakdownList || !dom.imperialBreakdownList) return;
+    try {
+      const equivalents = getAllUnitEquivalents(realMeters);
+
+      dom.metricBreakdownList.innerHTML = equivalents.metric.map(item => `
+        <div class="equiv-row">
+          <span class="equiv-name">${item.label}</span>
+          <span class="equiv-val">${formatNumber(item.val, 3)} ${item.symbol}</span>
+        </div>
+      `).join('');
+
+      dom.imperialBreakdownList.innerHTML = equivalents.imperial.map(item => `
+        <div class="equiv-row">
+          <span class="equiv-name">${item.label}</span>
+          <span class="equiv-val">${item.key === 'ft_in' ? item.val : `${formatNumber(item.val, 3)} ${item.symbol}`}</span>
+        </div>
+      `).join('');
+    } catch (e) {
+      // Guard against non-finite breakdown
+    }
+  }
+
+  function swapDirection() {
+    state.direction = state.direction === 'drawing_to_real' ? 'real_to_drawing' : 'drawing_to_real';
+
+    // Swap input/output unit selections
+    const prevInUnit = dom.converterInputUnit?.value || 'cm';
+    const prevOutUnit = dom.converterOutputUnit?.value || 'm';
+
+    if (dom.converterInputUnit) dom.converterInputUnit.value = prevOutUnit;
+    if (dom.converterOutputUnit) dom.converterOutputUnit.value = prevInUnit;
+
+    state.converterInputUnit = prevOutUnit;
+    state.converterOutputUnit = prevInUnit;
+
+    if (state.direction === 'drawing_to_real') {
+      if (dom.converterInputBadge) dom.converterInputBadge.textContent = 'Drawing Measurement (Paper)';
+      if (dom.converterOutputBadge) dom.converterOutputBadge.textContent = 'Real-World Dimension';
+      if (dom.converterFlowFrom) dom.converterFlowFrom.textContent = '📐 Paper Drawing';
+      if (dom.converterFlowTo) dom.converterFlowTo.textContent = '🏛️ Real-World Site';
+    } else {
+      if (dom.converterInputBadge) dom.converterInputBadge.textContent = 'Real-World Dimension';
+      if (dom.converterOutputBadge) dom.converterOutputBadge.textContent = 'Drawing Measurement (Paper)';
+      if (dom.converterFlowFrom) dom.converterFlowFrom.textContent = '🏛️ Real-World Site';
+      if (dom.converterFlowTo) dom.converterFlowTo.textContent = '📐 Paper Drawing';
+    }
+
+    AudioService.playSwapSound();
+    calculateConverter();
+  }
+
+  return {
+    id: 'converter',
+    mount() {
+      // Initial calculation once DOM is available
+      calculateConverter();
+    },
+    getController() {
+      return { calculateConverter, swapDirection, renderEquivalentsBreakdown };
+    }
+  };
 }
 
 
@@ -10207,7 +10565,17 @@ function initializeApp() {
         if (dom.converterInputUnit) dom.converterInputUnit.value = snap.inUnit;
         if (dom.converterOutputUnit) dom.converterOutputUnit.value = snap.outUnit;
         state.direction = snap.direction || 'drawing_to_real';
-        updateDirectionUI();
+        if (state.direction === 'drawing_to_real') {
+          if (dom.converterInputBadge) dom.converterInputBadge.textContent = 'Drawing Measurement (Paper)';
+          if (dom.converterOutputBadge) dom.converterOutputBadge.textContent = 'Real-World Dimension';
+          if (dom.converterFlowFrom) dom.converterFlowFrom.textContent = '📐 Paper Drawing';
+          if (dom.converterFlowTo) dom.converterFlowTo.textContent = '🏛️ Real-World Site';
+        } else {
+          if (dom.converterInputBadge) dom.converterInputBadge.textContent = 'Real-World Dimension';
+          if (dom.converterOutputBadge) dom.converterOutputBadge.textContent = 'Drawing Measurement (Paper)';
+          if (dom.converterFlowFrom) dom.converterFlowFrom.textContent = '🏛️ Real-World Site';
+          if (dom.converterFlowTo) dom.converterFlowTo.textContent = '📐 Paper Drawing';
+        }
         calculateConverter();
         break;
       case 'rescale':
@@ -10233,8 +10601,8 @@ function initializeApp() {
         if (dom.areavolInputVal) dom.areavolInputVal.value = snap.val;
         state.calcType = snap.type || 'area';
         state.calcDirection = snap.direction || 'drawing_to_real';
-        updateAreaVolumeTypeUI();
-        updateAreaVolumeDirUI();
+        dom.areavolTypeBtns.forEach(b => b.classList.toggle('active', b.dataset.type === state.calcType));
+        dom.areavolDirBtns.forEach(b => b.classList.toggle('active', b.dataset.dir === state.calcDirection));
         updateAreaVolumeUnitSelects();
         if (dom.areavolInputUnit) dom.areavolInputUnit.value = snap.inUnit;
         if (dom.areavolOutputUnit) dom.areavolOutputUnit.value = snap.outUnit;
@@ -12535,6 +12903,21 @@ function initializeApp() {
     }
   }
 
+  /**
+   * Escapes user-entered batch text for safe interpolation into row HTML.
+   * Row names come from pasted user input, so `<`, `>`, `&`, quotes must be
+   * escaped before entering tr.innerHTML.
+   */
+  function escapeBatchCell(val) {
+    if (val === null || val === undefined) return '';
+    return String(val)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function renderBatchResults() {
     const batch = state.batchCad;
     const result = batch.lastResult || { rows: [], summary: { totalRows: 0, validRows: 0, invalidRows: 0, convertedRows: 0 } };
@@ -12596,10 +12979,10 @@ function initializeApp() {
             <input type="checkbox" class="batch-row-checkbox" data-id="${row.id}" ${batch.selectedIds.has(row.id) ? 'checked' : ''} aria-label="Select row ${row.index}" />
           </td>
           <td style="font-family: var(--font-family-mono); font-size: 0.75rem; color: var(--text-muted);">${row.index}</td>
-          <td style="font-weight: 600; color: var(--text-primary);">${escapeHTML(row.name)}</td>
+          <td style="font-weight: 600; color: var(--text-primary);">${escapeBatchCell(row.name)}</td>
           <td><span class="type-badge ${roleBadgeClass}" style="font-size: 0.65rem;">${roleTag}</span></td>
-          <td style="font-family: var(--font-family-mono); font-size: 0.8rem; color: var(--text-secondary);">${escapeHTML(row.sourceFormatted)}</td>
-          <td style="font-family: var(--font-family-mono); font-size: 0.85rem; font-weight: 700; color: ${row.valid ? 'var(--accent-primary)' : 'var(--color-error, #ef4444)'};">${escapeHTML(row.targetFormatted)}</td>
+          <td style="font-family: var(--font-family-mono); font-size: 0.8rem; color: var(--text-secondary);">${escapeBatchCell(row.sourceFormatted)}</td>
+          <td style="font-family: var(--font-family-mono); font-size: 0.85rem; font-weight: 700; color: ${row.valid ? 'var(--accent-primary)' : 'var(--color-error, #ef4444)'};">${escapeBatchCell(row.targetFormatted)}</td>
           <td style="text-align: center;">
             <span class="batch-status-pill ${row.valid ? (row.status === 'UNCHANGED' ? 'unchanged' : 'valid') : 'invalid'}">
               ${row.valid ? (row.status === 'UNCHANGED' ? 'UNCHANGED' : '✓ VALID') : '⚠ INVALID'}
@@ -12987,20 +13370,22 @@ function initializeApp() {
 
     if (targetTool === 'workspace') {
       state.workspace.entries.push(payload.entry);
-      saveWorkspaceState();
+      saveWorkspace();
       switchMode('workspace');
+      renderWorkspace();
       showToast(`Added "${payload.entry.name}" to Dimension Workspace`);
     } else if (targetTool === 'multiscale') {
       if (dom.multiscaleInput) {
         dom.multiscaleInput.value = payload.dimensionInput;
       }
       switchMode('multiscale');
-      runMultiScaleComparison(true);
+      calculateMultiScale(true);
       showToast('Loaded dimension in Multi-Scale Comparison');
     } else if (targetTool === 'chain') {
-      state.chains.segments.push(payload.segment);
-      saveChainState();
+      state.activeChain.segments.push(payload.segment);
+      saveChain();
       switchMode('chains');
+      calculateAndRenderChain(true);
       showToast(`Added "${payload.segment.name}" to Dimension Chain`);
     } else if (targetTool === 'cad_clipboard') {
       state.cadClipboard.manualInput = payload.manualInput;
@@ -13009,7 +13394,7 @@ function initializeApp() {
       if (dom.cadManualGroup) dom.cadManualGroup.style.display = 'block';
       if (dom.cadManualInput) dom.cadManualInput.value = payload.manualInput;
       switchMode('cad_clipboard');
-      updateCadPreview();
+      renderCadClipboard();
       showToast('Transferred dimensions to CAD Clipboard');
     } else if (targetTool === 'journal') {
       HistoryService.addEntry(payload);

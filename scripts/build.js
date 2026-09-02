@@ -54,7 +54,9 @@ export const BUNDLE_MODULES = [
   { name: 'Commands', file: path.join(srcDir, 'services', 'commands.js') },
 
   // --- UI (last: imports everything above) ---
+  { name: 'ViewRegistry', file: path.join(srcDir, 'ui', 'view-registry.js') },
   { name: 'Visualizer', file: path.join(srcDir, 'ui', 'visualizer.js') },
+  { name: 'ViewConverter', file: path.join(srcDir, 'ui', 'views', 'converter.js') },
   { name: 'App', file: path.join(srcDir, 'ui', 'app.js') }
 ];
 
