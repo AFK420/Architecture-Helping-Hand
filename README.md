@@ -3,7 +3,7 @@
 > **Professional Architectural Scale, Furniture Sizing & Multi-Unit Calculation Studio**  
 > *A high-precision, zero-dependency, tactile architectural conversion studio built for architects, interior designers, urban planners, physical model makers, and design students.*
 
-[![Tests](https://img.shields.io/badge/Tests-1476%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-1582%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-3--Tier%20Core%20%7C%20Frozen-10b981?style=flat-square)](ENGINEERING_RULES.md)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Vanilla)-f59e0b?style=flat-square)](package.json)
 [![License](https://img.shields.io/badge/License-MIT-6366f1?style=flat-square)](package.json)
@@ -142,7 +142,7 @@ The codebase has evolved through rigorous engineering, auditing, hardening, and 
 This repository serves as:
 1. **An Open-Source Reference Studio**: A tactile, zero-friction architectural scaling studio for architects, interior designers, landscape architects, students, and educators.
 2. **Zero-Dependency Architecture**: No React, no Vue, no webpack, no runtime `node_modules`. Anyone can clone the repository, double-click `index.html`, and use it immediately offline via `file:///`.
-3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **1,476 automated test assertions across 20 test suites** (authoritative count emitted by `npm test`).
+3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **1,582 automated test assertions across 22 test suites** (authoritative count emitted by `npm test`).
 4. **An Extensible Platform**: Prepared for future architectural geometry engines, CAD vector exports (SVG/DXF), and stair/ramp calculations.
 
 ---
@@ -434,7 +434,7 @@ python -m http.server 3500
 ### 3. Run Automated Test Suite
 ```bash
 npm test
-# Executes all 20 test suites (1,476 assertions, 100% passing)..
+# Executes all 22 test suites (1,582 assertions, 100% passing)...
 # The runner emits the authoritative total assertion count on completion.
 ```
 
@@ -467,6 +467,10 @@ node scripts/build.js --check
 
 ## 🔮 Future Roadmap
 
+* **Stabilization (Completed)**: The architecture is prepared for the phases below:
+  - **UI modularization**: feature controllers live in `src/ui/views/` behind a registry (`src/ui/view-registry.js`); `app.js` keeps global startup/navigation/palette/keyboard duties only.
+  - **Project Document Model** (`src/core/project.js`): a versioned, validated, serializable envelope with unknown-field preservation — the shared state for future Rooms, Walls, Furniture, Survey, snapshots, and AI context.
+  - **Versioned project store** (`src/services/store.js`): persists `{ version, project }` with a migration chain, loud refusal of newer-than-understood versions, controlled recovery from corrupted data, tiny pub/sub, and **non-destructive legacy import** (existing per-feature keys are read, never deleted). Project data and user preferences (theme, quick-dim prefs, favorites) are strictly separated.
 * **Phase 3: Extended Architectural Geometry & Room Area Engine**:
   - Multi-room space planning & net-to-gross area scheduler.
   - Wall thickness offset and clearance envelope calculator.

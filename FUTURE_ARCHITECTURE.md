@@ -45,6 +45,10 @@ When feature development begins in subsequent phases, new calculations will be a
 
 ## 3. Data Flow & Integration Pattern
 
+*(Update, September 2, 2026 — Stabilization phase landed two foundations this document planned for:*
+1. *`src/core/project.js` — the Project Document Model (versioned, validated, serializable envelope with unknown-field preservation).*
+2. *`src/services/store.js` — the versioned project store (migration chain, non-destructive legacy import, pub/sub). New features holding PROJECT data must persist through it; user preferences stay in their own keys. UI controllers now live per-feature in `src/ui/views/` behind `src/ui/view-registry.js`.)*
+
 Future UI modes (e.g. a Stair Calculator tab or Geometry Explorer) will strictly follow the established data flow:
 
 ```text

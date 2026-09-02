@@ -38,6 +38,36 @@ src/
   - MUST delegate all math, conversions, and parsing to `src/core/`.
   - MUST call `src/services/` for persistence and logging.
 
+### 1.4 Feature View Contract (`src/ui/views/`, added Stabilization 1)
+Feature controllers live in one module per mode/tool under `src/ui/views/`:
+`converter.js`, `rescaler.js`, `detector.js`, `area-volume.js`,
+`expression-multiscale.js`, `dimension-chains.js`, `cad-clipboard-handoff.js`,
+`batch-cad.js`, `quick-dimension.js`, `history.js`.
+
+* **Contract**: each view exports `createXView(context)` returning
+  `{ id, mount(), getController() }` (optional `onModeEnter`/`onModeLeave`).
+* **Context**: one frozen object assembled by `app.js` (`state`, `dom`, shared
+  helpers, services, `views`). Views MUST NOT import other views — cross-feature
+  calls go through `context.views.callController(viewId, fnName, ...args)`,
+  which fails loudly if the target view/function is missing.
+* **Registration**: every view is registered in `app.js` via the registry from
+  `src/ui/view-registry.js` (unique ids, required `mount`, validated context).
+* **Global responsibilities stay in `app.js`**: startup, mode navigation,
+  command palette, global keyboard handling, furniture/reference rendering,
+  and the workspace controller (registered inline so other views can reach
+  `saveWorkspace`/`renderWorkspace`).
+
+### 1.5 Project Data vs User Preferences (added Stabilization 3)
+* **Project data** (dimensions, chains, notes, snapshots, decisions, exports,
+  future rooms/walls/furniture) MUST flow through the versioned project store
+  (`src/services/store.js`), never through raw feature localStorage keys.
+* **User preferences** (theme, sound, default precision, quick-dim prefs,
+  favorites) remain in their existing per-feature keys.
+* The two MUST NOT be mixed in one key. Legacy per-feature keys holding
+  project-like data are migrated non-destructively via
+  `ProjectStore.importLegacy()` — the store reads legacy keys, never deletes
+  them.
+
 ---
 
 ## 2. Input Parser Contract
