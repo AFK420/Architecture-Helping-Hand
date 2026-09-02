@@ -114,6 +114,11 @@ import {
   getCadHandoffSummary,
   validateCadHandoffSelection
 } from '../core/cad-targets.js';
+import { createViewRegistry, validateViewContext } from './view-registry.js';
+import { createConverterView } from './views/converter.js';
+import { createRescalerView } from './views/rescaler.js';
+import { createDetectorView } from './views/detector.js';
+import { createAreaVolumeView } from './views/area-volume.js';
 import { StorageService } from '../services/storage.js';
 import { AudioService } from '../services/audio.js';
 import { HistoryService } from '../services/history.js';
@@ -928,10 +933,10 @@ export function initializeApp() {
     AudioService.playTick();
 
     // Trigger calculation refresh for active mode
-    if (targetMode === 'converter') calculateConverter();
-    else if (targetMode === 'rescale') calculateRescaler();
-    else if (targetMode === 'detector') calculateDetector();
-    else if (targetMode === 'area_volume') calculateAreaVolume();
+    if (targetMode === 'converter') views.callController('converter', 'calculateConverter');
+    else if (targetMode === 'rescale') views.callController('rescale', 'calculateRescaler');
+    else if (targetMode === 'detector') views.callController('detector', 'calculateDetector');
+    else if (targetMode === 'area_volume') views.callController('area_volume', 'calculateAreaVolume');
     else if (targetMode === 'furniture') renderFurnitureGrid();
     else if (targetMode === 'reference') renderReferenceChart();
     else if (targetMode === 'workspace') renderWorkspace();
@@ -986,6 +991,7 @@ export function initializeApp() {
   }
 
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // 5. Populate Dropdowns (Units, Scales)
   // ---------------------------------------------------------------------------
   function populateUnitSelects() {
@@ -994,35 +1000,13 @@ export function initializeApp() {
     const volumeEntries = Object.entries(VOLUME_UNITS);
 
     const lengthOptions = lengthEntries.map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
-    
+
     // Converter unit selects
     if (dom.converterInputUnit) dom.converterInputUnit.innerHTML = lengthOptions;
     if (dom.converterOutputUnit) dom.converterOutputUnit.innerHTML = lengthOptions;
-    if (dom.rescaleOrigUnit) dom.rescaleOrigUnit.innerHTML = lengthOptions;
-    if (dom.rescaleTargetUnit) dom.rescaleTargetUnit.innerHTML = lengthOptions;
-    if (dom.detectorPaperUnit) dom.detectorPaperUnit.innerHTML = lengthOptions;
-    if (dom.detectorRealUnit) dom.detectorRealUnit.innerHTML = lengthOptions;
 
-    // Set initial values
-    if (dom.converterInputUnit) dom.converterInputUnit.value = state.converterInputUnit;
-    if (dom.converterOutputUnit) dom.converterOutputUnit.value = state.converterOutputUnit;
-    if (dom.rescaleOrigUnit) dom.rescaleOrigUnit.value = state.rescaleOrigUnit;
-    if (dom.rescaleTargetUnit) dom.rescaleTargetUnit.value = state.rescaleTargetUnit;
-    if (dom.detectorPaperUnit) dom.detectorPaperUnit.value = state.detectPaperUnit;
-    if (dom.detectorRealUnit) dom.detectorRealUnit.value = state.detectRealUnit;
-
-    // Reference Scale Select
-    if (dom.refScaleSelect) {
-      dom.refScaleSelect.innerHTML = SCALE_PRESETS.map(p => `<option value="${p.ratio}">${p.name} — ${p.desc}</option>`).join('');
-      dom.refScaleSelect.value = state.refScaleRatio;
-    }
-
-    updateAreaVolumeUnitSelects();
-  }
-
-  function updateAreaVolumeUnitSelects() {
-    if (!dom.areavolInputUnit || !dom.areavolOutputUnit) return;
-    if (state.calcType === 'area') {
+    // Area & Volume unit selects
+    if (dom.areavolInputUnit) {
       const opts = Object.entries(AREA_UNITS).map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
       dom.areavolInputUnit.innerHTML = opts;
       dom.areavolOutputUnit.innerHTML = opts;
@@ -1037,7 +1021,6 @@ export function initializeApp() {
     }
   }
 
-  // ---------------------------------------------------------------------------
   // 6. Scale Preset Chips Renderer
   // ---------------------------------------------------------------------------
   function renderPresetChips(category = 'all') {
@@ -1068,585 +1051,13 @@ export function initializeApp() {
         if (dom.activeScaleBadge) dom.activeScaleBadge.textContent = `SCALE 1:${ratio}`;
         renderPresetChips(state.selectedCategory);
         AudioService.playTick();
-        calculateConverter();
+        views.callController('converter', 'calculateConverter');
       });
     });
   }
 
   // ---------------------------------------------------------------------------
-  // 7. Mode 1: Scale Converter Engine
-  // ---------------------------------------------------------------------------
-  function calculateConverter() {
-    const rawRatio = parseFloat(dom.scaleRatioInput?.value);
-    const parsedRatio = isNaN(rawRatio) || rawRatio <= 0 ? 50 : rawRatio;
-    state.scaleRatio = parsedRatio;
-
-    const rawInput = dom.converterInputVal?.value || '';
-    state.converterInputVal = rawInput;
-    state.converterInputUnit = dom.converterInputUnit?.value || 'cm';
-    state.converterOutputUnit = dom.converterOutputUnit?.value || 'm';
-
-    // Actionable Empty Check
-    if (!rawInput || rawInput.trim() === '') {
-      setUnifiedResultState({
-        toolPrefix: 'converter',
-        status: 'error',
-        errorText: '⚠️ Drawing Measurement: Enter a measurement dimension (e.g. 10, 12.5, 3 1/2, or 12\'-6").',
-        btn: dom.btnRunConverter
-      });
-      if (dom.converterInputVal) dom.converterInputVal.classList.add('input-error');
-      if (state.lastValidConverter) {
-        if (dom.converterResultVal) dom.converterResultVal.textContent = state.lastValidConverter.val;
-        if (dom.converterResultUnit) dom.converterResultUnit.textContent = state.lastValidConverter.unit;
-      }
-      return;
-    }
-
-    const parseRes = parseInput(rawInput, { allowNegative: false });
-
-    // Handle Unit Suffix extraction if user typed e.g. "15.5cm"
-    if (parseRes.isValid && parseRes.detectedUnit) {
-      state.converterInputUnit = parseRes.detectedUnit;
-      if (dom.converterInputUnit) dom.converterInputUnit.value = parseRes.detectedUnit;
-    }
-
-    if (!parseRes.isValid || parseRes.value <= 0) {
-      setUnifiedResultState({
-        toolPrefix: 'converter',
-        status: 'error',
-        errorText: `⚠️ Drawing Measurement: Enter a positive dimension greater than zero (${parseRes.error || 'e.g. 10, 12.5, 3 1/2'}).`,
-        btn: dom.btnRunConverter
-      });
-      if (dom.converterInputVal) dom.converterInputVal.classList.add('input-error');
-
-      // Preserve previous valid result if available
-      if (state.lastValidConverter) {
-        if (dom.converterResultVal) dom.converterResultVal.textContent = state.lastValidConverter.val;
-        if (dom.converterResultUnit) dom.converterResultUnit.textContent = state.lastValidConverter.unit;
-      } else {
-        if (dom.converterResultVal) dom.converterResultVal.textContent = '---';
-      }
-      return;
-    }
-
-    if (dom.converterInputVal) dom.converterInputVal.classList.remove('input-error');
-
-    try {
-      const calcRes = scaleDimension({
-        value: parseRes.value,
-        unitKey: state.converterInputUnit,
-        ratio: state.scaleRatio,
-        direction: state.direction,
-        targetUnitKey: state.converterOutputUnit
-      });
-
-      const formattedVal = formatNumber(calcRes.value, state.precision);
-
-      // Cache valid result
-      state.lastValidConverter = {
-        val: formattedVal,
-        unit: state.converterOutputUnit,
-        realMeters: calcRes.realMeters
-      };
-
-      // Update Result Display
-      if (dom.converterResultVal) {
-        dom.converterResultVal.textContent = formattedVal;
-      }
-      if (dom.converterResultUnit) {
-        dom.converterResultUnit.textContent = state.converterOutputUnit;
-      }
-
-      // Update Secondary Architectural Readout
-      if (dom.converterSecondaryReadout) {
-        const isMetric = ['mm', 'cm', 'm', 'km'].includes(state.converterOutputUnit);
-        if (isMetric) {
-          const inInches = calcRes.realMeters / UNITS.in.toMeters;
-          const ftIn = formatFeetInches(inInches);
-          const decFt = formatNumber(calcRes.realMeters / UNITS.ft.toMeters, 2);
-          dom.converterSecondaryReadout.textContent = `${ftIn} (${decFt} ft)`;
-        } else {
-          const mVal = formatNumber(calcRes.realMeters, 3);
-          const cmVal = formatNumber(calcRes.realMeters * 100, 1);
-          dom.converterSecondaryReadout.textContent = `${mVal} m (${cmVal} cm)`;
-        }
-      }
-
-      // Update Math Transformation Microcopy
-      if (dom.converterMathFormula) {
-        if (state.direction === 'drawing_to_real') {
-          dom.converterMathFormula.innerHTML = `<strong>Formula:</strong> Real Site = Drawing (${formatNumber(parseRes.value, 2)} ${state.converterInputUnit}) × Scale (${state.scaleRatio}) = <strong>${formattedVal} ${state.converterOutputUnit}</strong>`;
-        } else {
-          dom.converterMathFormula.innerHTML = `<strong>Formula:</strong> Drawing Paper = Real Site (${formatNumber(parseRes.value, 2)} ${state.converterInputUnit}) ÷ Scale (${state.scaleRatio}) = <strong>${formattedVal} ${state.converterOutputUnit}</strong>`;
-        }
-      }
-
-      // Update Breakdown Equivalents Table
-      renderEquivalentsBreakdown(calcRes.realMeters);
-
-      // Update Visual Scale Bar & Silhouette
-      updateVisualization({
-        realMeters: calcRes.realMeters,
-        scaleRatio: state.scaleRatio,
-        drawingMeters: calcRes.drawingMeters,
-        containerId: 'visualizer-container'
-      });
-
-      // Update Unified Result Lifecycle State & Context Strip
-      const directionLabel = state.direction === 'drawing_to_real' ? 'Paper Drawing' : 'Real Site';
-      setUnifiedResultState({
-        toolPrefix: 'converter',
-        status: 'success',
-        context: {
-          'Scale': `1:${state.scaleRatio}`,
-          'Source Input': `${formatNumber(parseRes.value, 2)} ${state.converterInputUnit} (${directionLabel})`
-        },
-        btn: dom.btnRunConverter
-      });
-    } catch (err) {
-      setUnifiedResultState({
-        toolPrefix: 'converter',
-        status: 'error',
-        errorText: `⚠️ Conversion error: ${err.message}`,
-        btn: dom.btnRunConverter
-      });
-    }
-  }
-
-  function renderEquivalentsBreakdown(realMeters) {
-    if (!dom.metricBreakdownList || !dom.imperialBreakdownList) return;
-    try {
-      const equivalents = getAllUnitEquivalents(realMeters);
-
-      dom.metricBreakdownList.innerHTML = equivalents.metric.map(item => `
-        <div class="equiv-row">
-          <span class="equiv-name">${item.label}</span>
-          <span class="equiv-val">${formatNumber(item.val, 3)} ${item.symbol}</span>
-        </div>
-      `).join('');
-
-      dom.imperialBreakdownList.innerHTML = equivalents.imperial.map(item => `
-        <div class="equiv-row">
-          <span class="equiv-name">${item.label}</span>
-          <span class="equiv-val">${item.key === 'ft_in' ? item.val : `${formatNumber(item.val, 3)} ${item.symbol}`}</span>
-        </div>
-      `).join('');
-    } catch (e) {
-      // Guard against non-finite breakdown
-    }
-  }
-
-  function swapDirection() {
-    state.direction = state.direction === 'drawing_to_real' ? 'real_to_drawing' : 'drawing_to_real';
-
-    // Swap input/output unit selections
-    const prevInUnit = dom.converterInputUnit?.value || 'cm';
-    const prevOutUnit = dom.converterOutputUnit?.value || 'm';
-    
-    if (dom.converterInputUnit) dom.converterInputUnit.value = prevOutUnit;
-    if (dom.converterOutputUnit) dom.converterOutputUnit.value = prevInUnit;
-
-    state.converterInputUnit = prevOutUnit;
-    state.converterOutputUnit = prevInUnit;
-
-    if (state.direction === 'drawing_to_real') {
-      if (dom.converterInputBadge) dom.converterInputBadge.textContent = 'Drawing Measurement (Paper)';
-      if (dom.converterOutputBadge) dom.converterOutputBadge.textContent = 'Real-World Dimension';
-      if (dom.converterFlowFrom) dom.converterFlowFrom.textContent = '📐 Paper Drawing';
-      if (dom.converterFlowTo) dom.converterFlowTo.textContent = '🏛️ Real-World Site';
-    } else {
-      if (dom.converterInputBadge) dom.converterInputBadge.textContent = 'Real-World Dimension';
-      if (dom.converterOutputBadge) dom.converterOutputBadge.textContent = 'Drawing Measurement (Paper)';
-      if (dom.converterFlowFrom) dom.converterFlowFrom.textContent = '🏛️ Real-World Site';
-      if (dom.converterFlowTo) dom.converterFlowTo.textContent = '📐 Paper Drawing';
-    }
-
-    AudioService.playSwapSound();
-    calculateConverter();
-  }
-
-  // ---------------------------------------------------------------------------
-  // 8. Mode 2: Rescaler Engine (Scale A -> Scale B)
-  // ---------------------------------------------------------------------------
-  function calculateRescaler() {
-    const origRatio = parseFloat(dom.rescaleOrigRatio?.value);
-    const targetRatio = parseFloat(dom.rescaleTargetRatio?.value);
-    const rawVal = dom.rescaleOrigVal?.value || '';
-
-    // Actionable Scale Validation
-    if (isNaN(origRatio) || origRatio <= 0) {
-      setUnifiedResultState({
-        toolPrefix: 'rescale',
-        status: 'error',
-        errorText: '⚠️ Original Scale (Scale A): Enter a scale denominator greater than 0 (e.g. 50 for 1:50).',
-        btn: dom.btnRunRescale
-      });
-      return;
-    }
-
-    if (isNaN(targetRatio) || targetRatio <= 0) {
-      setUnifiedResultState({
-        toolPrefix: 'rescale',
-        status: 'error',
-        errorText: '⚠️ Target Scale (Scale B): Enter a scale denominator greater than 0 (e.g. 200 for 1:200).',
-        btn: dom.btnRunRescale
-      });
-      return;
-    }
-
-    state.rescaleOrigRatio = origRatio;
-    state.rescaleTargetRatio = targetRatio;
-    state.rescaleOrigUnit = dom.rescaleOrigUnit?.value || 'cm';
-    state.rescaleTargetUnit = dom.rescaleTargetUnit?.value || 'cm';
-
-    // Actionable Dimension Empty Check
-    if (!rawVal || rawVal.trim() === '') {
-      setUnifiedResultState({
-        toolPrefix: 'rescale',
-        status: 'error',
-        errorText: '⚠️ Measured Length: Enter a positive drawing length measured on Sheet A (e.g. 12, 15.5, 3 1/2).',
-        btn: dom.btnRunRescale
-      });
-      if (dom.rescaleOrigVal) dom.rescaleOrigVal.classList.add('input-error');
-      if (state.lastValidRescale) {
-        if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = state.lastValidRescale.val;
-        if (dom.rescaleResultUnit) dom.rescaleResultUnit.textContent = state.lastValidRescale.unit;
-      }
-      return;
-    }
-
-    const parsed = parseInput(rawVal, { allowNegative: false });
-
-    if (!parsed.isValid || parsed.value <= 0) {
-      setUnifiedResultState({
-        toolPrefix: 'rescale',
-        status: 'error',
-        errorText: `⚠️ Measured Length: Enter a positive drawing measurement greater than zero (${parsed.error || 'e.g. 12, 15.5'}).`,
-        btn: dom.btnRunRescale
-      });
-      if (dom.rescaleOrigVal) dom.rescaleOrigVal.classList.add('input-error');
-
-      // Preserve previous valid result
-      if (state.lastValidRescale) {
-        if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = state.lastValidRescale.val;
-        if (dom.rescaleResultUnit) dom.rescaleResultUnit.textContent = state.lastValidRescale.unit;
-      } else {
-        if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = '---';
-      }
-      return;
-    }
-
-    if (dom.rescaleOrigVal) dom.rescaleOrigVal.classList.remove('input-error');
-
-    try {
-      const res = rescaleDrawing({
-        originalVal: parsed.value,
-        originalUnitKey: state.rescaleOrigUnit,
-        originalRatio: state.rescaleOrigRatio,
-        targetRatio: state.rescaleTargetRatio,
-        targetUnitKey: state.rescaleTargetUnit
-      });
-
-      const formatted = formatNumber(res.targetValue, state.precision);
-      state.lastValidRescale = {
-        val: formatted,
-        unit: state.rescaleTargetUnit
-      };
-
-      if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = formatted;
-      if (dom.rescaleResultUnit) dom.rescaleResultUnit.textContent = state.rescaleTargetUnit;
-      if (dom.rescaleFactorBadge) {
-        const pct = (res.factor * 100).toFixed(1);
-        const tag = res.factor > 1 ? 'Enlarged' : res.factor < 1 ? 'Reduced' : 'Same';
-        dom.rescaleFactorBadge.textContent = `${pct}% (${tag})`;
-      }
-      if (dom.rescaleRealSpan) {
-        dom.rescaleRealSpan.textContent = `${formatNumber(res.realMeters, 3)} m`;
-      }
-
-      // Update Math Formula Microcopy
-      if (dom.rescaleMathFormula) {
-        const pct = (res.factor * 100).toFixed(1);
-        const tag = res.factor > 1 ? 'Enlarged' : res.factor < 1 ? 'Reduced' : 'Same';
-        dom.rescaleMathFormula.innerHTML = `<strong>Formula:</strong> New Length = Original (${formatNumber(parsed.value, 2)} ${state.rescaleOrigUnit} @ 1:${state.rescaleOrigRatio}) × (${state.rescaleOrigRatio} ÷ ${state.rescaleTargetRatio}) = <strong>${formatted} ${state.rescaleTargetUnit} (${pct}% ${tag})</strong>`;
-      }
-
-      setUnifiedResultState({
-        toolPrefix: 'rescale',
-        status: 'success',
-        context: {
-          'Rescale': `1:${state.rescaleOrigRatio} ➔ 1:${state.rescaleTargetRatio}`,
-          'Source Sheet A': `${formatNumber(parsed.value, 2)} ${state.rescaleOrigUnit}`,
-          'Real Physical Distance': `${formatNumber(res.realMeters, 3)} m`
-        },
-        btn: dom.btnRunRescale
-      });
-    } catch (err) {
-      setUnifiedResultState({
-        toolPrefix: 'rescale',
-        status: 'error',
-        errorText: `⚠️ Rescale error: ${err.message}`,
-        btn: dom.btnRunRescale
-      });
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // 9. Mode 3: Scale Detector / Finder Engine
-  // ---------------------------------------------------------------------------
-  function calculateDetector() {
-    const rawPaper = dom.detectorPaperVal?.value || '';
-    const rawReal = dom.detectorRealVal?.value || '';
-
-    state.detectPaperUnit = dom.detectorPaperUnit?.value || 'cm';
-    state.detectRealUnit = dom.detectorRealUnit?.value || 'm';
-
-    // Actionable Empty Checks
-    if (!rawPaper || rawPaper.trim() === '') {
-      setUnifiedResultState({
-        toolPrefix: 'detector',
-        status: 'error',
-        errorText: '⚠️ Paper Dimension: Enter a measured drawing length (e.g. 4.5, 10, 2 1/4).',
-        btn: dom.btnRunDetector
-      });
-      if (dom.detectorPaperVal) dom.detectorPaperVal.classList.add('input-error');
-      if (state.lastValidDetector && dom.detectorRatioVal) {
-        dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
-      }
-      return;
-    }
-
-    const paperP = parseInput(rawPaper, { allowNegative: false });
-    if (!paperP.isValid || paperP.value <= 0) {
-      setUnifiedResultState({
-        toolPrefix: 'detector',
-        status: 'error',
-        errorText: `⚠️ Paper Dimension: Enter a positive drawing length greater than zero (${paperP.error || 'e.g. 4.5 cm'}).`,
-        btn: dom.btnRunDetector
-      });
-      if (dom.detectorPaperVal) dom.detectorPaperVal.classList.add('input-error');
-      if (state.lastValidDetector && dom.detectorRatioVal) {
-        dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
-      }
-      return;
-    }
-
-    if (dom.detectorPaperVal) dom.detectorPaperVal.classList.remove('input-error');
-
-    if (!rawReal || rawReal.trim() === '') {
-      setUnifiedResultState({
-        toolPrefix: 'detector',
-        status: 'error',
-        errorText: '⚠️ Real-World Dimension: Enter the known physical site distance (e.g. 9, 15, 30).',
-        btn: dom.btnRunDetector
-      });
-      if (dom.detectorRealVal) dom.detectorRealVal.classList.add('input-error');
-      if (state.lastValidDetector && dom.detectorRatioVal) {
-        dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
-      }
-      return;
-    }
-
-    const realP = parseInput(rawReal, { allowNegative: false });
-    if (!realP.isValid || realP.value <= 0) {
-      setUnifiedResultState({
-        toolPrefix: 'detector',
-        status: 'error',
-        errorText: `⚠️ Real-World Dimension: Enter a positive site dimension greater than zero (${realP.error || 'e.g. 9 m'}).`,
-        btn: dom.btnRunDetector
-      });
-      if (dom.detectorRealVal) dom.detectorRealVal.classList.add('input-error');
-      if (state.lastValidDetector && dom.detectorRatioVal) {
-        dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
-      }
-      return;
-    }
-
-    if (dom.detectorRealVal) dom.detectorRealVal.classList.remove('input-error');
-
-    try {
-      const res = detectScale({
-        paperVal: paperP.value,
-        paperUnitKey: state.detectPaperUnit,
-        realVal: realP.value,
-        realUnitKey: state.detectRealUnit
-      });
-
-      if (res.ratio === null || res.ratio <= 0) {
-        setUnifiedResultState({
-          toolPrefix: 'detector',
-          status: 'error',
-          errorText: '⚠️ Scale Detection: Dimensions must be greater than zero to determine scale.',
-          btn: dom.btnRunDetector
-        });
-        return;
-      }
-
-      state.lastDetectedRatio = res.ratio;
-      state.lastValidDetector = {
-        ratioString: res.ratioString,
-        ratio: res.ratio
-      };
-
-      if (dom.detectorRatioVal) dom.detectorRatioVal.textContent = res.ratioString;
-      if (dom.detectorPresetBadge) {
-        if (res.closestPreset) {
-          const matchLabel = res.isExactMatch ? 'Exact Match' : `Closest: Δ ${res.closestPreset.percentDiff}%`;
-          dom.detectorPresetBadge.innerHTML = `${matchLabel}: <strong>${res.closestPreset.name} (${res.closestPreset.desc})</strong>`;
-        } else {
-          dom.detectorPresetBadge.textContent = 'Custom Ratio (No standard preset match)';
-        }
-      }
-
-      // Update Math Formula Microcopy
-      if (dom.detectorMathFormula) {
-        dom.detectorMathFormula.innerHTML = `<strong>Formula:</strong> Scale 1:X = Real (${formatNumber(realP.value, 2)} ${state.detectRealUnit}) ÷ Paper (${formatNumber(paperP.value, 2)} ${state.detectPaperUnit}) = <strong>${res.ratioString}</strong>`;
-      }
-
-      setUnifiedResultState({
-        toolPrefix: 'detector',
-        status: 'success',
-        context: {
-          'Drawing Line': `${formatNumber(paperP.value, 2)} ${state.detectPaperUnit}`,
-          'Physical Site': `${formatNumber(realP.value, 2)} ${state.detectRealUnit}`,
-          'Detected Ratio': res.ratioString
-        },
-        btn: dom.btnRunDetector
-      });
-    } catch (err) {
-      setUnifiedResultState({
-        toolPrefix: 'detector',
-        status: 'error',
-        errorText: `⚠️ Detection error: ${err.message}`,
-        btn: dom.btnRunDetector
-      });
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // 10. Mode 4: Area & Volume Scaler Engine
-  // ---------------------------------------------------------------------------
-  function calculateAreaVolume() {
-    const rawRatio = parseFloat(dom.areavolRatioInput?.value);
-    if (isNaN(rawRatio) || rawRatio <= 0) {
-      setUnifiedResultState({
-        toolPrefix: 'areavol',
-        status: 'error',
-        errorText: '⚠️ Scale Ratio: Enter a scale denominator ratio greater than 0 (e.g. 100 for 1:100).',
-        btn: dom.btnRunAreavol
-      });
-      return;
-    }
-
-    state.areavolRatio = rawRatio;
-    state.areavolInputUnit = dom.areavolInputUnit?.value || (state.calcType === 'area' ? 'cm2' : 'cm3');
-    state.areavolOutputUnit = dom.areavolOutputUnit?.value || (state.calcType === 'area' ? 'm2' : 'm3');
-
-    const rawVal = dom.areavolInputVal?.value || '';
-    if (!rawVal || rawVal.trim() === '') {
-      setUnifiedResultState({
-        toolPrefix: 'areavol',
-        status: 'error',
-        errorText: '⚠️ Measurement Input: Enter a positive area or volume dimension (e.g. 4 m² or 25 sq ft).',
-        btn: dom.btnRunAreavol
-      });
-      if (dom.areavolInputVal) dom.areavolInputVal.classList.add('input-error');
-      if (state.lastValidAreavol) {
-        if (dom.areavolResultVal) dom.areavolResultVal.textContent = state.lastValidAreavol.val;
-        if (dom.areavolResultUnit) dom.areavolResultUnit.textContent = state.lastValidAreavol.unit;
-      }
-      return;
-    }
-
-    const parsed = parseInput(rawVal, { allowNegative: false });
-
-    if (!parsed.isValid || parsed.value <= 0) {
-      setUnifiedResultState({
-        toolPrefix: 'areavol',
-        status: 'error',
-        errorText: `⚠️ Measurement Input: Enter a positive value greater than zero (${parsed.error || 'e.g. 4 m²'}).`,
-        btn: dom.btnRunAreavol
-      });
-      if (dom.areavolInputVal) dom.areavolInputVal.classList.add('input-error');
-
-      // Preserve previous valid result
-      if (state.lastValidAreavol) {
-        if (dom.areavolResultVal) dom.areavolResultVal.textContent = state.lastValidAreavol.val;
-        if (dom.areavolResultUnit) dom.areavolResultUnit.textContent = state.lastValidAreavol.unit;
-      } else {
-        if (dom.areavolResultVal) dom.areavolResultVal.textContent = '---';
-      }
-      return;
-    }
-
-    if (dom.areavolInputVal) dom.areavolInputVal.classList.remove('input-error');
-
-    try {
-      const isDrawingToReal = state.calcDirection === 'drawing_to_real';
-      let res;
-
-      if (state.calcType === 'area') {
-        res = scaleArea({
-          areaVal: parsed.value,
-          inputUnitKey: state.areavolInputUnit,
-          scaleRatio: state.areavolRatio,
-          outputUnitKey: state.areavolOutputUnit,
-          isDrawingToReal: isDrawingToReal
-        });
-        if (dom.areavolFactorBadge) {
-          dom.areavolFactorBadge.textContent = `× ${formatNumber(res.factor, 0)} (${state.areavolRatio}²)`;
-        }
-      } else {
-        res = scaleVolume({
-          volumeVal: parsed.value,
-          inputUnitKey: state.areavolInputUnit,
-          scaleRatio: state.areavolRatio,
-          outputUnitKey: state.areavolOutputUnit,
-          isDrawingToReal: isDrawingToReal
-        });
-        if (dom.areavolFactorBadge) {
-          dom.areavolFactorBadge.textContent = `× ${formatNumber(res.factor, 0)} (${state.areavolRatio}³)`;
-        }
-      }
-
-      const formatted = formatNumber(res.resultValue, state.precision);
-      state.lastValidAreavol = {
-        val: formatted,
-        unit: state.areavolOutputUnit
-      };
-
-      if (dom.areavolResultVal) dom.areavolResultVal.textContent = formatted;
-      if (dom.areavolResultUnit) dom.areavolResultUnit.textContent = state.areavolOutputUnit;
-
-      // Update Math Formula Microcopy
-      if (dom.areavolMathFormula) {
-        const powStr = state.calcType === 'area' ? '²' : '³';
-        const typeLabel = state.calcType === 'area' ? 'Area' : 'Volume';
-        const op = isDrawingToReal ? '×' : '÷';
-        const targetTitle = isDrawingToReal ? `Real Site ${typeLabel}` : `Drawing Paper ${typeLabel}`;
-        dom.areavolMathFormula.innerHTML = `<strong>Formula:</strong> ${targetTitle} = Input (${formatNumber(parsed.value, 2)} ${state.areavolInputUnit}) ${op} Scale${powStr} (${state.areavolRatio}${powStr} = ${formatNumber(res.factor, 0)}) = <strong>${formatted} ${state.areavolOutputUnit}</strong>`;
-      }
-
-      setUnifiedResultState({
-        toolPrefix: 'areavol',
-        status: 'success',
-        context: {
-          'Scale Ratio': `1:${state.areavolRatio}`,
-          'Source Value': `${formatNumber(parsed.value, 2)} ${state.areavolInputUnit}`,
-          'Multiplier': `× ${formatNumber(res.factor, 0)}`
-        },
-        btn: dom.btnRunAreavol
-      });
-    } catch (err) {
-      setUnifiedResultState({
-        toolPrefix: 'areavol',
-        status: 'error',
-        errorText: `⚠️ Scaling error: ${err.message}`,
-        btn: dom.btnRunAreavol
-      });
-    }
-  }
-
+  // 11. Mode 5: Furniture Catalog (grid, filters, custom scaler)
   // ---------------------------------------------------------------------------
   function updateCategoryPillCounts() {
     const counts = { all: FURNITURE_DATABASE.length };
@@ -1905,9 +1316,9 @@ export function initializeApp() {
 
       const paperFormatted = `${formatNumber(wRes.value, 2)} × ${formatNumber(dRes.value, 2)} ${state.furniturePaperUnit}`;
       const formatted = `Paper @ 1:${state.furnitureScaleRatio}: <strong>${paperFormatted}</strong> (${formatNumber(paperArea, 2)} ${state.furniturePaperUnit}²) | Real Footprint: <strong>${formatNumber(realAreaM2, 2)} m²</strong> (${formatNumber(realAreaSqFt, 1)} sq ft)`;
-      
+
       if (dom.customFurnResult) dom.customFurnResult.innerHTML = formatted;
-      
+
       setUnifiedResultState({
         toolPrefix: 'custom-furn',
         status: 'success'
@@ -2230,7 +1641,7 @@ export function initializeApp() {
           if (dom.converterFlowFrom) dom.converterFlowFrom.textContent = '🏛️ Real-World Site';
           if (dom.converterFlowTo) dom.converterFlowTo.textContent = '📐 Paper Drawing';
         }
-        calculateConverter();
+        views.callController('converter', 'calculateConverter');
         break;
       case 'rescale':
         switchMode('rescale');
@@ -2239,7 +1650,7 @@ export function initializeApp() {
         if (dom.rescaleOrigUnit) dom.rescaleOrigUnit.value = snap.origUnit;
         if (dom.rescaleTargetRatio) dom.rescaleTargetRatio.value = snap.targetRatio;
         if (dom.rescaleTargetUnit) dom.rescaleTargetUnit.value = snap.targetUnit;
-        calculateRescaler();
+        views.callController('rescale', 'calculateRescaler');
         break;
       case 'detector':
         switchMode('detector');
@@ -2247,7 +1658,7 @@ export function initializeApp() {
         if (dom.detectorPaperUnit) dom.detectorPaperUnit.value = snap.paperUnit;
         if (dom.detectorRealVal) dom.detectorRealVal.value = snap.realVal;
         if (dom.detectorRealUnit) dom.detectorRealUnit.value = snap.realUnit;
-        calculateDetector();
+        views.callController('detector', 'calculateDetector');
         break;
       case 'area_volume':
         switchMode('area_volume');
@@ -2257,10 +1668,10 @@ export function initializeApp() {
         state.calcDirection = snap.direction || 'drawing_to_real';
         dom.areavolTypeBtns.forEach(b => b.classList.toggle('active', b.dataset.type === state.calcType));
         dom.areavolDirBtns.forEach(b => b.classList.toggle('active', b.dataset.dir === state.calcDirection));
-        updateAreaVolumeUnitSelects();
+        views.callController('area_volume', 'updateAreaVolumeUnitSelects');
         if (dom.areavolInputUnit) dom.areavolInputUnit.value = snap.inUnit;
         if (dom.areavolOutputUnit) dom.areavolOutputUnit.value = snap.outUnit;
-        calculateAreaVolume();
+        views.callController('area_volume', 'calculateAreaVolume');
         break;
       case 'furniture':
         switchMode('furniture');
@@ -5201,7 +4612,7 @@ export function initializeApp() {
         if (!isNaN(r) && r > 0) {
           state.scaleRatio = r;
           if (dom.activeScaleBadge) dom.activeScaleBadge.textContent = `SCALE 1:${r}`;
-          calculateConverter();
+          views.callController('converter', 'calculateConverter');
         }
       });
     }
@@ -5209,11 +4620,11 @@ export function initializeApp() {
     // Converter Inputs & Run Action
     if (dom.converterInputVal) {
       dom.converterInputVal.addEventListener('input', () => {
-        calculateConverter();
+        views.callController('converter', 'calculateConverter');
       });
       dom.converterInputVal.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
-          calculateConverter();
+          views.callController('converter', 'calculateConverter');
           if (dom.btnSaveHistory && dom.converterResultVal?.textContent !== '---') {
             dom.btnSaveHistory.click();
           }
@@ -5221,12 +4632,12 @@ export function initializeApp() {
       });
     }
 
-    if (dom.converterInputUnit) dom.converterInputUnit.addEventListener('change', calculateConverter);
-    if (dom.converterOutputUnit) dom.converterOutputUnit.addEventListener('change', calculateConverter);
-    if (dom.swapDirectionBtn) dom.swapDirectionBtn.addEventListener('click', swapDirection);
+    if (dom.converterInputUnit) dom.converterInputUnit.addEventListener('change', () => views.callController('converter', 'calculateConverter'));
+    if (dom.converterOutputUnit) dom.converterOutputUnit.addEventListener('change', () => views.callController('converter', 'calculateConverter'));
+    if (dom.swapDirectionBtn) dom.swapDirectionBtn.addEventListener('click', () => views.callController('converter', 'swapDirection'));
     if (dom.btnRunConverter) {
       dom.btnRunConverter.addEventListener('click', () => {
-        calculateConverter();
+        views.callController('converter', 'calculateConverter');
         logCurrentCalculationToHistory('converter');
       });
     }
@@ -5251,11 +4662,11 @@ export function initializeApp() {
     // Rescaler Listeners
     [dom.rescaleOrigRatio, dom.rescaleOrigVal, dom.rescaleOrigUnit, dom.rescaleTargetRatio, dom.rescaleTargetUnit].forEach(el => {
       if (el) {
-        el.addEventListener('input', calculateRescaler);
-        el.addEventListener('change', calculateRescaler);
+        el.addEventListener('input', () => views.callController('rescale', 'calculateRescaler'));
+        el.addEventListener('change', () => views.callController('rescale', 'calculateRescaler'));
         el.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
-            calculateRescaler();
+            views.callController('rescale', 'calculateRescaler');
             logCurrentCalculationToHistory('rescale');
           }
         });
@@ -5263,7 +4674,7 @@ export function initializeApp() {
     });
     if (dom.btnRunRescale) {
       dom.btnRunRescale.addEventListener('click', () => {
-        calculateRescaler();
+        views.callController('rescale', 'calculateRescaler');
         logCurrentCalculationToHistory('rescale');
       });
     }
@@ -5278,11 +4689,11 @@ export function initializeApp() {
     // Scale Detector Listeners
     [dom.detectorPaperVal, dom.detectorPaperUnit, dom.detectorRealVal, dom.detectorRealUnit].forEach(el => {
       if (el) {
-        el.addEventListener('input', calculateDetector);
-        el.addEventListener('change', calculateDetector);
+        el.addEventListener('input', () => views.callController('detector', 'calculateDetector'));
+        el.addEventListener('change', () => views.callController('detector', 'calculateDetector'));
         el.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
-            calculateDetector();
+            views.callController('detector', 'calculateDetector');
             logCurrentCalculationToHistory('detector');
           }
         });
@@ -5290,7 +4701,7 @@ export function initializeApp() {
     });
     if (dom.btnRunDetector) {
       dom.btnRunDetector.addEventListener('click', () => {
-        calculateDetector();
+        views.callController('detector', 'calculateDetector');
         logCurrentCalculationToHistory('detector');
       });
     }
@@ -5314,8 +4725,8 @@ export function initializeApp() {
         dom.areavolTypeBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         state.calcType = btn.dataset.type;
-        updateAreaVolumeUnitSelects();
-        calculateAreaVolume();
+        views.callController('area_volume', 'updateAreaVolumeUnitSelects');
+        views.callController('area_volume', 'calculateAreaVolume');
         AudioService.playTick();
       });
     });
@@ -5332,18 +4743,18 @@ export function initializeApp() {
           if (dom.areavolInputBadge) dom.areavolInputBadge.textContent = 'Real-World Dimension';
           if (dom.areavolOutputBadge) dom.areavolOutputBadge.textContent = 'Drawing Unit on Paper';
         }
-        calculateAreaVolume();
+        views.callController('area_volume', 'calculateAreaVolume');
         AudioService.playTick();
       });
     });
 
     [dom.areavolRatioInput, dom.areavolInputVal, dom.areavolInputUnit, dom.areavolOutputUnit].forEach(el => {
       if (el) {
-        el.addEventListener('input', calculateAreaVolume);
-        el.addEventListener('change', calculateAreaVolume);
+        el.addEventListener('input', () => views.callController('area_volume', 'calculateAreaVolume'));
+        el.addEventListener('change', () => views.callController('area_volume', 'calculateAreaVolume'));
         el.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
-            calculateAreaVolume();
+            views.callController('area_volume', 'calculateAreaVolume');
             logCurrentCalculationToHistory('area_volume');
           }
         });
@@ -5351,7 +4762,7 @@ export function initializeApp() {
     });
     if (dom.btnRunAreavol) {
       dom.btnRunAreavol.addEventListener('click', () => {
-        calculateAreaVolume();
+        views.callController('area_volume', 'calculateAreaVolume');
         logCurrentCalculationToHistory('area_volume');
       });
     }
@@ -7066,7 +6477,7 @@ export function initializeApp() {
       else if (e.key === 'c' || e.key === 'C') { e.preventDefault(); switchMode('cad_clipboard'); }
       else if (e.key === 'b' || e.key === 'B') { e.preventDefault(); switchMode('batch_cad'); }
       else if (e.key === 'q' || e.key === 'Q') { e.preventDefault(); toggleQuickDimension(); }
-      else if (e.key === 's' || e.key === 'S') { e.preventDefault(); swapDirection(); }
+      else if (e.key === 's' || e.key === 'S') { e.preventDefault(); views.callController('converter', 'swapDirection'); }
       else if (e.key === 'h' || e.key === 'H') { e.preventDefault(); toggleHistoryDrawer(); }
       else if (e.key === '?') {
         e.preventDefault();
@@ -7088,11 +6499,39 @@ export function initializeApp() {
   // ---------------------------------------------------------------------------
   // 15. Initial Bootstrapping
   // ---------------------------------------------------------------------------
+  // Feature views (Stabilization 1): each owns its mode's controller logic.
+  // They receive one shared frozen context and never import each other.
+  const views = createViewRegistry();
+  const viewContext = Object.freeze({
+    state,
+    dom,
+    showToast,
+    copyToClipboard,
+    downloadFile,
+    setUnifiedResultState,
+    setRunButtonState,
+    switchMode,
+    views,
+    AudioService,
+    StorageService,
+    HistoryService,
+    CommandRegistry,
+    logCurrentCalculationToHistory,
+    getController: (viewId, fnName, ...args) => views.callController(viewId, fnName, ...args)
+  });
+  validateViewContext(viewContext);
+
+  views.register(createConverterView(viewContext));
+  views.register(createRescalerView(viewContext));
+  views.register(createDetectorView(viewContext));
+  views.register(createAreaVolumeView(viewContext));
+
   applyTheme(state.activeTheme);
   updateSoundUI();
   populateUnitSelects();
   renderPresetChips(state.selectedCategory);
   attachEventListeners();
+  views.mountAll();
   if (state.quickDimension.isOpen || state.quickDimension.pinned) {
     toggleQuickDimension(true);
     if (state.quickDimension.pinned && dom.quickDimPinBtn) {

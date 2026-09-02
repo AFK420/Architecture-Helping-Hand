@@ -57,6 +57,9 @@ export const BUNDLE_MODULES = [
   { name: 'ViewRegistry', file: path.join(srcDir, 'ui', 'view-registry.js') },
   { name: 'Visualizer', file: path.join(srcDir, 'ui', 'visualizer.js') },
   { name: 'ViewConverter', file: path.join(srcDir, 'ui', 'views', 'converter.js') },
+  { name: 'ViewRescaler', file: path.join(srcDir, 'ui', 'views', 'rescaler.js') },
+  { name: 'ViewDetector', file: path.join(srcDir, 'ui', 'views', 'detector.js') },
+  { name: 'ViewAreaVolume', file: path.join(srcDir, 'ui', 'views', 'area-volume.js') },
   { name: 'App', file: path.join(srcDir, 'ui', 'app.js') }
 ];
 
