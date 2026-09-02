@@ -72,30 +72,15 @@ import {
   CHAIN_TEMPLATES,
   CHAIN_STORAGE_KEY
 } from '../core/dimension-chains.js';
+// NOTE: cad-clipboard / batch-cad / cad-targets core engines are imported by
+// their view modules (src/ui/views/*) — app.js only needs the storage keys
+// and the small helpers still referenced by listeners/state below.
 import {
-  CAD_FORMAT_PRESETS,
-  CAD_STORAGE_KEY,
-  formatCadValue,
-  formatCadValues,
-  formatCadWorkspace,
-  formatCadChain,
-  formatCadMultiScale,
-  formatCadExpression,
-  formatManualCadInput,
-  getCadFormatSummary
+  CAD_STORAGE_KEY
 } from '../core/cad-clipboard.js';
 import {
-  BATCH_PRESETS,
   BATCH_STORAGE_KEY,
-  detectBatchDelimiter,
-  parseBatchRow,
-  parseBatchInput,
-  convertBatchRow,
-  convertBatch,
-  filterBatchRows,
-  formatBatchResults,
-  convertBatchToWorkspaceGroup,
-  convertBatchToDimensionChain
+  detectBatchDelimiter
 } from '../core/batch-cad.js';
 import {
   DEFAULT_QUICK_SCALES,
@@ -106,14 +91,6 @@ import {
   formatQuickDimensionClipboard,
   createQuickHandoffPayload
 } from '../core/quick-dimension.js';
-import {
-  CAD_TARGET_PROFILES,
-  CAD_TARGET_IDS,
-  CAD_HANDOFF_STORAGE_KEY,
-  buildCadHandoffPayload,
-  getCadHandoffSummary,
-  validateCadHandoffSelection
-} from '../core/cad-targets.js';
 import { createViewRegistry, validateViewContext } from './view-registry.js';
 import { createConverterView } from './views/converter.js';
 import { createRescalerView } from './views/rescaler.js';
@@ -121,6 +98,8 @@ import { createDetectorView } from './views/detector.js';
 import { createAreaVolumeView } from './views/area-volume.js';
 import { createExpressionView, createMultiScaleView } from './views/expression-multiscale.js';
 import { createChainsView } from './views/dimension-chains.js';
+import { createCadClipboardView, createCadHandoffView } from './views/cad-clipboard-handoff.js';
+import { createBatchCadView } from './views/batch-cad.js';
 import { StorageService } from '../services/storage.js';
 import { AudioService } from '../services/audio.js';
 import { HistoryService } from '../services/history.js';
@@ -953,13 +932,13 @@ export function initializeApp() {
       views.callController('chains', 'calculateAndRenderChain');
     }
     else if (targetMode === 'cad_clipboard') {
-      renderCadClipboard();
+      views.callController('cad_clipboard', 'renderCadClipboard');
     }
     else if (targetMode === 'batch_cad') {
-      parseAndConvertBatch();
+      views.callController('batch_cad', 'parseAndConvertBatch');
     }
     else if (targetMode === 'cad_handoff') {
-      renderCadHandoff();
+      views.callController('cad_handoff', 'renderCadHandoff');
     }
   }
 
@@ -2872,721 +2851,6 @@ export function initializeApp() {
   // src/ui/views/expression-multiscale.js and are called via views.callController.
 
   // ---------------------------------------------------------------------------
-  // 13g. Mode 11: CAD Clipboard Controller
-  // ---------------------------------------------------------------------------
-  function saveCadClipboardSettings() {
-    try {
-      StorageService.setItem(CAD_STORAGE_KEY, JSON.stringify(state.cadClipboard));
-    } catch (e) {}
-  }
-
-  function applyCadPreset(presetKey) {
-    const preset = CAD_FORMAT_PRESETS[presetKey];
-    if (!preset) return;
-
-    state.cadClipboard.preset = presetKey;
-    state.cadClipboard.unit = preset.defaultUnit;
-    state.cadClipboard.precision = preset.defaultPrecision;
-    state.cadClipboard.suffix = preset.defaultSuffix;
-    state.cadClipboard.delimiter = preset.defaultDelimiter;
-    state.cadClipboard.targetValue = preset.targetValue;
-
-    // Sync UI elements
-    if (dom.cadTargetSelect) dom.cadTargetSelect.value = state.cadClipboard.targetValue;
-    if (dom.cadUnitSelect) dom.cadUnitSelect.value = state.cadClipboard.unit;
-    if (dom.cadPrecisionSelect) dom.cadPrecisionSelect.value = String(state.cadClipboard.precision);
-    if (dom.cadSuffixSelect) dom.cadSuffixSelect.value = state.cadClipboard.suffix;
-    if (dom.cadDelimiterSelect) dom.cadDelimiterSelect.value = state.cadClipboard.delimiter;
-
-    // Sync active chip
-    dom.cadQuickChips?.querySelectorAll('.cad-preset-chip').forEach(chip => {
-      chip.classList.toggle('active', chip.dataset.preset === presetKey);
-    });
-
-    renderCadClipboard(true);
-    AudioService.playTick();
-    showToast(`Loaded preset "${preset.name}"`);
-  }
-
-  function renderCadClipboard(isExplicitRun = false) {
-    const cad = state.cadClipboard;
-
-    // Sync form values into state
-    if (dom.cadTargetSelect) cad.targetValue = dom.cadTargetSelect.value || 'real';
-    if (dom.cadUnitSelect) cad.unit = dom.cadUnitSelect.value || 'mm';
-    if (dom.cadPrecisionSelect) cad.precision = parseInt(dom.cadPrecisionSelect.value, 10) || 0;
-    if (dom.cadSuffixSelect) cad.suffix = dom.cadSuffixSelect.value || 'none';
-    if (dom.cadDelimiterSelect) cad.delimiter = dom.cadDelimiterSelect.value || 'space';
-    if (dom.cadScopeSelect) cad.filterScope = dom.cadScopeSelect.value || 'all';
-
-    // Show/hide manual input group
-    if (dom.cadManualGroup) {
-      dom.cadManualGroup.style.display = cad.source === 'manual' ? 'block' : 'none';
-    }
-
-    // Sync active source pill
-    dom.cadSourcePills?.querySelectorAll('.cad-source-pill').forEach(pill => {
-      pill.classList.toggle('active', pill.dataset.source === cad.source);
-    });
-
-    // Sync active preset chip
-    dom.cadQuickChips?.querySelectorAll('.cad-preset-chip').forEach(chip => {
-      chip.classList.toggle('active', chip.dataset.preset === cad.preset);
-    });
-
-    let outputResult = { text: '', count: 0 };
-
-    if (cad.source === 'workspace') {
-      outputResult = formatCadWorkspace(state.workspace, {
-        filterScope: cad.filterScope,
-        selectedIds: state.workspaceSelectedIds,
-        targetValue: cad.targetValue,
-        format: cad.preset,
-        unit: cad.unit,
-        precision: cad.precision,
-        suffix: cad.suffix,
-        delimiter: cad.delimiter,
-        scaleRatio: state.workspace?.scaleRatio || 50
-      });
-    } else if (cad.source === 'chain') {
-      if (state.lastValidChain) {
-        outputResult = formatCadChain(state.lastValidChain, {
-          chainOutputMode: cad.preset === 'spreadsheet' ? 'table' : 'segments',
-          targetValue: cad.targetValue,
-          unit: cad.unit,
-          precision: cad.precision,
-          suffix: cad.suffix,
-          delimiter: cad.delimiter
-        });
-      }
-    } else if (cad.source === 'expression') {
-      if (state.lastValidExpression) {
-        outputResult = formatCadExpression(state.lastValidExpression, {
-          targetValue: cad.targetValue,
-          unit: cad.unit,
-          precision: cad.precision,
-          suffix: cad.suffix
-        });
-      }
-    } else if (cad.source === 'multiscale') {
-      if (state.lastValidMultiScale) {
-        outputResult = formatCadMultiScale(state.lastValidMultiScale, {
-          format: cad.preset,
-          unit: cad.unit,
-          precision: cad.precision,
-          suffix: cad.suffix,
-          delimiter: cad.delimiter
-        });
-      }
-    } else if (cad.source === 'manual') {
-      const raw = dom.cadManualInput?.value || cad.manualInput || '';
-      outputResult = formatManualCadInput(raw, {
-        unit: cad.unit,
-        precision: cad.precision,
-        suffix: cad.suffix,
-        delimiter: cad.delimiter
-      });
-    }
-
-    cad.lastFormattedText = outputResult.text;
-
-    // Update Preview Textarea
-    if (dom.cadPreviewBox) {
-      dom.cadPreviewBox.value = outputResult.text;
-    }
-
-    // Update Summary Metadata Tag
-    if (dom.cadSummaryBadge) {
-      dom.cadSummaryBadge.textContent = getCadFormatSummary(outputResult.count, {
-        targetValue: cad.targetValue,
-        unit: cad.unit,
-        precision: cad.precision,
-        suffix: cad.suffix
-      });
-    }
-
-    // Update Item Count Badge in Source Strip
-    if (dom.cadSourceCountBadge) {
-      dom.cadSourceCountBadge.textContent = `${outputResult.count} ${outputResult.count === 1 ? 'ITEM' : 'ITEMS'}`;
-    }
-
-    setUnifiedResultState({
-      toolPrefix: 'cad',
-      status: outputResult.count > 0 ? 'success' : 'ready'
-    });
-
-    saveCadClipboardSettings();
-
-    if (isExplicitRun) {
-      AudioService.playTick();
-    }
-  }
-
-  function copyCadClipboardData(optionsOverride = null) {
-    let textToCopy = state.cadClipboard.lastFormattedText;
-
-    if (optionsOverride && typeof optionsOverride === 'object') {
-      const mergedOpts = { ...state.cadClipboard, ...optionsOverride };
-      if (state.cadClipboard.source === 'workspace') {
-        textToCopy = formatCadWorkspace(state.workspace, mergedOpts).text;
-      } else if (state.cadClipboard.source === 'chain') {
-        textToCopy = formatCadChain(state.lastValidChain, mergedOpts).text;
-      } else if (state.cadClipboard.source === 'expression') {
-        textToCopy = formatCadExpression(state.lastValidExpression, mergedOpts).text;
-      } else if (state.cadClipboard.source === 'multiscale') {
-        textToCopy = formatCadMultiScale(state.lastValidMultiScale, mergedOpts).text;
-      } else if (state.cadClipboard.source === 'manual') {
-        textToCopy = formatManualCadInput(dom.cadManualInput?.value || '', mergedOpts).text;
-      }
-    }
-
-    if (!textToCopy || !textToCopy.trim()) {
-      showToast('No CAD dimension data to copy', 'warning');
-      return;
-    }
-
-    copyToClipboard(textToCopy, 'CAD Dimension Data');
-  }
-
-  function openCadClipboardWithSource(sourceKey) {
-    state.cadClipboard.source = sourceKey;
-    switchMode('cad_clipboard');
-    renderCadClipboard(true);
-    AudioService.playTick();
-    showToast(`Loaded ${sourceKey.toUpperCase()} data into CAD Clipboard`);
-  }
-
-  // ---------------------------------------------------------------------------
-  // 13h'. Mode 13: CAD Application Helpers (Send-To Handoff)
-  // ---------------------------------------------------------------------------
-  function saveCadHandoffSettings() {
-    try {
-      const { lastPayload, ...serializable } = state.cadHandoff;
-      void lastPayload;
-      StorageService.setItem(CAD_HANDOFF_STORAGE_KEY, JSON.stringify(serializable));
-    } catch (e) {}
-  }
-
-  /**
-   * Collects the current source data for the handoff payload builder from
-   * whatever tool state is live. Never recomputes math — only reads the
-   * last valid results the tools already produced.
-   */
-  function getCadHandoffSourceData() {
-    const h = state.cadHandoff;
-    switch (h.source) {
-      case 'workspace':
-        return {
-          workspace: state.workspace,
-          scope: h.workspaceScope || 'all',
-          selectedIds: state.workspaceSelectedIds
-        };
-      case 'expression':
-        return { result: state.lastValidExpression };
-      case 'multiscale':
-        return { result: state.lastValidMultiScale };
-      case 'chain':
-        return { result: state.lastValidChain, chainLayout: h.chainLayout || 'segments' };
-      case 'batch':
-        return {
-          result: state.batchCad.lastResult,
-          selectedOnly: h.batchScope === 'selected',
-          selectedIds: state.batchCad.selectedIds
-        };
-      case 'quick':
-        return { result: state.quickDimension.lastResult };
-      case 'manual':
-        return { rawText: dom.handoffManualInput?.value || h.manualInput || '' };
-      default:
-        return {};
-    }
-  }
-
-  function renderCadHandoff(isExplicitRun = false) {
-    const h = state.cadHandoff;
-
-    // Sync form controls into state
-    if (dom.handoffSourceSelect) h.source = dom.handoffSourceSelect.value || h.source;
-    if (dom.handoffFormatSelect) h.format = dom.handoffFormatSelect.value || h.format;
-    if (dom.handoffChainLayoutSelect) h.chainLayout = dom.handoffChainLayoutSelect.value || h.chainLayout;
-    if (dom.handoffWorkspaceScopeSelect) h.workspaceScope = dom.handoffWorkspaceScopeSelect.value || h.workspaceScope;
-    if (dom.handoffBatchScopeSelect) h.batchScope = dom.handoffBatchScopeSelect.value || h.batchScope;
-    if (dom.handoffUnitSelect) h.unit = dom.handoffUnitSelect.value === 'auto' ? null : dom.handoffUnitSelect.value;
-    if (dom.handoffPrecisionSelect) h.precision = dom.handoffPrecisionSelect.value === 'auto' ? null : parseInt(dom.handoffPrecisionSelect.value, 10);
-    if (dom.handoffSuffixSelect) h.suffix = dom.handoffSuffixSelect.value || h.suffix;
-
-    // Conditional groups
-    if (dom.handoffManualGroup) dom.handoffManualGroup.style.display = h.source === 'manual' ? 'block' : 'none';
-    if (dom.handoffChainLayoutGroup) dom.handoffChainLayoutGroup.style.display = h.source === 'chain' ? 'block' : 'none';
-    if (dom.handoffWorkspaceScopeGroup) dom.handoffWorkspaceScopeGroup.style.display = h.source === 'workspace' ? 'block' : 'none';
-    if (dom.handoffBatchScopeGroup) dom.handoffBatchScopeGroup.style.display = h.source === 'batch' ? 'block' : 'none';
-
-    // Target pills sync + description
-    dom.handoffTargetPills?.querySelectorAll('.cad-source-pill').forEach(pill => {
-      const isActive = pill.dataset.target === h.target;
-      pill.classList.toggle('active', isActive);
-      pill.setAttribute('aria-checked', isActive ? 'true' : 'false');
-    });
-    const profile = CAD_TARGET_PROFILES[h.target];
-    if (dom.handoffTargetDescription && profile) {
-      dom.handoffTargetDescription.textContent = profile.description;
-    }
-    if (dom.handoffCopyTargetLabel && profile) {
-      dom.handoffCopyTargetLabel.textContent = profile.label.toUpperCase();
-    }
-
-    // Build payload via the single core entry point
-    let payload;
-    const validation = validateCadHandoffSelection(h.target, h.format, h.source);
-    if (!validation.ok) {
-      payload = { text: '', count: 0, empty: true, targetLabel: '', modeLabel: '' };
-      if (dom.handoffSummaryBadge) dom.handoffSummaryBadge.textContent = validation.error;
-    } else {
-      payload = buildCadHandoffPayload(h.source, getCadHandoffSourceData(), {
-        targetId: h.target,
-        modeId: h.format,
-        unit: h.unit || undefined,
-        precision: typeof h.precision === 'number' ? h.precision : undefined,
-        suffix: h.suffix,
-        scaleRatio: state.workspace?.scaleRatio || state.lastValidChain?.scaleRatio || 50,
-        chainLayout: h.chainLayout
-      });
-      if (dom.handoffSummaryBadge) {
-        dom.handoffSummaryBadge.textContent = payload.empty
-          ? 'No values available — run the source tool first'
-          : getCadHandoffSummary(payload);
-      }
-    }
-
-    h.lastPayload = payload;
-
-    if (dom.handoffPreviewBox) {
-      dom.handoffPreviewBox.value = payload.text;
-    }
-
-    setUnifiedResultState({
-      toolPrefix: 'handoff',
-      status: payload.empty ? (validation.ok ? 'ready' : 'error') : 'success',
-      errorText: validation.ok ? '' : validation.error
-    });
-
-    saveCadHandoffSettings();
-
-    if (isExplicitRun) {
-      AudioService.playTick();
-    }
-  }
-
-  function copyCadHandoffPayload() {
-    const payload = state.cadHandoff.lastPayload;
-    const profile = CAD_TARGET_PROFILES[state.cadHandoff.target];
-    const label = profile ? `Payload for ${profile.label}` : 'CAD payload';
-
-    if (!payload || payload.empty || !payload.text || !payload.text.trim()) {
-      showToast('No CAD payload to copy — run the source tool first', 'warning');
-      return;
-    }
-
-    copyToClipboard(payload.text, label);
-  }
-
-  function openCadHandoffWithSource(sourceKey) {
-    state.cadHandoff.source = sourceKey;
-    if (dom.handoffSourceSelect) dom.handoffSourceSelect.value = sourceKey;
-    switchMode('cad_handoff');
-    renderCadHandoff(true);
-    AudioService.playTick();
-    showToast(`Loaded ${sourceKey.toUpperCase()} data into CAD Handoff`);
-  }
-
-  // ---------------------------------------------------------------------------
-  // 13h. Mode 12: Batch CAD Conversion Controller
-  // ---------------------------------------------------------------------------
-  function saveBatchCadSettings() {
-    try {
-      const serializable = {
-        ...state.batchCad,
-        selectedIds: Array.from(state.batchCad.selectedIds)
-      };
-      StorageService.setItem(BATCH_STORAGE_KEY, JSON.stringify(serializable));
-    } catch (e) {}
-  }
-
-  function updateBatchModeVisibility() {
-    const mode = dom.batchModeSelect?.value || state.batchCad.mode;
-    if (dom.batchSourceScaleGroup) {
-      dom.batchSourceScaleGroup.style.display = (mode === 'drawing_to_real' || mode === 'scale_to_scale') ? 'block' : 'none';
-    }
-    if (dom.batchTargetScaleGroup) {
-      dom.batchTargetScaleGroup.style.display = (mode === 'real_to_drawing' || mode === 'scale_to_scale') ? 'block' : 'none';
-    }
-  }
-
-  function applyBatchPreset(presetKey) {
-    const preset = BATCH_PRESETS[presetKey];
-    if (!preset) return;
-
-    state.batchCad.mode = preset.mode;
-    state.batchCad.sourceUnit = preset.sourceUnit;
-    state.batchCad.sourceScale = preset.sourceScale;
-    state.batchCad.targetUnit = preset.targetUnit;
-    state.batchCad.targetScale = preset.targetScale;
-    state.batchCad.precision = preset.precision;
-
-    // Sync dropdowns
-    if (dom.batchModeSelect) dom.batchModeSelect.value = preset.mode;
-    if (dom.batchSourceUnitSelect) dom.batchSourceUnitSelect.value = preset.sourceUnit;
-    if (dom.batchSourceScaleSelect) dom.batchSourceScaleSelect.value = String(preset.sourceScale);
-    if (dom.batchTargetUnitSelect) dom.batchTargetUnitSelect.value = preset.targetUnit;
-    if (dom.batchTargetScaleSelect) dom.batchTargetScaleSelect.value = String(preset.targetScale);
-    if (dom.batchPrecisionSelect) dom.batchPrecisionSelect.value = String(preset.precision);
-
-    // Sync active chip
-    dom.batchQuickChips?.querySelectorAll('.cad-preset-chip').forEach(chip => {
-      chip.classList.toggle('active', chip.dataset.preset === presetKey);
-    });
-
-    updateBatchModeVisibility();
-    parseAndConvertBatch(true);
-    AudioService.playTick();
-    showToast(`Loaded preset "${preset.name}"`);
-  }
-
-  function parseAndConvertBatch(isExplicitRun = false) {
-    const batch = state.batchCad;
-
-    // Sync parameters from DOM
-    if (dom.batchPasteInput) batch.rawInput = dom.batchPasteInput.value;
-    if (dom.batchModeSelect) batch.mode = dom.batchModeSelect.value || 'real_to_drawing';
-    if (dom.batchSourceUnitSelect) batch.sourceUnit = dom.batchSourceUnitSelect.value || 'mm';
-    if (dom.batchSourceScaleSelect) batch.sourceScale = parseInt(dom.batchSourceScaleSelect.value, 10) || 50;
-    if (dom.batchTargetUnitSelect) batch.targetUnit = dom.batchTargetUnitSelect.value || 'mm';
-    if (dom.batchTargetScaleSelect) batch.targetScale = parseInt(dom.batchTargetScaleSelect.value, 10) || 50;
-    if (dom.batchPrecisionSelect) batch.precision = parseInt(dom.batchPrecisionSelect.value, 10) || 2;
-    if (dom.batchDelimiterSelect) batch.delimiter = dom.batchDelimiterSelect.value || 'auto';
-
-    updateBatchModeVisibility();
-
-    const raw = (batch.rawInput || '').trim();
-    if (!raw) {
-      batch.lastResult = { rows: [], summary: { totalRows: 0, validRows: 0, invalidRows: 0, convertedRows: 0 } };
-      renderBatchResults();
-      setUnifiedResultState({ toolPrefix: 'batch', status: 'ready' });
-      return;
-    }
-
-    const detected = detectBatchDelimiter(raw);
-    if (dom.batchDelimiterBadge) {
-      dom.batchDelimiterBadge.textContent = `FORMAT: ${detected.toUpperCase()}`;
-    }
-
-    const parsed = parseBatchInput(raw, {
-      delimiter: batch.delimiter,
-      defaultUnit: batch.sourceUnit,
-      defaultScale: batch.sourceScale
-    });
-
-    const converted = convertBatch(parsed.rows, {
-      mode: batch.mode,
-      sourceUnit: batch.sourceUnit,
-      sourceScale: batch.sourceScale,
-      targetUnit: batch.targetUnit,
-      targetScale: batch.targetScale,
-      precision: batch.precision
-    });
-
-    batch.lastResult = converted;
-
-    renderBatchResults();
-
-    setUnifiedResultState({
-      toolPrefix: 'batch',
-      status: converted.summary.invalidRows > 0 ? (converted.summary.validRows > 0 ? 'success' : 'error') : 'success'
-    });
-
-    saveBatchCadSettings();
-
-    if (isExplicitRun) {
-      AudioService.playTick();
-      showToast(`Batch converted ${converted.summary.validRows} of ${converted.summary.totalRows} rows`);
-    }
-  }
-
-  /**
-   * Escapes user-entered batch text for safe interpolation into row HTML.
-   * Row names come from pasted user input, so `<`, `>`, `&`, quotes must be
-   * escaped before entering tr.innerHTML.
-   */
-  function escapeBatchCell(val) {
-    if (val === null || val === undefined) return '';
-    return String(val)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function renderBatchResults() {
-    const batch = state.batchCad;
-    const result = batch.lastResult || { rows: [], summary: { totalRows: 0, validRows: 0, invalidRows: 0, convertedRows: 0 } };
-    const rows = result.rows || [];
-    const summary = result.summary || { totalRows: 0, validRows: 0, invalidRows: 0, convertedRows: 0 };
-
-    // Update Summary Metrics
-    if (dom.batchMetricTotal) dom.batchMetricTotal.textContent = `${summary.totalRows} ${summary.totalRows === 1 ? 'ROW' : 'ROWS'}`;
-    if (dom.batchMetricValid) dom.batchMetricValid.textContent = `${summary.validRows} VALID`;
-    if (dom.batchMetricInvalid) {
-      dom.batchMetricInvalid.textContent = `${summary.invalidRows} INVALID`;
-      dom.batchMetricInvalid.style.display = summary.invalidRows > 0 ? 'inline-flex' : 'none';
-    }
-
-    // Update Filter Counts
-    const validCount = rows.filter(r => r.valid).length;
-    const invalidCount = rows.filter(r => !r.valid).length;
-    const selectedCount = rows.filter(r => batch.selectedIds.has(r.id)).length;
-
-    if (dom.filterCountAll) dom.filterCountAll.textContent = String(rows.length);
-    if (dom.filterCountValid) dom.filterCountValid.textContent = String(validCount);
-    if (dom.filterCountInvalid) dom.filterCountInvalid.textContent = String(invalidCount);
-    if (dom.filterCountSelected) dom.filterCountSelected.textContent = String(selectedCount);
-
-    // Empty State vs Table
-    if (rows.length === 0) {
-      if (dom.batchTable) dom.batchTable.style.display = 'none';
-      if (dom.batchEmptyState) dom.batchEmptyState.style.display = 'block';
-      if (dom.batchTableBody) dom.batchTableBody.innerHTML = '';
-      return;
-    }
-
-    if (dom.batchTable) dom.batchTable.style.display = 'table';
-    if (dom.batchEmptyState) dom.batchEmptyState.style.display = 'none';
-
-    // Filter Rows
-    const filteredRows = filterBatchRows(rows, batch.activeFilter, batch.selectedIds);
-
-    // Master Checkbox State
-    if (dom.batchMasterCheckbox) {
-      dom.batchMasterCheckbox.checked = rows.length > 0 && selectedCount === rows.length;
-      dom.batchMasterCheckbox.indeterminate = selectedCount > 0 && selectedCount < rows.length;
-    }
-
-    // Render Table Body via DocumentFragment for High Performance
-    if (dom.batchTableBody) {
-      const fragment = document.createDocumentFragment();
-
-      filteredRows.forEach(row => {
-        const tr = document.createElement('tr');
-        tr.className = `batch-row ${row.valid ? '' : 'is-invalid'} ${batch.selectedIds.has(row.id) ? 'is-selected' : ''}`;
-        tr.dataset.id = row.id;
-
-        const roleTag = row.semanticRole === 'segment' ? 'SEG' : (row.semanticRole === 'allowance' ? 'ALW' : 'REF');
-        const roleBadgeClass = row.semanticRole === 'segment' ? 'badge-seg' : (row.semanticRole === 'allowance' ? 'badge-alw' : 'badge-ref');
-
-        tr.innerHTML = `
-          <td style="text-align: center;">
-            <input type="checkbox" class="batch-row-checkbox" data-id="${row.id}" ${batch.selectedIds.has(row.id) ? 'checked' : ''} aria-label="Select row ${row.index}" />
-          </td>
-          <td style="font-family: var(--font-family-mono); font-size: 0.75rem; color: var(--text-muted);">${row.index}</td>
-          <td style="font-weight: 600; color: var(--text-primary);">${escapeBatchCell(row.name)}</td>
-          <td><span class="type-badge ${roleBadgeClass}" style="font-size: 0.65rem;">${roleTag}</span></td>
-          <td style="font-family: var(--font-family-mono); font-size: 0.8rem; color: var(--text-secondary);">${escapeBatchCell(row.sourceFormatted)}</td>
-          <td style="font-family: var(--font-family-mono); font-size: 0.85rem; font-weight: 700; color: ${row.valid ? 'var(--accent-primary)' : 'var(--color-error, #ef4444)'};">${escapeBatchCell(row.targetFormatted)}</td>
-          <td style="text-align: center;">
-            <span class="batch-status-pill ${row.valid ? (row.status === 'UNCHANGED' ? 'unchanged' : 'valid') : 'invalid'}">
-              ${row.valid ? (row.status === 'UNCHANGED' ? 'UNCHANGED' : '✓ VALID') : '⚠ INVALID'}
-            </span>
-          </td>
-          <td style="text-align: right;">
-            <button type="button" class="chain-row-del-btn batch-delete-row-btn" data-id="${row.id}" title="Remove row">✕</button>
-          </td>
-        `;
-
-        fragment.appendChild(tr);
-      });
-
-      dom.batchTableBody.innerHTML = '';
-      dom.batchTableBody.appendChild(fragment);
-
-      // Attach row event listeners
-      dom.batchTableBody.querySelectorAll('.batch-row-checkbox').forEach(cb => {
-        cb.addEventListener('change', (e) => {
-          e.stopPropagation();
-          const id = cb.dataset.id;
-          if (cb.checked) batch.selectedIds.add(id);
-          else batch.selectedIds.delete(id);
-          renderBatchResults();
-        });
-      });
-
-      dom.batchTableBody.querySelectorAll('.batch-delete-row-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const id = btn.dataset.id;
-          deleteBatchRow(id);
-        });
-      });
-    }
-  }
-
-  function deleteBatchRow(id) {
-    if (!state.batchCad.lastResult || !Array.isArray(state.batchCad.lastResult.rows)) return;
-    state.batchCad.lastResult.rows = state.batchCad.lastResult.rows.filter(r => r.id !== id);
-    state.batchCad.selectedIds.delete(id);
-    // Re-index
-    state.batchCad.lastResult.rows.forEach((r, idx) => { r.index = idx + 1; });
-    // Recalculate summary
-    const rows = state.batchCad.lastResult.rows;
-    state.batchCad.lastResult.summary = {
-      totalRows: rows.length,
-      validRows: rows.filter(r => r.valid).length,
-      invalidRows: rows.filter(r => !r.valid).length,
-      convertedRows: rows.filter(r => r.status === 'CONVERTED').length,
-      unchangedRows: rows.filter(r => r.status === 'UNCHANGED').length,
-      totalCanonicalMeters: rows.filter(r => r.valid).reduce((acc, r) => acc + r.canonicalMeters, 0),
-      totalTargetValue: rows.filter(r => r.valid).reduce((acc, r) => acc + (r.targetValue || 0), 0)
-    };
-    renderBatchResults();
-    AudioService.playTick();
-    showToast('Removed row');
-  }
-
-  function copyBatchData(formatKey = 'results_only') {
-    const result = state.batchCad.lastResult;
-    if (!result || !result.rows || result.rows.length === 0) {
-      showToast('No batch conversion results to copy', 'warning');
-      return;
-    }
-
-    const hasSelected = state.batchCad.selectedIds.size > 0;
-    const text = formatBatchResults(result, {
-      format: formatKey,
-      selectedOnly: hasSelected,
-      selectedIds: state.batchCad.selectedIds
-    });
-
-    if (!text || !text.trim()) {
-      showToast('No valid dimension data to copy', 'warning');
-      return;
-    }
-
-    const label = hasSelected ? `${state.batchCad.selectedIds.size} Selected Results` : 'Batch Conversion Results';
-    copyToClipboard(text, label);
-  }
-
-  function sendBatchToWorkspace() {
-    const result = state.batchCad.lastResult;
-    if (!result || !result.rows || result.rows.length === 0) {
-      showToast('No batch conversion results to send', 'warning');
-      return;
-    }
-
-    const hasSelected = state.batchCad.selectedIds.size > 0;
-    const payload = convertBatchToWorkspaceGroup(result, {
-      groupName: `Batch (${result.config?.mode || 'Conversion'})`,
-      selectedOnly: hasSelected,
-      selectedIds: state.batchCad.selectedIds
-    });
-
-    if (payload.entries.length === 0) {
-      showToast('No valid rows to add to Dimension Workspace', 'warning');
-      return;
-    }
-
-    if (!Array.isArray(state.workspace.groups)) state.workspace.groups = [];
-    if (!Array.isArray(state.workspace.entries)) state.workspace.entries = [];
-
-    state.workspace.groups.push(payload.group);
-    state.workspace.entries.push(...payload.entries);
-
-    saveWorkspace();
-    switchMode('workspace');
-    renderWorkspace();
-    AudioService.playTick();
-    showToast(`Added ${payload.entries.length} rows to Dimension Workspace`);
-  }
-
-  function sendBatchToMultiScale() {
-    const result = state.batchCad.lastResult;
-    if (!result || !result.rows || result.rows.length === 0) {
-      showToast('No batch rows to compare', 'warning');
-      return;
-    }
-
-    const validRows = result.rows.filter(r => r.valid);
-    if (validRows.length === 0) {
-      showToast('No valid rows to compare', 'warning');
-      return;
-    }
-
-    // Use first valid row or selected row
-    const targetRow = (state.batchCad.selectedIds.size > 0
-      ? validRows.find(r => state.batchCad.selectedIds.has(r.id))
-      : validRows[0]) || validRows[0];
-
-    state.multiScale.dimensionInput = `${targetRow.targetValue || targetRow.parsedValue} ${result.config?.targetUnit || 'mm'}`;
-    if (dom.msDimensionInput) dom.msDimensionInput.value = state.multiScale.dimensionInput;
-
-    switchMode('multiscale');
-    views.callController('multiscale', 'calculateMultiScale');
-    AudioService.playTick();
-    showToast(`Comparing "${targetRow.name}" across multiple scales`);
-  }
-
-  function sendBatchToChains() {
-    const result = state.batchCad.lastResult;
-    if (!result || !result.rows || result.rows.length === 0) {
-      showToast('No batch rows to convert to chain', 'warning');
-      return;
-    }
-
-    const hasSelected = state.batchCad.selectedIds.size > 0;
-    const chain = convertBatchToDimensionChain(result, {
-      chainName: `Batch Chain (${result.config?.targetUnit || 'mm'})`,
-      selectedOnly: hasSelected,
-      selectedIds: state.batchCad.selectedIds
-    });
-
-    if (!chain.segments || chain.segments.length === 0) {
-      showToast('No valid rows for dimension chain', 'warning');
-      return;
-    }
-
-    state.activeChain = chain;
-    if (dom.chainsNameInput) dom.chainsNameInput.value = chain.name;
-    if (dom.chainsUnitSelect) dom.chainsUnitSelect.value = chain.defaultUnit;
-
-    switchMode('chains');
-    views.callController('chains', 'calculateAndRenderChain', true);
-    AudioService.playTick();
-    showToast(`Created Dimension Chain with ${chain.segments.length} segments`);
-  }
-
-  function sendBatchToCadClipboard() {
-    const result = state.batchCad.lastResult;
-    if (!result || !result.rows || result.rows.length === 0) {
-      showToast('No batch rows to format for CAD', 'warning');
-      return;
-    }
-
-    // Set CAD Clipboard source to manual with raw text
-    const rawNumbers = formatBatchResults(result, {
-      format: 'raw_numbers',
-      selectedOnly: state.batchCad.selectedIds.size > 0,
-      selectedIds: state.batchCad.selectedIds
-    });
-
-    state.cadClipboard.source = 'manual';
-    state.cadClipboard.manualInput = rawNumbers;
-    if (dom.cadManualInput) dom.cadManualInput.value = rawNumbers;
-
-    switchMode('cad_clipboard');
-    renderCadClipboard(true);
-    AudioService.playTick();
-    showToast('Loaded batch numbers into CAD Clipboard');
-  }
-
-  // ---------------------------------------------------------------------------
   // 13i. Quick Dimension Strip Controller (Phase 2.5 Part 8: Glance Micro-Tool)
   // ---------------------------------------------------------------------------
   function saveQuickDimSettings() {
@@ -3803,7 +3067,7 @@ export function initializeApp() {
       if (dom.cadManualGroup) dom.cadManualGroup.style.display = 'block';
       if (dom.cadManualInput) dom.cadManualInput.value = payload.manualInput;
       switchMode('cad_clipboard');
-      renderCadClipboard();
+      views.callController('cad_clipboard', 'renderCadClipboard');
       showToast('Transferred dimensions to CAD Clipboard');
     } else if (targetTool === 'journal') {
       HistoryService.addEntry(payload);
@@ -5126,7 +4390,7 @@ export function initializeApp() {
     if (dom.cadQuickChips) {
       dom.cadQuickChips.querySelectorAll('.cad-preset-chip').forEach(chip => {
         chip.addEventListener('click', () => {
-          applyCadPreset(chip.dataset.preset);
+          views.callController('cad_clipboard', 'applyCadPreset', chip.dataset.preset);
         });
       });
     }
@@ -5135,7 +4399,7 @@ export function initializeApp() {
       dom.cadSourcePills.querySelectorAll('.cad-source-pill').forEach(pill => {
         pill.addEventListener('click', () => {
           state.cadClipboard.source = pill.dataset.source;
-          renderCadClipboard(true);
+          views.callController('cad_clipboard', 'renderCadClipboard', true);
           AudioService.playTick();
         });
       });
@@ -5144,7 +4408,7 @@ export function initializeApp() {
     if (dom.cadManualInput) {
       dom.cadManualInput.addEventListener('input', (e) => {
         state.cadClipboard.manualInput = e.target.value;
-        renderCadClipboard(false);
+        views.callController('cad_clipboard', 'renderCadClipboard', false);
       });
     }
 
@@ -5159,7 +4423,7 @@ export function initializeApp() {
     cadSelects.forEach(sel => {
       if (sel) {
         sel.addEventListener('change', () => {
-          renderCadClipboard(true);
+          views.callController('cad_clipboard', 'renderCadClipboard', true);
           AudioService.playTick();
         });
       }
@@ -5167,37 +4431,37 @@ export function initializeApp() {
 
     if (dom.btnRunCadClipboard) {
       dom.btnRunCadClipboard.addEventListener('click', () => {
-        renderCadClipboard(true);
+        views.callController('cad_clipboard', 'renderCadClipboard', true);
       });
     }
 
     if (dom.btnCadCopyMain) {
       dom.btnCadCopyMain.addEventListener('click', () => {
-        copyCadClipboardData();
+        views.callController('cad_clipboard', 'copyCadClipboardData');
       });
     }
 
     if (dom.btnCadCopyRaw) {
       dom.btnCadCopyRaw.addEventListener('click', () => {
-        copyCadClipboardData({ suffix: 'none', format: 'generic', delimiter: 'space' });
+        views.callController('cad_clipboard', 'copyCadClipboardData', { suffix: 'none', format: 'generic', delimiter: 'space' });
       });
     }
 
     if (dom.btnCadCopyUnits) {
       dom.btnCadCopyUnits.addEventListener('click', () => {
-        copyCadClipboardData({ suffix: 'symbol' });
+        views.callController('cad_clipboard', 'copyCadClipboardData', { suffix: 'symbol' });
       });
     }
 
     if (dom.btnCadCopyTsv) {
       dom.btnCadCopyTsv.addEventListener('click', () => {
-        copyCadClipboardData({ format: 'spreadsheet', delimiter: 'tsv' });
+        views.callController('cad_clipboard', 'copyCadClipboardData', { format: 'spreadsheet', delimiter: 'tsv' });
       });
     }
 
     if (dom.btnCadExportTxt) {
       dom.btnCadExportTxt.addEventListener('click', () => {
-        renderCadClipboard(true);
+        views.callController('cad_clipboard', 'renderCadClipboard', true);
         const text = state.cadClipboard.lastFormattedText;
         if (text) {
           downloadFile(text, 'CAD_Dimensions.txt', 'text/plain');
@@ -5212,25 +4476,25 @@ export function initializeApp() {
     // Cross-Mode CAD Handoff Buttons
     if (dom.wsOpenCadBtn) {
       dom.wsOpenCadBtn.addEventListener('click', () => {
-        openCadClipboardWithSource('workspace');
+        views.callController('cad_clipboard', 'openCadClipboardWithSource', 'workspace');
       });
     }
 
     if (dom.exprCadHandoffBtn) {
       dom.exprCadHandoffBtn.addEventListener('click', () => {
-        openCadClipboardWithSource('expression');
+        views.callController('cad_clipboard', 'openCadClipboardWithSource', 'expression');
       });
     }
 
     if (dom.msCadHandoffBtn) {
       dom.msCadHandoffBtn.addEventListener('click', () => {
-        openCadClipboardWithSource('multiscale');
+        views.callController('cad_clipboard', 'openCadClipboardWithSource', 'multiscale');
       });
     }
 
     if (dom.chainsCadHandoffBtn) {
       dom.chainsCadHandoffBtn.addEventListener('click', () => {
-        openCadClipboardWithSource('chain');
+        views.callController('cad_clipboard', 'openCadClipboardWithSource', 'chain');
       });
     }
 
@@ -5241,12 +4505,12 @@ export function initializeApp() {
     if (dom.handoffManualInput) {
       dom.handoffManualInput.addEventListener('input', () => {
         state.cadHandoff.manualInput = dom.handoffManualInput.value;
-        renderCadHandoff();
+        views.callController('cad_handoff', 'renderCadHandoff');
       });
       dom.handoffManualInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
-          renderCadHandoff(true);
+          views.callController('cad_handoff', 'renderCadHandoff', true);
         }
       });
     }
@@ -5254,7 +4518,7 @@ export function initializeApp() {
       dom.handoffTargetPills.querySelectorAll('.cad-source-pill').forEach(pill => {
         pill.addEventListener('click', () => {
           state.cadHandoff.target = pill.dataset.target;
-          renderCadHandoff(true);
+          views.callController('cad_handoff', 'renderCadHandoff', true);
         });
       });
     }
@@ -5284,12 +4548,12 @@ export function initializeApp() {
       dom.btnRunCadHandoff.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
-          renderCadHandoff(true);
+          views.callController('cad_handoff', 'renderCadHandoff', true);
         }
       });
     }
     if (dom.btnHandoffCopy) {
-      dom.btnHandoffCopy.addEventListener('click', copyCadHandoffPayload);
+      dom.btnHandoffCopy.addEventListener('click', () => views.callController('cad_handoff', 'copyCadHandoffPayload'));
     }
     if (dom.btnHandoffExportTxt) {
       dom.btnHandoffExportTxt.addEventListener('click', () => {
@@ -5305,7 +4569,7 @@ export function initializeApp() {
     if (dom.btnHandoffOpenCadClipboard) {
       dom.btnHandoffOpenCadClipboard.addEventListener('click', () => {
         const sourceMap = { workspace: 'workspace', expression: 'expression', multiscale: 'multiscale', chain: 'chain', batch: 'workspace', quick: 'manual', manual: 'manual' };
-        openCadClipboardWithSource(sourceMap[state.cadHandoff.source] || 'workspace');
+        views.callController('cad_clipboard', 'openCadClipboardWithSource', sourceMap[state.cadHandoff.source] || 'workspace');
       });
     }
 
@@ -5313,7 +4577,7 @@ export function initializeApp() {
     if (dom.batchQuickChips) {
       dom.batchQuickChips.querySelectorAll('.cad-preset-chip').forEach(chip => {
         chip.addEventListener('click', () => {
-          applyBatchPreset(chip.dataset.preset);
+          views.callController('batch_cad', 'applyBatchPreset', chip.dataset.preset);
         });
       });
     }
@@ -5330,7 +4594,7 @@ export function initializeApp() {
       dom.batchPasteInput.addEventListener('keydown', (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
           e.preventDefault();
-          parseAndConvertBatch(true);
+          views.callController('batch_cad', 'parseAndConvertBatch', true);
         }
       });
     }
@@ -5338,56 +4602,56 @@ export function initializeApp() {
     if (dom.batchModeSelect) {
       dom.batchModeSelect.addEventListener('change', () => {
         state.batchCad.mode = dom.batchModeSelect.value;
-        updateBatchModeVisibility();
-        parseAndConvertBatch(false);
+        views.callController('batch_cad', 'updateBatchModeVisibility');
+        views.callController('batch_cad', 'parseAndConvertBatch', false);
       });
     }
 
     if (dom.batchSourceScaleSelect) {
       dom.batchSourceScaleSelect.addEventListener('change', () => {
         state.batchCad.sourceScale = parseInt(dom.batchSourceScaleSelect.value, 10) || 50;
-        parseAndConvertBatch(false);
+        views.callController('batch_cad', 'parseAndConvertBatch', false);
       });
     }
 
     if (dom.batchTargetScaleSelect) {
       dom.batchTargetScaleSelect.addEventListener('change', () => {
         state.batchCad.targetScale = parseInt(dom.batchTargetScaleSelect.value, 10) || 50;
-        parseAndConvertBatch(false);
+        views.callController('batch_cad', 'parseAndConvertBatch', false);
       });
     }
 
     if (dom.batchSourceUnitSelect) {
       dom.batchSourceUnitSelect.addEventListener('change', () => {
         state.batchCad.sourceUnit = dom.batchSourceUnitSelect.value;
-        parseAndConvertBatch(false);
+        views.callController('batch_cad', 'parseAndConvertBatch', false);
       });
     }
 
     if (dom.batchTargetUnitSelect) {
       dom.batchTargetUnitSelect.addEventListener('change', () => {
         state.batchCad.targetUnit = dom.batchTargetUnitSelect.value;
-        parseAndConvertBatch(false);
+        views.callController('batch_cad', 'parseAndConvertBatch', false);
       });
     }
 
     if (dom.batchPrecisionSelect) {
       dom.batchPrecisionSelect.addEventListener('change', () => {
         state.batchCad.precision = parseInt(dom.batchPrecisionSelect.value, 10) || 2;
-        parseAndConvertBatch(false);
+        views.callController('batch_cad', 'parseAndConvertBatch', false);
       });
     }
 
     if (dom.batchDelimiterSelect) {
       dom.batchDelimiterSelect.addEventListener('change', () => {
         state.batchCad.delimiter = dom.batchDelimiterSelect.value;
-        parseAndConvertBatch(false);
+        views.callController('batch_cad', 'parseAndConvertBatch', false);
       });
     }
 
     if (dom.btnRunBatchCad) {
       dom.btnRunBatchCad.addEventListener('click', () => {
-        parseAndConvertBatch(true);
+        views.callController('batch_cad', 'parseAndConvertBatch', true);
       });
     }
 
@@ -5398,7 +4662,7 @@ export function initializeApp() {
           dom.batchFilterPills.querySelectorAll('.cad-preset-chip').forEach(p => {
             p.classList.toggle('active', p === pill);
           });
-          renderBatchResults();
+          views.callController('batch_cad', 'renderBatchResults');
           AudioService.playTick();
         });
       });
@@ -5408,7 +4672,7 @@ export function initializeApp() {
       dom.batchSelectAllBtn.addEventListener('click', () => {
         if (state.batchCad.lastResult && state.batchCad.lastResult.rows) {
           state.batchCad.lastResult.rows.forEach(r => state.batchCad.selectedIds.add(r.id));
-          renderBatchResults();
+          views.callController('batch_cad', 'renderBatchResults');
           AudioService.playTick();
         }
       });
@@ -5417,7 +4681,7 @@ export function initializeApp() {
     if (dom.batchClearSelectionBtn) {
       dom.batchClearSelectionBtn.addEventListener('click', () => {
         state.batchCad.selectedIds.clear();
-        renderBatchResults();
+        views.callController('batch_cad', 'renderBatchResults');
         AudioService.playTick();
       });
     }
@@ -5431,7 +4695,7 @@ export function initializeApp() {
           } else {
             state.batchCad.selectedIds.clear();
           }
-          renderBatchResults();
+          views.callController('batch_cad', 'renderBatchResults');
           AudioService.playTick();
         }
       });
@@ -5442,86 +4706,86 @@ export function initializeApp() {
         const sample = `Wall North = 4800mm\nSEG Wall South = 3200mm\nWindow 1 = 1800 + 300\nALW Tolerance = 20mm\nDoor Entrance = 900\n2.4m\n7' 6"`;
         if (dom.batchPasteInput) dom.batchPasteInput.value = sample;
         state.batchCad.rawInput = sample;
-        parseAndConvertBatch(true);
+        views.callController('batch_cad', 'parseAndConvertBatch', true);
       });
     }
 
     // Export & Action toolbar buttons
     if (dom.batchCopyResultsBtn) {
       dom.batchCopyResultsBtn.addEventListener('click', () => {
-        copyBatchData('results_only');
+        views.callController('batch_cad', 'copyBatchData', 'results_only');
       });
     }
 
     if (dom.batchCopyRawBtn) {
       dom.batchCopyRawBtn.addEventListener('click', () => {
-        copyBatchData('raw_numbers');
+        views.callController('batch_cad', 'copyBatchData', 'raw_numbers');
       });
     }
 
     if (dom.batchCopyTsvBtn) {
       dom.batchCopyTsvBtn.addEventListener('click', () => {
-        copyBatchData('tsv_schedule');
+        views.callController('batch_cad', 'copyBatchData', 'tsv_schedule');
       });
     }
 
     if (dom.batchOpenCadBtn) {
       dom.batchOpenCadBtn.addEventListener('click', () => {
-        sendBatchToCadClipboard();
+        views.callController('batch_cad', 'sendBatchToCadClipboard');
       });
     }
 
     if (dom.batchSendCadHandoffBtn) {
       dom.batchSendCadHandoffBtn.addEventListener('click', () => {
-        openCadHandoffWithSource('batch');
+        views.callController('cad_handoff', 'openCadHandoffWithSource', 'batch');
       });
     }
 
     if (dom.workspaceSendCadHandoffBtn) {
       dom.workspaceSendCadHandoffBtn.addEventListener('click', () => {
-        openCadHandoffWithSource('workspace');
+        views.callController('cad_handoff', 'openCadHandoffWithSource', 'workspace');
       });
     }
 
     if (dom.expressionSendCadHandoffBtn) {
       dom.expressionSendCadHandoffBtn.addEventListener('click', () => {
-        openCadHandoffWithSource('expression');
+        views.callController('cad_handoff', 'openCadHandoffWithSource', 'expression');
       });
     }
 
     if (dom.multiscaleSendCadHandoffBtn) {
       dom.multiscaleSendCadHandoffBtn.addEventListener('click', () => {
-        openCadHandoffWithSource('multiscale');
+        views.callController('cad_handoff', 'openCadHandoffWithSource', 'multiscale');
       });
     }
 
     if (dom.chainsSendCadHandoffBtn) {
       dom.chainsSendCadHandoffBtn.addEventListener('click', () => {
-        openCadHandoffWithSource('chain');
+        views.callController('cad_handoff', 'openCadHandoffWithSource', 'chain');
       });
     }
 
     if (dom.quickDimSendCadHandoffBtn) {
       dom.quickDimSendCadHandoffBtn.addEventListener('click', () => {
-        openCadHandoffWithSource('quick');
+        views.callController('cad_handoff', 'openCadHandoffWithSource', 'quick');
       });
     }
 
     if (dom.batchSendWorkspaceBtn) {
       dom.batchSendWorkspaceBtn.addEventListener('click', () => {
-        sendBatchToWorkspace();
+        views.callController('batch_cad', 'sendBatchToWorkspace');
       });
     }
 
     if (dom.batchCompareMultiscaleBtn) {
       dom.batchCompareMultiscaleBtn.addEventListener('click', () => {
-        sendBatchToMultiScale();
+        views.callController('batch_cad', 'sendBatchToMultiScale');
       });
     }
 
     if (dom.batchCreateChainBtn) {
       dom.batchCreateChainBtn.addEventListener('click', () => {
-        sendBatchToChains();
+        views.callController('batch_cad', 'sendBatchToChains');
       });
     }
 
@@ -5873,6 +5137,9 @@ export function initializeApp() {
   views.register(createExpressionView(viewContext));
   views.register(createMultiScaleView(viewContext));
   views.register(createChainsView(viewContext));
+  views.register(createCadClipboardView(viewContext));
+  views.register(createCadHandoffView(viewContext));
+  views.register(createBatchCadView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();
