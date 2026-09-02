@@ -65,6 +65,7 @@ export const BUNDLE_MODULES = [
   { name: 'ViewCadClipboardHandoff', file: path.join(srcDir, 'ui', 'views', 'cad-clipboard-handoff.js') },
   { name: 'ViewBatchCad', file: path.join(srcDir, 'ui', 'views', 'batch-cad.js') },
   { name: 'ViewQuickDimension', file: path.join(srcDir, 'ui', 'views', 'quick-dimension.js') },
+  { name: 'ViewHistory', file: path.join(srcDir, 'ui', 'views', 'history.js') },
   { name: 'App', file: path.join(srcDir, 'ui', 'app.js') }
 ];
 
