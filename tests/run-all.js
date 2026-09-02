@@ -27,6 +27,7 @@ const testFiles = [
   'cad-targets.test.js',
   'project.test.js',
   'store.test.js',
+  'stairs.test.js',
   'services.test.js',
   'commands.test.js',
   'data-integrity.test.js',

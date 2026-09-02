@@ -17,7 +17,7 @@ The current design—where `src/core/` houses pure calculation engines, `src/cor
 
 ## 2. Planned Core Module Extensions (Future Phases)
 
-When feature development begins in subsequent phases, new calculations will be added as dedicated pure mathematical modules under `src/core/`. *(Update, September 2, 2026: `src/core/geometry.js` already exists and is verified by `tests/geometry.test.js` — it is no longer future work. `stairs.js` and `slope.js` remain planned. Any new module must be registered in `BUNDLE_MODULES` in `scripts/build.js` per the build contract in ENGINEERING_RULES.md §6.1.)*
+When feature development begins in subsequent phases, new calculations will be added as dedicated pure mathematical modules under `src/core/`. *(Update, September 2, 2026: `src/core/geometry.js` and `src/core/stairs.js` already exist and are verified by `tests/geometry.test.js` / `tests/stairs.test.js` — they are no longer future work. `slope.js`/ramps remain planned. Any new module must be registered in `BUNDLE_MODULES` in `scripts/build.js` per the build contract in ENGINEERING_RULES.md §6.1. Stair contract details: STAIRS.md.)*
 
 ### 2.1 `src/core/geometry.js` (✅ IMPLEMENTED — verified by tests/geometry.test.js)
 * **Pure Functions**:
@@ -30,11 +30,12 @@ When feature development begins in subsequent phases, new calculations will be a
   - Units: Dimension-checked via `requireUnit`.
   - Outputs: Pure numeric results normalized in SI units and converted to target units.
 
-### 2.2 `src/core/stairs.js` (Future)
-* **Pure Functions**:
-  - `calcStairRisers({ totalHeight, targetRiserHeight, maxRiser, minTread })`
-  - Validates Blondel's architectural rule ($2R + T \approx 60\text{--}64\text{ cm}$).
-  - Computes exact headcount, riser count, tread depth, stair run, stringer length, and incline angle.
+### 2.2 `src/core/stairs.js` (✅ IMPLEMENTED — verified by tests/stairs.test.js; contract in STAIRS.md)
+* **Implemented API** (straight flight; the planned riser/ramp work extends this):
+  - `calculateStair({ mode, totalRise, ... })` — four input modes, deterministic candidates
+  - `generateStairSVG(result)` — proportional side elevation from actual geometry
+  - `resolveStairReferences(overrides)` — configurable, labelled reference ranges
+* **Original plan (superseded naming)**: `calcStairRisers`, Blondel 2R+T, incline angle.
 
 ### 2.3 `src/core/slope.js` (Future)
 * **Pure Functions**:

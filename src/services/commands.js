@@ -254,15 +254,14 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
-    id: 'future-stair-calc',
-    title: 'Stair & Riser Calculator',
-    description: 'Calculate stair riser count, tread depths, slope angles, and building code compliance',
-    category: 'Upcoming Tool',
+    id: 'nav-stairs',
+    title: 'Stair Calculator',
+    description: 'Straight-flight stair proportions: risers, goings, Blondel 2R+T, angle, run, and candidate options',
+    category: 'Navigation',
     icon: '🪜',
-    keywords: ['stair', 'riser', 'tread', 'slope', 'code', 'headroom', 'phase 2.5'],
-    actionType: 'placeholder',
-    available: false,
-    badge: 'Phase 2.5'
+    keywords: ['stair', 'stairs', 'riser', 'tread', 'going', 'blondel', 'angle', 'run', 'flight', 'mode 14'],
+    actionType: 'navigation',
+    available: true
   },
   {
     id: 'future-ramp-calc',

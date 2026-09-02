@@ -46,6 +46,7 @@ export const BUNDLE_MODULES = [
   { name: 'BatchCad', file: path.join(srcDir, 'core', 'batch-cad.js') },
   { name: 'QuickDimension', file: path.join(srcDir, 'core', 'quick-dimension.js') },
   { name: 'CadTargets', file: path.join(srcDir, 'core', 'cad-targets.js') },
+  { name: 'Stairs', file: path.join(srcDir, 'core', 'stairs.js') },
   { name: 'Project', file: path.join(srcDir, 'core', 'project.js') },
 
   // --- Services ---
@@ -68,6 +69,7 @@ export const BUNDLE_MODULES = [
   { name: 'ViewBatchCad', file: path.join(srcDir, 'ui', 'views', 'batch-cad.js') },
   { name: 'ViewQuickDimension', file: path.join(srcDir, 'ui', 'views', 'quick-dimension.js') },
   { name: 'ViewHistory', file: path.join(srcDir, 'ui', 'views', 'history.js') },
+  { name: 'ViewStairs', file: path.join(srcDir, 'ui', 'views', 'stairs.js') },
   { name: 'App', file: path.join(srcDir, 'ui', 'app.js') }
 ];
 

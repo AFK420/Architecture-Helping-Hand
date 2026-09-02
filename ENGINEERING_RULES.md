@@ -42,7 +42,7 @@ src/
 Feature controllers live in one module per mode/tool under `src/ui/views/`:
 `converter.js`, `rescaler.js`, `detector.js`, `area-volume.js`,
 `expression-multiscale.js`, `dimension-chains.js`, `cad-clipboard-handoff.js`,
-`batch-cad.js`, `quick-dimension.js`, `history.js`.
+`batch-cad.js`, `quick-dimension.js`, `history.js`, `stairs.js`.
 
 * **Contract**: each view exports `createXView(context)` returning
   `{ id, mount(), getController() }` (optional `onModeEnter`/`onModeLeave`).

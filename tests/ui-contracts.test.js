@@ -34,7 +34,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
 // 1. Verify Mode Navigation Targets in HTML
 {
-  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff'];
+  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff', 'stairs'];
   
   for (const mode of expectedModes) {
     const hasTab = htmlContent.includes(`data-mode="${mode}"`);
@@ -410,6 +410,46 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'multiscale-send-cad-handoff-btn',
     'chains-send-cad-handoff-btn',
     'quick-dim-send-cad-handoff-btn',
+    // Stair Calculator (Mode 14)
+    'stairs-mode-select',
+    'stairs-total-rise',
+    'stairs-desired-riser-group',
+    'stairs-desired-riser',
+    'stairs-riser-count-group',
+    'stairs-riser-count',
+    'stairs-available-run-group',
+    'stairs-available-run',
+    'stairs-total-run-group',
+    'stairs-total-run',
+    'stairs-desired-tread-group',
+    'stairs-desired-tread',
+    'stairs-objective-select',
+    'stairs-error-msg',
+    'stairs-ref-riser-min',
+    'stairs-ref-riser-max',
+    'stairs-ref-blondel-min',
+    'stairs-ref-blondel-max',
+    'stairs-reference-note',
+    'stairs-result-panel',
+    'stairs-state-badge',
+    'stairs-convention-badge',
+    'stairs-riser-count-val',
+    'stairs-riser-val',
+    'stairs-tread-val',
+    'stairs-run-val',
+    'stairs-flight-val',
+    'stairs-angle-val',
+    'stairs-slope-val',
+    'stairs-svg-wrap',
+    'stairs-blondel-val',
+    'stairs-blondel-status',
+    'stairs-candidates-body',
+    'stairs-copy-result-btn',
+    'stairs-copy-schedule-btn',
+    'stairs-send-cad-btn',
+    'stairs-send-workspace-btn',
+    'stairs-save-journal-btn',
+    'stairs-save-project-btn',
 
     // Quick Dimension Strip IDs
     'quick-dimension-strip',
@@ -492,6 +532,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'btn-run-cad-clipboard',
     'btn-run-batch-cad',
     'btn-run-cad-handoff',
+    'btn-run-stairs',
     'btn-run-quick-dim'
   ];
 

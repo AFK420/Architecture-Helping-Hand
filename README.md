@@ -3,7 +3,7 @@
 > **Professional Architectural Scale, Furniture Sizing & Multi-Unit Calculation Studio**  
 > *A high-precision, zero-dependency, tactile architectural conversion studio built for architects, interior designers, urban planners, physical model makers, and design students.*
 
-[![Tests](https://img.shields.io/badge/Tests-1582%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-1732%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-3--Tier%20Core%20%7C%20Frozen-10b981?style=flat-square)](ENGINEERING_RULES.md)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Vanilla)-f59e0b?style=flat-square)](package.json)
 [![License](https://img.shields.io/badge/License-MIT-6366f1?style=flat-square)](package.json)
@@ -142,7 +142,7 @@ The codebase has evolved through rigorous engineering, auditing, hardening, and 
 This repository serves as:
 1. **An Open-Source Reference Studio**: A tactile, zero-friction architectural scaling studio for architects, interior designers, landscape architects, students, and educators.
 2. **Zero-Dependency Architecture**: No React, no Vue, no webpack, no runtime `node_modules`. Anyone can clone the repository, double-click `index.html`, and use it immediately offline via `file:///`.
-3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **1,582 automated test assertions across 22 test suites** (authoritative count emitted by `npm test`).
+3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **1,732 automated test assertions across 23 test suites** (authoritative count emitted by `npm test`).
 4. **An Extensible Platform**: Prepared for future architectural geometry engines, CAD vector exports (SVG/DXF), and stair/ramp calculations.
 
 ---
@@ -246,6 +246,14 @@ This repository serves as:
 * **Selection Semantics Preserved**: Workspace scope (all / selected / segments / references / allowances) and Batch row selection carry through to the payload; batch order and chain order are preserved and pinned by tests.
 * **Preview Before Copy**: The exact clipboard text is always visible in a read-only preview with a live summary (count → target • format • unit) before copying or exporting as `.txt`.
 * **Scope Note — Workflow Profiles, Not Integrations**: These are clipboard formatting conventions for fast manual pasting. Part 9 does **not** provide direct AutoCAD, Rhino, or SketchUp API/plugin integration, generates no proprietary command syntax, and never executes copied content.
+
+### 16. Stair Calculator (Mode 14) — Architectural Tools
+* **Four Deterministic Input Modes**: Rise + Desired Riser · Rise + Number of Risers · Rise + Available Run · Rise + Run (direct geometry). Lengths accept the full application parser (`2.8m`, `2800mm`, `12'-6"`).
+* **Riser/Going Convention Made Explicit**: N risers → N − 1 goings (the upper slab is the final tread). The result header and SVG diagram show `16 risers / 15 goings` verbatim — the off-by-one is never hidden.
+* **Blondel Proportion Check**: shows Riser, Going, and 2R+T against a configurable 600–660 mm teaching band, labelled *Educational Heuristic (configurable)*. Status language is "Within/Below/Above configured reference range" — never "code compliant". Riser/going/angle ranges are equally configurable Typical References.
+* **Candidate Options**: up to eight ranked alternatives (e.g. 15/16/17 risers with their riser, going, run, and 2R+T), deterministic ordering, one click switches to an exact configuration. Objectives: comfortable proportion, minimize run, target riser, target tread.
+* **Proportional SVG Diagram**: side elevation drawn from the actual calculated geometry — rise, run, flight angle, and the step outline all match the numeric result (pinned by tests).
+* **Project Persistence**: *Save to Project* stores the stair as a decision in the versioned Project Document (`src/services/store.js`) — no stair-specific localStorage silo. Journal / Workspace / CAD Handoff handoffs reuse the existing systems. See **STAIRS.md** for the full contract.
 
 ---
 
@@ -434,7 +442,7 @@ python -m http.server 3500
 ### 3. Run Automated Test Suite
 ```bash
 npm test
-# Executes all 22 test suites (1,582 assertions, 100% passing)...
+# Executes all 23 test suites (1,732 assertions, 100% passing)....
 # The runner emits the authoritative total assertion count on completion.
 ```
 

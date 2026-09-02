@@ -2,7 +2,7 @@
 
 **Date**: September 2, 2026  
 **Repository**: [https://github.com/AFK420/Architecture-Helping-Hand.git](https://github.com/AFK420/Architecture-Helping-Hand.git)  
-**Status**: Verified & Hardened (Post Build-Pipeline Repair — 1,582 Assertions, 22 Suites)  
+**Status**: Verified & Hardened (Post Build-Pipeline Repair — 1,732 Assertions, 23 Suites)  
 
 ---
 
@@ -57,6 +57,7 @@ Architecture-Helping-Hand/
 │   │   ├── batch-cad.js           # Batch CAD conversion engine (Part 7)
 │   │   ├── quick-dimension.js     # Quick Dimension Strip engine (Part 8)
 │   │   ├── cad-targets.js         # CAD target profiles & send-to handoff payload builder (Part 9)
+│   │   ├── stairs.js              # Stair Calculator engine: modes, candidates, Blondel, SVG (Architectural Tools)
 │   │   └── project.js             # Project Document Model: versioned, validated, serializable envelope (Stabilization 2)
 │   ├── services/
 │   │   ├── storage.js             # Safe LocalStorage wrapper with memory fallback
@@ -78,7 +79,8 @@ Architecture-Helping-Hand/
 │           ├── cad-clipboard-handoff.js # Modes 11+13: CAD Clipboard & CAD Handoff
 │           ├── batch-cad.js       # Mode 12: Batch CAD Conversion
 │           ├── quick-dimension.js # Quick Dimension Strip micro-tool
-│           └── history.js         # Calculation Journal drawer
+│           ├── history.js         # Calculation Journal drawer
+│           └── stairs.js          # Mode 14: Stair Calculator
 ├── scripts/
 │   └── build.js                   # Deterministic bundler compiling src/ into standalone js/app.js
 │                                  #   (BUNDLE_MODULES manifest + --check flag; guarded by tests/build-integrity.test.js)
@@ -88,6 +90,7 @@ Architecture-Helping-Hand/
     ├── build-integrity.test.js    # Manifest coverage, bundle content & runtime smoke verification (31 tests)
     ├── project.test.js            # Project Document Model: create/validate/normalize/serialize/clone (58 tests)
     ├── store.test.js              # Project store: migrations, recovery, pub/sub, legacy import (48 tests)
+    ├── stairs.test.js             # Stair Calculator: 4 modes, candidates, validation, SVG-geometry, store round-trip (110 tests)
     ├── cad-targets.test.js        # CAD target profiles, all-source handoff payloads, order/selection/precision (106 tests)
     ├── ui-contracts.test.js       # Full DOM ID verification, Run buttons presence & bundle cleanliness (398 tests)
     ├── calculator.test.js         # Mathematical scaling, round-trip, boundary & error tests (40 tests)
@@ -152,7 +155,7 @@ Scaling formulas operate strictly on these normalized values:
 
 ## 4. Automated Testing & Verification Matrix
 
-The test suite consists of **22 automated test suites** containing **1,582 exact assertions**, all passing with zero failures. The authoritative total is emitted by `npm test` on every run — documentation should quote that output rather than hard-coded numbers.
+The test suite consists of **23 automated test suites** containing **1,732 exact assertions**, all passing with zero failures. The authoritative total is emitted by `npm test` on every run — documentation should quote that output rather than hard-coded numbers.
 
 | Test Suite File | Focus Area | Assertions | Result |
 | :--- | :--- | :---: | :---: |
@@ -160,6 +163,7 @@ The test suite consists of **22 automated test suites** containing **1,582 exact
 | `tests/cad-targets.test.js` | Part 9 CAD target profiles, all-source handoff payloads with real engine outputs, order/selection/precision pins | 106 | ✅ PASS |
 | `tests/project.test.js` | Stabilization 2: project model create/validate/normalize, unknown-field preservation, round-trips | 58 | ✅ PASS |
 | `tests/store.test.js` | Stabilization 3+4: versioned store, migrations, recovery, pub/sub, legacy import | 48 | ✅ PASS |
+| `tests/stairs.test.js` | Stair Calculator: all 4 modes, deterministic candidates, validation codes, SVG-geometry correspondence, project-store round-trip | 110 | ✅ PASS |
 | `tests/commands.test.js` | Command registry: registration, execution, categories, favorites, dynamic commands | 178 | ✅ PASS |
 | `tests/dimension-workspace.test.js` | Dimension Workspace entries, groups, serialization, persistence | 103 | ✅ PASS |
 | `tests/dimension-expression.test.js` | Expression parser determinism, validation, error codes, scale integration | 79 | ✅ PASS |
@@ -178,7 +182,7 @@ The test suite consists of **22 automated test suites** containing **1,582 exact
 | `tests/units.test.js` | Metric (mm, cm, dm, m, km), imperial (in, ft, yd, mi), area & volume factors, round-trips, strict invalid unit rejection | 26 | ✅ PASS |
 | `tests/formatter.test.js` | Decimal precision rounding, epsilon stabilization, trailing zero elimination, scientific notation, feet-inches notation | 12 | ✅ PASS |
 | `tests/data-integrity.test.js`| 28 scale presets uniqueness & ratio validity, 179 furniture records positive dimensions & unique IDs, reference ranges continuity | 9 | ✅ PASS |
-| **Total** | **22 Comprehensive Test Suites** | **1,582 Assertions** | **100% Passing (0 Failures)** |
+| **Total** | **23 Comprehensive Test Suites** | **1,732 Assertions** | **100% Passing (0 Failures)** |
 
 ---
 

@@ -102,7 +102,9 @@ import { createCadClipboardView, createCadHandoffView } from './views/cad-clipbo
 import { createBatchCadView } from './views/batch-cad.js';
 import { createQuickDimensionView } from './views/quick-dimension.js';
 import { createHistoryView } from './views/history.js';
+import { createStairsView } from './views/stairs.js';
 import { StorageService } from '../services/storage.js';
+import { createProjectStore } from '../services/store.js';
 import { AudioService } from '../services/audio.js';
 import { HistoryService } from '../services/history.js';
 import { CommandRegistry } from '../services/commands.js';
@@ -324,7 +326,15 @@ export function initializeApp() {
     lastValidConverter: null,
     lastValidRescale: null,
     lastValidDetector: null,
-    lastValidAreavol: null
+    lastValidAreavol: null,
+
+    // Mode 14: Stair Calculator
+    stairs: {
+      mode: 'rise_desired_riser',
+      objective: 'comfortable_proportion',
+      displayUnit: 'mm',
+      lastResult: null
+    }
   };
 
   // DOM Elements Cache (Strictly normalized with index.html)
@@ -760,7 +770,48 @@ export function initializeApp() {
     btnHandoffCopy: document.getElementById('btn-handoff-copy'),
     handoffCopyTargetLabel: document.getElementById('handoff-copy-target-label'),
     btnHandoffExportTxt: document.getElementById('btn-handoff-export-txt'),
-    btnHandoffOpenCadClipboard: document.getElementById('btn-handoff-open-cad-clipboard')
+    btnHandoffOpenCadClipboard: document.getElementById('btn-handoff-open-cad-clipboard'),
+
+    // Mode 14: Stair Calculator Elements
+    stairsModeSelect: document.getElementById('stairs-mode-select'),
+    stairsTotalRise: document.getElementById('stairs-total-rise'),
+    stairsDesiredRiserGroup: document.getElementById('stairs-desired-riser-group'),
+    stairsDesiredRiser: document.getElementById('stairs-desired-riser'),
+    stairsRiserCountGroup: document.getElementById('stairs-riser-count-group'),
+    stairsRiserCount: document.getElementById('stairs-riser-count'),
+    stairsAvailableRunGroup: document.getElementById('stairs-available-run-group'),
+    stairsAvailableRun: document.getElementById('stairs-available-run'),
+    stairsTotalRunGroup: document.getElementById('stairs-total-run-group'),
+    stairsTotalRun: document.getElementById('stairs-total-run'),
+    stairsDesiredTreadGroup: document.getElementById('stairs-desired-tread-group'),
+    stairsDesiredTread: document.getElementById('stairs-desired-tread'),
+    stairsObjectiveSelect: document.getElementById('stairs-objective-select'),
+    btnRunStairs: document.getElementById('btn-run-stairs'),
+    stairsErrorMsg: document.getElementById('stairs-error-msg'),
+    stairsRefRiserMin: document.getElementById('stairs-ref-riser-min'),
+    stairsRefRiserMax: document.getElementById('stairs-ref-riser-max'),
+    stairsRefBlondelMin: document.getElementById('stairs-ref-blondel-min'),
+    stairsRefBlondelMax: document.getElementById('stairs-ref-blondel-max'),
+    stairsReferenceNote: document.getElementById('stairs-reference-note'),
+    stairsResultPanel: document.getElementById('stairs-result-panel'),
+    stairsConventionBadge: document.getElementById('stairs-convention-badge'),
+    stairsRiserCountVal: document.getElementById('stairs-riser-count-val'),
+    stairsRiserVal: document.getElementById('stairs-riser-val'),
+    stairsTreadVal: document.getElementById('stairs-tread-val'),
+    stairsRunVal: document.getElementById('stairs-run-val'),
+    stairsFlightVal: document.getElementById('stairs-flight-val'),
+    stairsAngleVal: document.getElementById('stairs-angle-val'),
+    stairsSlopeVal: document.getElementById('stairs-slope-val'),
+    stairsSvgWrap: document.getElementById('stairs-svg-wrap'),
+    stairsBlondelVal: document.getElementById('stairs-blondel-val'),
+    stairsBlondelStatus: document.getElementById('stairs-blondel-status'),
+    stairsCandidatesBody: document.getElementById('stairs-candidates-body'),
+    stairsCopyResultBtn: document.getElementById('stairs-copy-result-btn'),
+    stairsCopyScheduleBtn: document.getElementById('stairs-copy-schedule-btn'),
+    stairsSendCadBtn: document.getElementById('stairs-send-cad-btn'),
+    stairsSendWorkspaceBtn: document.getElementById('stairs-send-workspace-btn'),
+    stairsSaveJournalBtn: document.getElementById('stairs-save-journal-btn'),
+    stairsSaveProjectBtn: document.getElementById('stairs-save-project-btn')
   };
 
   // ---------------------------------------------------------------------------
@@ -941,6 +992,9 @@ export function initializeApp() {
     }
     else if (targetMode === 'cad_handoff') {
       views.callController('cad_handoff', 'renderCadHandoff');
+    }
+    else if (targetMode === 'stairs') {
+      views.callController('stairs', 'calculate');
     }
   }
 
@@ -2337,6 +2391,9 @@ export function initializeApp() {
         break;
       case 'nav-cad-handoff':
         switchMode('cad_handoff');
+        break;
+      case 'nav-stairs':
+        switchMode('stairs');
         break;
       case 'nav-cad-clipboard':
         switchMode('cad_clipboard');
@@ -4314,6 +4371,57 @@ export function initializeApp() {
       });
     }
 
+    // Mode 14: Stair Calculator Listeners
+    if (dom.stairsModeSelect) {
+      dom.stairsModeSelect.addEventListener('change', () => {
+        state.stairs.mode = dom.stairsModeSelect.value;
+        views.callController('stairs', 'syncModeVisibility');
+        views.callController('stairs', 'calculate', true);
+      });
+    }
+    if (dom.stairsObjectiveSelect) {
+      dom.stairsObjectiveSelect.addEventListener('change', () => {
+        state.stairs.objective = dom.stairsObjectiveSelect.value;
+        views.callController('stairs', 'calculate', true);
+      });
+    }
+    [dom.stairsTotalRise, dom.stairsDesiredRiser, dom.stairsRiserCount, dom.stairsAvailableRun, dom.stairsTotalRun, dom.stairsDesiredTread].forEach(el => {
+      if (el) {
+        el.addEventListener('input', () => views.callController('stairs', 'calculate'));
+        el.addEventListener('change', () => views.callController('stairs', 'calculate', true));
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            views.callController('stairs', 'calculate', true);
+          }
+        });
+      }
+    });
+    [dom.stairsRefRiserMin, dom.stairsRefRiserMax, dom.stairsRefBlondelMin, dom.stairsRefBlondelMax].forEach(el => {
+      if (el) el.addEventListener('input', () => views.callController('stairs', 'calculate'));
+    });
+    if (dom.btnRunStairs) {
+      dom.btnRunStairs.addEventListener('click', () => views.callController('stairs', 'calculate', true));
+    }
+    if (dom.stairsCopyResultBtn) {
+      dom.stairsCopyResultBtn.addEventListener('click', () => views.callController('stairs', 'copyResult'));
+    }
+    if (dom.stairsCopyScheduleBtn) {
+      dom.stairsCopyScheduleBtn.addEventListener('click', () => views.callController('stairs', 'copySchedule'));
+    }
+    if (dom.stairsSendCadBtn) {
+      dom.stairsSendCadBtn.addEventListener('click', () => views.callController('stairs', 'sendToCad'));
+    }
+    if (dom.stairsSendWorkspaceBtn) {
+      dom.stairsSendWorkspaceBtn.addEventListener('click', () => views.callController('stairs', 'sendToWorkspace'));
+    }
+    if (dom.stairsSaveJournalBtn) {
+      dom.stairsSaveJournalBtn.addEventListener('click', () => views.callController('stairs', 'saveToJournal'));
+    }
+    if (dom.stairsSaveProjectBtn) {
+      dom.stairsSaveProjectBtn.addEventListener('click', () => views.callController('stairs', 'saveToProject'));
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -4482,6 +4590,11 @@ export function initializeApp() {
   // Feature views (Stabilization 1): each owns its mode's controller logic.
   // They receive one shared frozen context and never import each other.
   const views = createViewRegistry();
+  // Project store (Stabilization 3+4): one instance for the session; views
+  // that save PROJECT data (e.g. Stairs) reach it through the context.
+  const projectStore = createProjectStore({ storage: StorageService });
+  projectStore.loadProject(); // recover persisted project; failures stay controlled
+
   const viewContext = Object.freeze({
     state,
     dom,
@@ -4496,6 +4609,7 @@ export function initializeApp() {
     StorageService,
     HistoryService,
     CommandRegistry,
+    projectStore,
     getController: (viewId, fnName, ...args) => views.callController(viewId, fnName, ...args)
   });
   validateViewContext(viewContext);
@@ -4518,6 +4632,7 @@ export function initializeApp() {
     renderWorkspaceRef: () => views.callController('workspace', 'renderWorkspace'),
     toggleHistoryDrawerRef: () => views.callController('history', 'toggleHistoryDrawer')
   }));
+  views.register(createStairsView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();
