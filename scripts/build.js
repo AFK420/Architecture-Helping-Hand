@@ -60,6 +60,7 @@ export const BUNDLE_MODULES = [
   { name: 'ViewRescaler', file: path.join(srcDir, 'ui', 'views', 'rescaler.js') },
   { name: 'ViewDetector', file: path.join(srcDir, 'ui', 'views', 'detector.js') },
   { name: 'ViewAreaVolume', file: path.join(srcDir, 'ui', 'views', 'area-volume.js') },
+  { name: 'ViewExpressionMultiScale', file: path.join(srcDir, 'ui', 'views', 'expression-multiscale.js') },
   { name: 'App', file: path.join(srcDir, 'ui', 'app.js') }
 ];
 

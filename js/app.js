@@ -8910,6 +8910,420 @@ function createAreaVolumeView(context) {
 
 
   // =========================================================================
+  // MODULE: ViewExpressionMultiScale
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Expression & Multi-Scale Views (Modes 8-9)
+ * Extracted from ui/app.js during Stabilization 1. Mode 8 owns the dimension
+ * expression controller and recent-expression history; Mode 9 owns the
+ * multi-scale comparison table, favorites, and custom scales.
+ */
+
+
+
+
+
+
+function createExpressionView(context) {
+  const { state, dom, setUnifiedResultState, AudioService, views } = context;
+
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function calculateExpression(isExplicitRun = false) {
+    if (!dom.expressionInput) return;
+
+    const rawExpr = dom.expressionInput.value.trim();
+    const defaultUnit = dom.expressionDefaultUnit?.value || 'mm';
+    let scaleRatio = 50;
+    if (dom.expressionScaleSelect) {
+      if (dom.expressionScaleSelect.value === 'custom') {
+        scaleRatio = parseFloat(dom.expressionCustomScaleInput?.value) || 50;
+      } else {
+        scaleRatio = parseFloat(dom.expressionScaleSelect.value) || 50;
+      }
+    }
+
+    // Empty input state
+    if (rawExpr === '') {
+      if (dom.expressionLivePreview) dom.expressionLivePreview.textContent = 'Live: Ready';
+      if (dom.expressionErrorMsg) dom.expressionErrorMsg.style.display = 'none';
+      if (dom.expressionResultVal) dom.expressionResultVal.textContent = '0';
+      if (dom.expressionResultUnit) dom.expressionResultUnit.textContent = defaultUnit;
+      if (dom.expressionDrawingVal) dom.expressionDrawingVal.textContent = `0 ${defaultUnit}`;
+      setUnifiedResultState({
+        toolPrefix: 'expression',
+        status: 'ready'
+      });
+      return;
+    }
+
+    const evalResult = evaluateExpressionSafe(rawExpr, {
+      defaultUnit,
+      scaleRatio,
+      precision: state.precision
+    });
+
+    if (evalResult.isValid) {
+      state.lastValidExpression = evalResult;
+
+      // Update Live Preview Pill
+      if (dom.expressionLivePreview) {
+        dom.expressionLivePreview.textContent = `Live: = ${evalResult.formatted}`;
+        dom.expressionLivePreview.style.color = 'var(--text-accent)';
+      }
+      if (dom.expressionErrorMsg) dom.expressionErrorMsg.style.display = 'none';
+
+      // Update Primary Result Value & Unit
+      if (dom.expressionResultVal) dom.expressionResultVal.textContent = evalResult.formatted.replace(/\s*[a-zA-Z²³_"-]+$/, '') || evalResult.formatted;
+      if (dom.expressionResultUnit) dom.expressionResultUnit.textContent = (evalResult.dimension === 'scalar') ? 'scalar count' : evalResult.displayUnit;
+
+      // Update Dimension Badge
+      if (dom.expressionDimBadge) {
+        dom.expressionDimBadge.textContent = evalResult.dimension.toUpperCase();
+        dom.expressionDimBadge.className = evalResult.dimension === 'scalar' ? 'type-badge badge-alw' : 'type-badge badge-seg';
+      }
+
+      // Update Drawing Scale Output
+      if (dom.expressionDrawingLabel) {
+        dom.expressionDrawingLabel.textContent = `Scale 1:${scaleRatio}`;
+      }
+      if (dom.expressionDrawingVal) {
+        dom.expressionDrawingVal.textContent = evalResult.drawingFormatted || '---';
+      }
+
+      // Update Secondary Unit Equivalents
+      if (dom.expressionSecondaryReadout && evalResult.secondaryFormatted.length > 0) {
+        dom.expressionSecondaryReadout.innerHTML = evalResult.secondaryFormatted.map(sec => `
+          <div class="secondary-item"><span class="sec-unit">${sec.unit}</span><span class="sec-val">${sec.formatted}</span></div>
+        `).join('');
+      } else if (dom.expressionSecondaryReadout && evalResult.dimension === 'scalar') {
+        dom.expressionSecondaryReadout.innerHTML = `
+          <div class="secondary-item"><span class="sec-unit">count</span><span class="sec-val">${evalResult.formatted}</span></div>
+        `;
+      }
+
+      setUnifiedResultState({
+        toolPrefix: 'expression',
+        status: 'success'
+      });
+
+      if (isExplicitRun) {
+        addRecentExpression(rawExpr, evalResult.formatted);
+        AudioService.playTick();
+      }
+    } else {
+      // Invalid or incomplete syntax
+      if (dom.expressionLivePreview) {
+        dom.expressionLivePreview.textContent = `Live: Incomplete`;
+        dom.expressionLivePreview.style.color = 'var(--color-error)';
+      }
+      if (dom.expressionErrorMsg) {
+        dom.expressionErrorMsg.textContent = `⚠️ ${evalResult.error.message}`;
+        dom.expressionErrorMsg.style.display = 'block';
+      }
+
+      setUnifiedResultState({
+        toolPrefix: 'expression',
+        status: 'error',
+        errorText: `⚠️ ${evalResult.error.message}`
+      });
+    }
+  }
+
+  function addRecentExpression(expr, formatted) {
+    if (!state.recentExpressions) state.recentExpressions = [];
+    // Prevent duplicate adjacent
+    if (state.recentExpressions.length > 0 && state.recentExpressions[0].expr === expr) return;
+    state.recentExpressions.unshift({ expr, formatted, time: Date.now() });
+    if (state.recentExpressions.length > 10) state.recentExpressions.pop();
+    renderRecentExpressions();
+  }
+
+  function renderRecentExpressions() {
+    if (!dom.expressionRecentList) return;
+    if (!state.recentExpressions || state.recentExpressions.length === 0) {
+      dom.expressionRecentList.innerHTML = '<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">No recent expressions evaluated yet.</span>';
+      return;
+    }
+
+    dom.expressionRecentList.innerHTML = state.recentExpressions.map(item => `
+      <div class="recent-expr-item" data-expr="${escapeHtml(item.expr)}" title="Click to load expression">
+        <span class="recent-expr-formula">${escapeHtml(item.expr)}</span>
+        <span class="recent-expr-result">= ${escapeHtml(item.formatted)}</span>
+      </div>
+    `).join('');
+
+    dom.expressionRecentList.querySelectorAll('.recent-expr-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const expr = el.dataset.expr;
+        if (dom.expressionInput) {
+          dom.expressionInput.value = expr;
+          calculateExpression(true);
+          AudioService.playTick();
+        }
+      });
+    });
+  }
+
+  return {
+    id: 'expression',
+    mount() {},
+    getController() {
+      return { calculateExpression, renderRecentExpressions, addRecentExpression };
+    }
+  };
+}
+
+function createMultiScaleView(context) {
+  const { state, dom, showToast, setUnifiedResultState, copyToClipboard, AudioService, StorageService, views } = context;
+
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function calculateMultiScale(isExplicitRun = false) {
+    if (!dom.multiscaleInput) return;
+
+    const rawInput = dom.multiscaleInput.value.trim();
+    const defaultUnit = dom.multiscaleDefaultUnit?.value || 'mm';
+    const displayUnit = dom.multiscaleDisplayUnit?.value || 'mm';
+    const sortOrder = dom.multiscaleSortSelect?.value || 'ratio_asc';
+    const paperSize = dom.multiscalePaperSelect?.value === 'none' ? null : dom.multiscalePaperSelect?.value;
+    const minFit = dom.multiscaleFitMin?.value ? parseFloat(dom.multiscaleFitMin.value) : null;
+    const maxFit = dom.multiscaleFitMax?.value ? parseFloat(dom.multiscaleFitMax.value) : null;
+
+    // Determine scale ratios to compare
+    let baseRatios = [];
+    if (state.multiscaleGroup === 'favorites') {
+      baseRatios = state.multiscaleFavorites && state.multiscaleFavorites.length > 0
+        ? [...state.multiscaleFavorites]
+        : [20, 50, 100];
+    } else if (SCALE_PRESET_GROUPS[state.multiscaleGroup]) {
+      baseRatios = [...SCALE_PRESET_GROUPS[state.multiscaleGroup]];
+    } else {
+      baseRatios = getDefaultComparisonScales();
+    }
+
+    // Merge custom scale ratios
+    if (Array.isArray(state.multiscaleCustomScales)) {
+      for (const cr of state.multiscaleCustomScales) {
+        if (!baseRatios.includes(cr)) baseRatios.push(cr);
+      }
+    }
+
+    // Empty input check
+    if (rawInput === '') {
+      if (dom.multiscaleLivePreview) {
+        dom.multiscaleLivePreview.textContent = 'Live: Ready';
+        dom.multiscaleLivePreview.style.color = 'var(--text-muted)';
+      }
+      if (dom.multiscaleErrorMsg) dom.multiscaleErrorMsg.style.display = 'none';
+      if (dom.multiscaleRealVal) dom.multiscaleRealVal.textContent = `0 ${displayUnit}`;
+      if (dom.multiscaleCountBadge) dom.multiscaleCountBadge.textContent = '0 SCALES';
+      if (dom.multiscaleTableBody) dom.multiscaleTableBody.innerHTML = '';
+      if (dom.multiscaleEmptyState) dom.multiscaleEmptyState.style.display = 'block';
+      if (dom.multiscaleTableContainer) dom.multiscaleTableContainer.style.display = 'none';
+      setUnifiedResultState({ toolPrefix: 'multiscale', status: 'ready' });
+      return;
+    }
+
+    const comparison = compareAcrossScales(rawInput, baseRatios, {
+      defaultUnit,
+      displayUnit,
+      currentScaleRatio: state.scaleRatio || 50,
+      sortOrder,
+      paperSize,
+      targetFitMinMm: minFit,
+      targetFitMaxMm: maxFit,
+      favoriteRatios: state.multiscaleFavorites,
+      precision: state.precision
+    });
+
+    if (comparison.isValid) {
+      state.lastValidMultiScale = comparison;
+
+      if (dom.multiscaleLivePreview) {
+        dom.multiscaleLivePreview.textContent = `Live: = ${comparison.input.formattedReal}`;
+        dom.multiscaleLivePreview.style.color = 'var(--text-accent)';
+      }
+      if (dom.multiscaleErrorMsg) dom.multiscaleErrorMsg.style.display = 'none';
+      if (dom.multiscaleRealVal) dom.multiscaleRealVal.textContent = comparison.input.formattedReal;
+      if (dom.multiscaleRealLabel) {
+        dom.multiscaleRealLabel.textContent = comparison.input.isExpression
+          ? `Evaluated: ${comparison.input.raw}`
+          : `Real Dimension (${comparison.input.displayUnit})`;
+      }
+      if (dom.multiscaleCountBadge) {
+        dom.multiscaleCountBadge.textContent = `${comparison.count} SCALES`;
+      }
+
+      renderMultiScaleTable(comparison);
+      setUnifiedResultState({ toolPrefix: 'multiscale', status: 'success' });
+
+      if (isExplicitRun) {
+        AudioService.playTick();
+      }
+    } else {
+      if (dom.multiscaleLivePreview) {
+        dom.multiscaleLivePreview.textContent = 'Live: Incomplete';
+        dom.multiscaleLivePreview.style.color = 'var(--color-error)';
+      }
+      if (dom.multiscaleErrorMsg) {
+        dom.multiscaleErrorMsg.textContent = `⚠️ ${comparison.errorMessage}`;
+        dom.multiscaleErrorMsg.style.display = 'block';
+      }
+      setUnifiedResultState({
+        toolPrefix: 'multiscale',
+        status: 'error',
+        errorText: `⚠️ ${comparison.errorMessage}`
+      });
+    }
+  }
+
+  function renderMultiScaleTable(comparison) {
+    if (!dom.multiscaleTableBody) return;
+
+    if (!comparison || !comparison.isValid || comparison.scales.length === 0) {
+      if (dom.multiscaleEmptyState) dom.multiscaleEmptyState.style.display = 'block';
+      if (dom.multiscaleTableContainer) dom.multiscaleTableContainer.style.display = 'none';
+      dom.multiscaleTableBody.innerHTML = '';
+      return;
+    }
+
+    if (dom.multiscaleEmptyState) dom.multiscaleEmptyState.style.display = 'none';
+    if (dom.multiscaleTableContainer) dom.multiscaleTableContainer.style.display = 'block';
+
+    dom.multiscaleTableBody.innerHTML = comparison.scales.map(s => {
+      const isFav = state.multiscaleFavorites && state.multiscaleFavorites.includes(s.ratio);
+      let statusHtml = '';
+      if (s.isCurrent) {
+        statusHtml += `<span class="badge-current-scale">★ CURRENT</span> `;
+      }
+      if (s.fitStatus === 'suggested') {
+        statusHtml += `<span class="badge-suggested-fit">✓ FIT</span> `;
+      }
+      if (s.fitsPaper === false) {
+        statusHtml += `<span class="badge-sheet-exceed" title="Exceeds sheet width">⚠️ EXCEEDS</span> `;
+      }
+
+      return `
+        <tr class="multiscale-row ${s.isCurrent ? 'is-current' : ''}">
+          <td style="text-align: center;">
+            <button type="button" class="scale-fav-btn ${isFav ? 'is-fav' : ''}" data-ratio="${s.ratio}" title="${isFav ? 'Remove from favorites' : 'Mark as favorite'}">
+              ${isFav ? '★' : '☆'}
+            </button>
+          </td>
+          <td>
+            <strong style="font-family: var(--font-family-mono); color: var(--text-primary);">${escapeHtml(s.label)}</strong>
+          </td>
+          <td>
+            <span style="font-family: var(--font-family-mono); font-weight: 700; color: var(--accent-primary);">${escapeHtml(s.formatted)}</span>
+          </td>
+          <td class="multiscale-bar-cell">
+            <div class="multiscale-bar-track" title="Drawing length at ${s.label}: ${s.formatted} (${s.barPercent}% of max)">
+              <div class="multiscale-bar-fill" style="width: ${s.barPercent}%;"></div>
+            </div>
+          </td>
+          <td>
+            ${statusHtml || '<span style="color: var(--text-muted); font-size: 0.75rem;">—</span>'}
+          </td>
+          <td style="text-align: right;">
+            <button type="button" class="multiscale-row-action-btn ms-add-ws-btn" data-ratio="${s.ratio}" data-formatted="${escapeHtml(s.formatted)}" data-label="${escapeHtml(s.label)}" title="Add ${s.formatted} to Dimension Workspace">
+              + WS
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Attach row favorite toggles
+    dom.multiscaleTableBody.querySelectorAll('.scale-fav-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ratio = parseFloat(btn.dataset.ratio);
+        toggleScaleFavorite(ratio);
+      });
+    });
+
+    // Attach row add-to-workspace buttons
+    dom.multiscaleTableBody.querySelectorAll('.ms-add-ws-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ratio = parseFloat(btn.dataset.ratio);
+        const formatted = btn.dataset.formatted;
+        const label = btn.dataset.label;
+        const rawDim = comparison.input.formattedReal;
+
+        const entry = createDimensionEntry({
+          name: `Scale ${label} (${rawDim})`,
+          rawInput: formatted,
+          dimensionType: 'reference',
+          defaultUnit: comparison.input.displayUnit,
+          notes: `Source: Multi-Scale Comparison (${label})`
+        }, comparison.input.displayUnit);
+
+        state.workspace.entries.push(entry);
+        views.callController('workspace', 'saveWorkspace');
+        views.callController('workspace', 'renderWorkspace');
+        AudioService.playTick();
+        showToast(`Added [REF] "Scale ${label}" (${formatted}) to Workspace`);
+      });
+    });
+  }
+
+  function toggleScaleFavorite(ratio) {
+    if (!Array.isArray(state.multiscaleFavorites)) state.multiscaleFavorites = [];
+    const idx = state.multiscaleFavorites.indexOf(ratio);
+    if (idx >= 0) {
+      state.multiscaleFavorites.splice(idx, 1);
+      showToast(`Removed 1:${ratio} from favorites`);
+    } else {
+      state.multiscaleFavorites.push(ratio);
+      showToast(`Saved 1:${ratio} to favorites`);
+    }
+    StorageService.setItem('archiscale_multiscale_favs', JSON.stringify(state.multiscaleFavorites));
+    calculateMultiScale(false);
+  }
+
+  function addCustomScale(ratio) {
+    if (isNaN(ratio) || ratio <= 0 || !isFinite(ratio)) {
+      showToast('Enter a valid positive scale ratio (e.g. 33 for 1:33)', 'warning');
+      return;
+    }
+    if (!Array.isArray(state.multiscaleCustomScales)) state.multiscaleCustomScales = [];
+    if (!state.multiscaleCustomScales.includes(ratio)) {
+      state.multiscaleCustomScales.push(ratio);
+      showToast(`Added custom scale 1:${ratio}`);
+      calculateMultiScale(true);
+    } else {
+      showToast(`Custom scale 1:${ratio} is already present`);
+    }
+  }
+
+  return {
+    id: 'multiscale',
+    mount() {},
+    getController() {
+      return { calculateMultiScale, toggleScaleFavorite, addCustomScale };
+    }
+  };
+}
+
+
+  // =========================================================================
   // MODULE: App
   // =========================================================================
 
@@ -8917,6 +9331,7 @@ function createAreaVolumeView(context) {
  * Architecture Helping Hand - Main Application UI Controller
  * High-precision, zero-dependency, tactile architectural scaling studio.
  */
+
 
 
 
@@ -9759,11 +10174,11 @@ function initializeApp() {
     else if (targetMode === 'reference') renderReferenceChart();
     else if (targetMode === 'workspace') renderWorkspace();
     else if (targetMode === 'expression') {
-      calculateExpression();
-      renderRecentExpressions();
+      views.callController('expression', 'calculateExpression');
+      views.callController('expression', 'renderRecentExpressions');
     }
     else if (targetMode === 'multiscale') {
-      calculateMultiScale();
+      views.callController('multiscale', 'calculateMultiScale');
     }
     else if (targetMode === 'chains') {
       calculateAndRenderChain();
@@ -10526,7 +10941,7 @@ function initializeApp() {
             if (dom.expressionCustomScaleInput) dom.expressionCustomScaleInput.value = snap.scaleRatio;
           }
         }
-        calculateExpression(true);
+        views.callController('expression', 'calculateExpression', true);
         break;
       case 'chains':
         switchMode('chains');
@@ -10737,6 +11152,17 @@ function initializeApp() {
   // ---------------------------------------------------------------------------
   // 13b. Mode 7: Dimension Workspace Controller (v1.1 Polish)
   // ---------------------------------------------------------------------------
+  // NOTE: workspace is still an inline controller in app.js but is registered
+  // as a view so other views can reach saveWorkspace/renderWorkspace through
+  // the shared context (see multiscale view's add-to-workspace action).
+  const workspaceView = {
+    id: 'workspace',
+    mount() {},
+    getController() {
+      return { saveWorkspace, renderWorkspace };
+    }
+  };
+
   function saveWorkspace() {
     try {
       StorageService.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(state.workspace));
@@ -11291,7 +11717,7 @@ function initializeApp() {
               switchMode('multiscale');
               if (dom.multiscaleInput) {
                 dom.multiscaleInput.value = compQuery;
-                calculateMultiScale(true);
+                views.callController('multiscale', 'calculateMultiScale', true);
               }
             }
           };
@@ -11321,7 +11747,7 @@ function initializeApp() {
               switchMode('expression');
               if (dom.expressionInput) {
                 dom.expressionInput.value = query.trim();
-                calculateExpression(true);
+                views.callController('expression', 'calculateExpression', true);
               }
             }
           };
@@ -11673,369 +12099,8 @@ function initializeApp() {
     AudioService.playTick();
   }
 
-  function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
-  // ---------------------------------------------------------------------------
-  // 13d. Mode 8: Dimension Expression Controller
-  // ---------------------------------------------------------------------------
-  function calculateExpression(isExplicitRun = false) {
-    if (!dom.expressionInput) return;
-
-    const rawExpr = dom.expressionInput.value.trim();
-    const defaultUnit = dom.expressionDefaultUnit?.value || 'mm';
-    let scaleRatio = 50;
-    if (dom.expressionScaleSelect) {
-      if (dom.expressionScaleSelect.value === 'custom') {
-        scaleRatio = parseFloat(dom.expressionCustomScaleInput?.value) || 50;
-      } else {
-        scaleRatio = parseFloat(dom.expressionScaleSelect.value) || 50;
-      }
-    }
-
-    // Empty input state
-    if (rawExpr === '') {
-      if (dom.expressionLivePreview) dom.expressionLivePreview.textContent = 'Live: Ready';
-      if (dom.expressionErrorMsg) dom.expressionErrorMsg.style.display = 'none';
-      if (dom.expressionResultVal) dom.expressionResultVal.textContent = '0';
-      if (dom.expressionResultUnit) dom.expressionResultUnit.textContent = defaultUnit;
-      if (dom.expressionDrawingVal) dom.expressionDrawingVal.textContent = `0 ${defaultUnit}`;
-      setUnifiedResultState({
-        toolPrefix: 'expression',
-        status: 'ready'
-      });
-      return;
-    }
-
-    const evalResult = evaluateExpressionSafe(rawExpr, {
-      defaultUnit,
-      scaleRatio,
-      precision: state.precision
-    });
-
-    if (evalResult.isValid) {
-      state.lastValidExpression = evalResult;
-
-      // Update Live Preview Pill
-      if (dom.expressionLivePreview) {
-        dom.expressionLivePreview.textContent = `Live: = ${evalResult.formatted}`;
-        dom.expressionLivePreview.style.color = 'var(--text-accent)';
-      }
-      if (dom.expressionErrorMsg) dom.expressionErrorMsg.style.display = 'none';
-
-      // Update Primary Result Value & Unit
-      if (dom.expressionResultVal) dom.expressionResultVal.textContent = evalResult.formatted.replace(/\s*[a-zA-Z²³_"-]+$/, '') || evalResult.formatted;
-      if (dom.expressionResultUnit) dom.expressionResultUnit.textContent = (evalResult.dimension === 'scalar') ? 'scalar count' : evalResult.displayUnit;
-
-      // Update Dimension Badge
-      if (dom.expressionDimBadge) {
-        dom.expressionDimBadge.textContent = evalResult.dimension.toUpperCase();
-        dom.expressionDimBadge.className = evalResult.dimension === 'scalar' ? 'type-badge badge-alw' : 'type-badge badge-seg';
-      }
-
-      // Update Drawing Scale Output
-      if (dom.expressionDrawingLabel) {
-        dom.expressionDrawingLabel.textContent = `Scale 1:${scaleRatio}`;
-      }
-      if (dom.expressionDrawingVal) {
-        dom.expressionDrawingVal.textContent = evalResult.drawingFormatted || '---';
-      }
-
-      // Update Secondary Unit Equivalents
-      if (dom.expressionSecondaryReadout && evalResult.secondaryFormatted.length > 0) {
-        dom.expressionSecondaryReadout.innerHTML = evalResult.secondaryFormatted.map(sec => `
-          <div class="secondary-item"><span class="sec-unit">${sec.unit}</span><span class="sec-val">${sec.formatted}</span></div>
-        `).join('');
-      } else if (dom.expressionSecondaryReadout && evalResult.dimension === 'scalar') {
-        dom.expressionSecondaryReadout.innerHTML = `
-          <div class="secondary-item"><span class="sec-unit">count</span><span class="sec-val">${evalResult.formatted}</span></div>
-        `;
-      }
-
-      setUnifiedResultState({
-        toolPrefix: 'expression',
-        status: 'success'
-      });
-
-      if (isExplicitRun) {
-        addRecentExpression(rawExpr, evalResult.formatted);
-        AudioService.playTick();
-      }
-    } else {
-      // Invalid or incomplete syntax
-      if (dom.expressionLivePreview) {
-        dom.expressionLivePreview.textContent = `Live: Incomplete`;
-        dom.expressionLivePreview.style.color = 'var(--color-error)';
-      }
-      if (dom.expressionErrorMsg) {
-        dom.expressionErrorMsg.textContent = `⚠️ ${evalResult.error.message}`;
-        dom.expressionErrorMsg.style.display = 'block';
-      }
-
-      setUnifiedResultState({
-        toolPrefix: 'expression',
-        status: 'error',
-        errorText: `⚠️ ${evalResult.error.message}`
-      });
-    }
-  }
-
-  function addRecentExpression(expr, formatted) {
-    if (!state.recentExpressions) state.recentExpressions = [];
-    // Prevent duplicate adjacent
-    if (state.recentExpressions.length > 0 && state.recentExpressions[0].expr === expr) return;
-    state.recentExpressions.unshift({ expr, formatted, time: Date.now() });
-    if (state.recentExpressions.length > 10) state.recentExpressions.pop();
-    renderRecentExpressions();
-  }
-
-  function renderRecentExpressions() {
-    if (!dom.expressionRecentList) return;
-    if (!state.recentExpressions || state.recentExpressions.length === 0) {
-      dom.expressionRecentList.innerHTML = '<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">No recent expressions evaluated yet.</span>';
-      return;
-    }
-
-    dom.expressionRecentList.innerHTML = state.recentExpressions.map(item => `
-      <div class="recent-expr-item" data-expr="${escapeHtml(item.expr)}" title="Click to load expression">
-        <span class="recent-expr-formula">${escapeHtml(item.expr)}</span>
-        <span class="recent-expr-result">= ${escapeHtml(item.formatted)}</span>
-      </div>
-    `).join('');
-
-    dom.expressionRecentList.querySelectorAll('.recent-expr-item').forEach(el => {
-      el.addEventListener('click', () => {
-        const expr = el.dataset.expr;
-        if (dom.expressionInput) {
-          dom.expressionInput.value = expr;
-          calculateExpression(true);
-          AudioService.playTick();
-        }
-      });
-    });
-  }
-
-  // ---------------------------------------------------------------------------
-  // 13e. Mode 9: Multi-Scale Comparison Controller
-  // ---------------------------------------------------------------------------
-  function calculateMultiScale(isExplicitRun = false) {
-    if (!dom.multiscaleInput) return;
-
-    const rawInput = dom.multiscaleInput.value.trim();
-    const defaultUnit = dom.multiscaleDefaultUnit?.value || 'mm';
-    const displayUnit = dom.multiscaleDisplayUnit?.value || 'mm';
-    const sortOrder = dom.multiscaleSortSelect?.value || 'ratio_asc';
-    const paperSize = dom.multiscalePaperSelect?.value === 'none' ? null : dom.multiscalePaperSelect?.value;
-    const minFit = dom.multiscaleFitMin?.value ? parseFloat(dom.multiscaleFitMin.value) : null;
-    const maxFit = dom.multiscaleFitMax?.value ? parseFloat(dom.multiscaleFitMax.value) : null;
-
-    // Determine scale ratios to compare
-    let baseRatios = [];
-    if (state.multiscaleGroup === 'favorites') {
-      baseRatios = state.multiscaleFavorites && state.multiscaleFavorites.length > 0
-        ? [...state.multiscaleFavorites]
-        : [20, 50, 100];
-    } else if (SCALE_PRESET_GROUPS[state.multiscaleGroup]) {
-      baseRatios = [...SCALE_PRESET_GROUPS[state.multiscaleGroup]];
-    } else {
-      baseRatios = getDefaultComparisonScales();
-    }
-
-    // Merge custom scale ratios
-    if (Array.isArray(state.multiscaleCustomScales)) {
-      for (const cr of state.multiscaleCustomScales) {
-        if (!baseRatios.includes(cr)) baseRatios.push(cr);
-      }
-    }
-
-    // Empty input check
-    if (rawInput === '') {
-      if (dom.multiscaleLivePreview) {
-        dom.multiscaleLivePreview.textContent = 'Live: Ready';
-        dom.multiscaleLivePreview.style.color = 'var(--text-muted)';
-      }
-      if (dom.multiscaleErrorMsg) dom.multiscaleErrorMsg.style.display = 'none';
-      if (dom.multiscaleRealVal) dom.multiscaleRealVal.textContent = `0 ${displayUnit}`;
-      if (dom.multiscaleCountBadge) dom.multiscaleCountBadge.textContent = '0 SCALES';
-      if (dom.multiscaleTableBody) dom.multiscaleTableBody.innerHTML = '';
-      if (dom.multiscaleEmptyState) dom.multiscaleEmptyState.style.display = 'block';
-      if (dom.multiscaleTableContainer) dom.multiscaleTableContainer.style.display = 'none';
-      setUnifiedResultState({ toolPrefix: 'multiscale', status: 'ready' });
-      return;
-    }
-
-    const comparison = compareAcrossScales(rawInput, baseRatios, {
-      defaultUnit,
-      displayUnit,
-      currentScaleRatio: state.scaleRatio || 50,
-      sortOrder,
-      paperSize,
-      targetFitMinMm: minFit,
-      targetFitMaxMm: maxFit,
-      favoriteRatios: state.multiscaleFavorites,
-      precision: state.precision
-    });
-
-    if (comparison.isValid) {
-      state.lastValidMultiScale = comparison;
-
-      if (dom.multiscaleLivePreview) {
-        dom.multiscaleLivePreview.textContent = `Live: = ${comparison.input.formattedReal}`;
-        dom.multiscaleLivePreview.style.color = 'var(--text-accent)';
-      }
-      if (dom.multiscaleErrorMsg) dom.multiscaleErrorMsg.style.display = 'none';
-      if (dom.multiscaleRealVal) dom.multiscaleRealVal.textContent = comparison.input.formattedReal;
-      if (dom.multiscaleRealLabel) {
-        dom.multiscaleRealLabel.textContent = comparison.input.isExpression
-          ? `Evaluated: ${comparison.input.raw}`
-          : `Real Dimension (${comparison.input.displayUnit})`;
-      }
-      if (dom.multiscaleCountBadge) {
-        dom.multiscaleCountBadge.textContent = `${comparison.count} SCALES`;
-      }
-
-      renderMultiScaleTable(comparison);
-      setUnifiedResultState({ toolPrefix: 'multiscale', status: 'success' });
-
-      if (isExplicitRun) {
-        AudioService.playTick();
-      }
-    } else {
-      if (dom.multiscaleLivePreview) {
-        dom.multiscaleLivePreview.textContent = `Live: Incomplete`;
-        dom.multiscaleLivePreview.style.color = 'var(--color-error)';
-      }
-      if (dom.multiscaleErrorMsg) {
-        dom.multiscaleErrorMsg.textContent = `⚠️ ${comparison.errorMessage}`;
-        dom.multiscaleErrorMsg.style.display = 'block';
-      }
-      setUnifiedResultState({
-        toolPrefix: 'multiscale',
-        status: 'error',
-        errorText: `⚠️ ${comparison.errorMessage}`
-      });
-    }
-  }
-
-  function renderMultiScaleTable(comparison) {
-    if (!dom.multiscaleTableBody) return;
-
-    if (!comparison || !comparison.isValid || comparison.scales.length === 0) {
-      if (dom.multiscaleEmptyState) dom.multiscaleEmptyState.style.display = 'block';
-      if (dom.multiscaleTableContainer) dom.multiscaleTableContainer.style.display = 'none';
-      dom.multiscaleTableBody.innerHTML = '';
-      return;
-    }
-
-    if (dom.multiscaleEmptyState) dom.multiscaleEmptyState.style.display = 'none';
-    if (dom.multiscaleTableContainer) dom.multiscaleTableContainer.style.display = 'block';
-
-    dom.multiscaleTableBody.innerHTML = comparison.scales.map(s => {
-      const isFav = state.multiscaleFavorites && state.multiscaleFavorites.includes(s.ratio);
-      let statusHtml = '';
-      if (s.isCurrent) {
-        statusHtml += `<span class="badge-current-scale">★ CURRENT</span> `;
-      }
-      if (s.fitStatus === 'suggested') {
-        statusHtml += `<span class="badge-suggested-fit">✓ FIT</span> `;
-      }
-      if (s.fitsPaper === false) {
-        statusHtml += `<span class="badge-sheet-exceed" title="Exceeds sheet width">⚠️ EXCEEDS</span> `;
-      }
-
-      return `
-        <tr class="multiscale-row ${s.isCurrent ? 'is-current' : ''}">
-          <td style="text-align: center;">
-            <button type="button" class="scale-fav-btn ${isFav ? 'is-fav' : ''}" data-ratio="${s.ratio}" title="${isFav ? 'Remove from favorites' : 'Mark as favorite'}">
-              ${isFav ? '★' : '☆'}
-            </button>
-          </td>
-          <td>
-            <strong style="font-family: var(--font-family-mono); color: var(--text-primary);">${escapeHtml(s.label)}</strong>
-          </td>
-          <td>
-            <span style="font-family: var(--font-family-mono); font-weight: 700; color: var(--accent-primary);">${escapeHtml(s.formatted)}</span>
-          </td>
-          <td class="multiscale-bar-cell">
-            <div class="multiscale-bar-track" title="Drawing length at ${s.label}: ${s.formatted} (${s.barPercent}% of max)">
-              <div class="multiscale-bar-fill" style="width: ${s.barPercent}%;"></div>
-            </div>
-          </td>
-          <td>
-            ${statusHtml || '<span style="color: var(--text-muted); font-size: 0.75rem;">—</span>'}
-          </td>
-          <td style="text-align: right;">
-            <button type="button" class="multiscale-row-action-btn ms-add-ws-btn" data-ratio="${s.ratio}" data-formatted="${escapeHtml(s.formatted)}" data-label="${escapeHtml(s.label)}" title="Add ${s.formatted} to Dimension Workspace">
-              + WS
-            </button>
-          </td>
-        </tr>
-      `;
-    }).join('');
-
-    // Attach row favorite toggles
-    dom.multiscaleTableBody.querySelectorAll('.scale-fav-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const ratio = parseFloat(btn.dataset.ratio);
-        toggleScaleFavorite(ratio);
-      });
-    });
-
-    // Attach row add-to-workspace buttons
-    dom.multiscaleTableBody.querySelectorAll('.ms-add-ws-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const ratio = parseFloat(btn.dataset.ratio);
-        const formatted = btn.dataset.formatted;
-        const label = btn.dataset.label;
-        const rawDim = comparison.input.formattedReal;
-
-        const entry = createDimensionEntry({
-          name: `Scale ${label} (${rawDim})`,
-          rawInput: formatted,
-          dimensionType: 'reference',
-          defaultUnit: comparison.input.displayUnit,
-          notes: `Source: Multi-Scale Comparison (${label})`
-        }, comparison.input.displayUnit);
-
-        state.workspace.entries.push(entry);
-        saveWorkspace();
-        renderWorkspace();
-        AudioService.playTick();
-        showToast(`Added [REF] "Scale ${label}" (${formatted}) to Workspace`);
-      });
-    });
-  }
-
-  function toggleScaleFavorite(ratio) {
-    if (!Array.isArray(state.multiscaleFavorites)) state.multiscaleFavorites = [];
-    const idx = state.multiscaleFavorites.indexOf(ratio);
-    if (idx >= 0) {
-      state.multiscaleFavorites.splice(idx, 1);
-      showToast(`Removed 1:${ratio} from favorites`);
-    } else {
-      state.multiscaleFavorites.push(ratio);
-      showToast(`Saved 1:${ratio} to favorites`);
-    }
-    StorageService.setItem('archiscale_multiscale_favs', JSON.stringify(state.multiscaleFavorites));
-    calculateMultiScale(false);
-  }
-
-  function addCustomScale(ratio) {
-    if (isNaN(ratio) || ratio <= 0 || !isFinite(ratio)) {
-      showToast('Enter a valid positive scale ratio (e.g. 33 for 1:33)', 'warning');
-      return;
-    }
-    if (!Array.isArray(state.multiscaleCustomScales)) state.multiscaleCustomScales = [];
-    if (!state.multiscaleCustomScales.includes(ratio)) {
-      state.multiscaleCustomScales.push(ratio);
-      showToast(`Added custom scale 1:${ratio}`);
-      calculateMultiScale(true);
-    } else {
-      showToast(`Custom scale 1:${ratio} is already present`);
-    }
-  }
+  // NOTE: Mode 8 (Expression) and Mode 9 (Multi-Scale) controllers now live in
+  // src/ui/views/expression-multiscale.js and are called via views.callController.
 
   // ---------------------------------------------------------------------------
   // 13f. Mode 10: Dimension Chains Controller
@@ -13002,7 +13067,7 @@ function initializeApp() {
     if (dom.msDimensionInput) dom.msDimensionInput.value = state.multiScale.dimensionInput;
 
     switchMode('multiscale');
-    calculateMultiScale();
+    views.callController('multiscale', 'calculateMultiScale');
     AudioService.playTick();
     showToast(`Comparing "${targetRow.name}" across multiple scales`);
   }
@@ -13262,7 +13327,7 @@ function initializeApp() {
         dom.multiscaleInput.value = payload.dimensionInput;
       }
       switchMode('multiscale');
-      calculateMultiScale(true);
+      views.callController('multiscale', 'calculateMultiScale', true);
       showToast('Loaded dimension in Multi-Scale Comparison');
     } else if (targetTool === 'chain') {
       state.activeChain.segments.push(payload.segment);
@@ -14026,7 +14091,7 @@ function initializeApp() {
     // Mode 8: Dimension Expression Listeners
     if (dom.expressionInput) {
       dom.expressionInput.addEventListener('input', () => {
-        calculateExpression(false);
+        views.callController('expression', 'calculateExpression', false);
       });
 
       dom.expressionInput.addEventListener('keydown', (e) => {
@@ -14035,12 +14100,12 @@ function initializeApp() {
           if (e.shiftKey) {
             dom.expressionAddWorkspaceBtn?.click();
           } else {
-            calculateExpression(true);
+            views.callController('expression', 'calculateExpression', true);
           }
         } else if (e.key === 'Escape') {
           e.preventDefault();
           dom.expressionInput.value = '';
-          calculateExpression(false);
+          views.callController('expression', 'calculateExpression', false);
           AudioService.playTick();
         }
       });
@@ -14051,7 +14116,7 @@ function initializeApp() {
         if (dom.expressionInput) {
           dom.expressionInput.value = '';
           dom.expressionInput.focus();
-          calculateExpression(false);
+          views.callController('expression', 'calculateExpression', false);
           AudioService.playTick();
         }
       });
@@ -14059,7 +14124,7 @@ function initializeApp() {
 
     if (dom.expressionDefaultUnit) {
       dom.expressionDefaultUnit.addEventListener('change', () => {
-        calculateExpression(true);
+        views.callController('expression', 'calculateExpression', true);
         AudioService.playTick();
       });
     }
@@ -14070,20 +14135,20 @@ function initializeApp() {
         if (dom.expressionCustomScaleGroup) {
           dom.expressionCustomScaleGroup.style.display = isCustom ? 'block' : 'none';
         }
-        calculateExpression(true);
+        views.callController('expression', 'calculateExpression', true);
         AudioService.playTick();
       });
     }
 
     if (dom.expressionCustomScaleInput) {
       dom.expressionCustomScaleInput.addEventListener('input', () => {
-        calculateExpression(false);
+        views.callController('expression', 'calculateExpression', false);
       });
     }
 
     if (dom.btnRunExpression) {
       dom.btnRunExpression.addEventListener('click', () => {
-        calculateExpression(true);
+        views.callController('expression', 'calculateExpression', true);
       });
     }
 
@@ -14093,7 +14158,7 @@ function initializeApp() {
         const expr = chip.dataset.expr;
         if (dom.expressionInput && expr) {
           dom.expressionInput.value = expr;
-          calculateExpression(true);
+          views.callController('expression', 'calculateExpression', true);
           AudioService.playTick();
         }
       });
@@ -14101,7 +14166,7 @@ function initializeApp() {
 
     if (dom.expressionCopyBtn) {
       dom.expressionCopyBtn.addEventListener('click', () => {
-        calculateExpression(true);
+        views.callController('expression', 'calculateExpression', true);
         if (state.lastValidExpression && state.lastValidExpression.isValid) {
           copyToClipboard(state.lastValidExpression.formatted, 'Evaluated Expression Result');
         } else {
@@ -14112,7 +14177,7 @@ function initializeApp() {
 
     if (dom.expressionCopyRawBtn) {
       dom.expressionCopyRawBtn.addEventListener('click', () => {
-        calculateExpression(true);
+        views.callController('expression', 'calculateExpression', true);
         if (state.lastValidExpression && state.lastValidExpression.isValid) {
           const valStr = state.lastValidExpression.dimension === 'scalar'
             ? String(state.lastValidExpression.value)
@@ -14126,7 +14191,7 @@ function initializeApp() {
 
     if (dom.expressionCopyDrawingBtn) {
       dom.expressionCopyDrawingBtn.addEventListener('click', () => {
-        calculateExpression(true);
+        views.callController('expression', 'calculateExpression', true);
         if (state.lastValidExpression && state.lastValidExpression.isValid && state.lastValidExpression.drawingFormatted) {
           copyToClipboard(state.lastValidExpression.drawingFormatted, `Scaled Drawing (${state.lastValidExpression.drawingFormatted})`);
         } else {
@@ -14137,7 +14202,7 @@ function initializeApp() {
 
     if (dom.expressionAddWorkspaceBtn) {
       dom.expressionAddWorkspaceBtn.addEventListener('click', () => {
-        calculateExpression(true);
+        views.callController('expression', 'calculateExpression', true);
         if (!state.lastValidExpression || !state.lastValidExpression.isValid) {
           showToast('Cannot add invalid expression to workspace', 'warning');
           return;
@@ -14167,7 +14232,7 @@ function initializeApp() {
 
     if (dom.expressionSaveJournalBtn) {
       dom.expressionSaveJournalBtn.addEventListener('click', () => {
-        calculateExpression(true);
+        views.callController('expression', 'calculateExpression', true);
         logCurrentCalculationToHistory('expression');
       });
     }
@@ -14175,7 +14240,7 @@ function initializeApp() {
     if (dom.expressionClearRecentBtn) {
       dom.expressionClearRecentBtn.addEventListener('click', () => {
         state.recentExpressions = [];
-        renderRecentExpressions();
+        views.callController('expression', 'renderRecentExpressions');
         AudioService.playTick();
         showToast('Recent expressions cleared');
       });
@@ -14184,13 +14249,13 @@ function initializeApp() {
     // Mode 8 -> Mode 9: Compare Across Scales Action
     if (dom.expressionCompareBtn) {
       dom.expressionCompareBtn.addEventListener('click', () => {
-        calculateExpression(true);
+        views.callController('expression', 'calculateExpression', true);
         const exprToCompare = state.lastValidExpression?.formatted || dom.expressionInput?.value?.trim();
         if (exprToCompare) {
           switchMode('multiscale');
           if (dom.multiscaleInput) {
             dom.multiscaleInput.value = exprToCompare;
-            calculateMultiScale(true);
+            views.callController('multiscale', 'calculateMultiScale', true);
           }
           AudioService.playTick();
           showToast(`Loaded "${exprToCompare}" into Multi-Scale Comparison`);
@@ -14203,17 +14268,17 @@ function initializeApp() {
     // Mode 9: Multi-Scale Comparison Listeners
     if (dom.multiscaleInput) {
       dom.multiscaleInput.addEventListener('input', () => {
-        calculateMultiScale(false);
+        views.callController('multiscale', 'calculateMultiScale', false);
       });
 
       dom.multiscaleInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
-          calculateMultiScale(true);
+          views.callController('multiscale', 'calculateMultiScale', true);
         } else if (e.key === 'Escape') {
           e.preventDefault();
           dom.multiscaleInput.value = '';
-          calculateMultiScale(false);
+          views.callController('multiscale', 'calculateMultiScale', false);
           AudioService.playTick();
         }
       });
@@ -14224,7 +14289,7 @@ function initializeApp() {
         if (dom.multiscaleInput) {
           dom.multiscaleInput.value = '';
           dom.multiscaleInput.focus();
-          calculateMultiScale(false);
+          views.callController('multiscale', 'calculateMultiScale', false);
           AudioService.playTick();
         }
       });
@@ -14232,14 +14297,14 @@ function initializeApp() {
 
     if (dom.multiscaleDefaultUnit) {
       dom.multiscaleDefaultUnit.addEventListener('change', () => {
-        calculateMultiScale(true);
+        views.callController('multiscale', 'calculateMultiScale', true);
         AudioService.playTick();
       });
     }
 
     if (dom.multiscaleDisplayUnit) {
       dom.multiscaleDisplayUnit.addEventListener('change', () => {
-        calculateMultiScale(true);
+        views.callController('multiscale', 'calculateMultiScale', true);
         AudioService.playTick();
       });
     }
@@ -14250,7 +14315,7 @@ function initializeApp() {
         document.querySelectorAll('.multiscale-group-pill').forEach(p => p.classList.remove('active'));
         pill.classList.add('active');
         state.multiscaleGroup = pill.dataset.group;
-        calculateMultiScale(true);
+        views.callController('multiscale', 'calculateMultiScale', true);
         AudioService.playTick();
       });
     });
@@ -14258,34 +14323,34 @@ function initializeApp() {
     if (dom.multiscaleAddScaleBtn) {
       dom.multiscaleAddScaleBtn.addEventListener('click', () => {
         const ratio = parseFloat(dom.multiscaleCustomScaleInput?.value);
-        addCustomScale(ratio);
+        views.callController('multiscale', 'addCustomScale', ratio);
         if (dom.multiscaleCustomScaleInput) dom.multiscaleCustomScaleInput.value = '';
       });
     }
 
     if (dom.multiscaleSortSelect) {
       dom.multiscaleSortSelect.addEventListener('change', () => {
-        calculateMultiScale(true);
+        views.callController('multiscale', 'calculateMultiScale', true);
         AudioService.playTick();
       });
     }
 
     if (dom.multiscalePaperSelect) {
       dom.multiscalePaperSelect.addEventListener('change', () => {
-        calculateMultiScale(true);
+        views.callController('multiscale', 'calculateMultiScale', true);
         AudioService.playTick();
       });
     }
 
     if (dom.multiscaleFitMin) {
       dom.multiscaleFitMin.addEventListener('input', () => {
-        calculateMultiScale(false);
+        views.callController('multiscale', 'calculateMultiScale', false);
       });
     }
 
     if (dom.multiscaleFitMax) {
       dom.multiscaleFitMax.addEventListener('input', () => {
-        calculateMultiScale(false);
+        views.callController('multiscale', 'calculateMultiScale', false);
       });
     }
 
@@ -14295,7 +14360,7 @@ function initializeApp() {
         const dim = chip.dataset.dim;
         if (dom.multiscaleInput && dim) {
           dom.multiscaleInput.value = dim;
-          calculateMultiScale(true);
+          views.callController('multiscale', 'calculateMultiScale', true);
           AudioService.playTick();
         }
       });
@@ -14303,7 +14368,7 @@ function initializeApp() {
 
     if (dom.btnRunMultiscale) {
       dom.btnRunMultiscale.addEventListener('click', () => {
-        calculateMultiScale(true);
+        views.callController('multiscale', 'calculateMultiScale', true);
       });
     }
 
@@ -14311,7 +14376,7 @@ function initializeApp() {
       dom.multiscaleLoadSampleBtn.addEventListener('click', () => {
         if (dom.multiscaleInput) {
           dom.multiscaleInput.value = '2400 mm';
-          calculateMultiScale(true);
+          views.callController('multiscale', 'calculateMultiScale', true);
           AudioService.playTick();
         }
       });
@@ -14319,7 +14384,7 @@ function initializeApp() {
 
     if (dom.multiscaleCopyTableBtn) {
       dom.multiscaleCopyTableBtn.addEventListener('click', () => {
-        calculateMultiScale(true);
+        views.callController('multiscale', 'calculateMultiScale', true);
         if (state.lastValidMultiScale && state.lastValidMultiScale.isValid) {
           const out = formatScaleComparison(state.lastValidMultiScale, 'table');
           copyToClipboard(out, 'Scale Comparison Table');
@@ -14331,7 +14396,7 @@ function initializeApp() {
 
     if (dom.multiscaleCopyAllBtn) {
       dom.multiscaleCopyAllBtn.addEventListener('click', () => {
-        calculateMultiScale(true);
+        views.callController('multiscale', 'calculateMultiScale', true);
         if (state.lastValidMultiScale && state.lastValidMultiScale.isValid) {
           const out = formatScaleComparison(state.lastValidMultiScale, 'all');
           copyToClipboard(out, 'All Scales List');
@@ -14343,7 +14408,7 @@ function initializeApp() {
 
     if (dom.multiscaleCopyCurrentBtn) {
       dom.multiscaleCopyCurrentBtn.addEventListener('click', () => {
-        calculateMultiScale(true);
+        views.callController('multiscale', 'calculateMultiScale', true);
         if (state.lastValidMultiScale && state.lastValidMultiScale.isValid) {
           const out = formatScaleComparison(state.lastValidMultiScale, 'current');
           copyToClipboard(out, 'Current Scale Comparison');
@@ -14355,7 +14420,7 @@ function initializeApp() {
 
     if (dom.multiscaleCopyRawBtn) {
       dom.multiscaleCopyRawBtn.addEventListener('click', () => {
-        calculateMultiScale(true);
+        views.callController('multiscale', 'calculateMultiScale', true);
         if (state.lastValidMultiScale && state.lastValidMultiScale.isValid) {
           const out = formatScaleComparison(state.lastValidMultiScale, 'raw');
           copyToClipboard(out, 'Raw Drawing Numbers (CAD)');
@@ -14496,7 +14561,7 @@ function initializeApp() {
         switchMode('multiscale');
         if (dom.multiscaleInput) {
           dom.multiscaleInput.value = dimToCompare;
-          calculateMultiScale(true);
+          views.callController('multiscale', 'calculateMultiScale', true);
         }
         AudioService.playTick();
         showToast(`Loaded ${dimToCompare} into Multi-Scale Comparison`);
@@ -15343,6 +15408,9 @@ function initializeApp() {
   views.register(createRescalerView(viewContext));
   views.register(createDetectorView(viewContext));
   views.register(createAreaVolumeView(viewContext));
+  views.register(workspaceView);
+  views.register(createExpressionView(viewContext));
+  views.register(createMultiScaleView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();
