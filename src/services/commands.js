@@ -252,6 +252,16 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
+    id: 'nav-plan',
+    title: 'Plan Canvas',
+    description: 'Lightweight 2D SVG plan editor: rooms, walls, furniture placement, grid snapping, undo/redo',
+    category: 'Navigation',
+    icon: 'Plot',
+    keywords: ['plan', 'canvas', 'draw', 'room', 'wall', 'furniture', 'layout', '2d', 'mode 19'],
+    actionType: 'navigation',
+    available: true
+  },
+  {
     id: 'nav-cad-clipboard',
     title: 'CAD Clipboard & Formats',
     description: 'Instant CAD-ready copy formatting for AutoCAD, Rhino, Revit, SketchUp, and Spreadsheets',

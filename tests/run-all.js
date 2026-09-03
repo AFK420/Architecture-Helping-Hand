@@ -32,6 +32,7 @@ const testFiles = [
   'slopes.test.js',
   'export.test.js',
   'project-workspace.test.js',
+  'plan-canvas.test.js',
   'services.test.js',
   'commands.test.js',
   'data-integrity.test.js',

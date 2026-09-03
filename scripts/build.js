@@ -51,6 +51,8 @@ export const BUNDLE_MODULES = [
   { name: 'Ramps', file: path.join(srcDir, 'core', 'ramps.js') },
   { name: 'Slopes', file: path.join(srcDir, 'core', 'slopes.js') },
   { name: 'Project', file: path.join(srcDir, 'core', 'project.js') },
+  { name: 'Entities', file: path.join(srcDir, 'core', 'entities.js') },
+  { name: 'PlanCanvas', file: path.join(srcDir, 'core', 'plan-canvas.js') },
   { name: 'ExportModel', file: path.join(srcDir, 'core', 'export', 'export-model.js') },
 
   // --- Services ---
@@ -79,6 +81,7 @@ export const BUNDLE_MODULES = [
   { name: 'ViewSlopes', file: path.join(srcDir, 'ui', 'views', 'slopes.js') },
   { name: 'ViewExportCenter', file: path.join(srcDir, 'ui', 'views', 'export-center.js') },
   { name: 'ViewProjects', file: path.join(srcDir, 'ui', 'views', 'projects.js') },
+  { name: 'ViewPlan', file: path.join(srcDir, 'ui', 'views', 'plan.js') },
   { name: 'App', file: path.join(srcDir, 'ui', 'app.js') }
 ];
 

@@ -34,7 +34,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
 // 1. Verify Mode Navigation Targets in HTML
 {
-  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff', 'stairs', 'ramps', 'slopes', 'export', 'projects'];
+  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff', 'stairs', 'ramps', 'slopes', 'export', 'projects', 'plan'];
   
   for (const mode of expectedModes) {
     const hasTab = htmlContent.includes(`data-mode="${mode}"`);
@@ -556,6 +556,25 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'projects-snapshot-label',
     'btn-project-snapshot',
     'projects-snapshots-list',
+    // Plan Canvas (Mode 19)
+    'plan-tool-select',
+    'plan-furniture-group',
+    'plan-furniture-select',
+    'plan-grid-select',
+    'btn-plan-undo',
+    'btn-plan-redo',
+    'btn-plan-delete',
+    'btn-plan-clear',
+    'plan-error-msg',
+    'plan-entity-list',
+    'plan-result-panel',
+    'plan-state-badge',
+    'plan-status-badge',
+    'plan-svg',
+    'plan-svg-wrap',
+    'btn-plan-save',
+    'btn-plan-export-svg',
+    'btn-plan-export-dxf',
 
     // Quick Dimension Strip IDs
     'quick-dimension-strip',

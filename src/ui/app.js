@@ -107,6 +107,7 @@ import { createRampsView } from './views/ramps.js';
 import { createSlopesView } from './views/slopes.js';
 import { createExportCenterView } from './views/export-center.js';
 import { createProjectsView } from './views/projects.js';
+import { createPlanView } from './views/plan.js';
 import { StorageService } from '../services/storage.js';
 import { createProjectStore } from '../services/store.js';
 import { AudioService } from '../services/audio.js';
@@ -360,7 +361,17 @@ export function initializeApp() {
     },
 
     // Mode 18: Project Workspace
-    projects: {}
+    projects: {},
+
+    // Mode 19: Plan Canvas
+    plan: {
+      tool: 'select',
+      grid: 0.5,
+      selectedIds: new Set(),
+      furnitureIndex: 0,
+      furnitureRotated: false,
+      entities: []
+    }
   };
 
   // DOM Elements Cache (Strictly normalized with index.html)
@@ -949,7 +960,27 @@ export function initializeApp() {
     projectsLibraryList: document.getElementById('projects-library-list'),
     projectsSnapshotLabel: document.getElementById('projects-snapshot-label'),
     btnProjectSnapshot: document.getElementById('btn-project-snapshot'),
-    projectsSnapshotsList: document.getElementById('projects-snapshots-list')
+    projectsSnapshotsList: document.getElementById('projects-snapshots-list'),
+
+    // Mode 19: Plan Canvas Elements
+    planToolSelect: document.getElementById('plan-tool-select'),
+    planFurnitureGroup: document.getElementById('plan-furniture-group'),
+    planFurnitureSelect: document.getElementById('plan-furniture-select'),
+    planGridSelect: document.getElementById('plan-grid-select'),
+    btnPlanUndo: document.getElementById('btn-plan-undo'),
+    btnPlanRedo: document.getElementById('btn-plan-redo'),
+    btnPlanDelete: document.getElementById('btn-plan-delete'),
+    btnPlanClear: document.getElementById('btn-plan-clear'),
+    planErrorMsg: document.getElementById('plan-error-msg'),
+    planEntityList: document.getElementById('plan-entity-list'),
+    planResultPanel: document.getElementById('plan-result-panel'),
+    planStateBadge: document.getElementById('plan-state-badge'),
+    planStatusBadge: document.getElementById('plan-status-badge'),
+    planSvg: document.getElementById('plan-svg'),
+    planSvgWrap: document.getElementById('plan-svg-wrap'),
+    btnPlanSave: document.getElementById('btn-plan-save'),
+    btnPlanExportSvg: document.getElementById('btn-plan-export-svg'),
+    btnPlanExportDxf: document.getElementById('btn-plan-export-dxf')
   };
 
   // ---------------------------------------------------------------------------
@@ -1145,6 +1176,9 @@ export function initializeApp() {
     }
     else if (targetMode === 'projects') {
       views.callController('projects', 'renderAll');
+    }
+    else if (targetMode === 'plan') {
+      views.callController('plan', 'render');
     }
   }
 
@@ -2556,6 +2590,9 @@ export function initializeApp() {
         break;
       case 'nav-projects':
         switchMode('projects');
+        break;
+      case 'nav-plan':
+        switchMode('plan');
         break;
       case 'nav-cad-clipboard':
         switchMode('cad_clipboard');
@@ -4729,6 +4766,40 @@ export function initializeApp() {
       dom.btnProjectSnapshot.addEventListener('click', () => views.callController('projects', 'captureSnapshot'));
     }
 
+    // Mode 19: Plan Canvas Listeners
+    if (dom.planToolSelect) {
+      dom.planToolSelect.addEventListener('change', () => {
+        state.plan.tool = dom.planToolSelect.value;
+        views.callController('plan', 'syncToolVisibility');
+      });
+    }
+    if (dom.planGridSelect) {
+      dom.planGridSelect.addEventListener('change', () => {
+        state.plan.grid = parseFloat(dom.planGridSelect.value) || 0.5;
+      });
+    }
+    if (dom.btnPlanUndo) {
+      dom.btnPlanUndo.addEventListener('click', () => views.callController('plan', 'undo'));
+    }
+    if (dom.btnPlanRedo) {
+      dom.btnPlanRedo.addEventListener('click', () => views.callController('plan', 'redo'));
+    }
+    if (dom.btnPlanDelete) {
+      dom.btnPlanDelete.addEventListener('click', () => views.callController('plan', 'deleteSelected'));
+    }
+    if (dom.btnPlanClear) {
+      dom.btnPlanClear.addEventListener('click', () => views.callController('plan', 'clearPlan'));
+    }
+    if (dom.btnPlanSave) {
+      dom.btnPlanSave.addEventListener('click', () => views.callController('plan', 'saveToProject'));
+    }
+    if (dom.btnPlanExportSvg) {
+      dom.btnPlanExportSvg.addEventListener('click', () => views.callController('plan', 'exportPlan', 'svg'));
+    }
+    if (dom.btnPlanExportDxf) {
+      dom.btnPlanExportDxf.addEventListener('click', () => views.callController('plan', 'exportPlan', 'dxf'));
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -4944,6 +5015,7 @@ export function initializeApp() {
   views.register(createSlopesView(viewContext));
   views.register(createExportCenterView(viewContext));
   views.register(createProjectsView(viewContext));
+  views.register(createPlanView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();
