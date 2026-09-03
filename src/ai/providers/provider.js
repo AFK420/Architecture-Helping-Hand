@@ -28,7 +28,7 @@ export const AI_ERROR_CODES = Object.freeze({
 
 /** Capability keys every provider manifest must declare. */
 export const AI_CAPABILITIES = Object.freeze([
-  'text', 'reasoning', 'toolCalling', 'structuredOutput', 'vision', 'contextLimit'
+  'text', 'reasoning', 'toolCalling', 'structuredOutput', 'vision', 'imageGen', 'contextLimit'
 ]);
 
 /**

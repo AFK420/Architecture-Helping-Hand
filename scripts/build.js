@@ -66,6 +66,7 @@ export const BUNDLE_MODULES = [
   { name: 'AIContext', file: path.join(srcDir, 'ai', 'context', 'facts-pack.js') },
   { name: 'AIModes', file: path.join(srcDir, 'ai', 'modes', 'modes.js') },
   { name: 'AIOrchestrator', file: path.join(srcDir, 'ai', 'orchestrator.js') },
+  { name: 'AIVisual', file: path.join(srcDir, 'ai', 'visual.js') },
 
   // --- Services ---
   { name: 'Storage', file: path.join(srcDir, 'services', 'storage.js') },
@@ -111,6 +112,8 @@ export function stripImportsAndExports(code) {
     .replace(/import\s+[\s\S]*?from\s+['"][^'"]+['"];?/g, '')
     .replace(/import\s+['"][^'"]+['"];?/g, '')
     .replace(/export\s+default\s+/g, '')
+    // async function exports must be stripped before the generic keyword form
+    .replace(/export\s+async\s+function\s+/g, 'async function ')
     .replace(/export\s+(const|let|var|function|class)\s+/g, '$1 ')
     // Re-exports: `export { A, B } from './module.js';` (must run before bare export-braces form)
     .replace(/export\s*\{[^}]*\}\s*from\s*['"][^'"]+['"];?/g, '')

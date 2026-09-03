@@ -102,7 +102,7 @@ console.log('\n--- 1. Provider abstraction ---');
   });
   assertEqual(provider.id, 'gemini', 'Provider id preserved');
   assertEqual(provider.capabilities.vision, false, 'Undeclared capabilities default to false');
-  assertEqual(AI_CAPABILITIES.length, 6, 'Capability manifest complete');
+  assertEqual(AI_CAPABILITIES.length, 7, 'Capability manifest complete (incl. imageGen)');
   assert(providerSupports(provider, { text: true }), 'Supports declared capability');
   assert(!providerSupports(provider, { vision: true }), 'Does not support undeclared capability');
 }
