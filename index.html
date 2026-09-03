@@ -455,6 +455,16 @@
         <span>AI Settings</span>
         <span class="mode-key-hint">—</span>
       </button>
+
+      <button class="mode-tab" data-mode="imports" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" y1="3" x2="12" y2="15"></line>
+        </svg>
+        <span>Importer</span>
+        <span class="mode-key-hint">—</span>
+      </button>
     </nav>
 
     <!-- ======================================================== -->
@@ -3839,6 +3849,85 @@
               <span>📤 Export DXF</span>
             </button>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- MODE 22: IMPORTER (CSV · DXF · SVG ingestion)            -->
+    <!-- ======================================================== -->
+    <section id="mode-view-imports" class="tool-mode-view" aria-labelledby="heading-imports" hidden>
+      <div class="tool-layout">
+        <div class="archi-card main-calc-card">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <div class="card-header">
+            <div>
+              <span class="card-tag">MODE 22 • IMPORTER</span>
+              <h2 id="heading-imports" class="card-title">Importer</h2>
+            </div>
+            <div class="status-indicator">
+              <span id="imports-state-badge" class="badge-status-ready">READY</span>
+            </div>
+          </div>
+
+          <p class="tool-description">
+            Bring external material in: CSV/TSV dimension schedules, 2D DXF geometry (LINE/LWPOLYLINE/TEXT/CIRCLE), and flat SVG geometry. Imports produce a report — entities, units, confidence, warnings — before anything touches your project. Native CAD files (DWG, 3DM, SKP): export DXF/SVG from the source app first.
+          </p>
+
+          <div class="input-row-group" style="margin-bottom: 1rem;">
+            <label for="imports-format-select" class="input-label">Format</label>
+            <select id="imports-format-select" class="calc-select">
+              <option value="auto" selected>Auto-detect</option>
+              <option value="csv">CSV / TSV (dimension schedule)</option>
+              <option value="dxf">DXF (2D ASCII)</option>
+              <option value="svg">SVG (flat geometry)</option>
+            </select>
+          </div>
+
+          <div class="input-row-group" style="margin-bottom: 1rem;">
+            <label for="imports-file-input" class="input-label">Choose file (≤ 2 MB)</label>
+            <input type="file" id="imports-file-input" class="text-input" accept=".csv,.tsv,.txt,.dxf,.svg" />
+          </div>
+
+          <div class="input-row-group" style="margin-bottom: 1rem;">
+            <label for="imports-text-box" class="input-label">…or paste content</label>
+            <textarea id="imports-text-box" class="cad-preview-textarea" spellcheck="false" style="width: 100%; min-height: 120px; font-family: var(--font-family-mono); font-size: 0.72rem;" aria-label="Import content"></textarea>
+          </div>
+
+          <div class="calc-actions-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem;">
+            <button type="button" id="btn-run-imports" class="btn-calc-primary" style="width: 100%;">
+              <span class="btn-text">RUN IMPORT</span>
+            </button>
+            <button type="button" id="btn-imports-send-plan" class="result-action-btn" title="Send imported entities to the Plan Canvas and measurements to the project">
+              <span>➜ Send to Plan</span>
+            </button>
+          </div>
+
+          <div id="imports-error-msg" class="input-error-banner" style="display: none; margin-top: 0.7rem;" role="alert"></div>
+        </div>
+
+        <div class="archi-card result-panel" id="imports-result-panel" data-state="ready">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <div class="result-header">
+            <span class="result-label">IMPORT REPORT</span>
+            <span class="unit-system-tag" style="font-size: 0.7rem;">NEEDS VERIFICATION</span>
+          </div>
+
+          <pre id="imports-report-box" style="white-space: pre-wrap; font-family: var(--font-family-mono); font-size: 0.72rem; color: var(--text-secondary); padding: 0.5rem 0;">No import run yet.</pre>
+
+          <div id="imports-entity-list" style="display: none; flex-direction: column; gap: 0.3rem; max-height: 300px; overflow-y: auto;" role="list" aria-label="Imported entities"></div>
+
+          <p class="field-hint" style="font-size: 0.68rem; color: var(--text-muted); margin-top: 0.8rem;">
+            Imported geometry is candidate data in meters. Confirm the scale against a known dimension before trusting any measurement. Measurements land in the project marked NEEDS VERIFICATION.
+          </p>
         </div>
       </div>
     </section>

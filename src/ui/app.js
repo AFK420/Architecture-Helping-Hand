@@ -110,6 +110,7 @@ import { createProjectsView } from './views/projects.js';
 import { createPlanView } from './views/plan.js';
 import { createAiStudioView } from './views/ai-studio.js';
 import { createAiControlCenterView } from './views/ai-control-center.js';
+import { createImportsView } from './views/imports.js';
 import { buildScopedFactsPack } from '../ai/context/project-context.js';
 import { createAiHttp } from '../services/ai/http.js';
 import { createTransports } from '../services/ai/transports/index.js';
@@ -1045,7 +1046,17 @@ export function initializeApp() {
     aiManualCapImagegen: document.getElementById('ai-manual-cap-imagegen'),
     aiAddManualModelBtn: document.getElementById('btn-ai-add-manual-model'),
     aiActivityList: document.getElementById('ai-activity-list'),
-    aiClearActivityBtn: document.getElementById('btn-ai-clear-activity')
+    aiClearActivityBtn: document.getElementById('btn-ai-clear-activity'),
+
+    // Mode 22: Importer Elements
+    importsFormatSelect: document.getElementById('imports-format-select'),
+    importsFileInput: document.getElementById('imports-file-input'),
+    importsTextBox: document.getElementById('imports-text-box'),
+    importsRunBtn: document.getElementById('btn-run-imports'),
+    importsSendPlanBtn: document.getElementById('btn-imports-send-plan'),
+    importsErrorMsg: document.getElementById('imports-error-msg'),
+    importsReportBox: document.getElementById('imports-report-box'),
+    importsEntityList: document.getElementById('imports-entity-list')
   };
 
   // ---------------------------------------------------------------------------
@@ -1250,6 +1261,9 @@ export function initializeApp() {
     }
     else if (targetMode === 'ai_settings') {
       views.callController('ai_settings', 'renderAll');
+    }
+    else if (targetMode === 'imports') {
+      views.callController('imports', 'runImport');
     }
   }
 
@@ -4948,6 +4962,20 @@ export function initializeApp() {
       });
     }
 
+    // Mode 22: Importer listeners
+    if (dom.importsRunBtn) {
+      dom.importsRunBtn.addEventListener('click', () => views.callController('imports', 'runImport'));
+    }
+    if (dom.importsSendPlanBtn) {
+      dom.importsSendPlanBtn.addEventListener('click', () => views.callController('imports', 'sendToPlan'));
+    }
+    if (dom.importsFileInput) {
+      dom.importsFileInput.addEventListener('change', () => {
+        const file = dom.importsFileInput.files && dom.importsFileInput.files[0];
+        if (file) views.callController('imports', 'handleFile', file);
+      });
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -5193,6 +5221,7 @@ export function initializeApp() {
   views.register(createPlanView(viewContext));
   views.register(createAiStudioView(viewContext));
   views.register(createAiControlCenterView(viewContext));
+  views.register(createImportsView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();
