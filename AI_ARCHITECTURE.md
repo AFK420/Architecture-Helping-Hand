@@ -1,6 +1,6 @@
 # AI ARCHITECTURE — Architecture Helping Hand
 
-**Status**: Implemented (Phases 9–13)  
+**Status**: Implemented (Phases 9–13) · P14 hardened (see ARCHITECTURE_AUDIT.md §7)  
 **Layers**: `src/ai/` (providers · tools · modes · schemas · context · orchestrator · visual)  
 **Date**: September 3, 2026
 
@@ -88,10 +88,13 @@ All failures are controlled objects. `MISSING key` message explicitly reassures 
 
 ## 9. Testing
 
-`tests/ai.test.js` (68) + `tests/visual-ai.test.js` (15). Providers are **scripted in-process stubs** — deterministic, no network. The stub may return a base64 stand-in only to verify the label contract; real transport does not exist yet, so no external call is possible and none is faked.
+`tests/ai.test.js` (73) + `tests/visual-ai.test.js` (17) + the P14 end-to-end pipelines in `tests/integration.test.js` (39). Providers are **scripted in-process stubs** — deterministic, no network. The stub may return a base64 stand-in only to verify the label contract; real transport does not exist yet, so no external call is possible and none is faked.
+
+**P14 hardening (all regression-pinned)**: the facts pack filters null/garbage plan entities and only emits finite-geometry factChecks; `validateStructuredResponse` flags null/primitive findings instead of crashing; the visual layer converts throwing transports into the stable controlled error object.
 
 ## 10. Limitations
 
-- Real Gemini/GLM fetch transports are not yet implemented (the abstraction + key store are ready for them in `src/services/`)
+- Real Gemini/GLM fetch transports are not yet implemented (the abstraction + key store are ready for them in `src/services/`) — **by design**: no network code exists anywhere in the repository, so the free-cost and offline guarantees hold by construction
 - No write tools: APPLY flow exists in the store (update/undo/notify) but no UI surface yet
+- No dedicated AI panel in the UI yet: the orchestrator/tool layer is fully tested headlessly; wiring it to a visible assistant panel is future work
 - Vision analysis is heuristic by nature — always NEEDS VERIFICATION

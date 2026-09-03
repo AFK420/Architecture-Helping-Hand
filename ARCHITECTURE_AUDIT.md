@@ -1,8 +1,8 @@
 # Architecture Helping Hand — Codebase Audit & Core Architecture
 
-**Date**: September 2, 2026  
+**Date**: September 3, 2026  
 **Repository**: [https://github.com/AFK420/Architecture-Helping-Hand.git](https://github.com/AFK420/Architecture-Helping-Hand.git)  
-**Status**: Verified & Hardened (Post Build-Pipeline Repair — 2,455 Assertions, 30 Suites)  
+**Status**: Verified & Hardened (P14 Final Hardening — 2,544 Assertions, 32 Suites)  
 
 ---
 
@@ -107,8 +107,9 @@ Architecture-Helping-Hand/
     ├── stairs.test.js             # Stair Calculator: 4 modes, candidates, validation, SVG-geometry, store round-trip (110 tests)
     ├── ramps.test.js              # Ramp Calculator: 4 modes, ratio/angle, targets, SVG-geometry, real-engine integrations (128 tests)
     ├── slopes.test.js             # Slope Analyzer: 7 definitions, signed geometry, consistency, cross-engine regression (143 tests)
-    ├── ai.test.js                 # AI layer: providers, tools, facts pack, validators, orchestrator, proposals (68 tests)
-    ├── visual-ai.test.js          # Visual AI capability gating, honest unavailability, label contracts (15 tests)
+    ├── ai.test.js                 # AI layer: providers, tools, facts pack, validators, orchestrator, proposals (73 tests)
+    ├── visual-ai.test.js          # Visual AI capability gating, honest unavailability, label contracts (17 tests)
+    ├── integration.test.js        # P14 end-to-end pipelines through real engines (39 tests)
     ├── cad-targets.test.js        # CAD target profiles, all-source handoff payloads, order/selection/precision (106 tests)
     ├── ui-contracts.test.js       # Full DOM ID verification, Run buttons presence & bundle cleanliness (398 tests)
     ├── calculator.test.js         # Mathematical scaling, round-trip, boundary & error tests (40 tests)
@@ -173,20 +174,21 @@ Scaling formulas operate strictly on these normalized values:
 
 ## 4. Automated Testing & Verification Matrix
 
-The test suite consists of **30 automated test suites** containing **2,455 exact assertions**, all passing with zero failures. The authoritative total is emitted by `npm test` on every run — documentation should quote that output rather than hard-coded numbers.
+The test suite consists of **32 automated test suites** containing **2,544 exact assertions**, all passing with zero failures. The authoritative total is emitted by `npm test` on every run — documentation should quote that output rather than hard-coded numbers.
 
 | Test Suite File | Focus Area | Assertions | Result |
 | :--- | :--- | :---: | :---: |
-| `tests/ui-contracts.test.js` | Full DOM ID verification, mode switching targets, Run buttons presence, bundle cleanliness & zero-syntax error parsing | 398 | ✅ PASS |
+| `tests/ui-contracts.test.js` | Full DOM ID verification, mode switching targets, Run buttons presence, bundle cleanliness, escapeHtml resolution pins & zero-syntax error parsing | 611 | ✅ PASS |
+| `tests/integration.test.js` | P14 end-to-end pipelines: Room→Furniture→Clearance→Facts→Critique, Survey→Calibration→Export, Stair/Ramp→Project→CAD, Plan→Analysis→Snapshot→AI context (real engines only) | 39 | ✅ PASS |
 | `tests/cad-targets.test.js` | Part 9 CAD target profiles, all-source handoff payloads with real engine outputs, order/selection/precision pins | 106 | ✅ PASS |
 | `tests/project.test.js` | Stabilization 2: project model create/validate/normalize, unknown-field preservation, round-trips | 58 | ✅ PASS |
 | `tests/store.test.js` | Stabilization 3+4: versioned store, migrations, recovery, pub/sub, legacy import | 48 | ✅ PASS |
 | `tests/stairs.test.js` | Stair Calculator: all 4 modes, deterministic candidates, validation codes, SVG-geometry correspondence, project-store round-trip | 110 | ✅ PASS |
 | `tests/ramps.test.js` | Ramp Calculator: all 4 modes, ratio stability, targets, validation, SVG geometry, real parser/store/journal/CAD integrations | 128 | ✅ PASS |
 | `tests/slopes.test.js` | Slope Analyzer: all 7 definitions, signed geometry, singularities, consistency tolerance, cross-engine regression | 143 | ✅ PASS |
-| `tests/ai.test.js` | AI layer: provider gating/error taxonomy, 17-tool registry, facts pack, structured validation, numeric claim checking, orchestrator flows | 68 | ✅ PASS |
-| `tests/visual-ai.test.js` | Visual AI capability gating, honest unavailability, label enforcement, controlled errors | 15 | ✅ PASS |
-| `tests/commands.test.js` | Command registry: registration, execution, categories, favorites, dynamic commands | 178 | ✅ PASS |
+| `tests/ai.test.js` | AI layer: provider gating/error taxonomy, tool registry, hardened facts pack, structured validation (hostile-input safe), numeric claim checking, orchestrator flows | 73 | ✅ PASS |
+| `tests/visual-ai.test.js` | Visual AI capability gating, honest unavailability, label enforcement, controlled errors on throwing transports | 17 | ✅ PASS |
+| `tests/commands.test.js` | Command registry: registration, execution, categories, favorites, dynamic commands | 204 | ✅ PASS |
 | `tests/dimension-workspace.test.js` | Dimension Workspace entries, groups, serialization, persistence | 103 | ✅ PASS |
 | `tests/dimension-expression.test.js` | Expression parser determinism, validation, error codes, scale integration | 79 | ✅ PASS |
 | `tests/batch-cad.test.js` | Delimiter detection, row parsing, bulk conversion, export formatting | 76 | ✅ PASS |
@@ -200,11 +202,15 @@ The test suite consists of **30 automated test suites** containing **2,455 exact
 | `tests/parser.test.js` | Decimals, fractions (`3 1/2`, `5/8`, `15 3/16`), feet-inches (`12'`, `12' 6"`, `12'-6 1/2"`), attached units (`12in`, `6ft`), garbage, NaN, Infinity, negative rejection | 38 | ✅ PASS |
 | `tests/responsive.test.js` | Breakpoint, touch-target & responsive layout stylesheet contracts | 23 | ✅ PASS |
 | `tests/furniture.test.js` | Catalog integrity, 179 items validation, scaled drawing dimensions, search and category filtering | 21 | ✅ PASS |
-| `tests/services.test.js` | StorageService (read, write, remove, clear), HistoryService (add, remove, clear, CSV export, Markdown export, corrupt JSON recovery), AudioService safety | 19 | ✅ PASS |
+| `tests/services.test.js` | StorageService (read, write, remove, clear), HistoryService (add, remove, clear, CSV/Markdown export, corrupt/poisoned-storage recovery, service-owned identity), AudioService safety | 22 | ✅ PASS |
 | `tests/units.test.js` | Metric (mm, cm, dm, m, km), imperial (in, ft, yd, mi), area & volume factors, round-trips, strict invalid unit rejection | 26 | ✅ PASS |
 | `tests/formatter.test.js` | Decimal precision rounding, epsilon stabilization, trailing zero elimination, scientific notation, feet-inches notation | 12 | ✅ PASS |
+| `tests/export.test.js` | Universal Export Center: real-engine tables, JSON round-trip, DXF/SVG/TXT/CSV/TSV through the real exporters, store integration | 55 | ✅ PASS |
+| `tests/project-workspace.test.js` | Multi-project library, snapshots (linear-storage pin), import validation, future-version refusal | 37 | ✅ PASS |
+| `tests/plan-canvas.test.js` | Entities, transforms, grid/selection/undo, plan export geometry (SVG/DXF through real exporters) | 84 | ✅ PASS |
+| `tests/space-planning.test.js` | Fit/clearance/overlap/adjacency/efficiency, survey notebook, calibration math, annotations | 75 | ✅ PASS |
 | `tests/data-integrity.test.js`| 28 scale presets uniqueness & ratio validity, 179 furniture records positive dimensions & unique IDs, reference ranges continuity | 9 | ✅ PASS |
-| **Total** | **30 Comprehensive Test Suites** | **2,455 Assertions** | **100% Passing (0 Failures)** |
+| **Total** | **32 Comprehensive Test Suites** | **2,544 Assertions** | **100% Passing (0 Failures)** |
 
 ---
 
@@ -228,3 +234,32 @@ The architectural foundation is verified, fully tested, and free of formula dupl
 4. **Storage taxonomy** — PROJECT DATA (dimensions, chains, notes, snapshots, decisions, exports) flows through the store; USER PREFERENCES (theme, quick-dim prefs, favorites, sound) remain in their existing per-feature keys. The two never mix.
 
 Feature migration into the project document is deliberately incremental: features write to their legacy keys today, and the store's `importLegacy` path is the bridge. The codebase is ready for Projects → Export Center → Plan Canvas → Rooms/Walls → Survey → AI under the documented build contract in Section 0.
+
+---
+
+## 7. P14 Final Hardening Record (September 3, 2026)
+
+All findings below were discovered by a full repository audit and fixed with regression tests. No test was weakened and no expected behavior was changed to make tests pass.
+
+**Security**
+- `src/ui/app.js` called `escapeHtml()` at 15 sites without ever defining it — a latent `ReferenceError` that crashed workspace rendering; now defined once at `initializeApp` scope and pinned by `tests/ui-contracts.test.js`.
+- Calculation journal (`views/history.js`) interpolated persisted history fields into `innerHTML` unescaped — XSS via a poisoned localStorage payload; all interpolations escaped.
+- `HistoryService.addEntry` let callers (or poisoned persisted entries) forge `id`/`timestamp`/`date`; ids are now service-owned and the load path rejects malformed id shapes.
+- Project library import: `deserializeProjectJSON` + envelope validation only; prototype-pollution keys (`__proto__`) verified inert through the real import path.
+
+**AI**
+- Facts pack crashed on null/garbage plan entities (imported documents are envelope-validated only) and emitted null-valued `factChecks` that were uncheckable noise; now filters hostile entries and only emits finite geometry.
+- `validateStructuredResponse` crashed on null/primitive items in a model's `findings` array; non-objects are now flagged as validation errors.
+- Visual layer (`interpretImage`/`generateConceptImage`) leaked transport exceptions across the AI boundary; a throwing transport now surfaces as the stable controlled error object. Vision vs imageGen separation and the CONCEPTUAL EXPLORATION / NOT A TECHNICAL DRAWING / NOT CONSTRUCTION DOCUMENTATION labels are unchanged and pinned.
+
+**Project**
+- Snapshot embedding was O(n²): each snapshot embedded prior snapshots *with* their payloads (measured 1.5 KB → 81 KB over six snapshots), breaking localStorage persistence around snapshot 9–10. Payloads are now stripped inside embedded copies and re-attached by id on restore (time-travel semantics unchanged).
+- The multi-project library accepted future envelope versions and future individual `schemaVersion`s silently, normalizing newer data down — the exact data-loss path the active-envelope contract prevents; both are now refused loudly.
+
+**Export / Plan**
+- The plan canvas's "Export SVG/DXF" buttons were a dead end (the export center had no plan geometry source, so DXF exported a *chain*). Added `planToExportGeometry`/`generatePlanSVG` (pure, in `core/plan-canvas.js`), a "Plan Canvas" geometry source, and real routing through `wrapSVGDocument`/`buildDXF`.
+- Plan view rendering crashed on imported entities with non-numeric geometry; hostile entities are now skipped (SVG) or rendered with `?` placeholders (entity list).
+
+**Runner**
+- `tests/visual-ai.test.js` existed but was never registered in `tests/run-all.js` — `npm test` silently skipped the entire Phase 13 contract suite. Now registered (32/32 suites).
+- New `tests/integration.test.js`: five end-to-end pipelines (Project→Room→Furniture→Clearance→Facts→Critique; Survey→Calibration→Measurement→Room→Plan→Export; Stair→Project→CSV; Ramp→Slope shared math→DXF; Plan→Space analysis→Snapshot→AI context) through REAL implementations only.

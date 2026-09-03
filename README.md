@@ -3,7 +3,7 @@
 > **Professional Architectural Scale, Furniture Sizing & Multi-Unit Calculation Studio**  
 > *A high-precision, zero-dependency, tactile architectural conversion studio built for architects, interior designers, urban planners, physical model makers, and design students.*
 
-[![Tests](https://img.shields.io/badge/Tests-2455%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-2544%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-3--Tier%20Core%20%7C%20Frozen-10b981?style=flat-square)](ENGINEERING_RULES.md)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Vanilla)-f59e0b?style=flat-square)](package.json)
 [![License](https://img.shields.io/badge/License-MIT-6366f1?style=flat-square)](package.json)
@@ -145,7 +145,7 @@ The codebase has evolved through rigorous engineering, auditing, hardening, and 
 This repository serves as:
 1. **An Open-Source Reference Studio**: A tactile, zero-friction architectural scaling studio for architects, interior designers, landscape architects, students, and educators.
 2. **Zero-Dependency Architecture**: No React, no Vue, no webpack, no runtime `node_modules`. Anyone can clone the repository, double-click `index.html`, and use it immediately offline via `file:///`.
-3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **2,455 automated test assertions across 30 test suites** (authoritative count emitted by `npm test`).
+3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **2,544 automated test assertions across 32 test suites** (authoritative count emitted by `npm test`).
 4. **An Extensible Platform**: Prepared for future architectural geometry engines, CAD vector exports (SVG/DXF), and stair/ramp calculations.
 
 ---
@@ -466,7 +466,7 @@ python -m http.server 3500
 ### 3. Run Automated Test Suite
 ```bash
 npm test
-# Executes all 30 test suites (2,455 assertions, 100% passing).
+# Executes all 32 test suites (2,544 assertions, 100% passing).
 # The runner emits the authoritative total assertion count on completion.
 ```
 
@@ -499,20 +499,19 @@ node scripts/build.js --check
 
 ## 🔮 Future Roadmap
 
-* **Stabilization (Completed)**: The architecture is prepared for the phases below:
-  - **UI modularization**: feature controllers live in `src/ui/views/` behind a registry (`src/ui/view-registry.js`); `app.js` keeps global startup/navigation/palette/keyboard duties only.
-  - **Project Document Model** (`src/core/project.js`): a versioned, validated, serializable envelope with unknown-field preservation — the shared state for future Rooms, Walls, Furniture, Survey, snapshots, and AI context.
-  - **Versioned project store** (`src/services/store.js`): persists `{ version, project }` with a migration chain, loud refusal of newer-than-understood versions, controlled recovery from corrupted data, tiny pub/sub, and **non-destructive legacy import** (existing per-feature keys are read, never deleted). Project data and user preferences (theme, quick-dim prefs, favorites) are strictly separated.
-* **Phase 3: Extended Architectural Geometry & Room Area Engine**:
-  - Multi-room space planning & net-to-gross area scheduler.
-  - Wall thickness offset and clearance envelope calculator.
-* **Phase 4: Stair & Ramp Compliance Suite**:
+* **Status (September 3, 2026)**: Phases 1–13 are complete — Universal Export Center, Project Workspace, Plan Canvas, Architectural Entities, Space Planning, Survey/Calibration, Annotations, AI Foundation (provider abstraction, tool registry, facts pack, orchestrator, 7 specialist modes), and the Visual AI capability layer. P14 final hardening is complete (see ARCHITECTURE_AUDIT.md §7).
+* **AI transports not yet implemented (by design)**: the provider abstraction and key store are ready for real Gemini/GLM fetch transports in `src/services/`, but none exist yet — the app makes no network calls and is fully usable without AI. The Free AI requirement (no hidden keys, no paid fallback, no anonymous requests) is enforced by construction: no network code exists in the repository.
+* **AI proposal UI not yet surfaced**: the store's apply/undo/notify flow exists and is tested, but no UI panel exposes AI proposals yet.
+* **Survey/Calibration/Annotations UI not yet surfaced**: the three cores (`src/core/survey.js`, `annotations.js`) are tested pure modules; dedicated modes are future work.
+* **Phase 3 (legacy numbering): Extended Architectural Geometry**:
+  - Wall thickness offset and clearance envelope calculator — partially covered by the space-planning core (`checkClearance`, wall footprints in `wallRect`); advanced envelope tools remain future work.
+* **Phase 4 (legacy numbering): Stair & Ramp Compliance Suite**:
   - ✅ **Stair Calculator** (Mode 14) — implemented; see STAIRS.md.
   - ✅ **Ramp Calculator** (Mode 15) — implemented; see RAMPS.md.
   - ✅ **Slope Analyzer** (Mode 16) — implemented; see SLOPES.md.
   - Landing/switchback configurations remain future work.
-* **Phase 5: CAD Vector Exports**:
-  - Scaled SVG & DXF vector block export for AutoCAD, Rhino, Illustrator, and laser cutters.
+* **Phase 5 (legacy numbering): CAD Vector Exports**:
+  - ✅ **SVG & DXF vector export** — implemented in the Universal Export Center (Mode 17): SVG (chains, stairs, ramps, slopes, plan canvas) and DXF R12 subset (chain segments, room outlines, plan geometry) through `src/core/export/export-model.js`.
 * **Note on Part 9 (CAD Handoff)**: Completed as clipboard workflow profiles (Mode 13). Direct AutoCAD / Rhino / SketchUp API or plugin integration remains out of scope by design.
 
 ---
