@@ -91,7 +91,25 @@ console.log('🧪 Running tests/services.test.js...');
   const reloaded2 = HistoryService.reload();
   assert(Array.isArray(reloaded2) && reloaded2.length === 0, 'HistoryService gracefully recovers from non-array JSON');
 
+  // P14 hardening: poisoned persisted entries (bad id shape) are dropped on load
+  StorageService.setItem(HISTORY_STORAGE_KEY, JSON.stringify([
+    { id: 'evil"><img src=x onerror=alert(1)>', inputStr: '<b>x</b>' },
+    { id: 'not-a-valid-id', inputStr: 'y' },
+    null,
+    'string-entry'
+  ]));
+  const reloaded3 = HistoryService.reload();
+  assert(Array.isArray(reloaded3) && reloaded3.length === 0, 'Poisoned entries with malformed ids are rejected on load');
+
   HistoryService.clear();
+}
+
+// 3b. HistoryService identity fields are service-owned (P14)
+{
+  const forged = HistoryService.addEntry({ id: 'attacker-chosen-id', timestamp: 'FAKE', date: 'FAKE' });
+  assert(forged.id.startsWith('hist_'), 'Caller cannot forge the entry id through addEntry');
+  assert(forged.timestamp !== 'FAKE' && forged.date !== 'FAKE', 'Caller cannot forge timestamp/date through addEntry');
+  HistoryService.removeEntry(forged.id);
 }
 
 // 4. AudioService Safety Tests

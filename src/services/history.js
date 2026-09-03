@@ -13,8 +13,19 @@ function loadHistoryFromStorage() {
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) {
-        // Validate items
-        return parsed.filter(item => item && typeof item === 'object' && item.id);
+        // Validate items: require a well-formed service-generated id (defense
+        // against poisoned/persisted payloads — ids flow into DOM attributes
+        // and querySelector lookups in the journal view).
+        const idOk = id => typeof id === 'string' && /^hist_\d+_[a-z0-9]+$/.test(id);
+        return parsed.filter(item => item && typeof item === 'object' && idOk(item.id))
+          // Also strip any spread-in fields the service computes itself, so a
+          // persisted entry cannot override id/timestamp through addEntry.
+          .map(item => ({
+            ...item,
+            id: item.id,
+            timestamp: typeof item.timestamp === 'string' ? item.timestamp.slice(0, 40) : '',
+            date: typeof item.date === 'string' ? item.date.slice(0, 40) : ''
+          }));
       }
     }
   } catch (e) {
@@ -40,7 +51,13 @@ export const HistoryService = {
       throw new Error('History entry must be a valid object');
     }
 
+    // Service-owned identity fields are computed here and MUST NOT be
+    // overridable through the spread — the caller's entry comes last in
+    // the object literal below only for optional free-form fields, so the
+    // protected fields are re-asserted after the spread.
     const item = {
+      stateSnapshot: null,
+      ...entry,
       id: 'hist_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       date: new Date().toLocaleDateString(),
@@ -48,9 +65,7 @@ export const HistoryService = {
       mode: entry.mode || entry.operation || 'Scale Converter',
       scaleStr: entry.scaleStr || (entry.scaleRatio ? `1:${entry.scaleRatio}` : '-'),
       inputStr: entry.inputStr || '',
-      outputStr: entry.outputStr || '',
-      stateSnapshot: entry.stateSnapshot || null,
-      ...entry
+      outputStr: entry.outputStr || ''
     };
 
     historyList.unshift(item);
