@@ -45,11 +45,16 @@ export function selectProjectScope({ project, planEntities, request = {} }) {
   const openings = entities.filter(e => e.kind === 'door' || e.kind === 'window').slice(0, 30);
   const allFurniture = entities.filter(e => e.kind === 'furniture');
 
-  // Scope hint: keep rooms whose name/decision text matches; empty hint = all.
+  // Scope hint: keep rooms whose name matches any word of the hint; a
+  // non-matching hint keeps everything (never narrow to nothing).
   let rooms = allRooms;
   const hint = typeof request.scopeHint === 'string' ? request.scopeHint.trim().toLowerCase() : '';
   if (hint) {
-    const matches = allRooms.filter(r => String(r.name || '').toLowerCase().includes(hint));
+    const words = hint.split(/[^a-z0-9äöüß]+/i).filter(w => w.length >= 4);
+    const matches = allRooms.filter(r => {
+      const roomName = String(r.name || '').toLowerCase();
+      return words.some(w => roomName.includes(w)) || roomName.includes(hint);
+    });
     if (matches.length > 0 && matches.length < allRooms.length) {
       rooms = matches;
       // Furniture within or adjacent to the matched rooms only.

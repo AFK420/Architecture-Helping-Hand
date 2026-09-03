@@ -106,11 +106,11 @@ export function statusCodeToError(status) {
  */
 export function createKeyStore(storageAdapter, { sessionOnly = false } = {}) {
   const key = sessionOnly ? 'archiscale_ai_key_session' : 'archiscale_ai_keys';
-  let memoryKey = null; // session-only keys live only here
+  let memoryKeys = new Map(); // session-only keys live only here (per provider)
   return {
     setKey(providerId, apiKey) {
       if (sessionOnly) {
-        memoryKey = { providerId, apiKey };
+        memoryKeys.set(providerId, apiKey);
         return true;
       }
       try {
@@ -123,7 +123,7 @@ export function createKeyStore(storageAdapter, { sessionOnly = false } = {}) {
       }
     },
     getKey(providerId) {
-      if (sessionOnly) return memoryKey?.providerId === providerId ? memoryKey.apiKey : null;
+      if (sessionOnly) return memoryKeys.has(providerId) ? memoryKeys.get(providerId) : null;
       try {
         const all = JSON.parse(storageAdapter.getItem(key) || '{}');
         return all[providerId] || null;
@@ -133,7 +133,7 @@ export function createKeyStore(storageAdapter, { sessionOnly = false } = {}) {
     },
     clearKey(providerId) {
       if (sessionOnly) {
-        if (memoryKey?.providerId === providerId) memoryKey = null;
+        memoryKeys.delete(providerId);
         return true;
       }
       try {

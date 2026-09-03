@@ -10047,11 +10047,11 @@ function statusCodeToError(status) {
  */
 function createKeyStore(storageAdapter, { sessionOnly = false } = {}) {
   const key = sessionOnly ? 'archiscale_ai_key_session' : 'archiscale_ai_keys';
-  let memoryKey = null; // session-only keys live only here
+  let memoryKeys = new Map(); // session-only keys live only here (per provider)
   return {
     setKey(providerId, apiKey) {
       if (sessionOnly) {
-        memoryKey = { providerId, apiKey };
+        memoryKeys.set(providerId, apiKey);
         return true;
       }
       try {
@@ -10064,7 +10064,7 @@ function createKeyStore(storageAdapter, { sessionOnly = false } = {}) {
       }
     },
     getKey(providerId) {
-      if (sessionOnly) return memoryKey?.providerId === providerId ? memoryKey.apiKey : null;
+      if (sessionOnly) return memoryKeys.has(providerId) ? memoryKeys.get(providerId) : null;
       try {
         const all = JSON.parse(storageAdapter.getItem(key) || '{}');
         return all[providerId] || null;
@@ -10074,7 +10074,7 @@ function createKeyStore(storageAdapter, { sessionOnly = false } = {}) {
     },
     clearKey(providerId) {
       if (sessionOnly) {
-        if (memoryKey?.providerId === providerId) memoryKey = null;
+        memoryKeys.delete(providerId);
         return true;
       }
       try {
@@ -10724,11 +10724,16 @@ function selectProjectScope({ project, planEntities, request = {} }) {
   const openings = entities.filter(e => e.kind === 'door' || e.kind === 'window').slice(0, 30);
   const allFurniture = entities.filter(e => e.kind === 'furniture');
 
-  // Scope hint: keep rooms whose name/decision text matches; empty hint = all.
+  // Scope hint: keep rooms whose name matches any word of the hint; a
+  // non-matching hint keeps everything (never narrow to nothing).
   let rooms = allRooms;
   const hint = typeof request.scopeHint === 'string' ? request.scopeHint.trim().toLowerCase() : '';
   if (hint) {
-    const matches = allRooms.filter(r => String(r.name || '').toLowerCase().includes(hint));
+    const words = hint.split(/[^a-z0-9äöüß]+/i).filter(w => w.length >= 4);
+    const matches = allRooms.filter(r => {
+      const roomName = String(r.name || '').toLowerCase();
+      return words.some(w => roomName.includes(w)) || roomName.includes(hint);
+    });
     if (matches.length > 0 && matches.length < allRooms.length) {
       rooms = matches;
       // Furniture within or adjacent to the matched rooms only.
