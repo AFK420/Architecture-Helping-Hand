@@ -116,6 +116,17 @@ import { CommandRegistry } from '../services/commands.js';
 import { updateVisualization, getFurniturePlanSVG } from './visualizer.js';
 
 export function initializeApp() {
+  /** Escapes user-controllable strings before innerHTML rendering (app-wide). */
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   const state = {
     currentMode: 'converter',
     activeTheme: StorageService.getItem('archi_theme') || 'dark',
@@ -1319,7 +1330,7 @@ export function initializeApp() {
     }
 
     if (filtered.length === 0) {
-      const activeFilterName = state.furnitureSearchQuery ? `"${state.furnitureSearchQuery}"` : state.furnitureActiveCategory;
+      const activeFilterName = state.furnitureSearchQuery ? `"${escapeHtml(state.furnitureSearchQuery)}"` : state.furnitureActiveCategory;
       dom.furnitureCardsGrid.innerHTML = `
         <div class="empty-furn-state">
           <div class="empty-furn-icon">📐</div>

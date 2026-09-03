@@ -693,5 +693,21 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
   assert(syntaxValid, 'js/app.js parses with zero syntax errors');
 }
 
+// 5. P14 regression pin: every app.js escapeHtml( usage must resolve to a
+//    definition inside initializeApp. The workspace render previously called
+//    escapeHtml with NO definition anywhere in app.js — a latent ReferenceError
+//    that crashed workspace rendering at runtime (the smoke test's mock DOM
+//    never exercised that render path).
+{
+  const defCount = (appJsContent.match(/function escapeHtml\s*\(/g) || []).length;
+  assert(defCount >= 1, 'app.js defines escapeHtml (workspace render previously referenced it undefined)');
+
+  const defIdx = appJsContent.indexOf('function escapeHtml');
+  const initIdx = appJsContent.indexOf('export function initializeApp');
+  const firstUseIdx = appJsContent.indexOf('escapeHtml(', defIdx + 1);
+  assert(initIdx !== -1 && defIdx > initIdx, 'escapeHtml is defined inside initializeApp (all usage sites are within its scope)');
+  assert(firstUseIdx !== -1, 'escapeHtml is actually used to guard user-controllable strings');
+}
+
 console.log(`Summary: ${passed} passed, ${failed} failed.\n`);
 if (failed > 0) process.exit(1);

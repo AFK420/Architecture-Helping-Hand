@@ -10,6 +10,17 @@
 
 import { calculateWorkspaceTotals } from '../../core/dimension-workspace.js';
 
+/** Escapes user-controllable history strings before innerHTML rendering. */
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function createHistoryView(context) {
   const {
     state, dom, showToast, copyToClipboard, AudioService, HistoryService,
@@ -45,29 +56,29 @@ export function createHistoryView(context) {
     }
 
     dom.historyList.innerHTML = history.map(item => `
-      <div class="history-item-card" data-id="${item.id}">
+      <div class="history-item-card" data-id="${escapeHtml(item.id)}">
         <div class="hist-card-top">
           <div class="hist-title-group">
-            <span class="hist-mode-tag">${item.operation || item.mode || 'Scale Converter'}</span>
-            <span class="hist-scale-tag">${item.scaleStr || '-'}</span>
+            <span class="hist-mode-tag">${escapeHtml(item.operation || item.mode || 'Scale Converter')}</span>
+            <span class="hist-scale-tag">${escapeHtml(item.scaleStr || '-')}</span>
           </div>
-          <span class="hist-time-tag">${item.timestamp || ''}</span>
+          <span class="hist-time-tag">${escapeHtml(item.timestamp || '')}</span>
         </div>
 
         <div class="hist-details-grid">
           <div class="hist-data-row">
             <span class="hist-lbl">INPUT</span>
-            <span class="hist-val hist-input-val">${item.inputStr || '-'}</span>
+            <span class="hist-val hist-input-val">${escapeHtml(item.inputStr || '-')}</span>
           </div>
           <div class="hist-data-row highlight">
             <span class="hist-lbl">RESULT</span>
-            <span class="hist-val hist-output-val">${item.outputStr || '-'}</span>
+            <span class="hist-val hist-output-val">${escapeHtml(item.outputStr || '-')}</span>
           </div>
         </div>
 
         <div class="hist-card-actions">
           ${item.stateSnapshot ? `
-            <button class="hist-btn-restore action-tool-btn compact primary" data-id="${item.id}" title="Restore and rerun this calculation">
+            <button class="hist-btn-restore action-tool-btn compact primary" data-id="${escapeHtml(item.id)}" title="Restore and rerun this calculation">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                 <polyline points="1 4 1 10 7 10"></polyline>
                 <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
@@ -75,14 +86,14 @@ export function createHistoryView(context) {
               Restore
             </button>
           ` : ''}
-          <button class="hist-btn-copy action-tool-btn compact" data-text="${item.outputStr || item.inputStr}" title="Copy calculated result">
+          <button class="hist-btn-copy action-tool-btn compact" data-text="${escapeHtml(item.outputStr || item.inputStr)}" title="Copy calculated result">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
             </svg>
             Copy
           </button>
-          <button class="hist-btn-del action-tool-btn compact danger" data-id="${item.id}" title="Remove entry from journal">
+          <button class="hist-btn-del action-tool-btn compact danger" data-id="${escapeHtml(item.id)}" title="Remove entry from journal">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
