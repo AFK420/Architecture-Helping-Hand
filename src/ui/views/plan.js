@@ -87,30 +87,35 @@ export function createPlanView(context) {
     const entityMarkup = entities().map(e => {
       const selected = state.plan.selectedIds.has(e.id);
       const stroke = selected ? 'var(--color-warning, #fbbf24)' : 'var(--accent-primary, #7aa2ff)';
-      if (e.kind === 'room') {
+      // Imported project documents are envelope-validated only — skip entities
+      // whose geometry is not numeric rather than crashing the whole canvas.
+      const isNum = v => typeof v === 'number' && isFinite(v);
+      const hasRect = isNum(e.x) && isNum(e.y) && isNum(e.width) && isNum(e.depth);
+      if (e.kind === 'room' && hasRect) {
         const p1 = worldToSvg(transform, e.x, e.y + e.depth);   // bottom-left
         const p2 = worldToSvg(transform, e.x + e.width, e.y);   // top-right
         const labelPos = worldToSvg(transform, e.x + e.width / 2, e.y + e.depth / 2);
         return `<g>
           <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${((p2.x - p1.x)).toFixed(1)}" height="${((p1.y - p2.y)).toFixed(1)}"
-            fill="var(--bg-chip, rgba(122,162,255,0.08))" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.6}" data-entity-id="${e.id}" class="plan-entity"/>
+            fill="var(--bg-chip, rgba(122,162,255,0.08))" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.6}" data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>
           <text x="${labelPos.x.toFixed(1)}" y="${labelPos.y.toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--text-secondary,#9aa)" font-family="var(--font-family-mono,monospace)">${escapeHtml(e.name)} · ${roomArea(e).toFixed(1)}m²</text>
         </g>`;
       }
-      if (e.kind === 'wall') {
+      if (e.kind === 'wall' && isNum(e.x1) && isNum(e.y1) && isNum(e.x2) && isNum(e.y2)) {
         const a = worldToSvg(transform, e.x1, e.y1);
         const b = worldToSvg(transform, e.x2, e.y2);
+        const thickness = isNum(e.thickness) ? e.thickness : 0.2;
         return `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"
-          stroke="${stroke}" stroke-width="${Math.max(3, e.thickness * transform.zoom)}" stroke-linecap="square"
-          data-entity-id="${e.id}" class="plan-entity"/>`;
+          stroke="${stroke}" stroke-width="${Math.max(3, thickness * transform.zoom)}" stroke-linecap="square"
+          data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>`;
       }
-      if (e.kind === 'furniture') {
+      if (e.kind === 'furniture' && hasRect) {
         const p1 = worldToSvg(transform, e.x, e.y + e.depth);
         const p2 = worldToSvg(transform, e.x + e.width, e.y);
         const labelPos = worldToSvg(transform, e.x + e.width / 2, e.y + e.depth / 2);
         return `<g>
           <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${(p2.x - p1.x).toFixed(1)}" height="${(p1.y - p2.y).toFixed(1)}"
-            fill="rgba(74,222,128,0.10)" stroke="${stroke}" stroke-width="${selected ? 2 : 1.2}" data-entity-id="${e.id}" class="plan-entity"/>
+            fill="rgba(74,222,128,0.10)" stroke="${stroke}" stroke-width="${selected ? 2 : 1.2}" data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>
           <text x="${labelPos.x.toFixed(1)}" y="${labelPos.y.toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-muted,#889)" font-family="var(--font-family-mono,monospace)">${escapeHtml(e.name)}</text>
         </g>`;
       }
@@ -150,12 +155,15 @@ export function createPlanView(context) {
     }
     dom.planEntityList.innerHTML = entities().map(e => {
       const selected = state.plan.selectedIds.has(e.id);
+      // Imported project documents are envelope-validated only — individual
+      // entity fields may be garbage. Render honestly instead of crashing.
+      const num = v => (typeof v === 'number' && isFinite(v) ? v.toFixed(2) : '?');
       let desc;
-      if (e.kind === 'room') desc = `${e.width.toFixed(2)} × ${e.depth.toFixed(2)} m · ${roomArea(e).toFixed(2)} m²`;
-      else if (e.kind === 'wall') desc = `${wallLength(e).toFixed(2)} m · ${e.thickness.toFixed(2)} m thick`;
-      else desc = `${e.width.toFixed(2)} × ${e.depth.toFixed(2)} m`;
-      return `<div class="plan-entity-row" data-id="${e.id}" style="display: flex; justify-content: space-between; padding: 0.35rem 0.55rem; border: 1px solid var(--border-color-light); border-radius: 4px; cursor: pointer; font-family: var(--font-family-mono); font-size: 0.74rem; ${selected ? 'background: var(--bg-chip);' : ''}">
-        <span><strong style="color: var(--accent-primary);">${escapeHtml(e.name)}</strong> <span style="color: var(--text-muted);">${e.kind}</span></span>
+      if (e.kind === 'room') desc = `${num(e.width)} × ${num(e.depth)} m · ${typeof e.width === 'number' && typeof e.depth === 'number' ? roomArea(e).toFixed(2) : '?'} m²`;
+      else if (e.kind === 'wall') desc = `${typeof e.x1 === 'number' && typeof e.x2 === 'number' ? wallLength(e).toFixed(2) : '?'} m · ${num(e.thickness)} m thick`;
+      else desc = `${num(e.width)} × ${num(e.depth)} m`;
+      return `<div class="plan-entity-row" data-id="${escapeHtml(e.id)}" style="display: flex; justify-content: space-between; padding: 0.35rem 0.55rem; border: 1px solid var(--border-color-light); border-radius: 4px; cursor: pointer; font-family: var(--font-family-mono); font-size: 0.74rem; ${selected ? 'background: var(--bg-chip);' : ''}">
+        <span><strong style="color: var(--accent-primary);">${escapeHtml(e.name)}</strong> <span style="color: var(--text-muted);">${escapeHtml(e.kind)}</span></span>
         <span style="color: var(--text-secondary);">${desc}</span>
       </div>`;
     }).join('');
