@@ -19,10 +19,12 @@ import {
   roomsToDXFEntities,
   buildExport
 } from '../../core/export/export-model.js';
+import { planToExportGeometry } from '../../core/plan-canvas.js';
 import { generateChainSVG } from '../../core/dimension-chains.js';
 import { generateStairSVG } from '../../core/stairs.js';
 import { generateRampSVG } from '../../core/ramps.js';
 import { generateSlopeSVG } from '../../core/slopes.js';
+import { generatePlanSVG } from '../../core/plan-canvas.js';
 import { downloadExport, printExport } from '../../services/export.js';
 
 export function createExportCenterView(context) {
@@ -76,6 +78,9 @@ export function createExportCenterView(context) {
       if (key === 'slope' && state.slopes.lastResult) {
         return generateSlopeSVG(state.slopes.lastResult, { width: 520, height: 220 });
       }
+      if (key === 'plan' && Array.isArray(state.plan?.entities) && state.plan.entities.length > 0) {
+        return generatePlanSVG(planToExportGeometry(state.plan.entities), { pixelsPerMeter: 40 });
+      }
     } catch (e) {
       // Diagram generators return safe empty SVG for invalid states
     }
@@ -86,6 +91,18 @@ export function createExportCenterView(context) {
     const key = diagramKey || source;
     if (key === 'chain') return chainToDXFEntities(state.lastValidChain);
     if (key === 'rooms' || key === 'project') return roomsToDXFEntities(requireProject()?.rooms);
+    if (key === 'plan' && Array.isArray(state.plan?.entities)) {
+      // Plan entities (rooms/walls/furniture outlines) → DXF geometry in meters
+      const geo = planToExportGeometry(state.plan.entities);
+      const entities = [];
+      for (const poly of geo.polygons) {
+        entities.push({ type: 'polyline', closed: true, layer: 'PLAN', points: poly.points });
+      }
+      for (const t of geo.texts) {
+        entities.push({ type: 'text', x: t.x, y: t.y, text: t.text, height: 0.2 });
+      }
+      return entities;
+    }
     return [];
   }
 

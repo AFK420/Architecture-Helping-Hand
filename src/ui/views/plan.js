@@ -418,11 +418,14 @@ export function createPlanView(context) {
       return;
     }
     switchMode('export');
-    if (format === 'svg') {
-      views.callController('export', 'build');
-      showToast('Use SVG format with the plan geometry in Export Center');
+    // Route the export center to the plan geometry source for SVG/DXF
+    if (dom.exportDiagramSelect) dom.exportDiagramSelect.value = 'plan';
+    if (dom.exportSourceSelect) dom.exportSourceSelect.value = 'project';
+    if (format) {
+      views.callController('export', 'build', true);
+      showToast(`Export Center opened with the plan as ${String(format).toUpperCase()}`);
     } else {
-      showToast(`Use ${String(format).toUpperCase()} in Export Center`);
+      views.callController('export', 'build');
     }
   }
 

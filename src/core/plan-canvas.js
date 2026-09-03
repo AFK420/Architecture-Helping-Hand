@@ -209,3 +209,119 @@ export function entityMoveCommand(entity, dx, dy, label) {
     undo() { entity.x -= dx; entity.y -= dy; }
   };
 }
+
+// ---------------------------------------------------------------------------
+// Export geometry (P14): world-space outlines for SVG/DXF export
+// ---------------------------------------------------------------------------
+
+/**
+ * Reduces plan entities to plain export geometry (world meters):
+ *   { lines: [{x1,y1,x2,y2,label}], polygons: [{points:[[x,y]...], closed, label}], texts: [{x,y,text}] }
+ * Pure: the exporter decides units/scale; this module only shapes geometry.
+ * Rooms become closed polygons + a centered label; walls become thick-edge
+ * outlines (their bounding rect) so DXF (no thickness concept here) still
+ * shows the wall footprint; furniture becomes closed polygons + labels.
+ *
+ * @param {Array<Object>} entities - plan entities (rooms/walls/furniture)
+ * @param {Object} [options] - { includeLabels (default true) }
+ * @returns {{ lines: Array, polygons: Array, texts: Array }}
+ */
+export function planToExportGeometry(entities, options = {}) {
+  const includeLabels = options.includeLabels !== false;
+  const out = { lines: [], polygons: [], texts: [] };
+  for (const e of entities || []) {
+    if (!e || typeof e !== 'object') continue;
+    if (e.kind === 'room' && typeof e.x === 'number' && typeof e.width === 'number' &&
+        typeof e.y === 'number' && typeof e.depth === 'number') {
+      out.polygons.push({
+        closed: true,
+        points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
+        label: e.name || 'Room'
+      });
+      if (includeLabels) {
+        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: e.name || 'Room' });
+      }
+    } else if (e.kind === 'wall' && typeof e.x1 === 'number') {
+      // Wall footprint as a closed rectangle (thickness honored)
+      const minX = Math.min(e.x1, e.x2) - (e.thickness || 0) / 2;
+      const minY = Math.min(e.y1, e.y2) - (e.thickness || 0) / 2;
+      const w = Math.abs(e.x2 - e.x1) + (e.thickness || 0);
+      const d = Math.abs(e.y2 - e.y1) + (e.thickness || 0);
+      out.polygons.push({
+        closed: true,
+        points: [[minX, minY], [minX + w, minY], [minX + w, minY + d], [minX, minY + d]],
+        label: e.name || 'Wall'
+      });
+    } else if (e.kind === 'furniture' && typeof e.x === 'number' && typeof e.width === 'number') {
+      out.polygons.push({
+        closed: true,
+        points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
+        label: e.name || 'Furniture'
+      });
+      if (includeLabels) {
+        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: e.name || 'Furniture' });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Renders plan export geometry as a standalone inline SVG markup string
+ (world meters × pixelsPerMeter scale, y-axis flipped like the canvas view).
+ * Pure string output — the Export Center wraps it with wrapSVGDocument().
+ *
+ * @param {Object} geometry - output of planToExportGeometry
+ * @param {Object} [options] - { pixelsPerMeter (default 40), paddingMeters (default 1) }
+ * @returns {string} `<svg ...>...</svg>` markup with xmlns
+ */
+export function generatePlanSVG(geometry, options = {}) {
+  const ppm = typeof options.pixelsPerMeter === 'number' && options.pixelsPerMeter > 0
+    ? options.pixelsPerMeter : 40;
+  const pad = typeof options.paddingMeters === 'number' && options.paddingMeters >= 0
+    ? options.paddingMeters : 1;
+
+  const polys = (geometry && Array.isArray(geometry.polygons)) ? geometry.polygons : [];
+  const texts = (geometry && Array.isArray(geometry.texts)) ? geometry.texts : [];
+
+  // Bounds over all points (fall back to a 1m empty frame)
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const poly of polys) {
+    for (const [x, y] of poly.points || []) {
+      if (x < minX) minX = x; if (y < minY) minY = y;
+      if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+    }
+  }
+  for (const t of texts) {
+    if (t.x < minX) minX = t.x; if (t.y < minY) minY = t.y;
+    if (t.x > maxX) maxX = t.x; if (t.y > maxY) maxY = t.y;
+  }
+  if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) {
+    minX = 0; minY = 0; maxX = 1; maxY = 1;
+  }
+  minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+
+  const widthM = Math.max(maxX - minX, 0.1);
+  const heightM = Math.max(maxY - minY, 0.1);
+  const widthPx = Math.min(widthM * ppm, 6000);
+  const heightPx = Math.min(heightM * ppm, 6000);
+
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const X = x => ((x - minX) * ppm).toFixed(1);
+  const Y = y => (heightPx - (y - minY) * ppm).toFixed(1); // flip y (screen down)
+
+  const shapes = polys.map(poly => {
+    const ptsAttr = (poly.points || []).map(([x, y]) => `${X(x)},${Y(y)}`).join(' ');
+    return `<polygon points="${ptsAttr}" fill="none" stroke="#26418f" stroke-width="1.5"/>`;
+  }).join('\n  ');
+
+  const labels = texts.map(t =>
+    `<text x="${X(t.x)}" y="${Y(t.y)}" text-anchor="middle" font-family="monospace" font-size="10" fill="#333">${esc(t.text)}</text>`
+  ).join('\n  ');
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx.toFixed(0)}" height="${heightPx.toFixed(0)}" viewBox="0 0 ${widthPx.toFixed(0)} ${heightPx.toFixed(0)}">
+  <rect x="0" y="0" width="${widthPx.toFixed(0)}" height="${heightPx.toFixed(0)}" fill="#ffffff"/>
+  ${shapes}
+  ${labels}
+</svg>`;
+}

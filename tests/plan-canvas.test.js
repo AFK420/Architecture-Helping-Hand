@@ -9,7 +9,8 @@
 import {
   createViewTransform, worldToSvg, svgToWorld, zoomAt, panBy,
   buildGrid, snapToGrid, snapRect, pickEntities, wallRect,
-  createHistory, entityAddRemoveCommand, entityMoveCommand
+  createHistory, entityAddRemoveCommand, entityMoveCommand,
+  planToExportGeometry, generatePlanSVG
 } from '../src/core/plan-canvas.js';
 import {
   createRoom, roomArea, roomPerimeter, roomAspectRatio, roomContainsPoint, rectsIntersect,
@@ -18,6 +19,7 @@ import {
   placeFurniture, furnitureRect
 } from '../src/core/entities.js';
 import { FURNITURE_DATABASE, getScaledFurnitureDimensions } from '../src/core/furniture.js';
+import { wrapSVGDocument, buildDXF } from '../src/core/export/export-model.js';
 
 let passed = 0;
 let failed = 0;
@@ -314,6 +316,46 @@ console.log('\n--- 7. Undo/Redo ---');
     history.push(cmd);
   }
   assert(history.depth() <= 3, 'History depth bounded');
+}
+
+// ---------------------------------------------------------------------------
+// P14: Plan → Export geometry (SVG/DXF) — closes the plan-export dead end
+// ---------------------------------------------------------------------------
+console.log('\n--- Plan export geometry ---');
+
+{
+  const room = createRoom({ name: 'Living', x: 0, y: 0, width: 4.8, depth: 3.2 });
+  const wall = createWall({ name: 'W1', x1: 0, y1: 0, x2: 4.8, y2: 0, thickness: 0.2 });
+  const sofa = placeFurniture({ wCm: 220, dCm: 90, x: 0.3, y: 0.3, name: 'Sofa' });
+  const geo = planToExportGeometry([room, wall, sofa]);
+
+  assertEqual(geo.polygons.length, 3, 'Room, wall footprint, and furniture become closed polygons');
+  assertEqual(geo.polygons[0].points.length, 4, 'Room polygon has four corners');
+  assertClose(geo.polygons[0].points[2][0], 4.8, 'Room polygon corner matches real geometry');
+  assertEqual(geo.texts.length, 2, 'Room and furniture labeled (walls unlabeled)');
+  assertEqual(geo.lines.length, 0, 'No stray line entities');
+
+  // Wall footprint honors thickness
+  const wallPoly = geo.polygons[1];
+  assertClose(wallPoly.points[2][1] - wallPoly.points[0][1], 0.2, 'Wall polygon depth equals wall thickness');
+
+  // SVG generation
+  const svg = generatePlanSVG(geo);
+  assert(svg.includes('<svg') && svg.includes('xmlns='), 'Plan SVG is standalone with namespace');
+  assert(svg.includes('Living') && svg.includes('Sofa'), 'Plan SVG carries labels');
+  assert(!svg.includes('<img'), 'Plan SVG contains no foreign elements');
+  const wrapped = wrapSVGDocument(svg);
+  assert(wrapped.startsWith('<?xml'), 'Plan SVG wraps into an export document');
+
+  // DXF generation (through the real exporter's polyline path)
+  const dxf = buildDXF(geo.polygons.map(p => ({ type: 'polyline', closed: true, layer: 'PLAN', points: p.points })));
+  assert(dxf.includes('POLYLINE') && dxf.includes('SEQEND') && dxf.includes('EOF'), 'Plan polygons export as closed DXF polylines');
+
+  // Empty / hostile inputs stay safe
+  const emptySvg = generatePlanSVG(planToExportGeometry([]));
+  assert(emptySvg.includes('<svg'), 'Empty plan still produces a valid SVG frame');
+  const hostile = planToExportGeometry([null, undefined, { kind: 'room' }, '<script>x</script>']);
+  assert(Array.isArray(hostile.polygons) && hostile.texts.every(t => !t.text.includes('<')), 'Hostile entities skipped; labels escaped downstream');
 }
 
 console.log(`\nSummary: ${passed} passed, ${failed} failed.\n`);
