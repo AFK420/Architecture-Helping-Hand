@@ -187,6 +187,19 @@ console.log('\n--- 3. Facts pack ---');
   assert(pack.data.rooms.length === 2, 'Data section structured');
 }
 
+{
+  // P14 hardening: malformed plan entities and project containers must not
+  // crash the context build (imported documents are envelope-validated only)
+  const pack = buildFactsPack({ metadata: null, dimensions: 'oops' }, [null, undefined, { kind: 'room' }]);
+  assert(Array.isArray(pack.factChecks), 'Null/garbage entities do not crash the facts pack');
+  assertEqual(pack.factChecks.length, 0, 'Rooms without geometry emit no factChecks');
+
+  const nanRoom = { kind: 'room', id: 'r1', name: 'Broken', x: NaN, width: NaN, depth: 3.2 };
+  const nanPack = buildFactsPack({}, [nanRoom]);
+  assert(!nanPack.factChecks.some(f => f.value === null || !isFinite(f.value)), 'NaN-geometry room excluded from numeric fact checks');
+  assert(nanPack.data.rooms.length === 1, 'NaN room still listed (honestly null), never silently dropped from the text');
+}
+
 // ---------------------------------------------------------------------------
 // 4. Structured validation & trust
 // ---------------------------------------------------------------------------
