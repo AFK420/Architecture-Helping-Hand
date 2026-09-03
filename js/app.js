@@ -11480,6 +11480,25 @@ function createProjectStore(options = {}) {
    * project that still contains that snapshot (restores never delete the
    * snapshot being restored, nor any earlier ones).
    */
+  /**
+   * Strips the embedded payloads of PRIOR snapshots from a project copy.
+   * Snapshot N embeds the whole document as it was at time N — if that
+   * document still contains snapshots 1..N-1 WITH their payloads, storage
+   * grows O(n²) and blows the localStorage quota around snapshot 9-10 on
+   * a real project. Payload-stripping prior snapshots inside the embedded
+   * copy keeps every snapshot O(document size): restore re-attaches the
+   * payloads from the LIVE snapshot container (ids are stable, the live
+   * container always outlives any restore — see restoreSnapshot).
+   */
+  function stripEmbeddedSnapshotPayloads(projectCopy) {
+    if (projectCopy && Array.isArray(projectCopy.snapshots)) {
+      projectCopy.snapshots = projectCopy.snapshots.map(s =>
+        s && typeof s === 'object' ? { ...s, project: null } : s
+      );
+    }
+    return projectCopy;
+  }
+
   function createSnapshot(label) {
     if (!currentProject) return { ok: false, errors: ['no project to snapshot'] };
     const snapshot = {
@@ -11494,8 +11513,10 @@ function createProjectStore(options = {}) {
       return draft;
     });
     if (!registered.ok) return registered;
-    // Phase 2: embed a copy of the doc that now CONTAINS this snapshot
-    const embedded = cloneProject(currentProject);
+    // Phase 2: embed a copy of the doc that now CONTAINS this snapshot.
+    // Prior snapshots' payloads are stripped inside the embedded copy to
+    // keep the container linear in document size (see helper above).
+    const embedded = stripEmbeddedSnapshotPayloads(cloneProject(currentProject));
     currentProject.snapshots = currentProject.snapshots.map(s =>
       s.id === snapshot.id ? { ...s, project: embedded } : s
     );
@@ -11508,6 +11529,13 @@ function createProjectStore(options = {}) {
   /**
    * Restores a snapshot: replaces the current project with the snapshot's
    * stored copy (a structured copy — the snapshot itself is preserved).
+   *
+   * The embedded copy carries prior snapshots with STRIPPED payloads
+   * (storage-size contract). The live container still holds every payload
+   * for snapshots that existed when the snapshot was taken; re-attach
+   * those payloads by id so a restore never loses a snapshot's payload.
+   * Payloads for snapshots created AFTER the embedded point are, and must
+   * be, absent from the restored state — they did not exist then.
    */
   function restoreSnapshot(snapshotId) {
     if (!currentProject) return { ok: false, errors: ['no project open'] };
@@ -11515,7 +11543,20 @@ function createProjectStore(options = {}) {
     if (!snap || !snap.project) return { ok: false, errors: [`snapshot "${snapshotId}" not found`] };
     const check = validateProject(snap.project);
     if (!check.ok) return { ok: false, errors: check.errors };
-    currentProject = normalizeProject(cloneProject(snap.project));
+    const restored = normalizeProject(cloneProject(snap.project));
+    if (Array.isArray(restored.snapshots)) {
+      const payloadById = new Map(
+        currentProject.snapshots
+          .filter(s => s && s.project)
+          .map(s => [s.id, s.project])
+      );
+      restored.snapshots = restored.snapshots.map(s =>
+        s && typeof s === 'object' && !s.project && payloadById.has(s.id)
+          ? { ...s, project: cloneProject(payloadById.get(s.id)) }
+          : s
+      );
+    }
+    currentProject = restored;
     const saved = saveProject();
     if (!saved.ok) return saved;
     notify('restore', currentProject);

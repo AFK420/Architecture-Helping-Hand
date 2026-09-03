@@ -158,6 +158,36 @@ console.log('\n--- 2. Snapshots ---');
   assert(!store.restoreSnapshot('missing').ok, 'Restoring missing snapshot fails cleanly');
 }
 
+{
+  // P14 hardening: snapshot embedding must stay LINEAR in document size.
+  // Regression pin — the original implementation embedded the whole doc
+  // (including prior snapshots WITH their payloads) into every new
+  // snapshot, growing O(n²) until localStorage quota broke persistence
+  // around snapshot 9-10 on a real project.
+  const storage = makeStorage();
+  const store = createProjectStore({ storage, generateId: () => 'proj-snap-linear' });
+  store.createNewProject({ name: 'Linear Snapshots' });
+  const sizes = [];
+  for (let i = 1; i <= 6; i++) {
+    store.updateProject(d => { d.notes.push({ id: `n${i}`, title: 't', body: 'x'.repeat(1000) }); return d; });
+    const r = store.createSnapshot(`snap ${i}`);
+    const s = store.getProject().snapshots.find(x => x.id === r.snapshotId);
+    sizes.push(JSON.stringify(s).length);
+  }
+  // Linear growth: each step adds ~document size (~1.1KB), not the
+  // cumulative sum. The last step must add far less than doubling.
+  const lastStep = sizes[5] - sizes[4];
+  assert(lastStep < 5000, `Snapshot embedding grows linearly (last step +${lastStep} bytes, was +40912 before the fix)`);
+  // Every snapshot still carries a restorable payload
+  assert(store.getProject().snapshots.every(s => s.project), 'Every snapshot keeps a restorable payload');
+
+  // Restore the MIDDLE snapshot: payloads of still-existing snapshots survive
+  const snap1 = store.getProject().snapshots[0].id;
+  const restored = store.restoreSnapshot(snap1);
+  assert(restored.ok, 'Restore after payload-stripping works');
+  assert(store.getProject().snapshots.some(s => s.id === snap1 && s.project), 'Snapshot payload survives its own restore (re-attached by id)');
+}
+
 // ---------------------------------------------------------------------------
 // 3. Active envelope untouched by library operations
 // ---------------------------------------------------------------------------
