@@ -21,6 +21,7 @@
 import {
   PROJECT_SCHEMA_VERSION,
   PROJECT_STORE_KEY,
+  PROJECT_LIBRARY_KEY,
   createProject,
   validateProject,
   normalizeProject,
@@ -281,6 +282,170 @@ export function createProjectStore(options = {}) {
     return currentProject;
   }
 
+  // ------------------------------------------------------------------
+  // Multi-project library (Phase 2: Project Workspace)
+  // Stored under a separate key: { version, projects: { id: projectDoc } }
+  // The active project stays in the single-project envelope for backward
+  // compatibility with existing persistence.
+  // ------------------------------------------------------------------
+
+  function readLibrary() {
+    let raw;
+    try {
+      raw = storage.getItem(PROJECT_LIBRARY_KEY);
+    } catch (e) {
+      return { ok: false, errors: ['storage unavailable'], library: null };
+    }
+    if (!raw) return { ok: true, library: { version: CURRENT_STORE_VERSION, projects: {} } };
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      return { ok: false, errors: ['project library is not valid JSON'], library: null };
+    }
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.projects !== 'object' || parsed.projects === null) {
+      return { ok: false, errors: ['project library envelope malformed'], library: null };
+    }
+    return { ok: true, library: parsed };
+  }
+
+  function writeLibrary(library) {
+    try {
+      storage.setItem(PROJECT_LIBRARY_KEY, JSON.stringify({ ...library, version: CURRENT_STORE_VERSION }));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * Lists saved project summaries (id, name, updatedAt) — newest first.
+   * Corrupted entries are skipped and reported, never thrown.
+   */
+  function listProjects() {
+    const res = readLibrary();
+    if (!res.ok) return { ok: false, errors: res.errors, projects: [] };
+    const summaries = [];
+    for (const [id, doc] of Object.entries(res.library.projects)) {
+      try {
+        const check = validateProject(doc);
+        if (!check.ok) continue;
+        summaries.push({
+          id,
+          name: doc.metadata?.name || 'Untitled Project',
+          updatedAt: doc.metadata?.updatedAt || doc.metadata?.createdAt || '',
+          createdAt: doc.metadata?.createdAt || ''
+        });
+      } catch (e) { /* skip corrupted */ }
+    }
+    summaries.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    return { ok: true, projects: summaries };
+  }
+
+  /**
+   * Saves (upserts) the current project into the library under its id.
+   */
+  function saveProjectToLibrary() {
+    if (!currentProject) return { ok: false, errors: ['no project to save'] };
+    const check = validateProject(currentProject);
+    if (!check.ok) return { ok: false, errors: check.errors };
+    const res = readLibrary();
+    if (!res.ok) return { ok: false, errors: res.errors };
+    res.library.projects[currentProject.id] = currentProject;
+    if (!writeLibrary(res.library)) {
+      return { ok: false, errors: ['storage write failed (quota or unavailable)'] };
+    }
+    notify('library-save', currentProject);
+    return { ok: true, id: currentProject.id };
+  }
+
+  /**
+   * Loads a project from the library by id (replaces in-memory current).
+   */
+  function loadProjectFromLibrary(id) {
+    if (typeof id !== 'string' || !id) {
+      return { ok: false, errors: ['loadProjectFromLibrary requires a project id'] };
+    }
+    const res = readLibrary();
+    if (!res.ok) return { ok: false, errors: res.errors };
+    const doc = res.library.projects[id];
+    if (!doc) return { ok: false, errors: [`project "${id}" not found in library`] };
+    const check = validateProject(doc);
+    if (!check.ok) return { ok: false, errors: check.errors };
+    currentProject = normalizeProject(doc);
+    notify('open', currentProject);
+    return { ok: true, project: currentProject };
+  }
+
+  /**
+   * Deletes a project from the library. The ACTIVE project envelope is
+   * untouched — deleting a library copy never destroys the open document.
+   */
+  function deleteProject(id) {
+    const res = readLibrary();
+    if (!res.ok) return { ok: false, errors: res.errors };
+    if (!res.library.projects[id]) {
+      return { ok: false, errors: [`project "${id}" not found in library`] };
+    }
+    delete res.library.projects[id];
+    if (!writeLibrary(res.library)) {
+      return { ok: false, errors: ['storage write failed (quota or unavailable)'] };
+    }
+    notify('delete', { id });
+    return { ok: true };
+  }
+
+  /**
+   * Creates a structured snapshot of the current project inside its own
+   * snapshots container (structured copy — no branching/merge machinery).
+   *
+   * Semantics: the snapshot's embedded copy is taken AFTER the snapshot is
+   * registered in the container, so restoring any snapshot always yields a
+   * project that still contains that snapshot (restores never delete the
+   * snapshot being restored, nor any earlier ones).
+   */
+  function createSnapshot(label) {
+    if (!currentProject) return { ok: false, errors: ['no project to snapshot'] };
+    const snapshot = {
+      id: `snap-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      label: typeof label === 'string' && label ? label : `Snapshot ${currentProject.snapshots.length + 1}`,
+      createdAt: nowFn().toISOString(),
+      project: null
+    };
+    // Phase 1: register the (copy- pending) snapshot in the current doc
+    const registered = updateProject(draft => {
+      draft.snapshots.push(snapshot);
+      return draft;
+    });
+    if (!registered.ok) return registered;
+    // Phase 2: embed a copy of the doc that now CONTAINS this snapshot
+    const embedded = cloneProject(currentProject);
+    currentProject.snapshots = currentProject.snapshots.map(s =>
+      s.id === snapshot.id ? { ...s, project: embedded } : s
+    );
+    const saved = saveProject();
+    if (!saved.ok) return saved;
+    notify('snapshot', currentProject);
+    return { ok: true, snapshotId: snapshot.id, snapshot: cloneProject(currentProject.snapshots.find(s => s.id === snapshot.id)) };
+  }
+
+  /**
+   * Restores a snapshot: replaces the current project with the snapshot's
+   * stored copy (a structured copy — the snapshot itself is preserved).
+   */
+  function restoreSnapshot(snapshotId) {
+    if (!currentProject) return { ok: false, errors: ['no project open'] };
+    const snap = currentProject.snapshots.find(s => s.id === snapshotId);
+    if (!snap || !snap.project) return { ok: false, errors: [`snapshot "${snapshotId}" not found`] };
+    const check = validateProject(snap.project);
+    if (!check.ok) return { ok: false, errors: check.errors };
+    currentProject = normalizeProject(cloneProject(snap.project));
+    const saved = saveProject();
+    if (!saved.ok) return saved;
+    notify('restore', currentProject);
+    return { ok: true, project: currentProject };
+  }
+
   /**
    * Non-destructive legacy import: copies supported legacy payloads into the
    * current project document without deleting the original keys.
@@ -343,6 +508,12 @@ export function createProjectStore(options = {}) {
     createNewProject,
     importLegacy,
     reset,
+    listProjects,
+    saveProjectToLibrary,
+    loadProjectFromLibrary,
+    deleteProject,
+    createSnapshot,
+    restoreSnapshot,
     get CURRENT_VERSION() { return CURRENT_STORE_VERSION; }
   };
 }

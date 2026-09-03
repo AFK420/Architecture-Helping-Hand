@@ -31,6 +31,7 @@ const testFiles = [
   'ramps.test.js',
   'slopes.test.js',
   'export.test.js',
+  'project-workspace.test.js',
   'services.test.js',
   'commands.test.js',
   'data-integrity.test.js',

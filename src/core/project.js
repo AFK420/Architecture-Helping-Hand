@@ -27,6 +27,9 @@ export const PROJECT_SCHEMA_VERSION = 1;
 /** Storage envelope key for the versioned project store. */
 export const PROJECT_STORE_KEY = 'archiscale_project_store';
 
+/** Storage key for the multi-project library (Phase 2: Project Workspace). */
+export const PROJECT_LIBRARY_KEY = 'archiscale_project_library';
+
 /** Legacy per-feature keys (read-only here; migration is non-destructive). */
 export const LEGACY_STORAGE_KEYS = Object.freeze({
   workspace: 'archiscale_dimension_workspace',

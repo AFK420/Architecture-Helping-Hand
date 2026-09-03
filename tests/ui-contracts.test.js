@@ -34,7 +34,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
 // 1. Verify Mode Navigation Targets in HTML
 {
-  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff', 'stairs', 'ramps', 'slopes', 'export'];
+  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff', 'stairs', 'ramps', 'slopes', 'export', 'projects'];
   
   for (const mode of expectedModes) {
     const hasTab = htmlContent.includes(`data-mode="${mode}"`);
@@ -536,6 +536,26 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'btn-export-download',
     'btn-export-copy',
     'btn-export-print',
+    // Project Workspace (Mode 18)
+    'projects-name-input',
+    'projects-desc-input',
+    'projects-current-info',
+    'btn-project-new',
+    'btn-project-save',
+    'btn-project-rename',
+    'btn-project-duplicate',
+    'btn-project-delete',
+    'btn-project-export-json',
+    'projects-error-msg',
+    'projects-import-box',
+    'btn-project-import',
+    'projects-result-panel',
+    'projects-state-badge',
+    'projects-count-badge',
+    'projects-library-list',
+    'projects-snapshot-label',
+    'btn-project-snapshot',
+    'projects-snapshots-list',
 
     // Quick Dimension Strip IDs
     'quick-dimension-strip',

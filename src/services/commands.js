@@ -242,6 +242,16 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
+    id: 'nav-projects',
+    title: 'Project Workspace',
+    description: 'Manage design projects: new, open, save, duplicate, snapshots (design options), and validated JSON import',
+    category: 'Navigation',
+    icon: '🗂',
+    keywords: ['project', 'workspace', 'open', 'save', 'snapshot', 'duplicate', 'import', 'new', 'mode 18'],
+    actionType: 'navigation',
+    available: true
+  },
+  {
     id: 'nav-cad-clipboard',
     title: 'CAD Clipboard & Formats',
     description: 'Instant CAD-ready copy formatting for AutoCAD, Rhino, Revit, SketchUp, and Spreadsheets',

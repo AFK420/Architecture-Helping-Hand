@@ -78,6 +78,7 @@ export const BUNDLE_MODULES = [
   { name: 'ViewRamps', file: path.join(srcDir, 'ui', 'views', 'ramps.js') },
   { name: 'ViewSlopes', file: path.join(srcDir, 'ui', 'views', 'slopes.js') },
   { name: 'ViewExportCenter', file: path.join(srcDir, 'ui', 'views', 'export-center.js') },
+  { name: 'ViewProjects', file: path.join(srcDir, 'ui', 'views', 'projects.js') },
   { name: 'App', file: path.join(srcDir, 'ui', 'app.js') }
 ];
 

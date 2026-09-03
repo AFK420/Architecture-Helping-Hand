@@ -106,6 +106,7 @@ import { createStairsView } from './views/stairs.js';
 import { createRampsView } from './views/ramps.js';
 import { createSlopesView } from './views/slopes.js';
 import { createExportCenterView } from './views/export-center.js';
+import { createProjectsView } from './views/projects.js';
 import { StorageService } from '../services/storage.js';
 import { createProjectStore } from '../services/store.js';
 import { AudioService } from '../services/audio.js';
@@ -356,7 +357,10 @@ export function initializeApp() {
     // Mode 17: Export Center
     exportCenter: {
       lastResult: null
-    }
+    },
+
+    // Mode 18: Project Workspace
+    projects: {}
   };
 
   // DOM Elements Cache (Strictly normalized with index.html)
@@ -924,7 +928,28 @@ export function initializeApp() {
     exportPreviewBox: document.getElementById('export-preview-box'),
     btnExportDownload: document.getElementById('btn-export-download'),
     btnExportCopy: document.getElementById('btn-export-copy'),
-    btnExportPrint: document.getElementById('btn-export-print')
+    btnExportPrint: document.getElementById('btn-export-print'),
+
+    // Mode 18: Project Workspace Elements
+    projectsNameInput: document.getElementById('projects-name-input'),
+    projectsDescInput: document.getElementById('projects-desc-input'),
+    projectsCurrentInfo: document.getElementById('projects-current-info'),
+    btnProjectNew: document.getElementById('btn-project-new'),
+    btnProjectSave: document.getElementById('btn-project-save'),
+    btnProjectRename: document.getElementById('btn-project-rename'),
+    btnProjectDuplicate: document.getElementById('btn-project-duplicate'),
+    btnProjectDelete: document.getElementById('btn-project-delete'),
+    btnProjectExportJson: document.getElementById('btn-project-export-json'),
+    projectsErrorMsg: document.getElementById('projects-error-msg'),
+    projectsImportBox: document.getElementById('projects-import-box'),
+    btnProjectImport: document.getElementById('btn-project-import'),
+    projectsResultPanel: document.getElementById('projects-result-panel'),
+    projectsStateBadge: document.getElementById('projects-state-badge'),
+    projectsCountBadge: document.getElementById('projects-count-badge'),
+    projectsLibraryList: document.getElementById('projects-library-list'),
+    projectsSnapshotLabel: document.getElementById('projects-snapshot-label'),
+    btnProjectSnapshot: document.getElementById('btn-project-snapshot'),
+    projectsSnapshotsList: document.getElementById('projects-snapshots-list')
   };
 
   // ---------------------------------------------------------------------------
@@ -1117,6 +1142,9 @@ export function initializeApp() {
     }
     else if (targetMode === 'export') {
       views.callController('export', 'build');
+    }
+    else if (targetMode === 'projects') {
+      views.callController('projects', 'renderAll');
     }
   }
 
@@ -2525,6 +2553,9 @@ export function initializeApp() {
         break;
       case 'nav-export':
         switchMode('export');
+        break;
+      case 'nav-projects':
+        switchMode('projects');
         break;
       case 'nav-cad-clipboard':
         switchMode('cad_clipboard');
@@ -4672,6 +4703,32 @@ export function initializeApp() {
       dom.btnExportPrint.addEventListener('click', () => views.callController('export', 'print'));
     }
 
+    // Mode 18: Project Workspace Listeners
+    if (dom.btnProjectNew) {
+      dom.btnProjectNew.addEventListener('click', () => views.callController('projects', 'newProject'));
+    }
+    if (dom.btnProjectSave) {
+      dom.btnProjectSave.addEventListener('click', () => views.callController('projects', 'saveProject'));
+    }
+    if (dom.btnProjectRename) {
+      dom.btnProjectRename.addEventListener('click', () => views.callController('projects', 'applyInfo'));
+    }
+    if (dom.btnProjectDuplicate) {
+      dom.btnProjectDuplicate.addEventListener('click', () => views.callController('projects', 'duplicateProject'));
+    }
+    if (dom.btnProjectDelete) {
+      dom.btnProjectDelete.addEventListener('click', () => views.callController('projects', 'deleteSelected'));
+    }
+    if (dom.btnProjectExportJson) {
+      dom.btnProjectExportJson.addEventListener('click', () => views.callController('projects', 'exportJson'));
+    }
+    if (dom.btnProjectImport) {
+      dom.btnProjectImport.addEventListener('click', () => views.callController('projects', 'importJson'));
+    }
+    if (dom.btnProjectSnapshot) {
+      dom.btnProjectSnapshot.addEventListener('click', () => views.callController('projects', 'captureSnapshot'));
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -4886,6 +4943,7 @@ export function initializeApp() {
   views.register(createRampsView(viewContext));
   views.register(createSlopesView(viewContext));
   views.register(createExportCenterView(viewContext));
+  views.register(createProjectsView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();
