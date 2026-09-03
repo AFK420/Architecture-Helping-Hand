@@ -8727,6 +8727,582 @@ function entityMoveCommand(entity, dx, dy, label) {
 
 
   // =========================================================================
+  // MODULE: SpacePlanning
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Space Planning Core
+ * Phase 5: deterministic spatial reasoning over plan entities.
+ *
+ * Evidence-first: every check returns numbers explaining the verdict —
+ * never a bare boolean. Clearance values are USER-CONFIGURED study
+ * envelopes, NOT universal legal requirements (labels: User Configured /
+ * Educational Reference / Needs Verification).
+ *
+ * Scope: rectilinear rooms/furniture (axis-aligned rects), straight
+ * corridors. No pathfinding, no terrain, no compliance claims.
+ */
+
+
+
+
+/** Default clearance envelopes (educational study values, user-configurable). */
+const DEFAULT_CLEARANCES = Object.freeze({
+  circulation: 0.9,      // m — common study value for a walkway
+  wheelchairTurning: 1.5, // m — widely taught turning circle diameter (study value)
+  doorApproach: 0.75,    // m — clear space in front of a door (study value)
+  bedSide: 0.6,          // m — walking space beside a bed (study value)
+  deskChair: 0.75,       // m — chair pull-back (study value)
+  diningChair: 0.75      // m — chair pull-back (study value)
+});
+
+/**
+ * Furniture-fit check for one piece inside one room.
+ * @returns {{ verdict: 'fits'|'partial'|'no-fit', evidence: {...} }}
+ */
+function checkFurnitureFit(furniture, room) {
+  if (!furniture || !room) {
+    return { verdict: 'no-fit', evidence: { reason: 'missing furniture or room' } };
+  }
+  const fr = { x: furniture.x, y: furniture.y, width: furniture.width, depth: furniture.depth };
+  const fitsEntirely = fr.x >= room.x - 1e-9 && fr.y >= room.y - 1e-9 &&
+    fr.x + fr.width <= room.x + room.width + 1e-9 &&
+    fr.y + fr.depth <= room.y + room.depth + 1e-9;
+
+  if (fitsEntirely) {
+    return {
+      verdict: 'fits',
+      evidence: {
+        furnitureId: furniture.id, roomId: room.id,
+        furnitureWidth: furniture.width, furnitureDepth: furniture.depth,
+        roomWidth: room.width, roomDepth: room.depth,
+        marginEast: room.x + room.width - (fr.x + fr.width),
+        marginWest: fr.x - room.x,
+        marginNorth: room.y + room.depth - (fr.y + fr.depth),
+        marginSouth: fr.y - room.y
+      }
+    };
+  }
+
+  // Partial: does any part overlap the room?
+  const intersects = rectsIntersect(fr, { x: room.x, y: room.y, width: room.width, depth: room.depth });
+  if (intersects) {
+    return {
+      verdict: 'partial',
+      evidence: {
+        furnitureId: furniture.id, roomId: room.id,
+        reason: 'Furniture partially inside the room — protrudes beyond a wall.',
+        furnitureWidth: furniture.width, furnitureDepth: furniture.depth,
+        roomWidth: room.width, roomDepth: room.depth
+      }
+    };
+  }
+  return {
+    verdict: 'no-fit',
+    evidence: { furnitureId: furniture.id, roomId: room.id, reason: 'Furniture entirely outside the room.' }
+  };
+}
+
+/**
+ * Clearance envelope check: does the furniture respect the requested
+ * clearance on all sides within the room? (Envelope-based, not pathfinding.)
+ */
+function checkClearance(furniture, room, clearanceMeters, clearanceLabel = 'User Configured') {
+  const fr = furniture;
+  const innerRoom = {
+    x: room.x + clearanceMeters,
+    y: room.y + clearanceMeters,
+    width: room.width - 2 * clearanceMeters,
+    depth: room.depth - 2 * clearanceMeters
+  };
+  if (innerRoom.width <= 0 || innerRoom.depth <= 0) {
+    return {
+      satisfied: false, clearanceMeters, clearanceLabel,
+      evidence: { reason: `Room smaller than 2 × clearance (${clearanceMeters} m on each side).` }
+    };
+  }
+  const inside = fr.x >= innerRoom.x - 1e-9 && fr.y >= innerRoom.y - 1e-9 &&
+    fr.x + fr.width <= innerRoom.x + innerRoom.width + 1e-9 &&
+    fr.y + fr.depth <= innerRoom.y + innerRoom.depth + 1e-9;
+
+  return {
+    satisfied: inside,
+    clearanceMeters,
+    clearanceLabel,
+    evidence: inside
+      ? { reason: `Furniture stays within the ${clearanceMeters} m envelope on all sides.` }
+      : {
+          reason: `Furniture breaches the ${clearanceMeters} m envelope on at least one side.`,
+          availableMarginEast: innerRoom.x + innerRoom.width - (fr.x + fr.width),
+          availableMarginWest: fr.x - innerRoom.x,
+          availableMarginNorth: innerRoom.y + innerRoom.depth - (fr.y + fr.depth),
+          availableMarginSouth: fr.y - innerRoom.y
+        }
+  };
+}
+
+/**
+ * Overlap detection between furniture pieces, furniture vs walls, and
+ * furniture outside any room. Deterministic rect math with evidence.
+ */
+function checkOverlaps(furnitureList, rooms, walls) {
+  const conflicts = [];
+  const furn = furnitureList || [];
+  const roomList = rooms || [];
+  const wallList = walls || [];
+
+  // furniture vs furniture
+  for (let i = 0; i < furn.length; i++) {
+    for (let j = i + 1; j < furn.length; j++) {
+      if (rectsIntersect(furn[i], furn[j])) {
+        conflicts.push({
+          type: 'furniture-furniture',
+          a: furn[i].id, b: furn[j].id,
+          aName: furn[i].name, bName: furn[j].name,
+          evidence: `Overlap area between "${furn[i].name}" and "${furn[j].name}".`
+        });
+      }
+    }
+    // furniture vs walls
+    for (const w of wallList) {
+      if (rectsIntersect(furn[i], wallRect(w))) {
+        conflicts.push({
+          type: 'furniture-wall',
+          a: furn[i].id, b: w.id,
+          aName: furn[i].name, bName: w.name,
+          evidence: `"${furn[i].name}" intersects wall "${w.name}".`
+        });
+      }
+    }
+    // furniture outside every room
+    const contained = roomList.some(r =>
+      furn[i].x >= r.x - 1e-9 && furn[i].y >= r.y - 1e-9 &&
+      furn[i].x + furn[i].width <= r.x + r.width + 1e-9 &&
+      furn[i].y + furn[i].depth <= r.y + r.depth + 1e-9);
+    if (roomList.length > 0 && !contained) {
+      conflicts.push({
+        type: 'furniture-outside-room',
+        a: furn[i].id, b: null,
+        aName: furn[i].name, bName: null,
+        evidence: `"${furn[i].name}" is not fully inside any room.`
+      });
+    }
+  }
+  return { conflicts, count: conflicts.length };
+}
+
+/**
+ * Adjacency: explicit relationships between rooms sharing a wall edge or
+ * declared in the project. Returns satisfied/missing with evidence.
+ * Touch test: rooms are adjacent if any edge of one coincides with an edge
+ * of the other (within epsilon) — corner-only contact is NOT adjacency.
+ */
+function checkAdjacency(adjacencyRequirements, rooms) {
+  const roomList = rooms || [];
+  const eps = 1e-6;
+  const results = (adjacencyRequirements || []).map(req => {
+    const a = roomList.find(r => r.id === req.a || r.name === req.a);
+    const b = roomList.find(r => r.id === req.b || r.name === req.b);
+    if (!a || !b) {
+      return { ...req, satisfied: false, evidence: 'One or both rooms do not exist in the plan.' };
+    }
+    // Vertical edge shared: a right edge == b left edge (or vice versa), with y-overlap
+    const verticalTouch =
+      (Math.abs((a.x + a.width) - b.x) < eps || Math.abs((b.x + b.width) - a.x) < eps) &&
+      a.y < b.y + b.depth - eps && b.y < a.y + a.depth - eps;
+    // Horizontal edge shared: a top edge == b bottom edge (or vice versa), with x-overlap
+    const horizontalTouch =
+      (Math.abs((a.y + a.depth) - b.y) < eps || Math.abs((b.y + b.depth) - a.y) < eps) &&
+      a.x < b.x + b.width - eps && b.x < a.x + a.width - eps;
+    const touching = verticalTouch || horizontalTouch;
+    return {
+      ...req,
+      satisfied: touching,
+      evidence: touching
+        ? `"${a.name}" and "${b.name}" share an edge.`
+        : `"${a.name}" and "${b.name}" do not share an edge in the current plan.`
+    };
+  });
+  const satisfiedCount = results.filter(r => r.satisfied).length;
+  return { results, satisfiedCount, total: results.length };
+}
+
+/**
+ * Efficiency metrics for a plan. Formulas documented in evidence.
+ */
+function calculateEfficiency(rooms, furnitureList, circulationAreaM2 = 0) {
+  const roomList = rooms || [];
+  const furn = furnitureList || [];
+  const totalRoomArea = roomList.reduce((acc, r) => acc + roomArea(r), 0);
+  const occupiedArea = furn.reduce((acc, f) => acc + f.width * f.depth, 0);
+  const circulation = Math.max(0, circulationAreaM2);
+  const usableArea = Math.max(0, totalRoomArea - occupiedArea - circulation);
+  return {
+    totalRoomAreaM2: totalRoomArea,
+    occupiedAreaM2: occupiedArea,
+    circulationAreaM2: circulation,
+    usableAreaM2: usableArea,
+    occupancyPercent: totalRoomArea > 0 ? (occupiedArea / totalRoomArea) * 100 : 0,
+    circulationPercent: totalRoomArea > 0 ? (circulation / totalRoomArea) * 100 : 0,
+    furnitureCount: furn.length,
+    roomCount: roomList.length,
+    formulaNotes: {
+      usableArea: 'totalRoomArea − occupiedArea − circulationArea',
+      occupancyPercent: 'occupiedArea / totalRoomArea × 100',
+      circulationPercent: 'circulationArea / totalRoomArea × 100',
+      note: 'Circulation area is user-supplied (rectangle sum or estimate) — the analyzer does not pathfind.'
+    }
+  };
+}
+
+/**
+ * Layout comparison across snapshots/options: shows differences rather than
+ * declaring a winner.
+ */
+function compareLayouts(layouts) {
+  const rows = (layouts || []).map((l, idx) => ({
+    label: l.label || `Option ${String.fromCharCode(65 + idx)}`,
+    roomCount: (l.rooms || []).length,
+    totalAreaM2: (l.rooms || []).reduce((acc, r) => acc + roomArea(r), 0),
+    furnitureCount: (l.furniture || []).length,
+    conflicts: l.conflicts !== undefined ? l.conflicts : (l.furniture || []).length,
+    efficiency: l.efficiency || null
+  }));
+  const best = rows.reduce((acc, r) => (r.conflicts < acc.conflicts ? r : acc), rows[0] || null);
+  return {
+    rows,
+    fewestConflicts: best ? best.label : null,
+    note: 'Differences are shown, not judged. Choose per brief: area, conflicts, adjacency, and efficiency trade off against each other.'
+  };
+}
+
+/**
+ * Simple corridor-width check: minimum unobstructed passage between two
+ * parallel boundaries on a straight segment (no pathfinding).
+ */
+function checkCorridorWidth(corridorRect, obstacles, minwidthMeters = DEFAULT_CLEARANCES.circulation) {
+  // Corridor modeled as a rect; obstacles intersecting it reduce usable width.
+  // Simplified evidence: list obstructions and compare with the minimum width.
+  const obstructions = (obstacles || []).filter(o => rectsIntersect(corridorRect, o));
+  return {
+    corridorWidthMeters: corridorRect.width,
+    minimumRequiredMeters: minwidthMeters,
+    obstructionCount: obstructions.length,
+    obstructions: obstructions.map(o => o.name || o.id),
+    clear: obstructions.length === 0 && corridorRect.width >= minwidthMeters - 1e-9,
+    evidence: obstructions.length > 0
+      ? `${obstructions.length} obstruction(s) inside the corridor envelope.`
+      : `Corridor is ${corridorRect.width.toFixed(2)} m wide (minimum ${minwidthMeters} m).`
+  };
+}
+
+
+  // =========================================================================
+  // MODULE: Survey
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Survey & Calibration Core
+ * Phases 6+7: measurement notebook with provenance + raster image
+ * calibration math. Pure, deterministic, zero-DOM.
+ *
+ * Survey measurements keep provenance (source + verification status) and
+ * may stay uncertain — recording does not force geometry.
+ * Calibration maps image pixels ↔ world meters through a two-point known
+ * distance; the math is exact and testable without a browser.
+ */
+
+
+
+// ---------------------------------------------------------------------------
+// Phase 6: Survey / Measurement Notebook
+// ---------------------------------------------------------------------------
+
+const MEASUREMENT_SOURCES = Object.freeze([
+  'Measured', 'Estimated', 'Imported', 'AI Interpreted', 'User Entered'
+]);
+
+const MEASUREMENT_STATUSES = Object.freeze([
+  'Verified', 'Unverified', 'Needs Review'
+]);
+
+/**
+ * Creates a survey measurement record. Values are stored as entered plus a
+ * canonical meters field when parseable; uncertain records stay records.
+ */
+function createMeasurement({ id, label, value, unit = 'm', source = 'Measured', status = 'Unverified', location = '', note = '', timestamp = null, roomId = null }) {
+  if (typeof label !== 'string' || !label.trim()) {
+    throw new TypeError('Measurement requires a label');
+  }
+  requireFiniteNumber(value, 'measurement.value');
+  if (value <= 0) throw new Error('Measurement value must be greater than zero');
+  if (!MEASUREMENT_SOURCES.includes(source)) {
+    throw new Error(`Invalid measurement source "${source}". Valid: ${MEASUREMENT_SOURCES.join(', ')}`);
+  }
+  if (!MEASUREMENT_STATUSES.includes(status)) {
+    throw new Error(`Invalid measurement status "${status}". Valid: ${MEASUREMENT_STATUSES.join(', ')}`);
+  }
+  return {
+    kind: 'measurement',
+    id: id || `meas-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    label: label.trim(),
+    value,
+    unit,
+    meters: null, // filled by the caller with the unit system (kept pure here)
+    source,
+    status,
+    location: typeof location === 'string' ? location : '',
+    note: typeof note === 'string' ? note : '',
+    timestamp: timestamp || new Date().toISOString(),
+    roomId
+  };
+}
+
+/** Marks a measurement verified / needs-review (returns a new record). */
+function setMeasurementStatus(measurement, status) {
+  if (!MEASUREMENT_STATUSES.includes(status)) {
+    throw new Error(`Invalid status "${status}"`);
+  }
+  return { ...measurement, status };
+}
+
+/** Survey summary: counts by status and source, flagged items. */
+function summarizeSurvey(measurements) {
+  const list = measurements || [];
+  return {
+    total: list.length,
+    byStatus: MEASUREMENT_STATUSES.reduce((acc, s) => ({ ...acc, [s]: list.filter(m => m.status === s).length }), {}),
+    bySource: MEASUREMENT_SOURCES.reduce((acc, s) => ({ ...acc, [s]: list.filter(m => m.source === s).length }), {}),
+    needsAttention: list.filter(m => m.status !== 'Verified').map(m => ({ id: m.id, label: m.label, status: m.status }))
+  };
+}
+
+/**
+ * Converts recorded survey measurements into room-candidate dimensions when
+ * the student explicitly chooses (label convention: "Room W" / "Room D").
+ * Returns a proposal — never silently mutates the plan.
+ */
+function proposeRoomFromMeasurements(measurements, roomName) {
+  const list = measurements || [];
+  const verified = list.filter(m => m.status === 'Verified');
+  const width = list.find(m => /(^|\s)(W|width)$/i.test(m.label)) || verified[0] || null;
+  const depth = list.find(m => /(^|\s)(D|depth)$/i.test(m.label)) || verified[1] || null;
+  return {
+    proposal: width && depth ? {
+      name: roomName || 'Surveyed Room',
+      widthMeters: width.meters !== null ? width.meters : width.value,
+      depthMeters: depth.meters !== null ? depth.meters : depth.value,
+      basedOn: [width.id, depth.id],
+      note: 'Proposal only — the student accepts/edits it before any plan change.'
+    } : null,
+    needsMore: !width || !depth,
+    unverifiedCount: list.filter(m => m.status !== 'Verified').length
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7: Drawing / Image Calibration
+// ---------------------------------------------------------------------------
+
+/**
+ * Creates a calibration from two image points and a known real distance.
+ * Pure math: scale = realMeters / pixelDistance (meters per pixel).
+ */
+function createCalibration({ pointA, pointB, realMeters, unitLabel = 'm' }) {
+  if (!pointA || !pointB || typeof pointA.x !== 'number' || typeof pointA.y !== 'number' ||
+      typeof pointB.x !== 'number' || typeof pointB.y !== 'number') {
+    throw new TypeError('Calibration requires two image points with numeric x/y.');
+  }
+  requireFiniteNumber(realMeters, 'calibration.realMeters');
+  if (realMeters <= 0) throw new Error('Known real distance must be greater than zero');
+  const pixelDistance = Math.hypot(pointB.x - pointA.x, pointB.y - pointA.y);
+  if (pixelDistance <= 0) throw new Error('The two calibration points must differ.');
+  return {
+    kind: 'calibration',
+    pointA, pointB,
+    pixelDistance,
+    realMeters,
+    unitLabel,
+    metersPerPixel: realMeters / pixelDistance,
+    pixelsPerMeter: pixelDistance / realMeters
+  };
+}
+
+/** Converts an image pixel coordinate to calibrated world meters. */
+function pixelToWorld(calibration, px, py) {
+  return {
+    x: px * calibration.metersPerPixel,
+    y: py * calibration.metersPerPixel
+  };
+}
+
+/** Converts world meters back to image pixels. */
+function worldToPixel(calibration, wx, wy) {
+  return {
+    x: wx * calibration.pixelsPerMeter,
+    y: wy * calibration.pixelsPerMeter
+  };
+}
+
+/** Distance between two pixel points, expressed in calibrated meters. */
+function calibratedDistance(calibration, a, b) {
+  const pixelDist = Math.hypot(b.x - a.x, b.y - a.y);
+  return pixelDist * calibration.metersPerPixel;
+}
+
+/**
+ * Chained measurement: sums calibrated segments (point-to-point walk).
+ */
+function calibratedChainDistance(calibration, points) {
+  if (!Array.isArray(points) || points.length < 2) {
+    throw new TypeError('Chained measurement requires at least two points.');
+  }
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    total += calibratedDistance(calibration, points[i - 1], points[i]);
+  }
+  return total;
+}
+
+/** Shoelace area of a pixel polygon, in calibrated square meters. */
+function calibratedPolygonArea(calibration, points) {
+  if (!Array.isArray(points) || points.length < 3) {
+    throw new TypeError('Polygon area requires at least three points.');
+  }
+  let sum = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    sum += a.x * b.y - b.x * a.y;
+  }
+  return Math.abs(sum / 2) * calibration.metersPerPixel ** 2;
+}
+
+// ---------------------------------------------------------------------------
+// Image constraints (weak laptop: conservative limits, documented)
+// ---------------------------------------------------------------------------
+
+const IMAGE_LIMITS = Object.freeze({
+  maxFileBytes: 10 * 1024 * 1024,      // 10 MB import cap
+  maxPixelDimension: 2000,             // downscale longest side to 2000 px
+  recommendedFormats: ['png', 'jpg', 'jpeg', 'webp'],
+  storageNote: 'Image blobs belong in IndexedDB (future) — never base64 in localStorage.'
+});
+
+/** Validates an image descriptor against the documented limits. */
+function validateImageMeta({ widthPx, heightPx, bytes }) {
+  const problems = [];
+  if (typeof bytes === 'number' && bytes > IMAGE_LIMITS.maxFileBytes) {
+    problems.push(`File exceeds the ${IMAGE_LIMITS.maxFileBytes / 1024 / 1024} MB import cap.`);
+  }
+  if (typeof widthPx === 'number' && typeof heightPx === 'number') {
+    const longest = Math.max(widthPx, heightPx);
+    if (longest > IMAGE_LIMITS.maxPixelDimension) {
+      problems.push(`Image will be downscaled: longest side ${longest} px > ${IMAGE_LIMITS.maxPixelDimension} px.`);
+    }
+  }
+  return { ok: problems.length === 0, problems, limits: IMAGE_LIMITS };
+}
+
+
+  // =========================================================================
+  // MODULE: Annotations
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Annotations Core
+ * Phase 8: structured 2D annotation objects for the plan canvas and
+ * calibrated images. Pure data + validation; rendering is the view's job.
+ *
+ * Supported kinds: text, dimension, arrow, line, rect, circle, note-marker.
+ * Annotations live in the project document (id-referenced) and participate
+ * in undo/redo through the plan history.
+ */
+
+
+
+const ANNOTATION_KINDS = Object.freeze([
+  'text', 'dimension', 'arrow', 'line', 'rect', 'circle', 'note'
+]);
+
+/**
+ * Creates a validated annotation. Geometry is in the coordinate space of
+ * whatever layer it belongs to (plan world meters or image pixels) — the
+ * layer field records which.
+ */
+function createAnnotation({ id, kind, layer = 'plan', x, y, x2, y2, text = '', color = 'accent', roomId = null, imageId = null, createdAt = null }) {
+  if (!ANNOTATION_KINDS.includes(kind)) {
+    throw new Error(`Invalid annotation kind "${kind}". Valid: ${ANNOTATION_KINDS.join(', ')}`);
+  }
+  requireFiniteNumber(x, 'annotation.x');
+  requireFiniteNumber(y, 'annotation.y');
+  if (['dimension', 'arrow', 'line', 'rect'].includes(kind)) {
+    requireFiniteNumber(x2, 'annotation.x2');
+    requireFiniteNumber(y2, 'annotation.y2');
+  }
+  if (kind === 'text' && (typeof text !== 'string' || !text.trim())) {
+    throw new Error('Text annotations require non-empty text.');
+  }
+  if (kind === 'note' && (typeof text !== 'string' || !text.trim())) {
+    throw new Error('Note markers require note text.');
+  }
+  if (kind === 'circle') {
+    // circle stores radius in x2
+    requireFiniteNumber(x2, 'annotation.radius');
+    if (x2 <= 0) throw new Error('Circle radius must be greater than zero.');
+  }
+  return {
+    kind: 'annotation',
+    annotationKind: kind,
+    id: id || `ann-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    layer, // 'plan' | 'image'
+    x, y,
+    x2: x2 !== undefined ? x2 : null,
+    y2: y2 !== undefined ? y2 : null,
+    text,
+    color,
+    roomId,
+    imageId,
+    createdAt: createdAt || new Date().toISOString()
+  };
+}
+
+/** Moves an annotation by dx/dy (both anchor and end). Returns a new object. */
+function moveAnnotation(annotation, dx, dy) {
+  return {
+    ...annotation,
+    x: annotation.x + dx,
+    y: annotation.y + dy,
+    x2: annotation.x2 !== null ? annotation.x2 + dx : null,
+    y2: annotation.y2 !== null ? annotation.y2 + dy : null
+  };
+}
+
+/** Dimension annotations expose their measured length (same-space units). */
+function annotationLength(annotation) {
+  if (annotation.annotationKind !== 'dimension' && annotation.annotationKind !== 'line' && annotation.annotationKind !== 'arrow') {
+    return null;
+  }
+  return Math.hypot(annotation.x2 - annotation.x, annotation.y2 - annotation.y);
+}
+
+/** Validates a list of annotation payloads; returns { valid, errors } without throwing. */
+function validateAnnotations(annotations) {
+  const errors = [];
+  for (const a of annotations || []) {
+    try {
+      // Strip wrapper fields so raw payloads validate cleanly
+      const { kind: wrapperKind, id, createdAt, ...rest } = a || {};
+      createAnnotation({ ...rest, kind: rest.annotationKind || a?.annotationKind || a?.kind });
+    } catch (e) {
+      errors.push({ id: a?.id || null, error: e.message });
+    }
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+
+  // =========================================================================
   // MODULE: ExportModel
   // =========================================================================
 

@@ -53,6 +53,9 @@ export const BUNDLE_MODULES = [
   { name: 'Project', file: path.join(srcDir, 'core', 'project.js') },
   { name: 'Entities', file: path.join(srcDir, 'core', 'entities.js') },
   { name: 'PlanCanvas', file: path.join(srcDir, 'core', 'plan-canvas.js') },
+  { name: 'SpacePlanning', file: path.join(srcDir, 'core', 'space-planning.js') },
+  { name: 'Survey', file: path.join(srcDir, 'core', 'survey.js') },
+  { name: 'Annotations', file: path.join(srcDir, 'core', 'annotations.js') },
   { name: 'ExportModel', file: path.join(srcDir, 'core', 'export', 'export-model.js') },
 
   // --- Services ---
