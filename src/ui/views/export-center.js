@@ -134,7 +134,7 @@ export function createExportCenterView(context) {
       dom.exportDxfScaleGroup.style.display = format === 'dxf' ? 'block' : 'none';
     }
 
-    const request = { format, source, projectId: state.slopes ? null : null };
+    const request = { format, source, projectId: null };
     const project = requireProject();
     if (project) request.projectId = project.id;
 
