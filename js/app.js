@@ -9820,6 +9820,1012 @@ function buildExport(request) {
 
 
   // =========================================================================
+  // MODULE: AIProvider
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - AI Provider Abstraction
+ * Phase 9.1-9.5: capability-declared cloud providers. NO local AI, no GPU
+ * inference, no Ollama — the target laptop runs CAD beside the browser.
+ *
+ * Providers are declared, never hard-coded with permanent model ids: the
+ * runtime configuration supplies model names; this module only defines the
+ * provider shape, capability manifest, and error taxonomy. Network calls
+ * happen in services (fetch wrappers) — this module stays importable
+ * headless and defines the CONTRACT.
+ *
+ * Free-cost policy: no paid fallback. When quota is exhausted the
+ * orchestrator reports AI_UNAVAILABLE and the app keeps working.
+ */
+
+/** Error codes shared by all providers (stable contract for the UI). */
+const AI_ERROR_CODES = Object.freeze({
+  PROVIDER_UNCONFIGURED: 'PROVIDER_UNCONFIGURED',   // no API key set
+  NETWORK_ERROR: 'NETWORK_ERROR',                    // fetch failed / offline
+  AUTH_FAILED: 'AUTH_FAILED',                        // 401/403
+  QUOTA_EXHAUSTED: 'QUOTA_EXHAUSTED',                // 429 / free limit
+  TIMEOUT: 'TIMEOUT',
+  INVALID_MODEL: 'INVALID_MODEL',                    // 404 model
+  MALFORMED_RESPONSE: 'MALFORMED_RESPONSE',
+  UNSAFE_CONTENT: 'UNSAFE_CONTENT',                  // provider blocked
+  UNKNOWN: 'UNKNOWN'
+});
+
+/** Capability keys every provider manifest must declare. */
+const AI_CAPABILITIES = Object.freeze([
+  'text', 'reasoning', 'toolCalling', 'structuredOutput', 'vision', 'contextLimit'
+]);
+
+/**
+ * Creates a provider instance from a declaration.
+ *
+ * @param {Object} declaration
+ * @param {string} declaration.id - 'gemini' | 'glm' | ...
+ * @param {string} declaration.label - human name
+ * @param {Object} declaration.capabilities - booleans + contextLimit
+ * @param {Function} declaration.sendPrompt - async ({ systemPrompt, userPrompt, options }) =>
+ *   { ok: true, text } | { ok: false, errorCode, message }  (implemented in services)
+ * @returns {Object} frozen provider handle
+ */
+function createProvider(declaration) {
+  if (!declaration || typeof declaration !== 'object') {
+    throw new TypeError('Provider declaration required');
+  }
+  if (typeof declaration.id !== 'string' || !declaration.id) {
+    throw new TypeError('Provider id required');
+  }
+  if (typeof declaration.sendPrompt !== 'function') {
+    throw new TypeError(`Provider "${declaration.id}" must implement sendPrompt()`);
+  }
+  const capabilities = {};
+  for (const key of AI_CAPABILITIES) {
+    capabilities[key] = declaration.capabilities?.[key] ?? false;
+  }
+  return Object.freeze({
+    id: declaration.id,
+    label: declaration.label || declaration.id,
+    capabilities: Object.freeze(capabilities),
+    sendPrompt: declaration.sendPrompt
+  });
+}
+
+/** True when a provider can serve a request needing the given capabilities. */
+function providerSupports(provider, needed) {
+  if (!provider) return false;
+  for (const key of Object.keys(needed || {})) {
+    if (needed[key] && !provider.capabilities[key]) return false;
+  }
+  return true;
+}
+
+/** Normalizes a provider/network failure into the stable error taxonomy. */
+function normalizeProviderError(err) {
+  if (err && err.errorCode && typeof err.errorCode === 'string' && Object.values(AI_ERROR_CODES).includes(err.errorCode)) {
+    return { errorCode: err.errorCode, message: err.message || 'Provider error' };
+  }
+  if (err && err.aiErrorCode) {
+    return { errorCode: err.aiErrorCode, message: err.message || 'Provider error' };
+  }
+  const message = err?.message || String(err || 'Unknown error');
+  if (/failed to fetch|network|offline/i.test(message)) {
+    return { errorCode: AI_ERROR_CODES.NETWORK_ERROR, message: 'Network unavailable — the app works fully without AI.' };
+  }
+  if (/aborted|timeout/i.test(message)) {
+    return { errorCode: AI_ERROR_CODES.TIMEOUT, message: 'AI request timed out.' };
+  }
+  return { errorCode: AI_ERROR_CODES.UNKNOWN, message };
+}
+
+/** Maps an HTTP status to the taxonomy. */
+function statusCodeToError(status) {
+  if (status === 401 || status === 403) return { errorCode: AI_ERROR_CODES.AUTH_FAILED, message: 'Authentication failed — check the API key.' };
+  if (status === 429) return { errorCode: AI_ERROR_CODES.QUOTA_EXHAUSTED, message: 'AI temporarily unavailable — free provider limit reached.' };
+  if (status === 404) return { errorCode: AI_ERROR_CODES.INVALID_MODEL, message: 'Model not found — check the configured model name.' };
+  if (status >= 500) return { errorCode: AI_ERROR_CODES.NETWORK_ERROR, message: 'Provider server error — try again later.' };
+  return { errorCode: AI_ERROR_CODES.UNKNOWN, message: `Provider returned HTTP ${status}.` };
+}
+
+/**
+ * Runtime key storage (session-only or persisted via StorageService by the
+ * caller). Keys NEVER live in this module's code and are never logged.
+ */
+function createKeyStore(storageAdapter, { sessionOnly = false } = {}) {
+  const key = sessionOnly ? 'archiscale_ai_key_session' : 'archiscale_ai_keys';
+  let memoryKey = null; // session-only keys live only here
+  return {
+    setKey(providerId, apiKey) {
+      if (sessionOnly) {
+        memoryKey = { providerId, apiKey };
+        return true;
+      }
+      try {
+        const all = JSON.parse(storageAdapter.getItem(key) || '{}');
+        all[providerId] = apiKey;
+        storageAdapter.setItem(key, JSON.stringify(all));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    },
+    getKey(providerId) {
+      if (sessionOnly) return memoryKey?.providerId === providerId ? memoryKey.apiKey : null;
+      try {
+        const all = JSON.parse(storageAdapter.getItem(key) || '{}');
+        return all[providerId] || null;
+      } catch (e) {
+        return null;
+      }
+    },
+    clearKey(providerId) {
+      if (sessionOnly) {
+        if (memoryKey?.providerId === providerId) memoryKey = null;
+        return true;
+      }
+      try {
+        const all = JSON.parse(storageAdapter.getItem(key) || '{}');
+        delete all[providerId];
+        storageAdapter.setItem(key, JSON.stringify(all));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    },
+    /** True when a key exists for at least one provider. */
+    hasAnyKey(providerId) {
+      return this.getKey(providerId) !== null;
+    }
+  };
+}
+
+
+  // =========================================================================
+  // MODULE: AIToolRegistry
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - AI Tool Registry
+ * Phase 9.7-9.9: declared tools with schemas and permissions. The model
+ * can only call registered tools; tool calls never evaluate model-generated
+ * code. Every tool executes DETERMINISTIC core functions.
+ *
+ * Permission tiers:
+ *   READ_*  — safe, automatic
+ *   PROPOSE_* — returns a proposal object; UI shows Preview/Accept/Reject
+ *   APPLY_* — requires explicit user approval (handled by the orchestrator)
+ */
+
+/**
+ * @param {Object} tools - map of tool implementations keyed by name
+ */
+function createToolRegistry(tools = {}) {
+  const registry = new Map();
+  for (const [name, tool] of Object.entries(tools)) {
+    registerTool(registry, name, tool);
+  }
+  return {
+    register(name, tool) { registerTool(registry, name, tool); },
+    get: name => registry.get(name) || null,
+    list() {
+      return Array.from(registry.values()).map(t => ({
+        name: t.name, description: t.description, permission: t.permission,
+        inputSchema: t.inputSchema
+      }));
+    },
+    /** Executes a tool call with basic argument validation against the schema. */
+    async execute(name, args) {
+      const tool = registry.get(name);
+      if (!tool) {
+        return { ok: false, error: `Unknown tool "${name}"` };
+      }
+      const validation = validateAgainstSchema(args || {}, tool.inputSchema || {});
+      if (!validation.ok) {
+        return { ok: false, error: `Invalid arguments for ${name}: ${validation.error}` };
+      }
+      try {
+        const result = await tool.handler(args || {});
+        return { ok: true, tool: name, permission: tool.permission, result };
+      } catch (e) {
+        return { ok: false, tool: name, error: e.message };
+      }
+    }
+  };
+}
+
+function registerTool(registry, name, tool) {
+  if (typeof tool.handler !== 'function') {
+    throw new TypeError(`Tool "${name}" needs a handler function`);
+  }
+  if (!tool.permission) {
+    throw new TypeError(`Tool "${name}" needs a permission tier`);
+  }
+  registry.set(name, Object.freeze({
+    name,
+    description: tool.description || '',
+    permission: tool.permission,
+    inputSchema: tool.inputSchema || {},
+    handler: tool.handler
+  }));
+}
+
+/** Minimal schema validation: type + required. (No JSON-schema dep.) */
+function validateAgainstSchema(args, schema) {
+  for (const key of Object.keys(schema)) {
+    const expected = schema[key];
+    const value = args[key];
+    if (value === undefined) {
+      if (expected.required) return { ok: false, error: `missing "${key}"` };
+      continue;
+    }
+    const actual = Array.isArray(value) ? 'array' : typeof value;
+    if (expected.type && actual !== expected.type) {
+      return { ok: false, error: `"${key}" must be ${expected.type}, got ${actual}` };
+    }
+  }
+  return { ok: true };
+}
+
+/** Permission tier constants. */
+const AI_PERMISSIONS = Object.freeze({
+  READ_PROJECT: 'READ_PROJECT',
+  READ_GEOMETRY: 'READ_GEOMETRY',
+  READ_MEASUREMENTS: 'READ_MEASUREMENTS',
+  READ_CALCULATIONS: 'READ_CALCULATIONS',
+  PROPOSE_CHANGE: 'PROPOSE_CHANGE',
+  PROPOSE_NOTE: 'PROPOSE_NOTE',
+  PROPOSE_LAYOUT: 'PROPOSE_LAYOUT',
+  APPLY_CHANGE: 'APPLY_CHANGE'
+});
+
+
+  // =========================================================================
+  // MODULE: AIArchitectureTools
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - AI Tools
+ * Phase 9.7: the tool set exposed to the model. Every handler calls
+ * DETERMINISTIC core functions with REAL project data — the model never
+ * calculates facts the core already knows, and never mutates the project
+ * directly (PROPOSE_* tools return proposal objects for the user).
+ */
+
+
+
+
+
+
+
+
+
+/**
+ * Builds the standard read/calculate tool set bound to live project state.
+ *
+ * @param {Function} getProject - () => project document (real store)
+ * @param {Function} getPlanEntities - () => plan entity array (real canvas state)
+ */
+function createArchitectureTools(getProject, getPlanEntities) {
+  const findRoom = (roomRef) => {
+    const p = getProject();
+    const entities = getPlanEntities();
+    return entities.find(e => e.kind === 'room' && (e.id === roomRef || e.name === roomRef)) ||
+      (p?.rooms || []).find(r => r.id === roomRef || r.name === roomRef) || null;
+  };
+
+  return {
+    // ---- READ tools ----
+    getProject: {
+      description: 'Full project document: metadata, site, containers, decisions, snapshots.',
+      permission: AI_PERMISSIONS.READ_PROJECT,
+      inputSchema: {},
+      handler: async () => getProject()
+    },
+    getRooms: {
+      description: 'All rooms with calculated area and perimeter.',
+      permission: AI_PERMISSIONS.READ_GEOMETRY,
+      inputSchema: {},
+      handler: async () => {
+        const p = getProject();
+        const entities = getPlanEntities();
+        const rooms = entities.filter(e => e.kind === 'room');
+        return rooms.map(r => ({
+          id: r.id, name: r.name, widthMeters: r.width, depthMeters: r.depth,
+          areaM2: roomArea(r), perimeterM2: roomPerimeter(r),
+          furnitureIds: (p?.plan?.entities || []).filter(e => e.kind === 'furniture' && e.roomId === r.id).map(f => f.id)
+        }));
+      }
+    },
+    getRoom: {
+      description: 'One room by id or name, with furniture inside it.',
+      permission: AI_PERMISSIONS.READ_GEOMETRY,
+      inputSchema: { roomRef: { type: 'string', required: true } },
+      handler: async ({ roomRef }) => {
+        const room = findRoom(roomRef);
+        if (!room) return { error: `Room "${roomRef}" not found` };
+        const furniture = getPlanEntities().filter(e => e.kind === 'furniture' && e.roomId === room.id);
+        return {
+          id: room.id, name: room.name, widthMeters: room.width, depthMeters: room.depth,
+          areaM2: roomArea(room), perimeterM2: roomPerimeter(room),
+          furniture: furniture.map(f => ({ id: f.id, name: f.name, x: f.x, y: f.y, widthMeters: f.width, depthMeters: f.depth }))
+        };
+      }
+    },
+    getWalls: {
+      description: 'All walls with lengths.',
+      permission: AI_PERMISSIONS.READ_GEOMETRY,
+      inputSchema: {},
+      handler: async () => getPlanEntities().filter(e => e.kind === 'wall')
+    },
+    getOpenings: {
+      description: 'All doors and windows.',
+      permission: AI_PERMISSIONS.READ_GEOMETRY,
+      inputSchema: {},
+      handler: async () => getPlanEntities().filter(e => e.kind === 'door' || e.kind === 'window')
+    },
+    getFurniture: {
+      description: 'All placed furniture with positions and footprints.',
+      permission: AI_PERMISSIONS.READ_GEOMETRY,
+      inputSchema: {},
+      handler: async () => getPlanEntities().filter(e => e.kind === 'furniture')
+    },
+    getDimensions: {
+      description: 'All recorded dimensions (the dimension schedule).',
+      permission: AI_PERMISSIONS.READ_MEASUREMENTS,
+      inputSchema: {},
+      handler: async () => getProject()?.dimensions || []
+    },
+    getMeasurements: {
+      description: 'Survey measurements with provenance and verification status.',
+      permission: AI_PERMISSIONS.READ_MEASUREMENTS,
+      inputSchema: {},
+      handler: async () => getProject()?.measurements || []
+    },
+    getDecisions: {
+      description: 'Design decision journal (kind, name, result data).',
+      permission: AI_PERMISSIONS.READ_PROJECT,
+      inputSchema: {},
+      handler: async () => getProject()?.decisions || []
+    },
+
+    // ---- CALCULATION tools (deterministic core) ----
+    evaluateExpression: {
+      description: 'Evaluate an architectural dimension expression, e.g. "2400+900" or "2.8m/2".',
+      permission: AI_PERMISSIONS.READ_CALCULATIONS,
+      inputSchema: { expression: { type: 'string', required: true } },
+      handler: async ({ expression }) => evaluateExpressionSafe(expression)
+    },
+    calculateStair: {
+      description: 'Stair calculation: rise + riser count → riser/tread/run/angle/Blondel.',
+      permission: AI_PERMISSIONS.READ_CALCULATIONS,
+      inputSchema: { totalRiseMeters: { type: 'number', required: true }, riserCount: { type: 'number', required: true } },
+      handler: async ({ totalRiseMeters, riserCount }) => calculateStair({ mode: 'rise_riser_count', totalRise: totalRiseMeters, riserCount })
+    },
+    calculateRamp: {
+      description: 'Ramp geometry: rise + run → slope %, ratio, angle.',
+      permission: AI_PERMISSIONS.READ_CALCULATIONS,
+      inputSchema: { riseMeters: { type: 'number', required: true }, runMeters: { type: 'number', required: true } },
+      handler: async ({ riseMeters, runMeters }) => calculateRamp({ mode: 'rise_run_direct', rise: riseMeters, run: runMeters })
+    },
+    calculateSlope: {
+      description: 'General slope analysis: rise + run → percent/ratio/angle (signed).',
+      permission: AI_PERMISSIONS.READ_CALCULATIONS,
+      inputSchema: { riseMeters: { type: 'number', required: true }, runMeters: { type: 'number', required: true } },
+      handler: async ({ riseMeters, runMeters }) => analyzeSlope({ mode: 'rise_run', rise: riseMeters, run: runMeters })
+    },
+    checkFurnitureFit: {
+      description: 'Does a furniture piece fit in a room? Returns fits/partial/no-fit with margins.',
+      permission: AI_PERMISSIONS.READ_GEOMETRY,
+      inputSchema: { furnitureId: { type: 'string', required: true }, roomId: { type: 'string', required: true } },
+      handler: async ({ furnitureId, roomId }) => {
+        const f = getPlanEntities().find(e => e.id === furnitureId && e.kind === 'furniture');
+        const room = findRoom(roomId);
+        if (!f || !room) return { error: 'Furniture or room not found' };
+        return checkFurnitureFit(f, room);
+      }
+    },
+    checkClearance: {
+      description: 'Clearance-envelope check for furniture in a room (user-configured meters).',
+      permission: AI_PERMISSIONS.READ_GEOMETRY,
+      inputSchema: { furnitureId: { type: 'string', required: true }, roomId: { type: 'string', required: true }, clearanceMeters: { type: 'number', required: true } },
+      handler: async ({ furnitureId, roomId, clearanceMeters }) => {
+        const f = getPlanEntities().find(e => e.id === furnitureId && e.kind === 'furniture');
+        const room = findRoom(roomId);
+        if (!f || !room) return { error: 'Furniture or room not found' };
+        return checkClearance(f, room, clearanceMeters, 'User Configured');
+      }
+    },
+    checkOverlaps: {
+      description: 'All overlap conflicts in the current plan (furniture/furniture, furniture/wall, outside-room).',
+      permission: AI_PERMISSIONS.READ_GEOMETRY,
+      inputSchema: {},
+      handler: async () => checkOverlaps(
+        getPlanEntities().filter(e => e.kind === 'furniture'),
+        getPlanEntities().filter(e => e.kind === 'room'),
+        getPlanEntities().filter(e => e.kind === 'wall')
+      )
+    },
+
+    // ---- PROPOSE tools (return proposals; the user applies them) ----
+    proposeNote: {
+      description: 'Propose a project note. Returns a proposal — the user must accept it.',
+      permission: AI_PERMISSIONS.PROPOSE_NOTE,
+      inputSchema: { title: { type: 'string', required: true }, body: { type: 'string', required: true } },
+      handler: async ({ title, body }) => ({
+        proposalType: 'add-note',
+        proposal: { id: null, title, body, createdAt: null, createdBy: 'ai' },
+        requiresApproval: true,
+        note: 'Preview and accept in the UI — the AI never writes directly.'
+      })
+    },
+    proposeFurnitureMove: {
+      description: 'Propose moving a furniture piece by (dx, dy) meters. Returns a previewable proposal.',
+      permission: AI_PERMISSIONS.PROPOSE_CHANGE,
+      inputSchema: { furnitureId: { type: 'string', required: true }, dx: { type: 'number', required: true }, dy: { type: 'number', required: true }, reason: { type: 'string' } },
+      handler: async ({ furnitureId, dx, dy, reason }) => {
+        const f = getPlanEntities().find(e => e.id === furnitureId && e.kind === 'furniture');
+        if (!f) return { error: `Furniture "${furnitureId}" not found` };
+        return {
+          proposalType: 'move-furniture',
+          proposal: {
+            furnitureId, entityName: f.name,
+            from: { x: f.x, y: f.y },
+            to: { x: f.x + dx, y: f.y + dy },
+            reason: reason || 'No reason given'
+          },
+          requiresApproval: true,
+          note: 'Preview shows from/to; applying recalculates checks and keeps undo.'
+        };
+      }
+    }
+  };
+}
+
+
+  // =========================================================================
+  // MODULE: AISchemas
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - AI Schemas & Validators
+ * Phase 9.10-9.13: structured response validation, trust classification,
+ * numeric fact-checking. The model's output is UNTRUSTED — everything is
+ * validated before rendering and numeric claims are compared with core.
+ */
+
+/** Trust classification labels (stable contract). */
+const TRUST_LEVELS = Object.freeze([
+  'CALCULATED', 'FACT', 'REFERENCE', 'INFERENCE',
+  'DESIGN JUDGMENT', 'SPECULATION', 'UNKNOWN', 'NEEDS VERIFICATION'
+]);
+
+/**
+ * Structured critic schema: every finding carries evidence, severity,
+ * recommendation, alternative, trade-off, and a next test.
+ */
+const CRITIC_RESPONSE_SCHEMA = Object.freeze({
+  summary: { type: 'string' },
+  verdict: { type: 'string' },
+  findings: {
+    type: 'array',
+    item: {
+      title: { type: 'string', required: true },
+      severity: { type: 'string', enum: ['high', 'medium', 'low'] },
+      observation: { type: 'string', required: true },
+      evidence: { type: 'array', required: true },
+      whyItMatters: { type: 'string', required: true },
+      recommendation: { type: 'string', required: true },
+      alternative: { type: 'string' },
+      tradeOff: { type: 'string' },
+      testNext: { type: 'string', required: true },
+      trust: { type: 'string' }
+    }
+  }
+});
+
+/** Minimal structural validator (no dependencies). */
+function validateStructuredResponse(response, schema) {
+  if (!response || typeof response !== 'object') {
+    return { ok: false, errors: ['Response must be an object'] };
+  }
+  const errors = [];
+  for (const [key, spec] of Object.entries(schema)) {
+    const value = response[key];
+    if (spec.type === 'array') {
+      if (!Array.isArray(value)) {
+        errors.push(`"${key}" must be an array`);
+        continue;
+      }
+      if (spec.item) {
+        value.forEach((item, idx) => {
+          for (const [ik, ispec] of Object.entries(spec.item)) {
+            if (ispec.required && item[ik] === undefined) {
+              errors.push(`"${key}[${idx}].${ik}" missing`);
+            } else if (item[ik] !== undefined && ispec.type === 'string' && typeof item[ik] !== 'string') {
+              errors.push(`"${key}[${idx}].${ik}" must be a string`);
+            } else if (item[ik] !== undefined && ispec.type === 'array' && !Array.isArray(item[ik])) {
+              errors.push(`"${key}[${idx}].${ik}" must be an array`);
+            } else if (item[ik] !== undefined && ispec.enum && !ispec.enum.includes(item[ik])) {
+              errors.push(`"${key}[${idx}].${ik}" must be one of: ${ispec.enum.join(', ')}`);
+            }
+          }
+        });
+      }
+    } else if (spec.type === 'string') {
+      if (typeof value !== 'string') errors.push(`"${key}" must be a string`);
+    } else if (spec.type === 'number') {
+      if (typeof value !== 'number' || !isFinite(value)) errors.push(`"${key}" must be a finite number`);
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+/**
+ * Numeric claim validation: extracts "number + unit" claims from AI text and
+ * compares them against the deterministic facts pack. Claim-centric: a claim
+ * passes if it matches ANY known fact (within tolerance); otherwise, if there
+ * are facts of the same unit family, it is flagged NEEDS VERIFICATION.
+ * This implements "AI SUGGESTS. CORE VERIFIES." mechanically.
+ *
+ * @param {string} aiText - the model's prose
+ * @param {Array<{label: string, value: number, unit?: string, tolerancePercent?: number}>} facts
+ * @returns {{ claims: Array, mismatches: Array }}
+ */
+function validateNumericClaims(aiText, facts) {
+  const claims = [];
+  const mismatches = [];
+  const text = String(aiText || '');
+  const factList = (facts || []).filter(f => typeof f.value === 'number' && isFinite(f.value));
+
+  // Matches: 14.2 m² | 14.2m² | 14.2 m2 | 3.2 m | 2800 mm | 12.5 %
+  const re = /(-?\d+(?:[.,]\d+)?)\s*(m2|m²|m3|m³|mm|cm|m|km|ft|in|%)/gi;
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    const rawValue = parseFloat(match[1].replace(',', '.'));
+    const claim = { text: match[0], value: rawValue, unit: match[2].toLowerCase() };
+    claims.push(claim);
+
+    // Normalize the claim's unit token so 'm²' and 'm2' both match an 'm2' fact
+    const normalizedUnit = claim.unit === 'm²' ? 'm2' : claim.unit;
+    const matchingFacts = factList.filter(f => factClaimUnits(f).includes(normalizedUnit));
+    if (matchingFacts.length === 0) continue; // nothing to check against
+    const matched = matchingFacts.some(fact => {
+      const normalized = normalizeClaimToFact(claim, fact);
+      if (normalized === null) return false;
+      const tolerance = fact.tolerancePercent !== undefined ? fact.tolerancePercent : 2;
+      const diff = Math.abs(normalized - fact.value);
+      return diff <= fact.value * (tolerance / 100) + 1e-9;
+    });
+    if (!matched) {
+      mismatches.push({
+        factLabel: matchingFacts.map(f => f.label).join(' | '),
+        factValue: matchingFacts[0].value,
+        claimText: claim.text,
+        claimValue: claim.value,
+        classification: 'NEEDS VERIFICATION',
+        note: `AI claimed ${claim.text} but no deterministic fact matches it (known: ${matchingFacts.map(f => `${f.label}=${f.value}`).join(', ')}).`
+      });
+    }
+  }
+  return { claims, mismatches };
+}
+
+function factClaimUnits(fact) {
+  const unit = (fact.unit || '').toLowerCase();
+  if (/m2|sq/.test(unit)) return ['m2', 'm²'];
+  if (unit === 'mm') return ['mm', 'm'];
+  if (unit === 'cm') return ['cm', 'm'];
+  if (unit === '%') return ['%'];
+  return ['m', 'mm', 'cm'];
+}
+
+/** Normalizes a claim's value into the fact's unit; null when incompatible. */
+function normalizeClaimToFact(claim, fact) {
+  const fuRaw = (fact.unit || '').toLowerCase();
+  const fu = fuRaw === 'm²' ? 'm2' : fuRaw;
+  const cuRaw = claim.unit;
+  const cu = cuRaw === 'm²' ? 'm2' : cuRaw;
+  if (fu === cu) return claim.value;
+  if (fu === 'mm') return cu === 'm' ? claim.value * 1000 : (cu === 'cm' ? claim.value * 10 : null);
+  if (fu === 'cm') return cu === 'm' ? claim.value * 100 : (cu === 'mm' ? claim.value / 10 : null);
+  if (fu === 'm') return cu === 'mm' ? claim.value / 1000 : (cu === 'cm' ? claim.value / 100 : null);
+  return null;
+}
+
+/**
+ * Trust classifier: given an AI statement's provenance metadata, produce the
+ * label. Modes tag their output; unknown provenance = UNKNOWN.
+ */
+function classifyTrust(provenance) {
+  if (!provenance) return 'UNKNOWN';
+  if (provenance.calculatedByCore) return 'CALCULATED';
+  if (provenance.fromProjectData) return 'FACT';
+  if (provenance.fromReference) return 'REFERENCE';
+  if (provenance.fromReasoning) return 'INFERENCE';
+  if (provenance.fromJudgment) return 'DESIGN JUDGMENT';
+  if (provenance.speculative) return 'SPECULATION';
+  return 'UNKNOWN';
+}
+
+
+  // =========================================================================
+  // MODULE: AIContext
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - AI Context Builder (Facts Pack)
+ * Phase 9.12: a compact DETERMINISTIC summary of project state for the AI.
+ * The AI reasons over these facts; it must not recalculate what the core
+ * already knows. Pure: reads project + plan entities, emits text + data.
+ */
+
+
+
+
+/**
+ * Builds the facts pack.
+ *
+ * @param {Object} project - real project document (from the store)
+ * @param {Array} planEntities - real plan entities (rooms/walls/furniture)
+ * @param {Object} [options] - { includeMeasurements, includeDecisions, maxFacts }
+ * @returns {{ text: string, data: Object, factChecks: Array }}
+ */
+function buildFactsPack(project, planEntities, options = {}) {
+  const p = project || {};
+  const entities = Array.isArray(planEntities) ? planEntities : [];
+  const rooms = entities.filter(e => e.kind === 'room');
+  const walls = entities.filter(e => e.kind === 'wall');
+  const furniture = entities.filter(e => e.kind === 'furniture');
+  const openings = entities.filter(e => e.kind === 'door' || e.kind === 'window');
+
+  const roomFacts = rooms.map(r => ({
+    label: `Room "${r.name}" area`,
+    value: Number(roomArea(r).toFixed(2)),
+    unit: 'm2',
+    id: r.id
+  }));
+
+  const overlaps = checkOverlaps(furniture, rooms, walls);
+
+  const data = {
+    project: {
+      id: p.id || null,
+      name: p.metadata?.name || 'Untitled Project',
+      description: p.metadata?.description || p.site?.description || ''
+    },
+    site: p.site ? { location: p.site.location || '', areaM2: p.site.areaM2 || null } : null,
+    rooms: rooms.map(r => ({
+      id: r.id, name: r.name,
+      widthMeters: r.width, depthMeters: r.depth,
+      areaM2: Number(roomArea(r).toFixed(2)),
+      perimeterM2: Number(roomPerimeter(r).toFixed(2))
+    })),
+    walls: walls.map(w => ({ id: w.id, name: w.name })),
+    openings: openings.map(o => ({ kind: o.kind, id: o.id, name: o.name, widthMeters: o.width })),
+    furniture: furniture.map(f => ({ id: f.id, name: f.name, x: f.x, y: f.y, widthMeters: f.width, depthMeters: f.depth })),
+    dimensions: (p.dimensions || []).length,
+    measurements: (p.measurements || []).map(m => ({ label: m.label, value: m.value, unit: m.unit, status: m.status })),
+    decisions: (p.decisions || []).map(d => ({ kind: d.kind, name: d.name, createdAt: d.createdAt })),
+    conflicts: overlaps.conflicts,
+    currentOption: (p.snapshots || []).length ? `${p.snapshots.length} snapshots recorded` : 'no snapshots'
+  };
+
+  const lines = [];
+  lines.push(`PROJECT: ${data.project.name}`);
+  if (data.project.description) lines.push(`INTENT: ${data.project.description}`);
+  if (data.site && (data.site.location || data.site.areaM2)) {
+    lines.push(`SITE: ${data.site.location || '—'}${data.site.areaM2 ? ` (${data.site.areaM2} m²)` : ''}`);
+  }
+  lines.push(`ROOMS (${data.rooms.length}):`);
+  for (const r of data.rooms) {
+    lines.push(`  ${r.name}: ${r.widthMeters} × ${r.depthMeters} m = ${r.areaM2} m²`);
+  }
+  lines.push(`WALLS: ${data.walls.length} · OPENINGS: ${data.openings.length} · FURNITURE: ${data.furniture.length}`);
+  if (data.conflicts.length > 0) {
+    lines.push(`CONFLICTS (${data.conflicts.length}):`);
+    for (const c of data.conflicts.slice(0, 5)) lines.push(`  ${c.evidence}`);
+  }
+  if (options.includeDecisions !== false && data.decisions.length > 0) {
+    lines.push(`DECISIONS: ${data.decisions.slice(-3).map(d => d.name).join(', ')}`);
+  }
+  if (options.includeMeasurements !== false && data.measurements.length > 0) {
+    lines.push(`MEASUREMENTS: ${data.measurements.map(m => `${m.label}=${m.value}${m.unit}(${m.status})`).join('; ')}`);
+  }
+
+  return {
+    text: lines.join('\n'),
+    data,
+    factChecks: roomFacts // deterministic values for numeric claim validation
+  };
+}
+
+
+  // =========================================================================
+  // MODULE: AIModes
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - AI Specialist Modes
+ * Phase 10: Tutor / Mentor / Critic / Brutal Critic / Jury / Ideation /
+ * Best Practice. Modes are system-prompt + schema + severity profiles —
+ * NOT autonomous agents. One orchestrator drives them all.
+ *
+ * Tone contract: brutally honest ≠ insulting. Direct, specific, evidence-
+ * based, willing to disagree, professionally respectful. No empty praise.
+ */
+
+const AI_MODES = Object.freeze({
+  TUTOR: 'tutor',
+  MENTOR: 'mentor',
+  CRITIC: 'critic',
+  BRUTAL: 'brutal',
+  JURY: 'jury',
+  IDEATION: 'ideation',
+  BEST_PRACTICE: 'best-practice'
+});
+
+const CRITIC_SCHEMA_HINT = `Return STRICT JSON matching:
+{ "summary": string, "verdict": string,
+  "findings": [ { "title": string, "severity": "high"|"medium"|"low",
+    "observation": string, "evidence": string[], "whyItMatters": string,
+    "recommendation": string, "alternative": string, "tradeOff": string,
+    "testNext": string, "trust": string } ] }`;
+
+const MODE_PROFILES = Object.freeze({
+  [AI_MODES.TUTOR]: {
+    label: 'Tutor',
+    severity: 'low',
+    requiresStudentQuestion: true,
+    systemPrompt: `You are an architecture TUTOR for a second-year student. Socratic first:
+ask one focused question that helps the student reason before explaining.
+Use the FACTS PACK for all numbers — never invent dimensions or areas.
+After the student has had a chance to think (or explicitly asks), explain
+clearly with reference to their actual geometry. Trust labels: mark
+calculations as CALCULATED, teaching conventions as REFERENCE.`,
+    expectsStructured: false
+  },
+  [AI_MODES.MENTOR]: {
+    label: 'Design Mentor',
+    severity: 'low',
+    systemPrompt: `You are a DESIGN MENTOR. Using the project FACTS PACK:
+offer observations, questions, possibilities, and trade-offs. Help the
+student develop their own concept — do NOT impose a single correct answer.
+Always note what to test next in the plan. Mark speculation explicitly.`,
+    expectsStructured: false
+  },
+  [AI_MODES.CRITIC]: {
+    label: 'Studio Critic',
+    severity: 'medium',
+    systemPrompt: `You are a STUDIO CRITIC. Analyze the FACTS PACK rigorously.
+Cover concept, spatial hierarchy, circulation, proportion, light, thresholds,
+efficiency, furniture, openings — whichever the data supports. NO empty praise.
+Every finding must cite actual evidence from the facts pack (dimensions,
+areas, conflicts). Use the numeric values verbatim from the facts pack.
+${CRITIC_SCHEMA_HINT}
+Mark uncertain claims "NEEDS VERIFICATION".`,
+    expectsStructured: true
+  },
+  [AI_MODES.BRUTAL]: {
+    label: 'Brutal Critic',
+    severity: 'high',
+    systemPrompt: `You are a BRUTAL STUDIO CRITIC: direct, unsentimental, highly
+specific, willing to disagree with the student's stated concept. Attack the
+WEAKEST parts of the scheme with evidence from the facts pack — quote real
+numbers and name real conflicts. Say "I disagree" when warranted.
+NEVER insult, demean, or attack the person — only the design decisions.
+No praise unless it is load-bearing. ${CRITIC_SCHEMA_HINT}`,
+    expectsStructured: true
+  },
+  [AI_MODES.JURY]: {
+    label: 'Jury',
+    severity: 'high',
+    systemPrompt: `You are a JURY PANEL preparing the student for studio review.
+Challenge: What is your architectural argument? Why this organization,
+proportion, circulation, material? What makes this project yours? What is
+unresolved? What assumption are you relying on? Use the DECISIONS history
+and FACTS PACK as evidence. Ask, then evaluate the answers against the data.
+${CRITIC_SCHEMA_HINT}`,
+    expectsStructured: true
+  },
+  [AI_MODES.IDEATION]: {
+    label: 'Ideation',
+    severity: 'low',
+    systemPrompt: `You are an IDEATION partner generating genuinely DIFFERENT
+design strategies (e.g. linear spine, courtyard, split mass, vertical,
+compressed/expanded sequence). Each strategy needs: concept, spatial effect,
+circulation effect, advantages, disadvantages, trade-offs, what to test next
+in the plan. Ground every strategy in the FACTS PACK dimensions. Mark
+speculative parts SPECULATION.`,
+    expectsStructured: false
+  },
+  [AI_MODES.BEST_PRACTICE]: {
+    label: 'Best Practice',
+    severity: 'medium',
+    systemPrompt: `You are a BEST-PRACTICE advisor combining deterministic
+calculations with stored references. Reference values are educational
+heuristics — NEVER claim code compliance. For anything regulatory say
+"NEEDS VERIFICATION — verify applicable local requirements". Show the
+relevant calculation from the FACTS PACK, then the practice guidance.`,
+    expectsStructured: false
+  }
+});
+
+/** Returns the frozen profile for a mode id. */
+function getModeProfile(modeId) {
+  return MODE_PROFILES[modeId] || null;
+}
+
+/** All mode descriptors for the UI. */
+function listModes() {
+  return Object.values(MODE_PROFILES).map(p => ({
+    id: p.label ? Object.keys(MODE_PROFILES).find(k => MODE_PROFILES[k] === p) : p.label,
+    label: p.label,
+    severity: p.severity,
+    expectsStructured: p.expectsStructured
+  }));
+}
+
+
+  // =========================================================================
+  // MODULE: AIOrchestrator
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - AI Orchestrator
+ * Phase 9.6 + Phase 12: the single entry point for all AI requests.
+ *
+ *   AI Orchestrator → specialist mode → context builder (facts pack) →
+ *   provider → structured response → validator → numeric fact-check → UI
+ *
+ * AI SUGGESTS. CORE VERIFIES. — the orchestrator never trusts model output:
+ * responses are validated against the mode's schema and numeric claims are
+ * compared against deterministic facts. No autonomous loops, one request =
+ * one response. Network transport is injected (sendPrompt from services).
+ *
+ * The application is FULLY functional without AI: every failure returns a
+ * controlled { ok: false, errorCode } and the UI stays usable.
+ */
+
+
+
+
+
+/** Local error code for unknown mode (kept in the same namespace shape). */
+const ERROR_MISSING_MODE = 'MISSING_MODE';
+
+/**
+ * Creates the orchestrator.
+ *
+ * @param {Object} options
+ * @param {Object} options.provider - provider handle from createProvider
+ * @param {Function} options.getKey - () => apiKey | null (from the key store)
+ * @param {Function} options.buildFactsPack - (modeId) => { text, data, factChecks }
+ * @param {Object} [options.toolRegistry] - optional registered tools
+ * @param {Function} [options.now] - clock override (tests)
+ */
+function createOrchestrator(options = {}) {
+  const { provider, getKey, buildFactsPack } = options;
+  if (!provider) throw new TypeError('Orchestrator requires a provider');
+  if (typeof getKey !== 'function') throw new TypeError('Orchestrator requires a key getter');
+
+  function requireReady(needed = {}) {
+    if (!providerSupports(provider, needed)) {
+      return { ok: false, errorCode: AI_ERROR_CODES.PROVIDER_UNCONFIGURED, message: `Provider "${provider.label}" lacks required capabilities.` };
+    }
+    const apiKey = getKey();
+    if (!apiKey) {
+      return { ok: false, errorCode: AI_ERROR_CODES.PROVIDER_UNCONFIGURED, message: 'AI is not configured — add an API key in settings. The app works fully without AI.' };
+    }
+    return { ok: true };
+  }
+
+  /**
+   * Runs a mode request end-to-end.
+   *
+   * @param {Object} request
+   * @param {string} request.mode - one of AI_MODES
+   * @param {string} request.userMessage - the student's question/answer
+   * @param {Object} [request.requiredCapabilities] - e.g. { vision: true }
+   * @param {Object} [request.factsOptions] - passed to the facts pack builder
+   * @returns {Promise<Object>} { ok, mode, text?, structured?, consistency?, errorCode?, message? }
+   */
+  async function run(request = {}) {
+    const modeId = request.mode || AI_MODES.CRITIC;
+    const profile = getModeProfile(modeId);
+    if (!profile) {
+      return { ok: false, errorCode: ERROR_MISSING_MODE, message: `Unknown AI mode "${modeId}"` };
+    }
+
+    const ready = requireReady(request.requiredCapabilities);
+    if (!ready.ok) return { ok: false, mode: modeId, ...ready };
+
+    const facts = buildFactsPack ? buildFactsPack(modeId, request.factsOptions) : { text: '', data: {}, factChecks: [] };
+
+    const userPrompt = [
+      'FACTS PACK (deterministic, from the application — trust these numbers):',
+      facts.text || '(no project data available)',
+      '',
+      `STUDENT (${profile.label} mode):`,
+      request.userMessage || '(no message)'
+    ].join('\n');
+
+    let providerResult;
+    try {
+      providerResult = await provider.sendPrompt({
+        systemPrompt: profile.systemPrompt,
+        userPrompt,
+        options: { expectsStructured: profile.expectsStructured, apiKey: getKey() }
+      });
+    } catch (err) {
+      const normalized = normalizeProviderError(err);
+      return { ok: false, mode: modeId, ...normalized };
+    }
+
+    if (!providerResult.ok) {
+      const normalized = normalizeProviderError(providerResult);
+      return { ok: false, mode: modeId, ...normalized };
+    }
+
+    const text = providerResult.text;
+
+    // Structured modes: parse + validate JSON from the response
+    if (profile.expectsStructured) {
+      const structured = extractJson(text);
+      if (!structured) {
+        return { ok: false, mode: modeId, errorCode: AI_ERROR_CODES.MALFORMED_RESPONSE, message: 'AI response was not valid structured JSON.', rawText: text };
+      }
+      const validation = validateStructuredResponse(structured, CRITIC_RESPONSE_SCHEMA);
+      if (!validation.ok) {
+        return { ok: false, mode: modeId, errorCode: AI_ERROR_CODES.MALFORMED_RESPONSE, message: `AI response failed validation: ${validation.errors[0]}`, rawText: text, validationErrors: validation.errors };
+      }
+      // Enforce trust labels on findings that lack one
+      for (const finding of structured.findings || []) {
+        if (!finding.trust) finding.trust = 'INFERENCE';
+      }
+      // Numeric fact-check against deterministic values
+      const numeric = validateNumericClaims(text, facts.factChecks || []);
+      return {
+        ok: true, mode: modeId,
+        structured,
+        text,
+        consistency: {
+          numericClaimsChecked: numeric.claims.length,
+          mismatches: numeric.mismatches,
+          status: numeric.mismatches.length === 0 ? 'CONSISTENT' : 'NEEDS VERIFICATION'
+        }
+      };
+    }
+
+    // Unstructured modes: still run numeric fact-checking over the prose
+    const numeric = validateNumericClaims(text, facts.factChecks || []);
+    return {
+      ok: true, mode: modeId, text,
+      consistency: {
+        numericClaimsChecked: numeric.claims.length,
+        mismatches: numeric.mismatches,
+        status: numeric.mismatches.length === 0 ? 'CONSISTENT' : 'NEEDS VERIFICATION'
+      }
+    };
+  }
+
+  return { run, provider, getModeProfile };
+}
+
+/** Extracts the first JSON object from a model response (tolerates prose fences). */
+function extractJson(text) {
+  if (!text) return null;
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1] : text;
+  const start = candidate.indexOf('{');
+  const end = candidate.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) return null;
+  try {
+    return JSON.parse(candidate.slice(start, end + 1));
+  } catch (e) {
+    return null;
+  }
+}
+
+
+  // =========================================================================
   // MODULE: Storage
   // =========================================================================
 

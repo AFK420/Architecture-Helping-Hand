@@ -58,6 +58,15 @@ export const BUNDLE_MODULES = [
   { name: 'Annotations', file: path.join(srcDir, 'core', 'annotations.js') },
   { name: 'ExportModel', file: path.join(srcDir, 'core', 'export', 'export-model.js') },
 
+  // --- AI layer (orchestrator last: consumes providers/modes/schemas/tools) ---
+  { name: 'AIProvider', file: path.join(srcDir, 'ai', 'providers', 'provider.js') },
+  { name: 'AIToolRegistry', file: path.join(srcDir, 'ai', 'tools', 'registry.js') },
+  { name: 'AIArchitectureTools', file: path.join(srcDir, 'ai', 'tools', 'architecture-tools.js') },
+  { name: 'AISchemas', file: path.join(srcDir, 'ai', 'schemas', 'validators.js') },
+  { name: 'AIContext', file: path.join(srcDir, 'ai', 'context', 'facts-pack.js') },
+  { name: 'AIModes', file: path.join(srcDir, 'ai', 'modes', 'modes.js') },
+  { name: 'AIOrchestrator', file: path.join(srcDir, 'ai', 'orchestrator.js') },
+
   // --- Services ---
   { name: 'Storage', file: path.join(srcDir, 'services', 'storage.js') },
   { name: 'ExportServices', file: path.join(srcDir, 'services', 'export.js') },
