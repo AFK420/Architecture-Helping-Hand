@@ -11220,7 +11220,6 @@ function printExport(title, content) {
  */
 
 
-
 /**
  * Migration chain: each entry upgrades a document from its index+1 to the
  * next version. Register future migrations here, e.g. MIGRATIONS[1] = v2->v3.
@@ -11498,6 +11497,20 @@ function createProjectStore(options = {}) {
     if (!parsed || typeof parsed !== 'object' || typeof parsed.projects !== 'object' || parsed.projects === null) {
       return { ok: false, errors: ['project library envelope malformed'], library: null };
     }
+    // Same future-version contract as the active envelope: a library written
+    // by a newer app must be refused loudly, never silently downgraded
+    // (individual project documents carry their own schemaVersion; the
+    // envelope version tracks the library container format).
+    if (parsed.version !== undefined && (!Number.isInteger(parsed.version) || parsed.version > CURRENT_STORE_VERSION)) {
+      return {
+        ok: false,
+        errors: [
+          `Project library version ${parsed.version} is newer than this app understands (${CURRENT_STORE_VERSION}). ` +
+          'Refusing to open it to avoid data loss. Please update the application.'
+        ],
+        library: null
+      };
+    }
     return { ok: true, library: parsed };
   }
 
@@ -11562,6 +11575,17 @@ function createProjectStore(options = {}) {
     if (!res.ok) return { ok: false, errors: res.errors };
     const doc = res.library.projects[id];
     if (!doc) return { ok: false, errors: [`project "${id}" not found in library`] };
+    // Future individual documents are refused loudly (same contract as the
+    // active envelope) — never silently normalized down to the current schema.
+    if (Number.isInteger(doc.schemaVersion) && doc.schemaVersion > PROJECT_SCHEMA_VERSION) {
+      return {
+        ok: false,
+        errors: [
+          `Library project "${id}" has schema version ${doc.schemaVersion}, newer than this app understands (${PROJECT_SCHEMA_VERSION}). ` +
+          'Refusing to open it to avoid data loss. Please update the application.'
+        ]
+      };
+    }
     const check = validateProject(doc);
     if (!check.ok) return { ok: false, errors: check.errors };
     currentProject = normalizeProject(doc);

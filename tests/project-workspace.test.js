@@ -194,6 +194,36 @@ console.log('\n--- 2. Snapshots ---');
 console.log('\n--- 3. Envelope/library separation ---');
 
 {
+  // P14 hardening: future-version library envelopes and future individual
+  // schemaVersion documents are refused loudly — the same contract the
+  // active envelope already had (no silent downgrade of newer data).
+  const futureStorage = makeStorage();
+  futureStorage.setItem(PROJECT_LIBRARY_KEY, JSON.stringify({
+    version: 99,
+    projects: { a: { schemaVersion: 1, id: 'a', metadata: { name: 'A' } } }
+  }));
+  const futureStore = createProjectStore({ storage: futureStorage });
+  assert(!futureStore.listProjects().ok, 'Future-version library envelope refused (list)');
+  assert(!futureStore.loadProjectFromLibrary('a').ok, 'Future-version library envelope refused (open)');
+
+  const futureDocStorage = makeStorage();
+  futureDocStorage.setItem(PROJECT_LIBRARY_KEY, JSON.stringify({
+    version: 1,
+    projects: { fut: { schemaVersion: 99, id: 'fut', metadata: { name: 'Future' } } }
+  }));
+  const futureDocStore = createProjectStore({ storage: futureDocStorage });
+  const refused = futureDocStore.loadProjectFromLibrary('fut');
+  assert(!refused.ok && refused.errors[0].includes('newer than this app understands'), 'Future individual schemaVersion document refused with guidance');
+
+  // Normal flows unaffected
+  const normal = makeStorage();
+  const store = createProjectStore({ storage: normal, generateId: () => 'proj-future-ok' });
+  store.createNewProject({ name: 'OK' });
+  assert(store.saveProjectToLibrary().ok && store.listProjects().projects.length === 1, 'Library save/list work for current-version data');
+  assert(store.loadProjectFromLibrary('proj-future-ok').ok, 'Library open works for current-version data');
+}
+
+{
   const storage = makeStorage();
   const store = createProjectStore({ storage });
   store.createNewProject({ id: 'proj-active', name: 'Active' });
