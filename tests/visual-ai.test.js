@@ -96,5 +96,17 @@ console.log('🧪 Running tests/visual-ai.test.js...');
   assert(res.available && !res.ok && res.errorCode === AI_ERROR_CODES.MISSING_INPUT, 'Missing image → MISSING_INPUT');
 }
 
+{
+  // P14 hardening: a throwing transport surfaces as a controlled error,
+  // never an uncontrolled exception (P14 audit found this gap)
+  const throwing = createProvider({ id: 'g', label: 'G', capabilities: { vision: true }, sendPrompt: async () => { throw new Error('boom'); } });
+  const res = await interpretImage(throwing, { imageBase64: 'x' });
+  assert(res.available && !res.ok && typeof res.errorCode === 'string', 'interpretImage: throwing transport → controlled error object');
+
+  const throwingGen = createProvider({ id: 'g', capabilities: { imageGen: true }, sendPrompt: async () => { throw new Error('boom'); } });
+  const genRes = await generateConceptImage(throwingGen, { prompt: 'x' });
+  assert(genRes.available && !genRes.ok && typeof genRes.errorCode === 'string', 'generateConceptImage: throwing transport → controlled error object');
+}
+
 console.log(`\nSummary: ${passed} passed, ${failed} failed.\n`);
 if (failed > 0) process.exit(1);

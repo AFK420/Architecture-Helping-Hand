@@ -12,7 +12,7 @@
  *    DRAWING in both the data and the UI contract
  */
 
-import { AI_ERROR_CODES } from './providers/provider.js';
+import { AI_ERROR_CODES, normalizeProviderError } from './providers/provider.js';
 
 export const VISUAL_CAPABILITIES = Object.freeze(['vision', 'imageGen']);
 
@@ -41,15 +41,22 @@ export async function interpretImage(provider, { imageBase64, mimeType, question
   if (!imageBase64) {
     return { available: true, ok: false, errorCode: AI_ERROR_CODES.MISSING_INPUT, message: 'No image provided.' };
   }
-  const result = await provider.sendPrompt({
-    systemPrompt: `You analyze architectural images (sketches, plans, site photos).
+  let result;
+  try {
+    result = await provider.sendPrompt({
+      systemPrompt: `You analyze architectural images (sketches, plans, site photos).
 Return STRICT JSON: { "observations": [ { "topic": string, "description": string,
 "confidence": "high"|"medium"|"low" } ], "summary": string }.
 NEVER present pixel-derived measurements as exact geometry — describe
 relationships and likely dimensions with confidence levels only.`,
-    userPrompt: `IMAGE (base64 ${mimeType || 'image/png'}) attached. QUESTION: ${question || 'Describe this architectural image.'}`,
-    options: { imageBase64, mimeType }
-  });
+      userPrompt: `IMAGE (base64 ${mimeType || 'image/png'}) attached. QUESTION: ${question || 'Describe this architectural image.'}`,
+      options: { imageBase64, mimeType }
+    });
+  } catch (err) {
+    // A throwing transport surfaces as a controlled error, never an exception
+    const normalized = normalizeProviderError(err);
+    return { available: true, ok: false, ...normalized };
+  }
   if (!result.ok) return { available: true, ok: false, ...result };
   return {
     available: true,
@@ -71,11 +78,18 @@ export async function generateConceptImage(provider, { prompt }) {
       reason: `Provider "${provider?.label || 'unknown'}" does not declare image-generation capability. Concept generation is unavailable — the rest of the application is unaffected.`
     };
   }
-  const result = await provider.sendPrompt({
-    systemPrompt: 'Generate a CONCEPTUAL architectural image. Output is for inspiration only.',
-    userPrompt: prompt || 'Conceptual massing study',
-    options: { generateImage: true }
-  });
+  let result;
+  try {
+    result = await provider.sendPrompt({
+      systemPrompt: 'Generate a CONCEPTUAL architectural image. Output is for inspiration only.',
+      userPrompt: prompt || 'Conceptual massing study',
+      options: { generateImage: true }
+    });
+  } catch (err) {
+    // A throwing transport surfaces as a controlled error, never an exception
+    const normalized = normalizeProviderError(err);
+    return { available: true, ok: false, ...normalized };
+  }
   if (!result.ok) return { available: true, ok: false, ...result };
   return {
     available: true,
