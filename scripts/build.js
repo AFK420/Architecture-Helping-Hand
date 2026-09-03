@@ -64,6 +64,7 @@ export const BUNDLE_MODULES = [
   { name: 'AIArchitectureTools', file: path.join(srcDir, 'ai', 'tools', 'architecture-tools.js') },
   { name: 'AISchemas', file: path.join(srcDir, 'ai', 'schemas', 'validators.js') },
   { name: 'AIContext', file: path.join(srcDir, 'ai', 'context', 'facts-pack.js') },
+  { name: 'AIProjectContext', file: path.join(srcDir, 'ai', 'context', 'project-context.js') },
   { name: 'AIModes', file: path.join(srcDir, 'ai', 'modes', 'modes.js') },
   { name: 'AIOrchestrator', file: path.join(srcDir, 'ai', 'orchestrator.js') },
   { name: 'AIVisual', file: path.join(srcDir, 'ai', 'visual.js') },
@@ -103,6 +104,8 @@ export const BUNDLE_MODULES = [
   { name: 'ViewExportCenter', file: path.join(srcDir, 'ui', 'views', 'export-center.js') },
   { name: 'ViewProjects', file: path.join(srcDir, 'ui', 'views', 'projects.js') },
   { name: 'ViewPlan', file: path.join(srcDir, 'ui', 'views', 'plan.js') },
+  { name: 'ViewAiStudio', file: path.join(srcDir, 'ui', 'views', 'ai-studio.js') },
+  { name: 'ViewAiControlCenter', file: path.join(srcDir, 'ui', 'views', 'ai-control-center.js') },
   { name: 'App', file: path.join(srcDir, 'ui', 'app.js') }
 ];
 

@@ -314,6 +314,57 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
+    id: 'nav-ai-studio',
+    title: 'Open AI Studio',
+    description: 'Task-focused AI workspace: critique, analyze, tutor, jury, ideate over the current project',
+    category: 'Navigation',
+    icon: '🤖',
+    keywords: ['ai', 'studio', 'assistant', 'critique', 'critic', 'tutor', 'jury', 'ideation', 'brutal', 'analyze', 'mode 20'],
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-ai-control-center',
+    title: 'AI Control Center',
+    description: 'Configure providers, API keys, model catalog, and AI job assignments',
+    category: 'Navigation',
+    icon: '⚙️',
+    keywords: ['ai', 'settings', 'provider', 'api key', 'gemini', 'glm', 'deepseek', 'model', 'catalog', 'jobs', 'configure', 'mode 21'],
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'ai-analyze-project',
+    title: 'Analyze Current Project',
+    description: 'Run the whole-project AI analysis job (structured strengths/problems report)',
+    category: 'AI Actions',
+    icon: '🏗️',
+    keywords: ['ai', 'analyze', 'project', 'review', 'critique', 'whole'],
+    actionType: 'action',
+    available: true
+  },
+  {
+    id: 'ai-critique-design',
+    title: 'Critique Current Design',
+    description: 'Run the Studio Critic job against the live project facts pack',
+    category: 'AI Actions',
+    icon: '🎯',
+    keywords: ['ai', 'critique', 'critic', 'design', 'review'],
+    actionType: 'action',
+    available: true
+  },
+  {
+    id: 'ai-test-provider',
+    title: 'Test AI Provider Connection',
+    description: 'Open the AI Control Center to run an explicit provider connection test',
+    category: 'AI Actions',
+    icon: '🔌',
+    keywords: ['ai', 'test', 'connection', 'provider', 'key', 'check'],
+    actionType: 'action',
+    available: true
+  },
+
+  {
     id: 'future-space-planner',
     title: 'Interactive Space Planner',
     description: 'Interactive top-down 2D canvas for room layout and furniture placement',

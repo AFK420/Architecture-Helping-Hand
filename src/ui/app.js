@@ -108,6 +108,14 @@ import { createSlopesView } from './views/slopes.js';
 import { createExportCenterView } from './views/export-center.js';
 import { createProjectsView } from './views/projects.js';
 import { createPlanView } from './views/plan.js';
+import { createAiStudioView } from './views/ai-studio.js';
+import { createAiControlCenterView } from './views/ai-control-center.js';
+import { buildScopedFactsPack } from '../ai/context/project-context.js';
+import { createAiHttp } from '../services/ai/http.js';
+import { createTransports } from '../services/ai/transports/index.js';
+import { createProviderManager } from '../services/ai/provider-manager.js';
+import { createModelCatalog } from '../services/ai/model-catalog.js';
+import { createJobRouter } from '../services/ai/job-router.js';
 import { StorageService } from '../services/storage.js';
 import { createProjectStore } from '../services/store.js';
 import { AudioService } from '../services/audio.js';
@@ -382,7 +390,10 @@ export function initializeApp() {
       furnitureIndex: 0,
       furnitureRotated: false,
       entities: []
-    }
+    },
+
+    // Modes 20-21: AI Studio + AI Control Center (services attached at boot)
+    ai: null
   };
 
   // DOM Elements Cache (Strictly normalized with index.html)
@@ -991,7 +1002,50 @@ export function initializeApp() {
     planSvgWrap: document.getElementById('plan-svg-wrap'),
     btnPlanSave: document.getElementById('btn-plan-save'),
     btnPlanExportSvg: document.getElementById('btn-plan-export-svg'),
-    btnPlanExportDxf: document.getElementById('btn-plan-export-dxf')
+    btnPlanExportDxf: document.getElementById('btn-plan-export-dxf'),
+
+    // Mode 20: AI Studio Elements
+    aiJobSelect: document.getElementById('ai-job-select'),
+    aiImageGroup: document.getElementById('ai-image-group'),
+    aiImageInput: document.getElementById('ai-image-input'),
+    aiQuestionInput: document.getElementById('ai-question-input'),
+    aiIncludeContextToggle: document.getElementById('ai-include-context-toggle'),
+    aiRunBtn: document.getElementById('btn-ai-run'),
+    aiOpenSettingsBtn: document.getElementById('btn-ai-open-settings'),
+    aiErrorMsg: document.getElementById('ai-error-msg'),
+    aiSaveNoteBtn: document.getElementById('btn-ai-save-note'),
+    aiCopyBtn: document.getElementById('btn-ai-copy'),
+    aiResultPanel: document.getElementById('ai-result-panel'),
+    aiModelBadge: document.getElementById('ai-model-badge'),
+    aiResponseEmpty: document.getElementById('ai-response-empty'),
+    aiResponseBody: document.getElementById('ai-response-body'),
+    aiConsistencyStrip: document.getElementById('ai-consistency-strip'),
+    aiContextSummary: document.getElementById('ai-context-summary'),
+
+    // Mode 21: AI Control Center Elements
+    aiProvidersList: document.getElementById('ai-providers-list'),
+    aiSettingsErrorMsg: document.getElementById('ai-settings-error-msg'),
+    aiJobsList: document.getElementById('ai-jobs-list'),
+    aiJobsReadyBadge: document.getElementById('ai-jobs-ready-badge'),
+    aiCatalogCountBadge: document.getElementById('ai-catalog-count-badge'),
+    aiCatalogSearch: document.getElementById('ai-catalog-search'),
+    aiCatalogProviderFilter: document.getElementById('ai-catalog-provider-filter'),
+    aiRefreshModelsBtn: document.getElementById('btn-ai-refresh-models'),
+    aiFilterVision: document.getElementById('ai-filter-vision'),
+    aiFilterStructured: document.getElementById('ai-filter-structured'),
+    aiFilterImageGen: document.getElementById('ai-filter-imagegen'),
+    aiCatalogList: document.getElementById('ai-catalog-list'),
+    aiManualProvider: document.getElementById('ai-manual-provider'),
+    aiManualModelId: document.getElementById('ai-manual-model-id'),
+    aiManualModelName: document.getElementById('ai-manual-model-name'),
+    aiManualCapText: document.getElementById('ai-manual-cap-text'),
+    aiManualCapReasoning: document.getElementById('ai-manual-cap-reasoning'),
+    aiManualCapStructured: document.getElementById('ai-manual-cap-structured'),
+    aiManualCapVision: document.getElementById('ai-manual-cap-vision'),
+    aiManualCapImagegen: document.getElementById('ai-manual-cap-imagegen'),
+    aiAddManualModelBtn: document.getElementById('btn-ai-add-manual-model'),
+    aiActivityList: document.getElementById('ai-activity-list'),
+    aiClearActivityBtn: document.getElementById('btn-ai-clear-activity')
   };
 
   // ---------------------------------------------------------------------------
@@ -1190,6 +1244,12 @@ export function initializeApp() {
     }
     else if (targetMode === 'plan') {
       views.callController('plan', 'render');
+    }
+    else if (targetMode === 'ai') {
+      views.callController('ai', 'populateJobs');
+    }
+    else if (targetMode === 'ai_settings') {
+      views.callController('ai_settings', 'renderAll');
     }
   }
 
@@ -2604,6 +2664,29 @@ export function initializeApp() {
         break;
       case 'nav-plan':
         switchMode('plan');
+        break;
+      case 'nav-ai-studio':
+        switchMode('ai');
+        break;
+      case 'nav-ai-control-center':
+        switchMode('ai_settings');
+        break;
+      case 'ai-analyze-project':
+        switchMode('ai');
+        setTimeout(() => {
+          if (dom.aiJobSelect) dom.aiJobSelect.value = 'projectAnalysis';
+          views.callController('ai', 'refreshImageGroup');
+        }, 0);
+        break;
+      case 'ai-critique-design':
+        switchMode('ai');
+        setTimeout(() => {
+          if (dom.aiJobSelect) dom.aiJobSelect.value = 'studioCritic';
+          views.callController('ai', 'refreshImageGroup');
+        }, 0);
+        break;
+      case 'ai-test-provider':
+        switchMode('ai_settings');
         break;
       case 'nav-cad-clipboard':
         switchMode('cad_clipboard');
@@ -4811,6 +4894,60 @@ export function initializeApp() {
       dom.btnPlanExportDxf.addEventListener('click', () => views.callController('plan', 'exportPlan', 'dxf'));
     }
 
+    // Mode 20: AI Studio listeners
+    if (dom.aiRunBtn) {
+      dom.aiRunBtn.addEventListener('click', () => views.callController('ai', 'runJob'));
+    }
+    if (dom.aiOpenSettingsBtn) {
+      dom.aiOpenSettingsBtn.addEventListener('click', () => switchMode('ai_settings'));
+    }
+    if (dom.aiJobSelect) {
+      dom.aiJobSelect.addEventListener('change', () => views.callController('ai', 'refreshImageGroup'));
+    }
+    if (dom.aiImageInput) {
+      dom.aiImageInput.addEventListener('change', () => {
+        const file = dom.aiImageInput.files && dom.aiImageInput.files[0];
+        if (file) views.callController('ai', 'handleImageFile', file);
+      });
+    }
+    if (dom.aiSaveNoteBtn) {
+      dom.aiSaveNoteBtn.addEventListener('click', () => views.callController('ai', 'saveToJournal'));
+    }
+    if (dom.aiCopyBtn) {
+      dom.aiCopyBtn.addEventListener('click', () => views.callController('ai', 'copyResponse'));
+    }
+
+    // Mode 21: AI Control Center listeners
+    if (dom.aiCatalogSearch) {
+      dom.aiCatalogSearch.addEventListener('input', () => views.callController('ai_settings', 'renderCatalog'));
+    }
+    if (dom.aiCatalogProviderFilter) {
+      dom.aiCatalogProviderFilter.addEventListener('change', () => views.callController('ai_settings', 'renderCatalog'));
+    }
+    for (const filterEl of [dom.aiFilterVision, dom.aiFilterStructured, dom.aiFilterImageGen]) {
+      if (filterEl) filterEl.addEventListener('change', () => views.callController('ai_settings', 'renderCatalog'));
+    }
+    if (dom.aiRefreshModelsBtn) {
+      dom.aiRefreshModelsBtn.addEventListener('click', () => {
+        // Refresh discovery for every configured, enabled provider.
+        const svc = state.ai;
+        if (!svc) return;
+        for (const p of svc.providerManager.listProviderStatuses()) {
+          if (p.enabled && p.hasKey) views.callController('ai_settings', 'discoverModels', p.id, null);
+        }
+      });
+    }
+    if (dom.aiAddManualModelBtn) {
+      dom.aiAddManualModelBtn.addEventListener('click', () => views.callController('ai_settings', 'addManualModel'));
+    }
+    if (dom.aiClearActivityBtn) {
+      dom.aiClearActivityBtn.addEventListener('click', () => {
+        state.ai?.router?.clearActivityLog();
+        views.callController('ai_settings', 'renderActivity');
+        showToast('AI activity log cleared');
+      });
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -4984,6 +5121,33 @@ export function initializeApp() {
   const projectStore = createProjectStore({ storage: StorageService });
   projectStore.loadProject(); // recover persisted project; failures stay controlled
 
+  // AI services (Phase 15): one shared instance graph. Keys live only inside
+  // the provider manager; the job router is the ONLY execution entry point.
+  let aiServices = null;
+  try {
+    const http = createAiHttp();
+    const transports = createTransports({ http });
+    const providerManager = createProviderManager({ storage: StorageService });
+    const modelCatalog = createModelCatalog({ storage: StorageService });
+    const router = createJobRouter({
+      providerManager,
+      modelCatalog,
+      transports,
+      storage: StorageService,
+      buildFactsPack: (args = {}) => buildScopedFactsPack({
+        project: projectStore.getProject(),
+        planEntities: state.plan.entities,
+        request: { scopeHint: args.request?.scopeHint || args.options?.scopeHint || '' }
+      })
+    });
+    aiServices = { http, transports, providerManager, modelCatalog, router };
+  } catch (e) {
+    // AI unavailable — the application remains fully functional (by design).
+    console.warn('AI services unavailable:', e?.message || e);
+    aiServices = null;
+  }
+  state.ai = aiServices;
+
   const viewContext = Object.freeze({
     state,
     dom,
@@ -5027,6 +5191,8 @@ export function initializeApp() {
   views.register(createExportCenterView(viewContext));
   views.register(createProjectsView(viewContext));
   views.register(createPlanView(viewContext));
+  views.register(createAiStudioView(viewContext));
+  views.register(createAiControlCenterView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();

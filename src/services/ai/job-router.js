@@ -338,7 +338,7 @@ export function createJobRouter(options = {}) {
       userPrompt = request.userMessage || request.prompt || 'Describe this architectural image.';
     } else {
       const facts = buildFactsPack
-        ? buildFactsPack({ jobId, scope: request.scope, options: request.factsOptions })
+        ? buildFactsPack({ jobId, scope: request.scope, options: request.factsOptions, request })
         : { text: '', data: {}, factChecks: [] };
       factChecks = facts.factChecks || [];
       systemPrompt = modeProfile ? modeProfile.systemPrompt : (request.systemPrompt || 'You are an architecture assistant.');

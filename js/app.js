@@ -10674,6 +10674,206 @@ function buildFactsPack(project, planEntities, options = {}) {
 
 
   // =========================================================================
+  // MODULE: AIProjectContext
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Project-Aware AI Context (Phase 15, M9)
+ * Bridges the live application state (project store + plan entities) into
+ * the job router's facts-pack callback, with SCOPING so a bedroom critique
+ * does not ship the kitchen's furniture.
+ *
+ * Budgeting contract:
+ *  - estimateTokens lives in job-router; here we trim entity lists by
+ *    relevance (named scope match first, then proximity, then cap counts)
+ *  - trimming is DISCLOSED: the returned summary records what was dropped
+ *    so the UI can show "Context reduced to fit selected model."
+ *  - pure: reads data, emits text — no DOM, no storage
+ */
+
+
+
+
+/** Caps for large projects — tuned to keep prompts modest by default. */
+const SCOPE_LIMITS = Object.freeze({
+  rooms: 24,
+  furniturePerRoom: 12,
+  furnitureGlobal: 40,
+  measurements: 20,
+  decisions: 6,
+  notes: 4
+});
+
+/**
+ * Extracts the relevant scope for a job.
+ *
+ * @param {Object} args
+ * @param {Object} args.project - project document (store)
+ * @param {Array} args.planEntities - live plan entities
+ * @param {Object} [args.request] - { scopeHint: string (room/keyword name), jobId }
+ * @returns {Object} scoped view { project, rooms, walls, openings, furniture, measurements, decisions, notes, site, conflicts, dropped: [] }
+ */
+function selectProjectScope({ project, planEntities, request = {} }) {
+  const p = project && typeof project === 'object' ? project : {};
+  const dropped = [];
+  const entities = (Array.isArray(planEntities) ? planEntities : [])
+    .filter(e => e && typeof e === 'object' && typeof e.kind === 'string');
+
+  const allRooms = entities.filter(e => e.kind === 'room');
+  const walls = entities.filter(e => e.kind === 'wall').slice(0, SCOPE_LIMITS.rooms * 2);
+  const openings = entities.filter(e => e.kind === 'door' || e.kind === 'window').slice(0, 30);
+  const allFurniture = entities.filter(e => e.kind === 'furniture');
+
+  // Scope hint: keep rooms whose name/decision text matches; empty hint = all.
+  let rooms = allRooms;
+  const hint = typeof request.scopeHint === 'string' ? request.scopeHint.trim().toLowerCase() : '';
+  if (hint) {
+    const matches = allRooms.filter(r => String(r.name || '').toLowerCase().includes(hint));
+    if (matches.length > 0 && matches.length < allRooms.length) {
+      rooms = matches;
+      // Furniture within or adjacent to the matched rooms only.
+      const roomRects = matches.map(r => ({ x: r.x, y: r.y, width: r.width, depth: r.depth, name: r.name }));
+      const inScope = [];
+      for (const f of allFurniture) {
+        const cx = (typeof f.x === 'number' ? f.x : 0) + (typeof f.width === 'number' ? f.width : 0) / 2;
+        const cy = (typeof f.y === 'number' ? f.y : 0) + (typeof f.depth === 'number' ? f.depth : 0) / 2;
+        const hit = roomRects.some(r =>
+          cx >= r.x && cx <= r.x + r.width && cy >= r.y && cy <= r.y + r.depth);
+        if (hit) inScope.push(f);
+      }
+      if (allFurniture.length > inScope.length) {
+        dropped.push(`${allFurniture.length - inScope.length} furniture items outside ${matches.map(r => r.name).join('/')}`);
+      }
+      allFurniture.length = 0;
+      allFurniture.push(...inScope);
+    }
+  }
+
+  if (rooms.length > SCOPE_LIMITS.rooms) {
+    dropped.push(`${rooms.length - SCOPE_LIMITS.rooms} rooms over the ${SCOPE_LIMITS.rooms}-room cap`);
+    rooms = rooms.slice(0, SCOPE_LIMITS.rooms);
+  }
+
+  // Furniture cap per room (keep the first N by area, larger first — usually
+  // the load-bearing pieces).
+  const cappedFurniture = allFurniture
+    .slice()
+    .sort((a, b) => ((b.width || 0) * (b.depth || 0)) - ((a.width || 0) * (a.depth || 0)));
+  if (cappedFurniture.length > SCOPE_LIMITS.furnitureGlobal) {
+    dropped.push(`${cappedFurniture.length - SCOPE_LIMITS.furnitureGlobal} furniture items over the global cap`);
+    cappedFurniture.length = SCOPE_LIMITS.furnitureGlobal;
+  }
+
+  const conflicts = checkOverlaps(cappedFurniture, rooms, walls);
+
+  const measurements = ((Array.isArray(p.measurements) ? p.measurements : []) || [])
+    .filter(m => m && typeof m === 'object')
+    .slice(0, SCOPE_LIMITS.measurements);
+  const decisions = ((Array.isArray(p.decisions) ? p.decisions : []) || [])
+    .filter(d => d && typeof d === 'object')
+    .slice(-SCOPE_LIMITS.decisions);
+  const notes = ((Array.isArray(p.notes) ? p.notes : []) || [])
+    .filter(n => n && typeof n === 'object')
+    .slice(-SCOPE_LIMITS.notes);
+
+  return {
+    project: p,
+    site: p.site || null,
+    rooms,
+    walls,
+    openings,
+    furniture: cappedFurniture,
+    measurements,
+    decisions,
+    notes,
+    conflicts,
+    dropped
+  };
+}
+
+/**
+ * Builds the facts-pack shape the job router expects from a scoped view.
+ * Deterministic text + data + numeric fact checks (room areas).
+ */
+function buildScopedFactsPack({ project, planEntities, request = {} }) {
+  const scope = selectProjectScope({ project, planEntities, request });
+  const isNum = v => typeof v === 'number' && isFinite(v);
+  const round2 = v => (isNum(v) ? Number(v.toFixed(2)) : null);
+  const meta = scope.project.metadata && typeof scope.project.metadata === 'object' ? scope.project.metadata : {};
+
+  const roomFacts = scope.rooms
+    .filter(r => isNum(r.width) && isNum(r.depth) && r.width > 0 && r.depth > 0)
+    .map(r => ({
+      label: `Room "${r.name}" area`,
+      value: Number(roomArea(r).toFixed(2)),
+      unit: 'm2',
+      id: r.id
+    }));
+
+  const data = {
+    project: {
+      id: scope.project.id || null,
+      name: meta.name || 'Untitled Project',
+      description: meta.description || ''
+    },
+    site: scope.site ? { location: scope.site.location || '', areaM2: scope.site.areaM2 || null } : null,
+    rooms: scope.rooms.map(r => ({
+      id: r.id, name: r.name,
+      widthMeters: round2(r.width), depthMeters: round2(r.depth),
+      areaM2: round2(roomArea(r)), perimeterM2: round2(roomPerimeter(r))
+    })),
+    openings: scope.openings.map(o => ({ kind: o.kind, name: o.name, widthMeters: round2(o.width) })),
+    furniture: scope.furniture.map(f => ({
+      id: f.id, name: f.name, roomId: f.roomId || null,
+      x: round2(f.x), y: round2(f.y),
+      widthMeters: round2(f.width), depthMeters: round2(f.depth)
+    })),
+    measurements: scope.measurements.map(m => ({ label: m.label, value: m.value, unit: m.unit, status: m.status })),
+    decisions: scope.decisions.map(d => ({ kind: d.kind, name: d.name })),
+    conflicts: scope.conflicts,
+    dropped: scope.dropped
+  };
+
+  const lines = [];
+  lines.push(`PROJECT: ${data.project.name}`);
+  if (data.project.description) lines.push(`INTENT: ${data.project.description}`);
+  if (data.site && (data.site.location || data.site.areaM2)) {
+    lines.push(`SITE: ${data.site.location || '—'}${data.site.areaM2 ? ` (${data.site.areaM2} m²)` : ''}`);
+  }
+  lines.push(`ROOMS (${data.rooms.length}):`);
+  for (const r of data.rooms) {
+    lines.push(`  ${r.name}: ${r.widthMeters ?? '?'} × ${r.depthMeters ?? '?'} m = ${r.areaM2 ?? '?'} m² (perimeter ${r.perimeterM2 ?? '?'} m)`);
+  }
+  lines.push(`WALLS: ${scope.walls.length} · OPENINGS: ${data.openings.length} · FURNITURE: ${data.furniture.length}`);
+  if (data.conflicts.length > 0) {
+    lines.push(`CONFLICTS (${data.conflicts.length}):`);
+    for (const c of data.conflicts.slice(0, 6)) lines.push(`  ${c.evidence}`);
+  }
+  if (data.decisions.length > 0) {
+    lines.push(`DECISIONS: ${data.decisions.map(d => d.name).join(', ')}`);
+  }
+  if (data.measurements.length > 0) {
+    lines.push(`MEASUREMENTS: ${data.measurements.map(m => `${m.label}=${m.value}${m.unit}(${m.status})`).join('; ')}`);
+  }
+  for (const n of scope.notes.slice(0, SCOPE_LIMITS.notes)) {
+    const title = typeof n?.title === 'string' ? n.title : 'note';
+    const body = typeof n?.body === 'string' ? n.body.slice(0, 160) : '';
+    lines.push(`NOTE: ${title}${body ? ` — ${body}` : ''}`);
+  }
+  if (scope.dropped.length > 0) {
+    lines.push(`CONTEXT REDUCED: ${scope.dropped.join('; ')}`);
+  }
+
+  return {
+    text: lines.join('\n'),
+    data,
+    factChecks: roomFacts,
+    dropped: scope.dropped
+  };
+}
+
+
+  // =========================================================================
   // MODULE: AIModes
   // =========================================================================
 
@@ -12380,6 +12580,57 @@ const DEFAULT_COMMANDS = [
     actionType: 'navigation',
     available: true
   },
+  {
+    id: 'nav-ai-studio',
+    title: 'Open AI Studio',
+    description: 'Task-focused AI workspace: critique, analyze, tutor, jury, ideate over the current project',
+    category: 'Navigation',
+    icon: '🤖',
+    keywords: ['ai', 'studio', 'assistant', 'critique', 'critic', 'tutor', 'jury', 'ideation', 'brutal', 'analyze', 'mode 20'],
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-ai-control-center',
+    title: 'AI Control Center',
+    description: 'Configure providers, API keys, model catalog, and AI job assignments',
+    category: 'Navigation',
+    icon: '⚙️',
+    keywords: ['ai', 'settings', 'provider', 'api key', 'gemini', 'glm', 'deepseek', 'model', 'catalog', 'jobs', 'configure', 'mode 21'],
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'ai-analyze-project',
+    title: 'Analyze Current Project',
+    description: 'Run the whole-project AI analysis job (structured strengths/problems report)',
+    category: 'AI Actions',
+    icon: '🏗️',
+    keywords: ['ai', 'analyze', 'project', 'review', 'critique', 'whole'],
+    actionType: 'action',
+    available: true
+  },
+  {
+    id: 'ai-critique-design',
+    title: 'Critique Current Design',
+    description: 'Run the Studio Critic job against the live project facts pack',
+    category: 'AI Actions',
+    icon: '🎯',
+    keywords: ['ai', 'critique', 'critic', 'design', 'review'],
+    actionType: 'action',
+    available: true
+  },
+  {
+    id: 'ai-test-provider',
+    title: 'Test AI Provider Connection',
+    description: 'Open the AI Control Center to run an explicit provider connection test',
+    category: 'AI Actions',
+    icon: '🔌',
+    keywords: ['ai', 'test', 'connection', 'provider', 'key', 'check'],
+    actionType: 'action',
+    available: true
+  },
+
   {
     id: 'future-space-planner',
     title: 'Interactive Space Planner',
@@ -14290,7 +14541,7 @@ function createJobRouter(options = {}) {
       userPrompt = request.userMessage || request.prompt || 'Describe this architectural image.';
     } else {
       const facts = buildFactsPack
-        ? buildFactsPack({ jobId, scope: request.scope, options: request.factsOptions })
+        ? buildFactsPack({ jobId, scope: request.scope, options: request.factsOptions, request })
         : { text: '', data: {}, factChecks: [] };
       factChecks = facts.factChecks || [];
       systemPrompt = modeProfile ? modeProfile.systemPrompt : (request.systemPrompt || 'You are an architecture assistant.');
@@ -20700,6 +20951,918 @@ function createPlanView(context) {
 
 
   // =========================================================================
+  // MODULE: ViewAiStudio
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - AI Studio View (Mode 20)
+ * Phase 15 (M8): the visible, task-focused AI workspace. NOT a chatbot —
+ * one job, one question, one validated answer. All routing goes through the
+ * job router service; all project context flows through the scoped facts
+ * pack; all rendering escapes model output before DOM insertion.
+ *
+ * Write-permission contract (rule 46): the AI response is READ/SUGGEST only.
+ * "Save to Journal" writes a project note the user explicitly triggered —
+ * the AI never mutates project state on its own.
+ */
+
+
+
+
+function createAiStudioView(context) {
+  const { state, dom, showToast, setUnifiedResultState, AudioService, switchMode, escapeHtml } = context;
+
+  let lastResult = null; // normalized job-router result (text only, no keys)
+  let imageData = null;  // { imageBase64, mimeType } for vision jobs
+  let busy = false;
+
+  function escape(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function router() {
+    return state.ai?.router || null;
+  }
+
+  function currentProject() {
+    try {
+      return context.projectStore?.getProject() || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function currentPlanEntities() {
+    return Array.isArray(state.plan?.entities) ? state.plan.entities : [];
+  }
+
+  function showError(message) {
+    if (dom.aiErrorMsg) {
+      dom.aiErrorMsg.textContent = `⚠️ ${message}`;
+      dom.aiErrorMsg.style.display = 'block';
+    }
+    setUnifiedResultState({ toolPrefix: 'ai', status: 'error', errorText: `⚠️ ${message}` });
+  }
+
+  function clearError() {
+    if (dom.aiErrorMsg) {
+      dom.aiErrorMsg.style.display = 'none';
+      dom.aiErrorMsg.textContent = '';
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Job selector + image visibility
+  // ------------------------------------------------------------------
+
+  function populateJobs() {
+    if (!dom.aiJobSelect) return;
+    const statuses = router() ? router().listJobStatuses() : [];
+    dom.aiJobSelect.innerHTML = AI_JOB_DEFINITIONS.map(def => {
+      const st = statuses.find(s => s.jobId === def.jobId);
+      const mark = !st ? '' : (st.status === 'READY' ? '✓' : `· ${st.status.toLowerCase()}`);
+      return `<option value="${escape(def.jobId)}">${escape(def.label)} ${escape(mark)}</option>`;
+    }).join('');
+  }
+
+  function selectedJobId() {
+    return dom.aiJobSelect?.value || 'generalAssistant';
+  }
+
+  function requiresImage(jobId) {
+    const def = AI_JOB_DEFINITIONS.find(j => j.jobId === jobId);
+    return !!def && jobId === 'imageAnalysis';
+  }
+
+  function refreshImageGroup() {
+    if (dom.aiImageGroup) {
+      dom.aiImageGroup.style.display = requiresImage(selectedJobId()) ? 'block' : 'none';
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Response rendering (all model output escaped — rule 45)
+  // ------------------------------------------------------------------
+
+  function renderResponse() {
+    if (!dom.aiResponseBody || !dom.aiResponseEmpty) return;
+    if (!lastResult || !lastResult.ok) {
+      dom.aiResponseEmpty.style.display = 'block';
+      dom.aiResponseBody.style.display = 'none';
+      if (dom.aiModelBadge) dom.aiModelBadge.textContent = '—';
+      if (dom.aiConsistencyStrip) dom.aiConsistencyStrip.style.display = 'none';
+      return;
+    }
+    dom.aiResponseEmpty.style.display = 'none';
+    dom.aiResponseBody.style.display = 'block';
+
+    const provider = lastResult.providerId || '—';
+    const model = lastResult.modelId || '—';
+    if (dom.aiModelBadge) dom.aiModelBadge.textContent = `${provider} · ${model}`;
+
+    if (lastResult.structured && Array.isArray(lastResult.structured.findings)) {
+      dom.aiResponseBody.innerHTML = renderStructured(lastResult.structured);
+    } else {
+      dom.aiResponseBody.innerHTML = `<div class="ai-prose">${escape(lastResult.text || '')}</div>`;
+    }
+
+    renderConsistency();
+  }
+
+  function renderStructured(structured) {
+    const parts = [];
+    if (structured.summary) {
+      parts.push(`<div style="margin-bottom: 0.6rem;"><strong>SUMMARY</strong><br/>${escape(structured.summary)}</div>`);
+    }
+    if (structured.verdict) {
+      parts.push(`<div style="margin-bottom: 0.8rem;"><strong>VERDICT</strong><br/>${escape(structured.verdict)}</div>`);
+    }
+    const findings = Array.isArray(structured.findings) ? structured.findings : [];
+    findings.forEach((f, idx) => {
+      const severity = f.severity === 'high' ? 'var(--color-error)' : f.severity === 'medium' ? 'var(--color-warning)' : 'var(--text-tertiary)';
+      const evidence = Array.isArray(f.evidence) ? f.evidence.map(e => `<li>${escape(e)}</li>`).join('') : '';
+      parts.push(`
+        <div style="border: 1px solid var(--border-color-light); border-left: 3px solid ${severity}; border-radius: 5px; padding: 0.55rem 0.7rem; margin-bottom: 0.55rem; background: var(--bg-card-header);">
+          <div style="font-weight: 700; font-size: 0.78rem; margin-bottom: 0.25rem;">${escape(f.title || `Finding ${idx + 1}`)}
+            <span style="color: ${severity}; font-weight: 400; font-size: 0.68rem;"> · ${escape((f.severity || 'low').toUpperCase())}</span>
+            ${f.trust ? `<span style="color: var(--text-muted); font-weight: 400; font-size: 0.66rem;"> · ${escape(f.trust)}</span>` : ''}
+          </div>
+          ${f.observation ? `<div style="margin-bottom: 0.3rem;">${escape(f.observation)}</div>` : ''}
+          ${evidence ? `<div style="margin-bottom: 0.3rem;"><span style="font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase;">Evidence</span><ul style="margin: 0.15rem 0 0.3rem 1.1rem; padding: 0; font-size: 0.76rem;">${evidence}</ul></div>` : ''}
+          ${f.whyItMatters ? `<div style="margin-bottom: 0.3rem;"><em>Why it matters:</em> ${escape(f.whyItMatters)}</div>` : ''}
+          ${f.recommendation ? `<div style="margin-bottom: 0.3rem;"><strong>Recommendation:</strong> ${escape(f.recommendation)}</div>` : ''}
+          ${f.alternative ? `<div style="margin-bottom: 0.3rem;"><em>Alternative:</em> ${escape(f.alternative)}</div>` : ''}
+          ${f.tradeOff ? `<div style="margin-bottom: 0.3rem;"><em>Trade-off:</em> ${escape(f.tradeOff)}</div>` : ''}
+          ${f.testNext ? `<div style="font-size: 0.72rem; color: var(--text-secondary);">→ Test next: ${escape(f.testNext)}</div>` : ''}
+        </div>`);
+    });
+    return parts.join('');
+  }
+
+  function renderConsistency() {
+    if (!dom.aiConsistencyStrip || !lastResult?.consistency) return;
+    const c = lastResult.consistency;
+    dom.aiConsistencyStrip.style.display = 'block';
+    if (c.status === 'CONSISTENT') {
+      dom.aiConsistencyStrip.style.background = 'var(--color-success-subtle)';
+      dom.aiConsistencyStrip.style.color = 'var(--color-success)';
+      dom.aiConsistencyStrip.textContent = `Numeric check: ${c.numericClaimsChecked} AI claim(s) consistent with core calculations.`;
+    } else {
+      dom.aiConsistencyStrip.style.background = 'var(--color-warning-subtle)';
+      dom.aiConsistencyStrip.style.color = 'var(--color-warning)';
+      const first = (c.mismatches && c.mismatches[0]) || {};
+      dom.aiConsistencyStrip.textContent = `NEEDS VERIFICATION — ${c.mismatches.length} numeric claim(s) did not match core calculations. ${first.note || ''}`.slice(0, 220);
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Context summary strip (what would be / was sent)
+  // ------------------------------------------------------------------
+
+  function updateContextSummary(dropped) {
+    if (!dom.aiContextSummary) return;
+    const pack = buildScopedFactsPack({
+      project: currentProject(),
+      planEntities: currentPlanEntities(),
+      request: { scopeHint: dom.aiQuestionInput?.value || '' }
+    });
+    const rooms = pack.data.rooms.length;
+    const furn = pack.data.furniture.length;
+    const conflicts = pack.data.conflicts.length;
+    const meas = pack.data.measurements.length;
+    const decisions = pack.data.decisions.length;
+    const droppedNote = (dropped && dropped.length) ? ` · REDUCED: ${dropped.join('; ')}` : '';
+    dom.aiContextSummary.textContent =
+      `Context: ${rooms} rooms · ${furn} furniture · ${conflicts} conflicts · ${meas} measurements · ${decisions} decisions${droppedNote}`;
+  }
+
+  // ------------------------------------------------------------------
+  // Run job
+  // ------------------------------------------------------------------
+
+  async function runJob() {
+    const r = router();
+    if (!r) {
+      showError('AI services are not initialized.');
+      return;
+    }
+    if (busy) return;
+    const jobId = selectedJobId();
+    const userMessage = dom.aiQuestionInput?.value?.trim() || '';
+    const includeContext = dom.aiIncludeContextToggle ? dom.aiIncludeContextToggle.checked : true;
+
+    if (requiresImage(jobId) && !imageData) {
+      showError('Choose an image for the vision job first.');
+      return;
+    }
+    if (!requiresImage(jobId) && !userMessage) {
+      showError('Write a question or instruction first.');
+      return;
+    }
+
+    busy = true;
+    clearError();
+    setUnifiedResultState({ toolPrefix: 'ai', status: 'running' });
+    if (dom.aiRunBtn) {
+      const btnText = dom.aiRunBtn.querySelector('.btn-text');
+      if (btnText) btnText.textContent = 'ASKING…';
+      dom.aiRunBtn.disabled = true;
+    }
+    updateContextSummary(null);
+
+    try {
+      const request = {
+        userMessage: userMessage || (requiresImage(jobId) ? 'Describe this architectural image.' : '')
+      };
+      if (requiresImage(jobId) && imageData) {
+        request.image = imageData;
+      }
+      if (includeContext) {
+        // Scope hint: use the question so a named-room question narrows context.
+        request.scope = { rooms: currentPlanEntities().filter(e => e.kind === 'room') };
+        request.scopeHint = userMessage;
+      } else {
+        request.scope = { rooms: [] };
+      }
+
+      const result = await r.runAIJob(jobId, {
+        ...request,
+        factsOptions: { scopeHint: includeContext ? userMessage : '' }
+      });
+
+      // The router builds the pack internally via the bound context builder;
+      // reflect the actual scoped pack (with disclosures) in the summary.
+      lastResult = result;
+      if (result.ok && includeContext) {
+        const pack = buildScopedFactsPack({
+          project: currentProject(),
+          planEntities: currentPlanEntities(),
+          request: { scopeHint: userMessage }
+        });
+        updateContextSummary(pack.dropped);
+      } else if (includeContext) {
+        updateContextSummary(null);
+      } else if (dom.aiContextSummary) {
+        dom.aiContextSummary.textContent = 'Context: not included (user opted out).';
+      }
+
+      if (!result.ok) {
+        showError(result.message || 'AI request failed.');
+        AudioService.playKeyClick();
+      } else {
+        AudioService.playSuccess();
+        setUnifiedResultState({ toolPrefix: 'ai', status: 'success' });
+      }
+      renderResponse();
+      populateJobs();
+    } catch (err) {
+      showError(`Unexpected error: ${err?.message || 'unknown'}`);
+    } finally {
+      busy = false;
+      if (dom.aiRunBtn) {
+        const btnText = dom.aiRunBtn.querySelector('.btn-text');
+        if (btnText) btnText.textContent = 'RUN AI JOB';
+        dom.aiRunBtn.disabled = false;
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Image handling (vision job)
+  // ------------------------------------------------------------------
+
+  async function handleImageFile(file) {
+    if (!file) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) {
+      showError('Only PNG, JPEG, or WebP images are supported.');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      showError('Image is larger than 8 MB — use a smaller export.');
+      return;
+    }
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = String(reader.result || '');
+          const comma = dataUrl.indexOf(',');
+          resolve(comma >= 0 ? dataUrl.slice(comma + 1) : '');
+        };
+        reader.onerror = () => reject(new Error('read failed'));
+        reader.readAsDataURL(file);
+      });
+      if (!base64) {
+        showError('Image could not be read.');
+        return;
+      }
+      imageData = { imageBase64: base64, mimeType: file.type };
+      clearError();
+      showToast('Image attached — ask a question and run the job');
+    } catch (e) {
+      showError('Image could not be read.');
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Save / copy actions
+  // ------------------------------------------------------------------
+
+  function saveToJournal() {
+    if (!lastResult || !lastResult.ok || !lastResult.text) {
+      showToast('Run a successful AI job first', 'warning');
+      return;
+    }
+    const projectStore = context.projectStore;
+    if (!projectStore) {
+      showToast('Project store unavailable', 'warning');
+      return;
+    }
+    const jobId = lastResult.jobId || 'ai';
+    const def = AI_JOB_DEFINITIONS.find(j => j.jobId === jobId);
+    const title = `AI ${def ? def.label : jobId} — ${new Date().toLocaleString()}`;
+    const body = (lastResult.text || '').slice(0, 4000);
+    const res = projectStore.updateProject(draft => {
+      draft.notes.push({ id: `note-ai-${Date.now().toString(36)}`, title, body, createdAt: new Date().toISOString(), source: 'ai' });
+      return draft;
+    });
+    if (res.ok) {
+      showToast('AI response saved to the project journal');
+      AudioService.playSuccess();
+    } else {
+      showToast(res.errors?.[0] || 'Save failed', 'warning');
+    }
+  }
+
+  function copyResponse() {
+    if (!lastResult || !lastResult.ok || !lastResult.text) {
+      showToast('Run a successful AI job first', 'warning');
+      return;
+    }
+    context.copyToClipboard(lastResult.text, 'AI response');
+  }
+
+  // ------------------------------------------------------------------
+  // View contract
+  // ------------------------------------------------------------------
+
+  return {
+    id: 'ai',
+    mount() {
+      populateJobs();
+      refreshImageGroup();
+      renderResponse();
+      updateContextSummary(null);
+    },
+    onModeEnter() {
+      populateJobs();
+      refreshImageGroup();
+    },
+    getController() {
+      return {
+        runJob,
+        populateJobs,
+        saveToJournal,
+        copyResponse,
+        handleImageFile,
+        refreshImageGroup,
+        setSaveNoteHandler(fn) { if (fn) fn(); }
+      };
+    }
+  };
+}
+
+/** Exported for tests: the view's rendering helpers are pure on input. */
+const AI_STUDIO_TEST_HOOKS = { buildScopedFactsPack };
+
+
+  // =========================================================================
+  // MODULE: ViewAiControlCenter
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - AI Control Center View (Mode 21)
+ * Phase 15 (M7): providers, keys, model catalog, job assignments, activity.
+ *
+ * Security contract rendered here:
+ *  - keys show masked only; typing a new key replaces (never re-displays)
+ *  - session vs persistent storage is an explicit choice with a plain-
+ *    language explanation
+ *  - connection tests are explicit button actions (the only live requests)
+ *  - disabled providers say so; retired models never silently reassign
+ */
+
+
+
+function createAiControlCenterView(context) {
+  const { state, dom, showToast, setUnifiedResultState, AudioService } = context;
+
+  function escape(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function ai() {
+    return state.ai || null; // { http, transports, providerManager, modelCatalog, router }
+  }
+
+  function showError(message) {
+    if (dom.aiSettingsErrorMsg) {
+      dom.aiSettingsErrorMsg.textContent = `⚠️ ${message}`;
+      dom.aiSettingsErrorMsg.style.display = 'block';
+    }
+    setUnifiedResultState({ toolPrefix: 'ai-settings', status: 'error', errorText: `⚠️ ${message}` });
+  }
+
+  function clearError() {
+    if (dom.aiSettingsErrorMsg) {
+      dom.aiSettingsErrorMsg.style.display = 'none';
+      dom.aiSettingsErrorMsg.textContent = '';
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Providers panel
+  // ------------------------------------------------------------------
+
+  function renderProviders() {
+    const svc = ai();
+    if (!svc || !dom.aiProvidersList) return;
+    const statuses = svc.providerManager.listProviderStatuses();
+    dom.aiProvidersList.innerHTML = statuses.map(s => {
+      const dot = s.hasKey ? '●' : '○';
+      const dotColor = s.hasKey ? 'var(--color-success)' : 'var(--text-muted)';
+      const stateText = !s.enabled ? 'Disabled' : (s.hasKey ? 'Configured' : 'No key');
+      return `
+        <div class="ai-provider-row" role="listitem" data-provider="${escape(s.id)}" style="border: 1px solid var(--border-color-light); border-radius: 6px; padding: 0.6rem 0.75rem; background: var(--bg-card-header);">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <div style="font-size: 0.82rem;">
+              <strong style="color: var(--accent-primary);">${escape(s.label)}</strong>
+              <span style="color: ${dotColor};"> ${dot}</span>
+              <span style="color: var(--text-muted); font-size: 0.72rem;"> ${escape(stateText)}${s.hasKey ? ` · <span title="masked">${escape(s.maskedKey)}</span>` : ''}</span>
+            </div>
+            <label style="display: flex; gap: 0.35rem; align-items: center; font-size: 0.7rem; color: var(--text-secondary); cursor: pointer;">
+              <input type="checkbox" class="ai-provider-enabled" data-provider="${escape(s.id)}" ${s.enabled ? 'checked' : ''} style="width: auto;" />
+              Enabled
+            </label>
+          </div>
+          <div class="ai-provider-detail" style="display: none; margin-top: 0.55rem;">
+            <p style="margin: 0 0 0.5rem; font-size: 0.72rem; color: var(--text-muted);">${escape(s.description)} <a href="${escape(s.docsUrl)}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary);">Docs ↗</a></p>
+            <div class="input-row-group" style="margin-bottom: 0.5rem;">
+              <label class="input-label" style="font-size: 0.68rem;">API key ${s.hasKey ? '(paste a new key to replace)' : ''}</label>
+              <div style="display: flex; gap: 0.5rem;">
+                <input type="password" class="text-input ai-provider-key-input" data-provider="${escape(s.id)}" placeholder="${escape(s.hasKey ? '•••••••• (stored)' : s.id === 'gemini' ? 'AIza…' : 'API key')}" autocomplete="off" style="flex: 1;" aria-label="API key for ${escape(s.label)}" />
+                <button type="button" class="result-action-btn ai-provider-key-save" data-provider="${escape(s.id)}" title="Save the key" style="padding: 0.3rem 0.6rem;"><span>💾</span></button>
+                <button type="button" class="result-action-btn ai-provider-key-clear" data-provider="${escape(s.id)}" title="Remove the stored key" style="padding: 0.3rem 0.6rem;"><span>🗑</span></button>
+              </div>
+              <label style="display: flex; gap: 0.4rem; align-items: center; font-size: 0.68rem; color: var(--text-secondary); margin-top: 0.35rem; cursor: pointer;">
+                <input type="radio" name="ai-key-mode-${escape(s.id)}" class="ai-key-mode" data-provider="${escape(s.id)}" value="session" ${s.keyMode === 'session' ? 'checked' : ''} style="width: auto;" />
+                Session only (safest — cleared when the tab closes)
+              </label>
+              <label style="display: flex; gap: 0.4rem; align-items: center; font-size: 0.68rem; color: var(--text-secondary); cursor: pointer;">
+                <input type="radio" name="ai-key-mode-${escape(s.id)}" class="ai-key-mode" data-provider="${escape(s.id)}" value="persistent" ${s.keyMode === 'persistent' ? 'checked' : ''} style="width: auto;" />
+                Persist locally (convenient — stored in this browser's localStorage, NOT an OS secret manager)
+              </label>
+            </div>
+            ${s.endpointEditable ? `
+            <div class="input-row-group" style="margin-bottom: 0.5rem;">
+              <label class="input-label" style="font-size: 0.68rem;">API endpoint (advanced)</label>
+              <input type="text" class="text-input ai-provider-endpoint" data-provider="${escape(s.id)}" value="${escape(s.endpoint)}" style="width: 100%; font-family: var(--font-family-mono); font-size: 0.7rem;" aria-label="API endpoint for ${escape(s.label)}" />
+            </div>` : ''}
+            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+              <button type="button" class="result-action-btn ai-provider-test" data-provider="${escape(s.id)}" title="Send a minimal live test request (no project data)"><span>🔌 Test</span></button>
+              <button type="button" class="result-action-btn ai-provider-discover" data-provider="${escape(s.id)}" title="Fetch the provider's model list"><span>🔄 Models</span></button>
+            </div>
+            <div class="ai-provider-status" data-provider="${escape(s.id)}" style="margin-top: 0.45rem; font-size: 0.7rem; color: var(--text-muted);"></div>
+          </div>
+          <button type="button" class="ai-provider-toggle" data-provider="${escape(s.id)}" style="background: none; border: none; color: var(--text-tertiary); font-size: 0.68rem; cursor: pointer; padding: 0; margin-top: 0.2rem;">Details ▾</button>
+        </div>`;
+    }).join('');
+
+    // Wire interactions
+    dom.aiProvidersList.querySelectorAll('.ai-provider-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const row = btn.closest('.ai-provider-row');
+        const detail = row?.querySelector('.ai-provider-detail');
+        if (detail) {
+          const open = detail.style.display !== 'none';
+          detail.style.display = open ? 'none' : 'block';
+          btn.textContent = open ? 'Details ▾' : 'Details ▴';
+        }
+      });
+    });
+    dom.aiProvidersList.querySelectorAll('.ai-provider-enabled').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const res = svc.providerManager.setEnabled(cb.dataset.provider, cb.checked);
+        if (res.ok) {
+          showToast(`${cb.dataset.provider} ${cb.checked ? 'enabled' : 'disabled'}`);
+          renderProviders();
+          renderJobs();
+        }
+      });
+    });
+    dom.aiProvidersList.querySelectorAll('.ai-provider-key-save').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pid = btn.dataset.provider;
+        const input = dom.aiProvidersList.querySelector(`.ai-provider-key-input[data-provider="${pid}"]`);
+        const value = input?.value || '';
+        if (!value.trim()) {
+          showError('Type the key before saving.');
+          return;
+        }
+        const res = svc.providerManager.setKey(pid, value);
+        if (res.ok) {
+          if (input) input.value = '';
+          clearError();
+          showToast(`Key saved (${res.mode} storage) — shown masked only`);
+          AudioService.playSuccess();
+          renderProviders();
+          renderJobs();
+        } else {
+          showError(res.error);
+        }
+      });
+    });
+    dom.aiProvidersList.querySelectorAll('.ai-provider-key-clear').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pid = btn.dataset.provider;
+        svc.providerManager.clearKey(pid);
+        showToast('Key removed');
+        renderProviders();
+        renderJobs();
+      });
+    });
+    dom.aiProvidersList.querySelectorAll('.ai-key-mode').forEach(radio => {
+      radio.addEventListener('change', () => {
+        if (!radio.checked) return;
+        const res = svc.providerManager.setKeyMode(radio.dataset.provider, radio.value);
+        if (res.ok) {
+          showToast(radio.value === 'session'
+            ? 'Session-only selected — any persisted key for this provider was cleared'
+            : 'Persistent storage selected — the key stays in this browser');
+          renderProviders();
+        }
+      });
+    });
+    dom.aiProvidersList.querySelectorAll('.ai-provider-endpoint').forEach(input => {
+      input.addEventListener('change', () => {
+        const res = svc.providerManager.setEndpoint(input.dataset.provider, input.value);
+        if (!res.ok) {
+          showError(res.error);
+        } else {
+          clearError();
+          showToast('Endpoint updated');
+        }
+      });
+    });
+    dom.aiProvidersList.querySelectorAll('.ai-provider-test').forEach(btn => {
+      btn.addEventListener('click', () => testProvider(btn.dataset.provider, btn));
+    });
+    dom.aiProvidersList.querySelectorAll('.ai-provider-discover').forEach(btn => {
+      btn.addEventListener('click', () => discoverModels(btn.dataset.provider, btn));
+    });
+  }
+
+  /** Explicit, user-triggered live connection test (the only one). */
+  async function testProvider(providerId, btn) {
+    const svc = ai();
+    if (!svc) return;
+    const statusEl = dom.aiProvidersList?.querySelector(`.ai-provider-status[data-provider="${providerId}"]`);
+    if (btn) btn.disabled = true;
+    if (statusEl) statusEl.textContent = 'Testing…';
+    // Test against the assigned model when one exists for this provider.
+    const assigned = svc.router?.listJobStatuses().find(s => s.providerId === providerId && s.modelId);
+    const transport = svc.transports.get(providerId);
+    const res = await svc.providerManager.testConnection(providerId, {
+      transport,
+      modelId: assigned?.modelId || null
+    });
+    if (btn) btn.disabled = false;
+    if (statusEl) {
+      if (res.ok) {
+        statusEl.textContent = `● CONNECTED${res.latencyMs != null ? ` (${res.latencyMs} ms)` : ''}${res.modelId ? ` · ${res.modelId}` : ''}`;
+        statusEl.style.color = 'var(--color-success)';
+        AudioService.playSuccess();
+      } else {
+        statusEl.textContent = `✕ ${res.message}`;
+        statusEl.style.color = 'var(--color-error)';
+        AudioService.playKeyClick();
+      }
+    }
+  }
+
+  /** Explicit, user-triggered model discovery (network). */
+  async function discoverModels(providerId, btn) {
+    const svc = ai();
+    if (!svc) return;
+    const statusEl = dom.aiProvidersList?.querySelector(`.ai-provider-status[data-provider="${providerId}"]`);
+    if (!svc.providerManager.hasKey(providerId)) {
+      if (statusEl) {
+        statusEl.textContent = '✕ Set an API key before refreshing models.';
+        statusEl.style.color = 'var(--color-error)';
+      }
+      return;
+    }
+    const transport = svc.transports.get(providerId);
+    if (!transport?.listModels) return;
+    if (btn) btn.disabled = true;
+    if (statusEl) statusEl.textContent = 'Discovering models…';
+    const status = svc.providerManager.getProviderStatus(providerId);
+    let res;
+    try {
+      res = await transport.listModels({ endpoint: status.endpoint, apiKey: svc.providerManager.getRawKey(providerId) });
+    } catch (err) {
+      res = { ok: false, message: err?.message || 'discovery failed' };
+    }
+    if (btn) btn.disabled = false;
+    if (res.ok) {
+      const merge = svc.modelCatalog.mergeDiscovery(providerId, res.models);
+      if (statusEl) {
+        statusEl.textContent = `● ${merge.total} models in catalog (+${merge.added} new)`;
+        statusEl.style.color = 'var(--color-success)';
+      }
+      showToast(`${providerId}: ${merge.added} new model(s), ${merge.updated} updated`);
+      renderCatalog();
+      renderJobs();
+    } else {
+      // Discovery failure does NOT break the provider — manual entry remains.
+      if (statusEl) {
+        statusEl.textContent = `✕ ${res.message || 'Discovery unavailable'} — use manual model entry below.`;
+        statusEl.style.color = 'var(--color-warning)';
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Jobs panel
+  // ------------------------------------------------------------------
+
+  function statusColor(status) {
+    switch (status) {
+      case 'READY': return 'var(--color-success)';
+      case 'NOT CONFIGURED': return 'var(--text-muted)';
+      case 'NO KEY': return 'var(--color-warning)';
+      case 'PROVIDER DISABLED':
+      case 'MODEL UNAVAILABLE':
+      case 'CAPABILITY MISMATCH': return 'var(--color-error)';
+      case 'LAST ERROR': return 'var(--color-warning)';
+      default: return 'var(--text-muted)';
+    }
+  }
+
+  function renderJobs() {
+    const svc = ai();
+    if (!svc || !dom.aiJobsList) return;
+    const statuses = svc.router.listJobStatuses();
+    const readyCount = statuses.filter(s => s.status === 'READY').length;
+    if (dom.aiJobsReadyBadge) dom.aiJobsReadyBadge.textContent = `${readyCount} READY`;
+
+    dom.aiJobsList.innerHTML = statuses.map(st => {
+      const assigned = svc.router.getAssignment(st.jobId);
+      const modelText = st.status === 'NOT CONFIGURED'
+        ? 'Not configured'
+        : `${st.providerId || '?'} · ${st.modelId || '?'}`;
+      const detail = st.lastError ? ` — ${escape(st.lastError.errorCode)}` : '';
+      return `
+        <div class="ai-job-row" role="listitem" data-job="${escape(st.jobId)}" style="border: 1px solid var(--border-color-light); border-radius: 5px; padding: 0.45rem 0.6rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <div style="font-size: 0.78rem;">
+              <strong style="color: var(--text-primary);">${escape(st.label)}</strong>
+              <span style="color: var(--text-muted); font-size: 0.7rem;"> · ${escape(modelText)}</span>
+              <span style="color: ${statusColor(st.status)}; font-size: 0.68rem; font-weight: 700;"> ● ${escape(st.status)}${detail}</span>
+            </div>
+            <div style="display: flex; gap: 0.35rem; align-items: center;">
+              <select class="calc-select ai-job-provider" data-job="${escape(st.jobId)}" style="min-width: 110px; font-size: 0.7rem;" aria-label="Provider for ${escape(st.label)}">
+                <option value="">Provider…</option>
+                ${svc.providerManager.listProviderStatuses().map(p =>
+                  `<option value="${escape(p.id)}" ${assigned?.providerId === p.id ? 'selected' : ''}>${escape(p.label)}</option>`).join('')}
+              </select>
+              <select class="calc-select ai-job-model" data-job="${escape(st.jobId)}" style="min-width: 150px; font-size: 0.7rem;" aria-label="Model for ${escape(st.label)}"></select>
+              <button type="button" class="result-action-btn ai-job-save" data-job="${escape(st.jobId)}" style="padding: 0.25rem 0.55rem; font-size: 0.68rem;" title="Assign the selected provider/model"><span>Assign</span></button>
+              <button type="button" class="result-action-btn ai-job-clear" data-job="${escape(st.jobId)}" style="padding: 0.25rem 0.55rem; font-size: 0.68rem;" title="Remove the assignment"><span>✕</span></button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Populate model dropdowns for the currently-chosen provider
+    dom.aiJobsList.querySelectorAll('.ai-job-row').forEach(row => {
+      const jobId = row.dataset.job;
+      const providerSel = row.querySelector('.ai-job-provider');
+      const modelSel = row.querySelector('.ai-job-model');
+      const fillModels = pid => {
+        const def = AI_JOB_DEFINITIONS.find(j => j.jobId === jobId);
+        const models = pid ? svc.modelCatalog.listModels(pid) : [];
+        modelSel.innerHTML = '<option value="">Model…</option>' + models.map(m =>
+          `<option value="${escape(m.modelId)}">${escape(m.displayName)}${m.origin === 'manual' ? ' (user declared)' : ''}</option>`).join('');
+        const assigned = svc.router.getAssignment(jobId);
+        if (assigned && assigned.providerId === pid) {
+          modelSel.value = assigned.modelId;
+        }
+        void def;
+      };
+      fillModels(providerSel.value);
+      providerSel.addEventListener('change', () => fillModels(providerSel.value));
+    });
+
+    dom.aiJobsList.querySelectorAll('.ai-job-save').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const jobId = btn.dataset.job;
+        const row = btn.closest('.ai-job-row');
+        const pid = row?.querySelector('.ai-job-provider')?.value;
+        const mid = row?.querySelector('.ai-job-model')?.value;
+        if (!pid || !mid) {
+          showError('Choose both a provider and a model before assigning.');
+          return;
+        }
+        const res = svc.router.assignModel(jobId, { providerId: pid, modelId: mid, fallbackPolicy: FALLBACK_POLICIES.NEVER });
+        if (res.ok) {
+          clearError();
+          showToast('Job assigned — fallback policy: never (default)');
+          AudioService.playSuccess();
+          renderJobs();
+        } else {
+          showError(res.error);
+        }
+      });
+    });
+    dom.aiJobsList.querySelectorAll('.ai-job-clear').forEach(btn => {
+      btn.addEventListener('click', () => {
+        svc.router.clearAssignment(btn.dataset.job);
+        renderJobs();
+      });
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Catalog panel
+  // ------------------------------------------------------------------
+
+  function renderCatalog() {
+    const svc = ai();
+    if (!svc || !dom.aiCatalogList) return;
+    const search = dom.aiCatalogSearch?.value || '';
+    const providerFilter = dom.aiCatalogProviderFilter?.value || '';
+    const caps = {
+      vision: dom.aiFilterVision?.checked || false,
+      structuredOutput: dom.aiFilterStructured?.checked || false,
+      imageGen: dom.aiFilterImageGen?.checked || false
+    };
+    const models = svc.modelCatalog.queryModels({
+      search,
+      providerId: providerFilter || undefined,
+      capabilities: caps
+    });
+    if (dom.aiCatalogCountBadge) dom.aiCatalogCountBadge.textContent = `${models.length} MODELS`;
+
+    if (models.length === 0) {
+      dom.aiCatalogList.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">No models match — run a provider\'s Models refresh or add a custom model below.</div>';
+      return;
+    }
+
+    dom.aiCatalogList.innerHTML = models.map(m => {
+      const capChips = [
+        m.capabilities.vision ? 'Vision' : null,
+        m.capabilities.reasoning ? 'Reasoning' : null,
+        m.capabilities.structuredOutput ? 'Structured' : null,
+        m.capabilities.toolCalling ? 'Tools' : null,
+        m.capabilities.imageGen ? 'ImageGen' : null
+      ].filter(Boolean).map(c => `<span style="border: 1px solid var(--border-color-light); border-radius: 3px; padding: 0 0.3rem; font-size: 0.62rem; margin-right: 0.25rem;">${escape(c)}</span>`).join('');
+      const ctx = m.capabilities.contextLimit ? `${(m.capabilities.contextLimit / 1000).toFixed(0)}k ctx` : 'ctx ?';
+      const statusColor = m.status === 'READY' ? 'var(--color-success)' : m.status === 'RETIRED' || m.status === 'UNAVAILABLE' ? 'var(--color-error)' : 'var(--text-muted)';
+      return `
+        <div class="ai-catalog-row" role="listitem" data-provider="${escape(m.providerId)}" data-model="${escape(m.modelId)}" style="border: 1px solid var(--border-color-light); border-radius: 5px; padding: 0.4rem 0.6rem; display: flex; justify-content: space-between; gap: 0.5rem; align-items: center;">
+          <div style="font-size: 0.74rem; min-width: 0;">
+            <strong style="color: var(--text-primary);">${escape(m.displayName)}</strong>
+            <span style="color: var(--text-muted); font-size: 0.66rem;"> · ${escape(m.providerId)} · ${escape(m.modelId)} · ${escape(ctx)}</span>
+            <div style="margin-top: 0.2rem;">${capChips}<span style="color: ${statusColor}; font-size: 0.64rem; font-weight: 700;"> ● ${escape(m.status)}</span>
+            ${m.origin === 'manual' ? '<span style="color: var(--text-muted); font-size: 0.62rem;"> · user declared</span>' : ''}</div>
+          </div>
+          <button type="button" class="result-action-btn ai-catalog-remove" data-provider="${escape(m.providerId)}" data-model="${escape(m.modelId)}" style="padding: 0.2rem 0.5rem; font-size: 0.66rem;" title="Remove this model from the catalog"><span>✕</span></button>
+        </div>`;
+    }).join('');
+
+    dom.aiCatalogList.querySelectorAll('.ai-catalog-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const res = svc.modelCatalog.removeModel(btn.dataset.provider, btn.dataset.model);
+        if (res.ok) {
+          showToast('Model removed from catalog');
+          renderCatalog();
+          renderJobs();
+        }
+      });
+    });
+  }
+
+  function populateProviderFilters() {
+    const svc = ai();
+    if (!svc) return;
+    const options = '<option value="">All providers</option>' +
+      svc.providerManager.listProviderStatuses().map(p => `<option value="${escape(p.id)}">${escape(p.label)}</option>`).join('');
+    if (dom.aiCatalogProviderFilter && !dom.aiCatalogProviderFilter.options.length) {
+      dom.aiCatalogProviderFilter.innerHTML = options;
+    }
+    if (dom.aiManualProvider && !dom.aiManualProvider.options.length) {
+      dom.aiManualProvider.innerHTML = svc.providerManager.listProviderStatuses()
+        .map(p => `<option value="${escape(p.id)}">${escape(p.label)}</option>`).join('');
+    }
+  }
+
+  function addManualModel() {
+    const svc = ai();
+    if (!svc) return;
+    const pid = dom.aiManualProvider?.value;
+    const modelId = dom.aiManualModelId?.value?.trim();
+    const displayName = dom.aiManualModelName?.value?.trim();
+    if (!pid || !modelId) {
+      showError('Choose a provider and enter the exact model ID.');
+      return;
+    }
+    const capabilities = {
+      text: dom.aiManualCapText?.checked ?? true,
+      reasoning: !!dom.aiManualCapReasoning?.checked,
+      structuredOutput: !!dom.aiManualCapStructured?.checked,
+      toolCalling: !!dom.aiManualCapStructured?.checked,
+      vision: !!dom.aiManualCapVision?.checked,
+      imageGen: !!dom.aiManualCapImagegen?.checked
+    };
+    const res = svc.modelCatalog.addManualModel(pid, { modelId, displayName, capabilities });
+    if (res.ok) {
+      clearError();
+      showToast(`Model "${modelId}" added (user declared)`);
+      if (dom.aiManualModelId) dom.aiManualModelId.value = '';
+      if (dom.aiManualModelName) dom.aiManualModelName.value = '';
+      renderCatalog();
+      renderJobs();
+      AudioService.playSuccess();
+    } else {
+      showError(res.error);
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Activity panel
+  // ------------------------------------------------------------------
+
+  function renderActivity() {
+    const svc = ai();
+    if (!svc || !dom.aiActivityList) return;
+    const log = svc.router.getActivityLog();
+    if (log.length === 0) {
+      dom.aiActivityList.innerHTML = '<div style="color: var(--text-muted); font-style: italic;">No AI activity yet.</div>';
+      return;
+    }
+    dom.aiActivityList.innerHTML = log.slice(0, 20).map(e => {
+      const color = e.outcome === 'SUCCESS' ? 'var(--color-success)' : 'var(--color-error)';
+      const tokens = (e.inputTokens != null || e.outputTokens != null)
+        ? ` · ${e.inputTokens ?? '?'}→${e.outputTokens ?? '?'} tok` : '';
+      return `<div style="display: flex; justify-content: space-between; gap: 0.5rem;">
+        <span style="color: var(--text-muted);">${escape(new Date(e.at).toLocaleTimeString())} · ${escape(e.jobId || '—')} · ${escape(e.providerId || '—')}${tokens}</span>
+        <span style="color: ${color}; font-weight: 700;">${escape(e.outcome === 'SUCCESS' ? '✓' : `✕ ${e.errorCode || 'ERROR'}`)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ------------------------------------------------------------------
+  // View contract
+  // ------------------------------------------------------------------
+
+  function renderAll() {
+    populateProviderFilters();
+    renderProviders();
+    renderJobs();
+    renderCatalog();
+    renderActivity();
+    clearError();
+  }
+
+  return {
+    id: 'ai_settings',
+    mount() {
+      renderAll();
+    },
+    onModeEnter() {
+      renderAll();
+    },
+    getController() {
+      return { renderAll, renderJobs, renderCatalog, renderActivity, addManualModel, testProvider, discoverModels };
+    }
+  };
+}
+
+
+  // =========================================================================
   // MODULE: App
   // =========================================================================
 
@@ -20721,6 +21884,14 @@ function createPlanView(context) {
 // NOTE: cad-clipboard / batch-cad / cad-targets core engines are imported by
 // their view modules (src/ui/views/*) — app.js only needs the storage keys
 // and the small helpers still referenced by listeners/state below.
+
+
+
+
+
+
+
+
 
 
 
@@ -21015,7 +22186,10 @@ function initializeApp() {
       furnitureIndex: 0,
       furnitureRotated: false,
       entities: []
-    }
+    },
+
+    // Modes 20-21: AI Studio + AI Control Center (services attached at boot)
+    ai: null
   };
 
   // DOM Elements Cache (Strictly normalized with index.html)
@@ -21624,7 +22798,50 @@ function initializeApp() {
     planSvgWrap: document.getElementById('plan-svg-wrap'),
     btnPlanSave: document.getElementById('btn-plan-save'),
     btnPlanExportSvg: document.getElementById('btn-plan-export-svg'),
-    btnPlanExportDxf: document.getElementById('btn-plan-export-dxf')
+    btnPlanExportDxf: document.getElementById('btn-plan-export-dxf'),
+
+    // Mode 20: AI Studio Elements
+    aiJobSelect: document.getElementById('ai-job-select'),
+    aiImageGroup: document.getElementById('ai-image-group'),
+    aiImageInput: document.getElementById('ai-image-input'),
+    aiQuestionInput: document.getElementById('ai-question-input'),
+    aiIncludeContextToggle: document.getElementById('ai-include-context-toggle'),
+    aiRunBtn: document.getElementById('btn-ai-run'),
+    aiOpenSettingsBtn: document.getElementById('btn-ai-open-settings'),
+    aiErrorMsg: document.getElementById('ai-error-msg'),
+    aiSaveNoteBtn: document.getElementById('btn-ai-save-note'),
+    aiCopyBtn: document.getElementById('btn-ai-copy'),
+    aiResultPanel: document.getElementById('ai-result-panel'),
+    aiModelBadge: document.getElementById('ai-model-badge'),
+    aiResponseEmpty: document.getElementById('ai-response-empty'),
+    aiResponseBody: document.getElementById('ai-response-body'),
+    aiConsistencyStrip: document.getElementById('ai-consistency-strip'),
+    aiContextSummary: document.getElementById('ai-context-summary'),
+
+    // Mode 21: AI Control Center Elements
+    aiProvidersList: document.getElementById('ai-providers-list'),
+    aiSettingsErrorMsg: document.getElementById('ai-settings-error-msg'),
+    aiJobsList: document.getElementById('ai-jobs-list'),
+    aiJobsReadyBadge: document.getElementById('ai-jobs-ready-badge'),
+    aiCatalogCountBadge: document.getElementById('ai-catalog-count-badge'),
+    aiCatalogSearch: document.getElementById('ai-catalog-search'),
+    aiCatalogProviderFilter: document.getElementById('ai-catalog-provider-filter'),
+    aiRefreshModelsBtn: document.getElementById('btn-ai-refresh-models'),
+    aiFilterVision: document.getElementById('ai-filter-vision'),
+    aiFilterStructured: document.getElementById('ai-filter-structured'),
+    aiFilterImageGen: document.getElementById('ai-filter-imagegen'),
+    aiCatalogList: document.getElementById('ai-catalog-list'),
+    aiManualProvider: document.getElementById('ai-manual-provider'),
+    aiManualModelId: document.getElementById('ai-manual-model-id'),
+    aiManualModelName: document.getElementById('ai-manual-model-name'),
+    aiManualCapText: document.getElementById('ai-manual-cap-text'),
+    aiManualCapReasoning: document.getElementById('ai-manual-cap-reasoning'),
+    aiManualCapStructured: document.getElementById('ai-manual-cap-structured'),
+    aiManualCapVision: document.getElementById('ai-manual-cap-vision'),
+    aiManualCapImagegen: document.getElementById('ai-manual-cap-imagegen'),
+    aiAddManualModelBtn: document.getElementById('btn-ai-add-manual-model'),
+    aiActivityList: document.getElementById('ai-activity-list'),
+    aiClearActivityBtn: document.getElementById('btn-ai-clear-activity')
   };
 
   // ---------------------------------------------------------------------------
@@ -21823,6 +23040,12 @@ function initializeApp() {
     }
     else if (targetMode === 'plan') {
       views.callController('plan', 'render');
+    }
+    else if (targetMode === 'ai') {
+      views.callController('ai', 'populateJobs');
+    }
+    else if (targetMode === 'ai_settings') {
+      views.callController('ai_settings', 'renderAll');
     }
   }
 
@@ -23237,6 +24460,29 @@ function initializeApp() {
         break;
       case 'nav-plan':
         switchMode('plan');
+        break;
+      case 'nav-ai-studio':
+        switchMode('ai');
+        break;
+      case 'nav-ai-control-center':
+        switchMode('ai_settings');
+        break;
+      case 'ai-analyze-project':
+        switchMode('ai');
+        setTimeout(() => {
+          if (dom.aiJobSelect) dom.aiJobSelect.value = 'projectAnalysis';
+          views.callController('ai', 'refreshImageGroup');
+        }, 0);
+        break;
+      case 'ai-critique-design':
+        switchMode('ai');
+        setTimeout(() => {
+          if (dom.aiJobSelect) dom.aiJobSelect.value = 'studioCritic';
+          views.callController('ai', 'refreshImageGroup');
+        }, 0);
+        break;
+      case 'ai-test-provider':
+        switchMode('ai_settings');
         break;
       case 'nav-cad-clipboard':
         switchMode('cad_clipboard');
@@ -25444,6 +26690,60 @@ function initializeApp() {
       dom.btnPlanExportDxf.addEventListener('click', () => views.callController('plan', 'exportPlan', 'dxf'));
     }
 
+    // Mode 20: AI Studio listeners
+    if (dom.aiRunBtn) {
+      dom.aiRunBtn.addEventListener('click', () => views.callController('ai', 'runJob'));
+    }
+    if (dom.aiOpenSettingsBtn) {
+      dom.aiOpenSettingsBtn.addEventListener('click', () => switchMode('ai_settings'));
+    }
+    if (dom.aiJobSelect) {
+      dom.aiJobSelect.addEventListener('change', () => views.callController('ai', 'refreshImageGroup'));
+    }
+    if (dom.aiImageInput) {
+      dom.aiImageInput.addEventListener('change', () => {
+        const file = dom.aiImageInput.files && dom.aiImageInput.files[0];
+        if (file) views.callController('ai', 'handleImageFile', file);
+      });
+    }
+    if (dom.aiSaveNoteBtn) {
+      dom.aiSaveNoteBtn.addEventListener('click', () => views.callController('ai', 'saveToJournal'));
+    }
+    if (dom.aiCopyBtn) {
+      dom.aiCopyBtn.addEventListener('click', () => views.callController('ai', 'copyResponse'));
+    }
+
+    // Mode 21: AI Control Center listeners
+    if (dom.aiCatalogSearch) {
+      dom.aiCatalogSearch.addEventListener('input', () => views.callController('ai_settings', 'renderCatalog'));
+    }
+    if (dom.aiCatalogProviderFilter) {
+      dom.aiCatalogProviderFilter.addEventListener('change', () => views.callController('ai_settings', 'renderCatalog'));
+    }
+    for (const filterEl of [dom.aiFilterVision, dom.aiFilterStructured, dom.aiFilterImageGen]) {
+      if (filterEl) filterEl.addEventListener('change', () => views.callController('ai_settings', 'renderCatalog'));
+    }
+    if (dom.aiRefreshModelsBtn) {
+      dom.aiRefreshModelsBtn.addEventListener('click', () => {
+        // Refresh discovery for every configured, enabled provider.
+        const svc = state.ai;
+        if (!svc) return;
+        for (const p of svc.providerManager.listProviderStatuses()) {
+          if (p.enabled && p.hasKey) views.callController('ai_settings', 'discoverModels', p.id, null);
+        }
+      });
+    }
+    if (dom.aiAddManualModelBtn) {
+      dom.aiAddManualModelBtn.addEventListener('click', () => views.callController('ai_settings', 'addManualModel'));
+    }
+    if (dom.aiClearActivityBtn) {
+      dom.aiClearActivityBtn.addEventListener('click', () => {
+        state.ai?.router?.clearActivityLog();
+        views.callController('ai_settings', 'renderActivity');
+        showToast('AI activity log cleared');
+      });
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -25617,6 +26917,33 @@ function initializeApp() {
   const projectStore = createProjectStore({ storage: StorageService });
   projectStore.loadProject(); // recover persisted project; failures stay controlled
 
+  // AI services (Phase 15): one shared instance graph. Keys live only inside
+  // the provider manager; the job router is the ONLY execution entry point.
+  let aiServices = null;
+  try {
+    const http = createAiHttp();
+    const transports = createTransports({ http });
+    const providerManager = createProviderManager({ storage: StorageService });
+    const modelCatalog = createModelCatalog({ storage: StorageService });
+    const router = createJobRouter({
+      providerManager,
+      modelCatalog,
+      transports,
+      storage: StorageService,
+      buildFactsPack: (args = {}) => buildScopedFactsPack({
+        project: projectStore.getProject(),
+        planEntities: state.plan.entities,
+        request: { scopeHint: args.request?.scopeHint || args.options?.scopeHint || '' }
+      })
+    });
+    aiServices = { http, transports, providerManager, modelCatalog, router };
+  } catch (e) {
+    // AI unavailable — the application remains fully functional (by design).
+    console.warn('AI services unavailable:', e?.message || e);
+    aiServices = null;
+  }
+  state.ai = aiServices;
+
   const viewContext = Object.freeze({
     state,
     dom,
@@ -25660,6 +26987,8 @@ function initializeApp() {
   views.register(createExportCenterView(viewContext));
   views.register(createProjectsView(viewContext));
   views.register(createPlanView(viewContext));
+  views.register(createAiStudioView(viewContext));
+  views.register(createAiControlCenterView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();
