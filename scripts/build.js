@@ -75,6 +75,14 @@ export const BUNDLE_MODULES = [
   { name: 'Audio', file: path.join(srcDir, 'services', 'audio.js') },
   { name: 'History', file: path.join(srcDir, 'services', 'history.js') },
   { name: 'Commands', file: path.join(srcDir, 'services', 'commands.js') },
+  // --- AI services (Phase 15: real provider transport; depends on AIProvider) ---
+  { name: 'AIHttp', file: path.join(srcDir, 'services', 'ai', 'http.js') },
+  { name: 'AITransportGemini', file: path.join(srcDir, 'services', 'ai', 'transports', 'gemini.js') },
+  { name: 'AITransportOpenAiCompat', file: path.join(srcDir, 'services', 'ai', 'transports', 'openai-compat.js') },
+  { name: 'AITransports', file: path.join(srcDir, 'services', 'ai', 'transports', 'index.js') },
+  { name: 'AIProviderManager', file: path.join(srcDir, 'services', 'ai', 'provider-manager.js') },
+  { name: 'AIModelCatalog', file: path.join(srcDir, 'services', 'ai', 'model-catalog.js') },
+  { name: 'AIJobRouter', file: path.join(srcDir, 'services', 'ai', 'job-router.js') },
 
   // --- UI (last: imports everything above) ---
   { name: 'ViewRegistry', file: path.join(srcDir, 'ui', 'view-registry.js') },

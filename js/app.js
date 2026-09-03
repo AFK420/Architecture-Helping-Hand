@@ -12619,6 +12619,1851 @@ class CommandRegistryClass {
 const CommandRegistry = new CommandRegistryClass();
 
   // =========================================================================
+  // MODULE: AIHttp
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - AI HTTP Boundary
+ * Phase 15 (M1): the ONLY module in the repository that performs AI network
+ * fetches. Transports (services/ai/transports/*) call these helpers; nothing
+ * else in core/, ai/, or ui/ may touch fetch for AI traffic.
+ *
+ * Contract:
+ *  - fetchImpl is injectable (tests bind a deterministic mock — automated
+ *    suites NEVER hit the network, rule 55/76)
+ *  - timeouts are enforced per request via AbortController
+ *  - responses resolve to { ok, status, statusText, headers, json } — the
+ *    caller (transport) maps status/errors into the AI error taxonomy
+ *  - API keys are passed by the caller per request and are NEVER logged or
+ *    stored here
+ */
+
+/** Default timeout for one AI HTTP request (ms). Generative calls are slow. */
+const DEFAULT_AI_HTTP_TIMEOUT_MS = 60000;
+
+/** Shorter timeout for lightweight calls (connection tests, model lists). */
+const QUICK_AI_HTTP_TIMEOUT_MS = 20000;
+
+/**
+ * Creates the AI HTTP client. One instance is shared by all transports so
+ * the injection point stays singular.
+ *
+ * @param {Object} [options]
+ * @param {Function} [options.fetchImpl] - (url, init) => Promise<Response>;
+ *   defaults to global fetch when available
+ * @param {Function} [options.now] - clock override (tests)
+ */
+function createAiHttp(options = {}) {
+  const fetchImpl = options.fetchImpl || (typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : null);
+  const now = options.now || (() => Date.now());
+  if (!fetchImpl) {
+    // No fetch environment (very old sandbox): every request fails controlled.
+    return {
+      available: false,
+      async request() {
+        return { ok: false, kind: 'network', message: 'Network transport unavailable in this environment.' };
+      }
+    };
+  }
+
+  /**
+   * Performs one request.
+   *
+   * @param {Object} req
+   * @param {string} req.url
+   * @param {Object} [req.init] - fetch init (method, headers, body)
+   * @param {number} [req.timeoutMs]
+   * @returns {Promise<Object>} { ok, kind?, status?, statusText?, json?, text?, message? }
+   *   ok=true  → status/statusText/json|text populated
+   *   ok=false → kind: 'network' | 'timeout', message for the UI
+   */
+  async function request(req) {
+    const { url, init = {}, timeoutMs = DEFAULT_AI_HTTP_TIMEOUT_MS } = req || {};
+    if (typeof url !== 'string' || !url) {
+      return { ok: false, kind: 'network', message: 'AI request requires a URL.' };
+    }
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    let timedOut = false;
+    let timer = null;
+    if (controller) {
+      timer = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, timeoutMs);
+    }
+    let response;
+    try {
+      response = await fetchImpl(url, controller ? { ...init, signal: controller.signal } : init);
+    } catch (err) {
+      if (timedOut) {
+        return { ok: false, kind: 'timeout', message: 'AI request timed out.' };
+      }
+      return { ok: false, kind: 'network', message: `Network error: ${err?.message || 'request failed'}` };
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+
+    const status = response.status;
+    // Parse the body defensively: JSON first, raw text fallback.
+    let body = null;
+    let text = null;
+    try {
+      text = await response.text();
+      if (text) {
+        try {
+          body = JSON.parse(text);
+        } catch (e) {
+          body = null; // non-JSON body — keep text for diagnostics
+        }
+      }
+    } catch (e) {
+      // Body unreadable — status still carries the outcome
+    }
+    return { ok: response.ok, status, statusText: response.statusText || '', json: body, text };
+  }
+
+  return { available: true, request, now };
+}
+
+
+  // =========================================================================
+  // MODULE: AITransportGemini
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Gemini Transport (Phase 15, M3)
+ * Real Google Gemini API adapter over the injected AI HTTP boundary.
+ *
+ * Endpoint mechanics (official REST, v1beta):
+ *  - Generate:  POST {endpoint}/models/{model}:generateContent?key=API_KEY
+ *  - Models:    GET  {endpoint}/models?key=API_KEY (paginated ListModels)
+ *  - Vision:    inline_data { mime_type, data(base64) } part
+ *  - Structured: generationConfig.responseMimeType = "application/json"
+ *
+ * The adapter never invents endpoints and never hard-codes a model id: the
+ * model comes from the caller (model catalog / job assignment). Capability
+ * gating happens upstream; this module maps requests/responses/errors.
+ */
+
+
+
+/** Minimal connection-test prompt — no project data, no user content. */
+const GEMINI_TEST_PROMPT = 'Reply with the single word: ready';
+
+/**
+ * Maps an HTTP status + provider error body into the AI error taxonomy.
+ * Gemini returns { error: { code, message, status } }.
+ */
+function mapGeminiError(http) {
+  const apiMessage = http?.json?.error?.message || http?.text || '';
+  if (http.status === 400 && /api key not valid|api_key_invalid/i.test(apiMessage)) {
+    return { errorCode: AI_ERROR_CODES.AUTH_FAILED, message: 'INVALID KEY — Google rejected the API key.' };
+  }
+  if (http.status === 401 || http.status === 403) {
+    return { errorCode: AI_ERROR_CODES.AUTH_FAILED, message: `INVALID KEY — authentication failed (${http.status}).` };
+  }
+  if (http.status === 429) {
+    return { errorCode: AI_ERROR_CODES.QUOTA_EXHAUSTED, message: 'AI temporarily unavailable — Gemini free limit reached.' };
+  }
+  if (http.status === 404) {
+    return { errorCode: AI_ERROR_CODES.INVALID_MODEL, message: 'MODEL NOT FOUND — check the configured model id.' };
+  }
+  if (http.status === 400) {
+    return { errorCode: AI_ERROR_CODES.UNKNOWN, message: `Gemini rejected the request: ${apiMessage || 'bad request'}` };
+  }
+  if (http.status >= 500) {
+    return { errorCode: AI_ERROR_CODES.NETWORK_ERROR, message: 'Gemini server error — try again later.' };
+  }
+  if (http.kind === 'timeout') {
+    return { errorCode: AI_ERROR_CODES.TIMEOUT, message: 'Gemini request timed out.' };
+  }
+  if (http.kind === 'network') {
+    return { errorCode: AI_ERROR_CODES.NETWORK_ERROR, message: http.message || 'Network unavailable — the app works fully without AI.' };
+  }
+  return { errorCode: AI_ERROR_CODES.UNKNOWN, message: apiMessage || `Gemini returned HTTP ${http.status}.` };
+}
+
+/** Builds the generateContent request body for one call. */
+function buildGenerateBody({ systemPrompt, userPrompt, options = {} }) {
+  const parts = [];
+  if (options.imageBase64) {
+    parts.push({
+      inline_data: {
+        mime_type: options.mimeType || 'image/png',
+        data: options.imageBase64
+      }
+    });
+  }
+  parts.push({ text: userPrompt || '' });
+  const body = {
+    contents: [{ role: 'user', parts }],
+    generationConfig: {}
+  };
+  if (systemPrompt) {
+    body.systemInstruction = { parts: [{ text: systemPrompt }] };
+  }
+  if (options.temperature !== undefined && typeof options.temperature === 'number') {
+    body.generationConfig.temperature = options.temperature;
+  }
+  if (options.maxOutputTokens !== undefined && typeof options.maxOutputTokens === 'number') {
+    body.generationConfig.maxOutputTokens = options.maxOutputTokens;
+  }
+  if (options.expectsStructured) {
+    body.generationConfig.responseMimeType = 'application/json';
+  }
+  return body;
+}
+
+/** Extracts the candidate text (concatenating text parts) or null. */
+function extractCandidateText(json) {
+  const candidate = json?.candidates?.[0];
+  if (!candidate) return null;
+  const parts = candidate?.content?.parts;
+  if (!Array.isArray(parts)) return null;
+  const texts = parts.map(p => (typeof p?.text === 'string' ? p.text : '')).filter(Boolean);
+  return texts.length ? texts.join('') : null;
+}
+
+/** Extracts inline base64 image data from a candidate part (image gen). */
+function extractInlineData(json) {
+  const parts = json?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return null;
+  for (const p of parts) {
+    const inline = p?.inline_data || p?.inlineData;
+    if (inline?.data) {
+      return { imageBase64: inline.data, mimeType: inline.mime_type || inline.mimeType || 'image/png' };
+    }
+  }
+  return null;
+}
+
+/** Maps the finishReason/safety block into the taxonomy. */
+function mapFinishReason(json) {
+  const reason = json?.candidates?.[0]?.finishReason;
+  if (reason === 'SAFETY') {
+    return { errorCode: AI_ERROR_CODES.UNSAFE_CONTENT, message: 'Gemini blocked the response (safety filter).' };
+  }
+  if (reason === 'RECITATION') {
+    return { errorCode: AI_ERROR_CODES.UNSAFE_CONTENT, message: 'Gemini withheld the response (recitation filter).' };
+  }
+  return null;
+}
+
+/** Normalizes a ListModels entry into the catalog shape. */
+function normalizeGeminiModel(m) {
+  const rawName = typeof m?.name === 'string' ? m.name.replace(/^models\//, '') : null;
+  if (!rawName) return null;
+  const methods = Array.isArray(m?.supportedGenerationMethods) ? m.supportedGenerationMethods : [];
+  if (methods.length > 0 && !methods.includes('generateContent')) return null; // embed/aqa etc.
+  const name = (m?.displayName || rawName).toLowerCase();
+  return {
+    modelId: rawName,
+    displayName: m?.displayName || rawName,
+    capabilities: {
+      text: true,
+      reasoning: /thinking|pro|flash-thinking/.test(rawName) || m?.thinking === true,
+      structuredOutput: true, // responseMimeType supported on generateContent models
+      toolCalling: true,
+      vision: /vision|image|multimodal|-v$|-vl/.test(rawName) || /gemini-2|gemini-3|gemini-1\.5/.test(rawName),
+      imageGen: methods.includes('generateImages') || /image-generation|imagen/.test(rawName),
+      contextWindow: typeof m?.inputTokenLimit === 'number' ? m.inputTokenLimit : null
+    },
+    status: 'DISCOVERED',
+    origin: 'discovery',
+    metadata: { version: m?.version || null, description: m?.description || '' }
+  };
+}
+
+/**
+ * Creates the Gemini transport bound to the shared HTTP client.
+ */
+function createGeminiTransport({ http }) {
+  if (!http || typeof http.request !== 'function') {
+    throw new Error('createGeminiTransport requires an AI HTTP client');
+  }
+
+  async function testConnection({ endpoint, apiKey, modelId }) {
+    const model = modelId || 'gemini-2.0-flash';
+    const started = Date.now();
+    const res = await http.request({
+      url: `${endpoint}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildGenerateBody({ userPrompt: GEMINI_TEST_PROMPT, options: { maxOutputTokens: 16 } }))
+      },
+      timeoutMs: 20000
+    });
+    if (!res.ok) {
+      return { ok: false, ...mapGeminiError(res) };
+    }
+    const text = extractCandidateText(res.json);
+    if (text === null) {
+      const blocked = mapFinishReason(res.json);
+      if (blocked) return { ok: false, ...blocked };
+      return { ok: false, errorCode: AI_ERROR_CODES.MALFORMED_RESPONSE, message: 'Gemini responded without text content.' };
+    }
+    return { ok: true, latencyMs: Date.now() - started, modelId: model };
+  }
+
+  async function listModels({ endpoint, apiKey }) {
+    const out = [];
+    let pageToken = null;
+    // Bound the pagination loop defensively (provider bug protection).
+    for (let page = 0; page < 10; page++) {
+      const url = new URL(`${endpoint}/models`);
+      url.searchParams.set('key', apiKey);
+      url.searchParams.set('pageSize', '200');
+      if (pageToken) url.searchParams.set('pageToken', pageToken);
+      const res = await http.request({ url: url.toString(), timeoutMs: 20000 });
+      if (!res.ok) {
+        return { ok: false, ...mapGeminiError(res), partial: out };
+      }
+      const models = Array.isArray(res.json?.models) ? res.json.models : null;
+      if (!models) {
+        return { ok: false, errorCode: AI_ERROR_CODES.MALFORMED_RESPONSE, message: 'Gemini model list was malformed.', partial: out };
+      }
+      for (const m of models) {
+        const normalized = normalizeGeminiModel(m);
+        if (normalized) out.push(normalized);
+      }
+      pageToken = res.json?.nextPageToken || null;
+      if (!pageToken) break;
+    }
+    return { ok: true, models: out };
+  }
+
+  /**
+   * Sends one generation request.
+   * @param {Object} req - { endpoint, apiKey, modelId, systemPrompt, userPrompt, options }
+   * @returns {Object} normalized result
+   *   { ok, text, usage:{inputTokens,outputTokens}, finishReason, rawMeta }
+   */
+  async function sendPrompt(req) {
+    const { endpoint, apiKey, modelId, systemPrompt, userPrompt, options = {} } = req || {};
+    if (!modelId) return { ok: false, errorCode: AI_ERROR_CODES.INVALID_MODEL, message: 'No model selected for this request.' };
+    const res = await http.request({
+      url: `${endpoint}/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildGenerateBody({ systemPrompt, userPrompt, options }))
+      }
+    });
+    if (!res.ok) return { ok: false, ...mapGeminiError(res) };
+    const blocked = mapFinishReason(res.json);
+    if (blocked) return { ok: false, ...blocked };
+    const text = extractCandidateText(res.json);
+    if (text === null) {
+      return { ok: false, errorCode: AI_ERROR_CODES.MALFORMED_RESPONSE, message: 'Gemini responded without text content.' };
+    }
+    const usage = res.json?.usageMetadata || {};
+    return {
+      ok: true,
+      text,
+      usage: {
+        inputTokens: typeof usage.promptTokenCount === 'number' ? usage.promptTokenCount : null,
+        outputTokens: typeof usage.candidatesTokenCount === 'number' ? usage.candidatesTokenCount : null
+      },
+      finishReason: res.json?.candidates?.[0]?.finishReason || 'STOP',
+      rawMeta: { modelVersion: res.json?.modelVersion || null }
+    };
+  }
+
+  /**
+   * Concept image generation where the model supports it. Gemini image
+   * generation models accept a text prompt and return inline image data.
+   */
+  async function generateImage(req) {
+    const { endpoint, apiKey, modelId, prompt, options = {} } = req || {};
+    if (!modelId) return { ok: false, errorCode: AI_ERROR_CODES.INVALID_MODEL, message: 'No image model selected.' };
+    const res = await http.request({
+      url: `${endpoint}/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt || 'Conceptual architectural massing study' }] }],
+          generationConfig: {
+            responseModalities: ['TEXT', 'IMAGE'],
+            ...(options.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {})
+          }
+        })
+      }
+    });
+    if (!res.ok) return { ok: false, ...mapGeminiError(res) };
+    const image = extractInlineData(res.json);
+    if (!image) {
+      return { ok: false, errorCode: AI_ERROR_CODES.MALFORMED_RESPONSE, message: 'Gemini returned no image data — the model may not support image generation.' };
+    }
+    return { ok: true, imageBase64: image.imageBase64, mimeType: image.mimeType };
+  }
+
+  return { providerId: 'gemini', testConnection, listModels, sendPrompt, generateImage };
+}
+
+
+  // =========================================================================
+  // MODULE: AITransportOpenAiCompat
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - OpenAI-Compatible Transport (Phase 15, M4+M5)
+ * One adapter serves every OpenAI-compatible provider (GLM / Zhipu v4,
+ * DeepSeek) — the differences are the base URL and defaults, which come
+ * from the provider directory and user configuration, never hard-coded.
+ *
+ * Endpoint mechanics (OpenAI chat-completions compatible):
+ *  - Generate:  POST {endpoint}/chat/completions   (Authorization: Bearer KEY)
+ *  - Models:    GET  {endpoint}/models             (Bearer KEY)
+ *  - Vision:    content array with { type: 'image_url', image_url: { url: 'data:...;base64,...' } }
+ *  - Structured: response_format { type: 'json_object' } where supported
+ *
+ * Model ids are ALWAYS caller-supplied (catalog / job assignment). No model
+ * assumptions live here beyond documented defaults for initial catalog seed.
+ */
+
+
+
+const OPENAI_COMPAT_TEST_PROMPT = 'Reply with the single word: ready';
+
+/** Maps an HTTP status/body from an OpenAI-compatible API into the taxonomy. */
+function mapOpenAiCompatError(http) {
+  const apiMessage = http?.json?.error?.message || http?.json?.message || http?.text || '';
+  if (http.status === 401 || http.status === 403) {
+    return { errorCode: AI_ERROR_CODES.AUTH_FAILED, message: `INVALID KEY — authentication failed (${http.status}).` };
+  }
+  if (http.status === 429) {
+    return { errorCode: AI_ERROR_CODES.QUOTA_EXHAUSTED, message: 'AI temporarily unavailable — provider limit reached.' };
+  }
+  if (http.status === 404) {
+    return { errorCode: AI_ERROR_CODES.INVALID_MODEL, message: 'MODEL NOT FOUND — check the configured model id.' };
+  }
+  if (http.status === 400 && /model.*not.*exist|invalid model/i.test(apiMessage)) {
+    return { errorCode: AI_ERROR_CODES.INVALID_MODEL, message: `MODEL NOT FOUND — ${apiMessage}` };
+  }
+  if (http.status === 400) {
+    return { errorCode: AI_ERROR_CODES.UNKNOWN, message: `Provider rejected the request: ${apiMessage || 'bad request'}` };
+  }
+  if (http.status >= 500) {
+    return { errorCode: AI_ERROR_CODES.NETWORK_ERROR, message: 'Provider server error — try again later.' };
+  }
+  if (http.kind === 'timeout') {
+    return { errorCode: AI_ERROR_CODES.TIMEOUT, message: 'Provider request timed out.' };
+  }
+  if (http.kind === 'network') {
+    return { errorCode: AI_ERROR_CODES.NETWORK_ERROR, message: http.message || 'Network unavailable — the app works fully without AI.' };
+  }
+  return { errorCode: AI_ERROR_CODES.UNKNOWN, message: apiMessage || `Provider returned HTTP ${http.status}.` };
+}
+
+/** Builds the chat/completions body. Vision uses the typed content array. */
+function buildChatBody({ systemPrompt, userPrompt, options = {} }) {
+  const userContent = [];
+  if (options.imageBase64) {
+    userContent.push({
+      type: 'image_url',
+      image_url: { url: `data:${options.mimeType || 'image/png'};base64,${options.imageBase64}` }
+    });
+  }
+  userContent.push({ type: 'text', text: userPrompt || '' });
+
+  const messages = [];
+  if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+  messages.push({ role: 'user', content: userContent });
+
+  const body = { model: options.modelId, messages };
+  if (typeof options.temperature === 'number') body.temperature = options.temperature;
+  if (typeof options.maxOutputTokens === 'number' || typeof options.maxOutputTokens === 'string') {
+    body.max_tokens = Number(options.maxOutputTokens);
+  }
+  if (options.expectsStructured) {
+    // json_object mode is widely supported on GLM 4.x and DeepSeek; when a
+    // model rejects it the transport surfaces the 400 with its message.
+    body.response_format = { type: 'json_object' };
+  }
+  if (options.reasoningEffort && typeof options.reasoningEffort === 'string') {
+    // OpenAI-compatible reasoning param (provider-accepted where supported)
+    body.reasoning_effort = options.reasoningEffort;
+  }
+  return body;
+}
+
+/** Extracts the first choice message content (string or typed array). */
+function extractChoiceText(json) {
+  const choice = json?.choices?.[0];
+  if (!choice) return null;
+  const content = choice?.message?.content;
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    const texts = content.map(p => (typeof p?.text === 'string' ? p.text : '')).filter(Boolean);
+    return texts.length ? texts.join('') : null;
+  }
+  return null;
+}
+
+/** Normalizes a /models entry into the catalog shape. */
+function normalizeOpenAiCompatModel(m, { providerId }) {
+  const modelId = typeof m?.id === 'string' ? m.id : null;
+  if (!modelId) return null;
+  const lower = modelId.toLowerCase();
+  // Vision suffixes: 'vision', '-vl', trailing 'v' (glm-4.6v style)
+  const vision = /vision|-vl|v$/.test(lower);
+  const imageGen = /image|cogview|dall|flux/.test(lower) && !/vision/.test(lower);
+  const isEmbedding = /embed|rerank/.test(lower);
+  const isAudio = /audio|speech|tts|voice|asr/.test(lower);
+  if (isEmbedding || isAudio) return null; // not applicable to this app's jobs
+  return {
+    modelId,
+    displayName: m?.display_name || modelId,
+    capabilities: {
+      text: !imageGen,
+      reasoning: /reason|thinking|pro|r1|think/.test(lower),
+      structuredOutput: !imageGen,
+      toolCalling: !imageGen,
+      vision,
+      imageGen,
+      contextWindow: null // not reported by these list APIs — user may override
+    },
+    status: 'DISCOVERED',
+    origin: 'discovery',
+    metadata: { providerId, owned_by: m?.owned_by || null }
+  };
+}
+
+/**
+ * Creates the OpenAI-compatible transport for a provider id.
+ *
+ * @param {Object} options
+ * @param {Object} options.http - shared AI HTTP client
+ * @param {string} options.providerId - 'glm' | 'deepseek' | future
+ */
+function createOpenAiCompatTransport({ http, providerId }) {
+  if (!http || typeof http.request !== 'function') {
+    throw new Error('createOpenAiCompatTransport requires an AI HTTP client');
+  }
+
+  async function testConnection({ endpoint, apiKey, modelId }) {
+    // Without a chosen model the test uses the documented default — the user
+    // can always retest against a specific catalog model.
+    const model = modelId || DEFAULT_TEST_MODELS[providerId] || null;
+    if (!model) {
+      return { ok: false, errorCode: AI_ERROR_CODES.PROVIDER_UNCONFIGURED, message: 'Choose a model before testing.' };
+    }
+    const started = Date.now();
+    const res = await http.request({
+      url: `${endpoint}/chat/completions`,
+      init: {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(buildChatBody({
+          userPrompt: OPENAI_COMPAT_TEST_PROMPT,
+          options: { modelId: model, maxOutputTokens: 16 }
+        }))
+      },
+      timeoutMs: 20000
+    });
+    if (!res.ok) return { ok: false, ...mapOpenAiCompatError(res) };
+    const text = extractChoiceText(res.json);
+    if (text === null) {
+      return { ok: false, errorCode: AI_ERROR_CODES.MALFORMED_RESPONSE, message: 'Provider responded without message content.' };
+    }
+    return { ok: true, latencyMs: Date.now() - started, modelId: model };
+  }
+
+  async function listModels({ endpoint, apiKey }) {
+    const res = await http.request({
+      url: `${endpoint}/models`,
+      init: { method: 'GET', headers: { Authorization: `Bearer ${apiKey}` } },
+      timeoutMs: 20000
+    });
+    if (!res.ok) return { ok: false, ...mapOpenAiCompatError(res) };
+    const data = res.json?.data;
+    if (!Array.isArray(data)) {
+      return { ok: false, errorCode: AI_ERROR_CODES.MALFORMED_RESPONSE, message: 'Provider model list was malformed.' };
+    }
+    const models = data
+      .map(m => normalizeOpenAiCompatModel(m, { providerId }))
+      .filter(Boolean);
+    return { ok: true, models };
+  }
+
+  async function sendPrompt(req) {
+    const { endpoint, apiKey, modelId, systemPrompt, userPrompt, options = {} } = req || {};
+    if (!modelId) return { ok: false, errorCode: AI_ERROR_CODES.INVALID_MODEL, message: 'No model selected for this request.' };
+    const res = await http.request({
+      url: `${endpoint}/chat/completions`,
+      init: {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(buildChatBody({ systemPrompt, userPrompt, options: { ...options, modelId } }))
+      }
+    });
+    if (!res.ok) return { ok: false, ...mapOpenAiCompatError(res) };
+    const text = extractChoiceText(res.json);
+    if (text === null) {
+      return { ok: false, errorCode: AI_ERROR_CODES.MALFORMED_RESPONSE, message: 'Provider responded without message content.' };
+    }
+    const usage = res.json?.usage || {};
+    return {
+      ok: true,
+      text,
+      usage: {
+        inputTokens: typeof usage.prompt_tokens === 'number' ? usage.prompt_tokens : null,
+        outputTokens: typeof usage.completion_tokens === 'number' ? usage.completion_tokens : null
+      },
+      finishReason: res.json?.choices?.[0]?.finish_reason || 'stop',
+      rawMeta: { model: res.json?.model || modelId }
+    };
+  }
+
+  return { providerId, testConnection, listModels, sendPrompt };
+}
+
+/**
+ * Documented defaults for connection tests BEFORE the user has discovered or
+ * chosen a model. These are seeds, never assumptions: once the catalog is
+ * populated, tests run against the user-selected model.
+ */
+const DEFAULT_TEST_MODELS = Object.freeze({
+  glm: 'glm-4.5-flash',
+  deepseek: 'deepseek-v4-flash'
+});
+
+
+  // =========================================================================
+  // MODULE: AITransports
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Transport Registry (Phase 15)
+ * Binds provider ids to their network adapters. Adding a provider = a
+ * directory entry + a transport + (optionally) a default test model; no
+ * other code changes anywhere in the app.
+ */
+
+
+
+
+/**
+ * Creates all transports over one shared HTTP client.
+ * @param {Object} options
+ * @param {Object} options.http - AI HTTP client from services/ai/http.js
+ */
+function createTransports(options = {}) {
+  const http = options.http;
+  if (!http || typeof http.request !== 'function') {
+    throw new Error('createTransports requires an AI HTTP client');
+  }
+  const transports = {
+    gemini: createGeminiTransport({ http }),
+    glm: createOpenAiCompatTransport({ http, providerId: 'glm' }),
+    deepseek: createOpenAiCompatTransport({ http, providerId: 'deepseek' })
+  };
+  return {
+    get(providerId) {
+      return transports[providerId] || null;
+    },
+    ids() {
+      return Object.keys(transports);
+    }
+  };
+}
+
+
+  // =========================================================================
+  // MODULE: AIProviderManager
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - AI Provider Manager (Phase 15, M1)
+ * Multi-provider configuration: declarative provider directory, per-provider
+ * key storage (session-only OR persisted — the user chooses per provider),
+ * enable/disable, and connection-test dispatch to the provider transport.
+ *
+ * Rules enforced here:
+ *  - Keys NEVER leave this service except to the transport for a request the
+ *    user triggers. Keys are never logged, never exported, never placed in
+ *    project documents.
+ *  - Masked display only: `••••abcd` (last 4 chars).
+ *  - A disabled provider cannot be selected for jobs; its configuration is
+ *    kept so re-enabling restores it.
+ *  - No automatic network calls: connection tests are explicit user actions.
+ *
+ * The provider DIRECTORY (ids, labels, default endpoints) is declarative
+ * data; the actual model catalog lives in model-catalog.js and the network
+ * adapters in transports/*. This module owns configuration state only.
+ */
+
+
+
+/** Persistent storage key for provider configuration (NO keys inside). */
+const AI_PROVIDER_SETTINGS_KEY = 'archiscale_ai_providers';
+
+/** Persistent storage key for the user's key-storage preference per provider. */
+const AI_KEY_MODE_KEY = 'archiscale_ai_key_modes';
+
+/**
+ * The provider directory. Declarative, extensible: adding a provider means
+ * adding an entry here plus a transport — no other code changes.
+ *
+ * transportId selects the adapter in transports/index.js; endpoints are the
+ * DOCUMENTED defaults and remain user-overridable where a provider offers
+ * regional or proxy endpoints (endpointEditable).
+ */
+const AI_PROVIDER_DIRECTORY = Object.freeze([
+  {
+    id: 'gemini',
+    label: 'Google Gemini',
+    transportId: 'gemini',
+    description: 'Google AI Studio API — generous free tier, wide model catalog.',
+    docsUrl: 'https://ai.google.dev/',
+    keyHint: 'Paste your Google AI Studio API key (AIza…)',
+    defaultEndpoint: 'https://generativelanguage.googleapis.com/v1beta',
+    endpointEditable: false,
+    supportsModelDiscovery: true,
+    supportsVision: true,
+    supportsImageGen: true
+  },
+  {
+    id: 'glm',
+    label: 'GLM (Zhipu)',
+    transportId: 'openai-compat',
+    description: 'Zhipu GLM models via the OpenAI-compatible v4 API.',
+    docsUrl: 'https://open.bigmodel.cn/dev/api',
+    keyHint: 'Paste your Zhipu / GLM API key',
+    defaultEndpoint: 'https://open.bigmodel.cn/api/paas/v4',
+    endpointEditable: true,
+    supportsModelDiscovery: true,
+    supportsVision: true,
+    supportsImageGen: false
+  },
+  {
+    id: 'deepseek',
+    label: 'DeepSeek',
+    transportId: 'openai-compat',
+    description: 'DeepSeek models via the OpenAI-compatible API.',
+    docsUrl: 'https://api-docs.deepseek.com/',
+    keyHint: 'Paste your DeepSeek API key (sk-…)',
+    defaultEndpoint: 'https://api.deepseek.com',
+    endpointEditable: true,
+    supportsModelDiscovery: true,
+    supportsVision: true,
+    supportsImageGen: false
+  }
+]);
+
+/** Returns the directory entry for a provider id (null when unknown). */
+function getProviderEntry(providerId) {
+  return AI_PROVIDER_DIRECTORY.find(p => p.id === providerId) || null;
+}
+
+/** Masks a key for display: never reveal more than the last 4 characters. */
+function maskKey(apiKey) {
+  if (!apiKey || typeof apiKey !== 'string') return '';
+  const tail = apiKey.slice(-4);
+  return `••••••••${tail}`;
+}
+
+/** Structural sanity for a pasted key (no network, no format guesses). */
+function validateKeyFormat(apiKey) {
+  if (typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+    return { ok: false, error: 'API key is empty.' };
+  }
+  if (apiKey.length > 4096) {
+    return { ok: false, error: 'API key is implausibly long (>4096 chars).' };
+  }
+  if (/[\r\n]/.test(apiKey)) {
+    return { ok: false, error: 'API key must be a single line — copy it again without line breaks.' };
+  }
+  return { ok: true, trimmed: apiKey.trim() };
+}
+
+/**
+ * Creates the provider manager.
+ *
+ * @param {Object} options
+ * @param {Object} options.storage - { getItem, setItem, removeItem }
+ * @param {Function} [options.now] - clock override (tests)
+ */
+function createProviderManager(options = {}) {
+  const storage = options.storage;
+  if (!storage || typeof storage.getItem !== 'function' || typeof storage.setItem !== 'function') {
+    throw new Error('createProviderManager requires a storage adapter');
+  }
+  const now = options.now || (() => new Date().toISOString());
+
+  // Two key stores: session (memory only) and persistent (storage adapter).
+  const sessionKeys = createKeyStore(storage, { sessionOnly: true });
+  const persistentKeys = createKeyStore(storage);
+
+  // providerId → 'session' | 'persistent' (default 'session' = safest)
+  const keyModes = loadKeyModes();
+  // providerId → { enabled, endpoint }
+  const settings = loadSettings();
+
+  function loadKeyModes() {
+    try {
+      const raw = storage.getItem(AI_KEY_MODE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {}
+    return {};
+  }
+
+  function loadSettings() {
+    try {
+      const raw = storage.getItem(AI_PROVIDER_SETTINGS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && parsed.providers) {
+          // Only known providers are restored; new directory entries default on.
+          const restored = {};
+          for (const entry of AI_PROVIDER_DIRECTORY) {
+            const saved = parsed.providers[entry.id];
+            restored[entry.id] = {
+              enabled: saved && typeof saved.enabled === 'boolean' ? saved.enabled : true,
+              endpoint: saved && typeof saved.endpoint === 'string' && saved.endpoint
+                ? saved.endpoint
+                : entry.defaultEndpoint
+            };
+          }
+          return restored;
+        }
+      }
+    } catch (e) {}
+    const defaults = {};
+    for (const entry of AI_PROVIDER_DIRECTORY) {
+      defaults[entry.id] = { enabled: true, endpoint: entry.defaultEndpoint };
+    }
+    return defaults;
+  }
+
+  function persistSettings() {
+    try {
+      storage.setItem(AI_PROVIDER_SETTINGS_KEY, JSON.stringify({
+        version: 1,
+        providers: settings,
+        updatedAt: now()
+      }));
+    } catch (e) {}
+  }
+
+  function persistKeyModes() {
+    try {
+      storage.setItem(AI_KEY_MODE_KEY, JSON.stringify(keyModes));
+    } catch (e) {}
+  }
+
+  // ------------------------------------------------------------------
+  // Keys
+  // ------------------------------------------------------------------
+
+  /** Sets the key for a provider in its configured storage mode. */
+  function setKey(providerId, apiKey) {
+    const entry = getProviderEntry(providerId);
+    if (!entry) return { ok: false, error: `Unknown provider "${providerId}".` };
+    const check = validateKeyFormat(apiKey);
+    if (!check.ok) return { ok: false, error: check.error };
+    const mode = keyModes[providerId] === 'persistent' ? 'persistent' : 'session';
+    const store = mode === 'persistent' ? persistentKeys : sessionKeys;
+    const stored = store.setKey(providerId, check.trimmed);
+    if (!stored) return { ok: false, error: 'Key could not be stored (storage unavailable).' };
+    return { ok: true, mode, maskedKey: maskKey(check.trimmed) };
+  }
+
+  /** Returns the raw key (transport use ONLY — never for display/logging). */
+  function getRawKey(providerId) {
+    const mode = keyModes[providerId] === 'persistent' ? 'persistent' : 'session';
+    const store = mode === 'persistent' ? persistentKeys : sessionKeys;
+    return store.getKey(providerId);
+  }
+
+  /** True when a key exists for the provider (without revealing it). */
+  function hasKey(providerId) {
+    return getRawKey(providerId) !== null && getRawKey(providerId) !== undefined;
+  }
+
+  function clearKey(providerId) {
+    sessionKeys.clearKey(providerId);
+    persistentKeys.clearKey(providerId);
+    return true;
+  }
+
+  /**
+   * Chooses where a provider's key lives. Switching to session-only clears
+   * any persisted key immediately (the user asked for the safer mode).
+   */
+  function setKeyMode(providerId, mode) {
+    if (!getProviderEntry(providerId)) return { ok: false, error: 'Unknown provider.' };
+    if (mode !== 'session' && mode !== 'persistent') {
+      return { ok: false, error: 'Key mode must be "session" or "persistent".' };
+    }
+    keyModes[providerId] = mode;
+    persistKeyModes();
+    if (mode === 'session') {
+      persistentKeys.clearKey(providerId);
+    }
+    return { ok: true, mode };
+  }
+
+  function getKeyMode(providerId) {
+    return keyModes[providerId] === 'persistent' ? 'persistent' : 'session';
+  }
+
+  // ------------------------------------------------------------------
+  // Enable / endpoint
+  // ------------------------------------------------------------------
+
+  function setEnabled(providerId, enabled) {
+    if (!settings[providerId]) return { ok: false, error: 'Unknown provider.' };
+    settings[providerId].enabled = !!enabled;
+    persistSettings();
+    return { ok: true };
+  }
+
+  function setEndpoint(providerId, endpoint) {
+    const entry = getProviderEntry(providerId);
+    if (!entry) return { ok: false, error: 'Unknown provider.' };
+    if (!entry.endpointEditable) {
+      return { ok: false, error: `${entry.label} uses a fixed official endpoint.` };
+    }
+    if (typeof endpoint !== 'string' || !/^https:\/\/.+/i.test(endpoint.trim())) {
+      return { ok: false, error: 'Endpoint must be an https:// URL.' };
+    }
+    settings[providerId].endpoint = endpoint.trim().replace(/\/+$/, '');
+    persistSettings();
+    return { ok: true, endpoint: settings[providerId].endpoint };
+  }
+
+  /** Provider status summary for the UI (never contains the raw key). */
+  function getProviderStatus(providerId) {
+    const entry = getProviderEntry(providerId);
+    if (!entry) return null;
+    const conf = settings[providerId] || { enabled: true, endpoint: entry.defaultEndpoint };
+    return {
+      id: entry.id,
+      label: entry.label,
+      description: entry.description,
+      docsUrl: entry.docsUrl,
+      enabled: conf.enabled !== false,
+      endpoint: conf.endpoint,
+      endpointEditable: entry.endpointEditable,
+      supportsModelDiscovery: entry.supportsModelDiscovery,
+      keyMode: getKeyMode(providerId),
+      hasKey: hasKey(providerId),
+      maskedKey: hasKey(providerId) ? maskKey(getRawKey(providerId)) : ''
+    };
+  }
+
+  function listProviderStatuses() {
+    return AI_PROVIDER_DIRECTORY.map(p => getProviderStatus(p.id));
+  }
+
+  /**
+   * Connection test — the ONLY intentional live request this service makes,
+   * always on explicit user action. `transport.testConnection` is supplied by
+   * the transports layer (injected, so tests bind mocks).
+   */
+  async function testConnection(providerId, { transport, modelId } = {}) {
+    const status = getProviderStatus(providerId);
+    if (!status) return { ok: false, errorCode: AI_ERROR_CODES.UNKNOWN, message: 'Unknown provider.' };
+    if (!status.enabled) {
+      return { ok: false, errorCode: AI_ERROR_CODES.PROVIDER_UNCONFIGURED, message: `${status.label} is disabled — enable it first.` };
+    }
+    if (!status.hasKey) {
+      return { ok: false, errorCode: AI_ERROR_CODES.PROVIDER_UNCONFIGURED, message: `No API key set for ${status.label}.` };
+    }
+    if (typeof transport?.testConnection !== 'function') {
+      return { ok: false, errorCode: AI_ERROR_CODES.UNKNOWN, message: 'Transport unavailable for this provider.' };
+    }
+    let result;
+    try {
+      result = await transport.testConnection({
+        endpoint: status.endpoint,
+        apiKey: getRawKey(providerId),
+        modelId: modelId || null
+      });
+    } catch (err) {
+      return { ok: false, errorCode: AI_ERROR_CODES.NETWORK_ERROR, message: `Connection test failed: ${err?.message || 'error'}` };
+    }
+    if (result.ok) {
+      return { ok: true, providerId, latencyMs: result.latencyMs ?? null, modelId: result.modelId ?? null, message: `CONNECTED — ${status.label} responded.` };
+    }
+    // Transport already returns taxonomy-normalized failures.
+    return { ok: false, providerId, errorCode: result.errorCode || AI_ERROR_CODES.UNKNOWN, message: result.message || 'Connection test failed.' };
+  }
+
+  return {
+    listProviderStatuses,
+    getProviderStatus,
+    setKey,
+    clearKey,
+    hasKey,
+    getRawKey,
+    setKeyMode,
+    getKeyMode,
+    setEnabled,
+    setEndpoint,
+    testConnection,
+    maskKey,
+    validateKeyFormat
+  };
+}
+
+/** Maps an HTTP-ish transport failure into the stable taxonomy (shared). */
+function mapHttpStatus(status) {
+  return statusCodeToError(status);
+}
+
+
+  // =========================================================================
+  // MODULE: AIModelCatalog
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - AI Model Catalog (Phase 15, M2)
+ * Per-provider model registries with three origins:
+ *
+ *   DISCOVERED  — from the provider's list API (provider truth)
+ *   MANUAL      — user-declared model id ("I know this model exists");
+ *                 capabilities are USER DECLARED and marked for verification
+ *   RETIRED     — a previously selected model that no longer resolves;
+ *                 never auto-deleted (assignments must show why they fail)
+ *
+ * Rules:
+ *  - Capabilities belong to the MODEL, never inferred from the provider.
+ *  - Provider discovery can UPGRADE a manual model's capability claims
+ *    (provider truth overrides user declaration) and flips the origin tag.
+ *  - The catalog NEVER stores API keys and is persisted separately from
+ *    provider keys.
+ *  - No automatic pruning: discovery merges (upsert); manual entries the
+ *    user deletes are the only removals.
+ */
+
+
+
+/** Persistent storage key for the model catalog (NO keys inside). */
+const AI_MODEL_CATALOG_KEY = 'archiscale_ai_model_catalog';
+
+/** Seed metadata: documented models per provider at implementation time.
+ *  These are convenience entries, NOT a permanent list — discovery and manual
+ *  entry keep the catalog current without app updates. Capabilities here are
+ *  the provider-documented minimums; they are refined by discovery. */
+const SEED_MODELS = {
+  gemini: [
+    {
+      modelId: 'gemini-2.0-flash',
+      displayName: 'Gemini 2.0 Flash',
+      capabilities: { text: true, reasoning: true, structuredOutput: true, toolCalling: true, vision: true, imageGen: false, contextWindow: 1048576 }
+    }
+  ],
+  glm: [
+    {
+      modelId: 'glm-4.5-flash',
+      displayName: 'GLM-4.5-Flash',
+      capabilities: { text: true, reasoning: true, structuredOutput: true, toolCalling: true, vision: false, imageGen: false, contextWindow: 128000 }
+    }
+  ],
+  deepseek: [
+    {
+      modelId: 'deepseek-v4-flash',
+      displayName: 'DeepSeek V4 Flash',
+      capabilities: { text: true, reasoning: true, structuredOutput: true, toolCalling: true, vision: false, imageGen: false, contextWindow: 128000 }
+    },
+    {
+      modelId: 'deepseek-v4-flash-vision-exp',
+      displayName: 'DeepSeek V4 Flash Vision (exp)',
+      capabilities: { text: true, reasoning: true, structuredOutput: true, toolCalling: true, vision: true, imageGen: false, contextWindow: 128000 }
+    }
+  ]
+};
+
+/** Normalizes a capability object to the canonical key set (missing = false). */
+function normalizeCapabilities(caps) {
+  const out = {};
+  for (const key of AI_CAPABILITIES) {
+    if (key === 'contextLimit') {
+      // Transports report `contextWindow`; the canonical key is contextLimit.
+      const raw = caps?.[key] !== undefined ? caps?.[key] : caps?.contextWindow;
+      out[key] = typeof raw === 'number' && isFinite(raw) && raw > 0 ? raw : null;
+    } else {
+      out[key] = !!caps?.[key];
+    }
+  }
+  return out;
+}
+
+/** Creates an empty catalog bound to a storage adapter. */
+function createModelCatalog({ storage, now = () => new Date().toISOString() } = {}) {
+  // providerId → { modelId → modelEntry }
+  let catalog = load();
+
+  function load() {
+    try {
+      const raw = storage?.getItem(AI_MODEL_CATALOG_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && parsed.providers) {
+          return sanitize(parsed.providers);
+        }
+      }
+    } catch (e) {}
+    return seed();
+  }
+
+  function seed() {
+    const providers = {};
+    for (const [pid, models] of Object.entries(SEED_MODELS)) {
+      providers[pid] = {};
+      for (const m of models) {
+        providers[pid][m.modelId] = {
+          modelId: m.modelId,
+          displayName: m.displayName,
+          capabilities: normalizeCapabilities(m.capabilities),
+          status: 'READY',
+          origin: 'seed',
+          verification: 'PROVIDER DOCUMENTED',
+          addedAt: now(),
+          updatedAt: now(),
+          metadata: {}
+        };
+      }
+    }
+    return providers;
+  }
+
+  /** Restores only structurally sane entries (imported storage may be old). */
+  function sanitize(providers) {
+    const out = {};
+    for (const [pid, models] of Object.entries(providers)) {
+      if (!models || typeof models !== 'object') continue;
+      out[pid] = {};
+      for (const [mid, entry] of Object.entries(models)) {
+        if (!entry || typeof entry !== 'object' || typeof entry.modelId !== 'string') continue;
+        out[pid][mid] = {
+          modelId: mid,
+          displayName: typeof entry.displayName === 'string' ? entry.displayName : mid,
+          capabilities: normalizeCapabilities(entry.capabilities),
+          status: ['READY', 'UNAVAILABLE', 'RETIRED', 'UNKNOWN'].includes(entry.status) ? entry.status : 'UNKNOWN',
+          origin: ['seed', 'discovery', 'manual'].includes(entry.origin) ? entry.origin : 'manual',
+          verification: typeof entry.verification === 'string' ? entry.verification : 'UNVERIFIED',
+          addedAt: entry.addedAt || now(),
+          updatedAt: entry.updatedAt || now(),
+          metadata: entry.metadata && typeof entry.metadata === 'object' ? entry.metadata : {}
+        };
+      }
+    }
+    return out;
+  }
+
+  function persist() {
+    try {
+      storage?.setItem(AI_MODEL_CATALOG_KEY, JSON.stringify({
+        version: 1,
+        providers: catalog,
+        updatedAt: now()
+      }));
+    } catch (e) {}
+  }
+
+  /** All entries for a provider (ordered by displayName). */
+  function listModels(providerId) {
+    const models = catalog[providerId] || {};
+    return Object.values(models)
+      .sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
+  }
+
+  /** One entry or null. */
+  function getModel(providerId, modelId) {
+    return catalog[providerId]?.[modelId] || null;
+  }
+
+  /**
+   * Upserts a model entry (discovery/manual/seed share this path).
+   * Provider truth (discovery) refreshes capabilities; manual claims are
+   * preserved until a discovery confirms or corrects them.
+   */
+  function upsertModel(providerId, entry) {
+    if (!catalog[providerId]) catalog[providerId] = {};
+    const existing = catalog[providerId][entry.modelId];
+    const merged = {
+      modelId: entry.modelId,
+      displayName: entry.displayName || existing?.displayName || entry.modelId,
+      capabilities: normalizeCapabilities(entry.capabilities || existing?.capabilities),
+      status: entry.status || existing?.status || 'READY',
+      origin: entry.origin || existing?.origin || 'manual',
+      verification: entry.verification || existing?.verification || 'UNVERIFIED',
+      addedAt: existing?.addedAt || entry.addedAt || now(),
+      updatedAt: now(),
+      metadata: { ...(existing?.metadata || {}), ...(entry.metadata || {}) }
+    };
+    catalog[providerId][entry.modelId] = merged;
+    persist();
+    return merged;
+  }
+
+  /**
+   * Manual model entry: "I know this model exists". Capabilities are exactly
+   * what the user declared — never invented, never defaulted to true.
+   */
+  function addManualModel(providerId, { modelId, displayName, capabilities }) {
+    if (typeof modelId !== 'string' || !modelId.trim()) {
+      return { ok: false, error: 'Model ID is required.' };
+    }
+    const id = modelId.trim();
+    if (/[\r\n]/.test(id)) return { ok: false, error: 'Model ID must be a single line.' };
+    const entry = upsertModel(providerId, {
+      modelId: id,
+      displayName: (displayName || '').trim() || id,
+      capabilities: normalizeCapabilities(capabilities || {}),
+      status: 'READY',
+      origin: 'manual',
+      verification: 'USER DECLARED — NEEDS VERIFICATION'
+    });
+    return { ok: true, model: entry };
+  }
+
+  /** User-initiated removal (the only deletion path). */
+  function removeModel(providerId, modelId) {
+    if (catalog[providerId]?.[modelId]) {
+      delete catalog[providerId][modelId];
+      persist();
+      return { ok: true };
+    }
+    return { ok: false, error: 'Model not found in the catalog.' };
+  }
+
+  /**
+   * Merges a discovery result batch for one provider. Discovery:
+   *  - upserts new DISCOVERED entries (PROVIDER DOCUMENTED verification)
+   *  - upgrades existing entries' capabilities with provider truth
+   *  - flips manual entries it confirms to origin 'discovery'
+   *  - NEVER deletes: models absent from a discovery pass keep their status
+   *    (an empty list is a discovery failure, not a retirement signal)
+   */
+  function mergeDiscovery(providerId, models) {
+    const list = Array.isArray(models) ? models : [];
+    let added = 0;
+    let updated = 0;
+    for (const m of list) {
+      if (!m || typeof m.modelId !== 'string' || !m.modelId) continue;
+      const existing = catalog[providerId]?.[m.modelId];
+      upsertModel(providerId, {
+        modelId: m.modelId,
+        displayName: m.displayName || m.modelId,
+        capabilities: m.capabilities || existing?.capabilities,
+        status: existing?.status === 'RETIRED' ? 'READY' : (existing?.status === 'UNAVAILABLE' ? existing.status : 'READY'),
+        origin: 'discovery',
+        verification: 'PROVIDER DOCUMENTED',
+        metadata: m.metadata || {}
+      });
+      if (existing) updated++; else added++;
+    }
+    return { ok: true, added, updated, total: listModels(providerId).length };
+  }
+
+  /**
+   * Marks a model retired (selected model no longer resolves on the
+   * provider). Retirement is visible, never silent.
+   */
+  function markRetired(providerId, modelId) {
+    const existing = catalog[providerId]?.[modelId];
+    if (!existing) return { ok: false, error: 'Model not found.' };
+    upsertModel(providerId, { modelId, status: 'RETIRED', verification: existing.verification });
+    return { ok: true };
+  }
+
+  /** Marks a model unavailable (e.g. discovery/auth problems at use time). */
+  function markUnavailable(providerId, modelId) {
+    const existing = catalog[providerId]?.[modelId];
+    if (!existing) return { ok: false, error: 'Model not found.' };
+    upsertModel(providerId, { modelId, status: 'UNAVAILABLE' });
+    return { ok: true };
+  }
+
+  /** Sets a user override on the context window (some APIs don't report it). */
+  function setContextWindow(providerId, modelId, tokens) {
+    const value = typeof tokens === 'number' && isFinite(tokens) && tokens > 0 ? Math.floor(tokens) : null;
+    upsertModel(providerId, { modelId });
+    catalog[providerId][modelId].capabilities.contextLimit = value;
+    persist();
+    return { ok: true, contextLimit: value };
+  }
+
+  /**
+   * Catalog filter query for the Control Center browser.
+   * @param {Object} q - { providerId?, search?, capabilities?: { vision, toolCalling, structuredOutput, imageGen } }
+   */
+  function queryModels(q = {}) {
+    const providerIds = q.providerId ? [q.providerId] : Object.keys(catalog);
+    let results = [];
+    for (const pid of providerIds) {
+      for (const entry of listModels(pid)) {
+        results.push({ providerId: pid, ...entry });
+      }
+    }
+    if (q.search && typeof q.search === 'string') {
+      const needle = q.search.trim().toLowerCase();
+      if (needle) {
+        results = results.filter(m =>
+          m.modelId.toLowerCase().includes(needle) ||
+          String(m.displayName).toLowerCase().includes(needle));
+      }
+    }
+    if (q.capabilities) {
+      for (const [cap, needed] of Object.entries(q.capabilities)) {
+        if (needed) results = results.filter(m => !!m.capabilities[cap]);
+      }
+    }
+    return results;
+  }
+
+  function clearAll() {
+    catalog = seed();
+    persist();
+  }
+
+  return {
+    listModels,
+    getModel,
+    upsertModel,
+    addManualModel,
+    removeModel,
+    mergeDiscovery,
+    markRetired,
+    markUnavailable,
+    setContextWindow,
+    queryModels,
+    clearAll
+  };
+}
+
+
+  // =========================================================================
+  // MODULE: AIJobRouter
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - AI Job Router (Phase 15, M6)
+ * The single entry point the rest of the application uses:
+ *
+ *   runAIJob("brutalCritic", { userMessage, context })
+ *
+ * Pipeline:
+ *   Job → resolve assignment → capability check → configured key check →
+ *   model status check → context budget vs model window → transport →
+ *   normalized response → AI validators (structured schema + numeric claims)
+ *
+ * Free-cost safety (hard rules):
+ *  - fallbackPolicy default is NEVER — no automatic model/provider switch
+ *  - no retry loops: one request = one transport call
+ *  - quota/rate-limit returns control to the user immediately
+ *
+ * Assignments + activity log persist WITHOUT keys and WITHOUT project data.
+ */
+
+
+
+
+
+/** Persistent storage key for job assignments (NO keys, NO project data). */
+const AI_JOB_SETTINGS_KEY = 'archiscale_ai_jobs';
+
+/** Activity log storage key (metadata only — never prompts, never keys). */
+const AI_ACTIVITY_LOG_KEY = 'archiscale_ai_activity';
+
+const MAX_ACTIVITY_ENTRIES = 60;
+
+/**
+ * AI job definitions. Each job maps to an existing AI mode profile (system
+ * prompt + schema) plus its own routing requirements. The user can reassign
+ * any job to any model; these definitions never hard-code a provider.
+ */
+const AI_JOB_DEFINITIONS = Object.freeze([
+  { jobId: 'generalAssistant', label: 'General Assistant', description: 'Open questions and everyday project help.', mode: AI_MODES.MENTOR, requiredCapabilities: { text: true } },
+  { jobId: 'tutor', label: 'Tutor', description: 'Socratic teaching on the current project.', mode: AI_MODES.TUTOR, requiredCapabilities: { text: true } },
+  { jobId: 'designMentor', label: 'Design Mentor', description: 'Concept development, possibilities, trade-offs.', mode: AI_MODES.MENTOR, requiredCapabilities: { text: true } },
+  { jobId: 'studioCritic', label: 'Studio Critic', description: 'Evidence-cited design critique (structured).', mode: AI_MODES.CRITIC, requiredCapabilities: { text: true, structuredOutput: true } },
+  { jobId: 'brutalCritic', label: 'Brutal Critic', description: 'Unsentimental critique of the weakest parts.', mode: AI_MODES.BRUTAL, requiredCapabilities: { text: true, structuredOutput: true } },
+  { jobId: 'jury', label: 'Jury', description: 'Jury-preparation interrogation of the concept.', mode: AI_MODES.JURY, requiredCapabilities: { text: true, structuredOutput: true } },
+  { jobId: 'ideation', label: 'Ideation', description: 'Genuinely different design strategies.', mode: AI_MODES.IDEATION, requiredCapabilities: { text: true } },
+  { jobId: 'bestPractice', label: 'Best Practice', description: 'Reference guidance with deterministic calculations.', mode: AI_MODES.BEST_PRACTICE, requiredCapabilities: { text: true } },
+  { jobId: 'projectAnalysis', label: 'Project Analysis', description: 'Whole-project structured review.', mode: AI_MODES.CRITIC, requiredCapabilities: { text: true, structuredOutput: true } },
+  { jobId: 'imageAnalysis', label: 'Image Analysis', description: 'Interpret sketches, plans, and site photos.', mode: null, requiredCapabilities: { text: true, vision: true } },
+  { jobId: 'conceptImage', label: 'Concept Image', description: 'Conceptual (never technical) image generation.', mode: null, requiredCapabilities: { text: true, imageGen: true } }
+]);
+
+/** Fallback policies. Default is NEVER — free-cost safety. */
+const FALLBACK_POLICIES = Object.freeze({
+  NEVER: 'never',
+  SAME_PROVIDER: 'same-provider',
+  ANY_CONFIGURED: 'any-configured'
+});
+
+function getJobDefinition(jobId) {
+  return AI_JOB_DEFINITIONS.find(j => j.jobId === jobId) || null;
+}
+
+/** Rough token estimate: chars/4 heuristic (documented approximation). */
+function estimateTokens(text) {
+  if (typeof text !== 'string' || !text) return 0;
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * Creates the job router.
+ *
+ * @param {Object} options
+ * @param {Object} options.providerManager - services/ai/provider-manager.js
+ * @param {Object} options.modelCatalog   - services/ai/model-catalog.js
+ * @param {Object} options.transports     - services/ai/transports/index.js
+ * @param {Function} [options.buildFactsPack] - (scope) => { text, data, factChecks }
+ * @param {Object} [options.storage]      - persistence for assignments + log
+ * @param {Function} [options.now]
+ */
+function createJobRouter(options = {}) {
+  const { providerManager, modelCatalog, transports, buildFactsPack } = options;
+  const storage = options.storage;
+  const now = options.now || (() => new Date().toISOString());
+
+  if (!providerManager) throw new Error('createJobRouter requires a providerManager');
+  if (!modelCatalog) throw new Error('createJobRouter requires a modelCatalog');
+  if (!transports || typeof transports.get !== 'function') throw new Error('createJobRouter requires transports');
+
+  let assignments = loadAssignments();
+  let activityLog = loadActivity();
+  const lastErrors = new Map(); // jobId → { at, errorCode, message }
+
+  function loadAssignments() {
+    try {
+      const raw = storage?.getItem(AI_JOB_SETTINGS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && parsed.assignments) return sanitizeAssignments(parsed.assignments);
+      }
+    } catch (e) {}
+    return {};
+  }
+
+  /** Only sane assignments survive a load (bad storage never breaks routing). */
+  function sanitizeAssignments(saved) {
+    const out = {};
+    for (const def of AI_JOB_DEFINITIONS) {
+      const a = saved[def.jobId];
+      if (a && typeof a === 'object' && typeof a.providerId === 'string' && typeof a.modelId === 'string') {
+        out[def.jobId] = {
+          providerId: a.providerId,
+          modelId: a.modelId,
+          fallbackPolicy: Object.values(FALLBACK_POLICIES).includes(a.fallbackPolicy) ? a.fallbackPolicy : FALLBACK_POLICIES.NEVER,
+          temperature: typeof a.temperature === 'number' ? a.temperature : null,
+          maxOutputTokens: typeof a.maxOutputTokens === 'number' ? a.maxOutputTokens : null,
+          reasoningEffort: typeof a.reasoningEffort === 'string' ? a.reasoningEffort : null
+        };
+      }
+    }
+    return out;
+  }
+
+  function persistAssignments() {
+    try {
+      storage?.setItem(AI_JOB_SETTINGS_KEY, JSON.stringify({ version: 1, assignments, updatedAt: now() }));
+    } catch (e) {}
+  }
+
+  function loadActivity() {
+    try {
+      const raw = storage?.getItem(AI_ACTIVITY_LOG_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.slice(0, MAX_ACTIVITY_ENTRIES);
+      }
+    } catch (e) {}
+    return [];
+  }
+
+  function persistActivity() {
+    try {
+      storage?.setItem(AI_ACTIVITY_LOG_KEY, JSON.stringify(activityLog.slice(0, MAX_ACTIVITY_ENTRIES)));
+    } catch (e) {}
+  }
+
+  // ------------------------------------------------------------------
+  // Assignment management
+  // ------------------------------------------------------------------
+
+  /**
+   * Assigns a model to a job. Refuses when the assignment cannot work:
+   * unknown provider, disabled provider, missing key is allowed (status
+   * surfaces NO KEY — the user may configure later), model capabilities
+   * missing a job requirement.
+   */
+  function assignModel(jobId, { providerId, modelId, fallbackPolicy, temperature, maxOutputTokens, reasoningEffort }) {
+    const def = getJobDefinition(jobId);
+    if (!def) return { ok: false, error: `Unknown job "${jobId}".` };
+    const providerStatus = providerManager.getProviderStatus(providerId);
+    if (!providerStatus) return { ok: false, error: `Unknown provider "${providerId}".` };
+    if (!providerStatus.enabled) return { ok: false, error: `${providerStatus.label} is disabled — enable it before assigning.` };
+    const model = modelCatalog.getModel(providerId, modelId);
+    if (!model) return { ok: false, error: `Model "${modelId}" is not in the ${providerStatus.label} catalog — add it first.` };
+    for (const [cap, needed] of Object.entries(def.requiredCapabilities)) {
+      if (needed && !model.capabilities[cap]) {
+        return { ok: false, error: `Selected model does not support ${capName(cap)}. Choose another model.` };
+      }
+    }
+    assignments[jobId] = {
+      providerId,
+      modelId,
+      fallbackPolicy: Object.values(FALLBACK_POLICIES).includes(fallbackPolicy) ? fallbackPolicy : FALLBACK_POLICIES.NEVER,
+      temperature: typeof temperature === 'number' ? temperature : null,
+      maxOutputTokens: typeof maxOutputTokens === 'number' ? maxOutputTokens : null,
+      reasoningEffort: typeof reasoningEffort === 'string' ? reasoningEffort : null
+    };
+    persistAssignments();
+    return { ok: true, assignment: { ...assignments[jobId] } };
+  }
+
+  function clearAssignment(jobId) {
+    delete assignments[jobId];
+    persistAssignments();
+    return { ok: true };
+  }
+
+  function getAssignment(jobId) {
+    return assignments[jobId] || null;
+  }
+
+  function capName(cap) {
+    return { structuredOutput: 'structured output', toolCalling: 'tool calling', imageGen: 'image generation', vision: 'vision', text: 'text', reasoning: 'reasoning' }[cap] || cap;
+  }
+
+  /**
+   * Health status per job for the UI: READY / NO KEY / PROVIDER DISABLED /
+   * MODEL UNAVAILABLE / NOT CONFIGURED / CAPABILITY MISMATCH / LAST ERROR.
+   */
+  function getJobStatus(jobId) {
+    const def = getJobDefinition(jobId);
+    if (!def) return { jobId, status: 'UNKNOWN', label: jobId };
+    const a = assignments[jobId];
+    if (!a) return { jobId, status: 'NOT CONFIGURED', label: def.label };
+    const providerStatus = providerManager.getProviderStatus(a.providerId);
+    if (!providerStatus) return { jobId, status: 'UNKNOWN', label: def.label };
+    if (!providerStatus.enabled) return { jobId, status: 'PROVIDER DISABLED', label: def.label, providerId: a.providerId, modelId: a.modelId };
+    const model = modelCatalog.getModel(a.providerId, a.modelId);
+    if (!model) return { jobId, status: 'MODEL UNAVAILABLE', label: def.label, providerId: a.providerId, modelId: a.modelId };
+    if (model.status === 'RETIRED' || model.status === 'UNAVAILABLE') {
+      return { jobId, status: 'MODEL UNAVAILABLE', label: def.label, providerId: a.providerId, modelId: a.modelId };
+    }
+    for (const [cap, needed] of Object.entries(def.requiredCapabilities)) {
+      if (needed && !model.capabilities[cap]) {
+        return { jobId, status: 'CAPABILITY MISMATCH', label: def.label, providerId: a.providerId, modelId: a.modelId, detail: capName(cap) };
+      }
+    }
+    if (!providerStatus.hasKey) return { jobId, status: 'NO KEY', label: def.label, providerId: a.providerId, modelId: a.modelId };
+    const lastError = lastErrors.get(jobId) || null;
+    return {
+      jobId,
+      status: lastError ? 'LAST ERROR' : 'READY',
+      label: def.label,
+      providerId: a.providerId,
+      modelId: a.modelId,
+      providerLabel: providerStatus.label,
+      modelLabel: model.displayName,
+      lastError
+    };
+  }
+
+  function listJobStatuses() {
+    return AI_JOB_DEFINITIONS.map(def => getJobStatus(def.jobId));
+  }
+
+  // ------------------------------------------------------------------
+  // Execution
+  // ------------------------------------------------------------------
+
+  function logActivity(entry) {
+    activityLog.unshift({
+      at: now(),
+      jobId: entry.jobId || null,
+      providerId: entry.providerId || null,
+      modelId: entry.modelId || null,
+      outcome: entry.outcome || 'ERROR',
+      errorCode: entry.errorCode || null,
+      inputTokens: typeof entry.inputTokens === 'number' ? entry.inputTokens : null,
+      outputTokens: typeof entry.outputTokens === 'number' ? entry.outputTokens : null,
+      durationMs: typeof entry.durationMs === 'number' ? entry.durationMs : null
+      // deliberately NO prompt text, NO project data, NO keys
+    });
+    activityLog = activityLog.slice(0, MAX_ACTIVITY_ENTRIES);
+    persistActivity();
+  }
+
+  function getActivityLog() {
+    return activityLog.slice();
+  }
+
+  function clearActivityLog() {
+    activityLog = [];
+    persistActivity();
+  }
+
+  /** Last error per job (usage/health UI). */
+  function recordError(jobId, errorCode, message) {
+    lastErrors.set(jobId, { at: now(), errorCode, message });
+  }
+
+  function clearError(jobId) {
+    lastErrors.delete(jobId);
+  }
+
+  /**
+   * Context budget check: refuses to send context that clearly exceeds the
+   * model's known window, and reports compression in the result so the UI
+   * can disclose "Context reduced to fit selected model."
+   */
+  function checkContextBudget(model, contextText) {
+    const window = model?.capabilities?.contextLimit || null;
+    if (!window) return { fits: true, reduced: false }; // unknown window: send, provider will judge
+    const estimate = estimateTokens(contextText) + 512; // + prompt scaffolding margin
+    if (estimate <= window * 0.9) return { fits: true, reduced: false, estimate, window };
+    return { fits: false, reduced: true, estimate, window };
+  }
+
+  /**
+   * Runs one AI job. ALWAYS resolves to a controlled object — never throws.
+   *
+   * @param {string} jobId
+   * @param {Object} request - { userMessage, context?, factsOptions?, image?, requiredCapabilities override }
+   * @returns {Promise<Object>} normalized result or controlled failure
+   */
+  async function runAIJob(jobId, request = {}) {
+    const def = getJobDefinition(jobId);
+    if (!def) {
+      return { ok: false, errorCode: AI_ERROR_CODES.UNKNOWN, message: `Unknown AI job "${jobId}".` };
+    }
+    const status = getJobStatus(jobId);
+    if (status.status === 'NOT CONFIGURED') {
+      return { ok: false, errorCode: AI_ERROR_CODES.PROVIDER_UNCONFIGURED, message: `"${def.label}" has no model assigned — configure it in the AI Control Center. The app works fully without AI.` };
+    }
+    if (status.status === 'PROVIDER DISABLED') {
+      return { ok: false, errorCode: AI_ERROR_CODES.PROVIDER_UNCONFIGURED, message: `The assigned provider (${status.providerId}) is disabled. Reassign the job or enable the provider.` };
+    }
+    if (status.status === 'MODEL UNAVAILABLE') {
+      return { ok: false, errorCode: AI_ERROR_CODES.INVALID_MODEL, message: `The assigned model (${status.modelId}) is unavailable — choose another model. No automatic switch was made.` };
+    }
+    if (status.status === 'CAPABILITY MISMATCH') {
+      return { ok: false, errorCode: AI_ERROR_CODES.UNKNOWN, message: `Assigned model lacks ${status.detail} — reassign this job.` };
+    }
+    if (status.status === 'NO KEY') {
+      return { ok: false, errorCode: AI_ERROR_CODES.PROVIDER_UNCONFIGURED, message: `No API key for ${status.providerId} — add one in the AI Control Center. The app works fully without AI.` };
+    }
+
+    const assignment = assignments[jobId];
+    const providerStatus = providerManager.getProviderStatus(assignment.providerId);
+    const model = modelCatalog.getModel(assignment.providerId, assignment.modelId);
+    const transport = transports.get(assignment.providerId);
+    if (!transport) {
+      return { ok: false, errorCode: AI_ERROR_CODES.UNKNOWN, message: 'No transport for the assigned provider.' };
+    }
+
+    // Build context (facts pack scoped by the caller) unless the caller
+    // supplies prebuilt prompt parts (vision / image jobs).
+    let systemPrompt = null;
+    let userPrompt = null;
+    let factChecks = [];
+    const modeProfile = def.mode ? getModeProfile(def.mode) : null;
+
+    if (request.image) {
+      // Vision / image jobs: context is a short project summary, the image
+      // travels separately through transport options.
+      systemPrompt = request.systemPrompt || (jobId === 'conceptImage'
+        ? 'Generate a CONCEPTUAL architectural image. Output is for inspiration only — never a technical drawing.'
+        : 'You analyze architectural images (sketches, plans, site photos). NEVER present pixel-derived measurements as exact geometry — describe relationships with confidence levels.');
+      userPrompt = request.userMessage || request.prompt || 'Describe this architectural image.';
+    } else {
+      const facts = buildFactsPack
+        ? buildFactsPack({ jobId, scope: request.scope, options: request.factsOptions })
+        : { text: '', data: {}, factChecks: [] };
+      factChecks = facts.factChecks || [];
+      systemPrompt = modeProfile ? modeProfile.systemPrompt : (request.systemPrompt || 'You are an architecture assistant.');
+      userPrompt = [
+        'FACTS PACK (deterministic, from the application — trust these numbers):',
+        facts.text || '(no project data available)',
+        '',
+        `STUDENT (${def.label}):`,
+        request.userMessage || '(no message)'
+      ].join('\n');
+    }
+
+    const budget = checkContextBudget(model, userPrompt);
+    if (!budget.fits) {
+      return {
+        ok: false,
+        errorCode: AI_ERROR_CODES.UNKNOWN,
+        message: `Context too large for this model (~${budget.estimate} tokens vs ${budget.window} window). Select relevant context or a larger model.`,
+        contextBudget: budget
+      };
+    }
+
+    const started = Date.now();
+    let transportResult;
+    try {
+      transportResult = await transport.sendPrompt({
+        endpoint: providerStatus.endpoint,
+        apiKey: providerManager.getRawKey(assignment.providerId),
+        modelId: assignment.modelId,
+        systemPrompt,
+        userPrompt,
+        options: {
+          expectsStructured: modeProfile ? modeProfile.expectsStructured : false,
+          temperature: assignment.temperature ?? undefined,
+          maxOutputTokens: assignment.maxOutputTokens ?? undefined,
+          reasoningEffort: assignment.reasoningEffort ?? undefined,
+          imageBase64: request.image?.imageBase64,
+          mimeType: request.image?.mimeType
+        }
+      });
+    } catch (err) {
+      const normalized = normalizeProviderError(err);
+      recordError(jobId, normalized.errorCode, normalized.message);
+      logActivity({ jobId, providerId: assignment.providerId, modelId: assignment.modelId, outcome: 'ERROR', errorCode: normalized.errorCode, durationMs: Date.now() - started });
+      return { ok: false, jobId, ...normalized };
+    }
+    const durationMs = Date.now() - started;
+
+    if (!transportResult.ok) {
+      const normalized = normalizeProviderError(transportResult);
+      recordError(jobId, normalized.errorCode, normalized.message);
+      logActivity({ jobId, providerId: assignment.providerId, modelId: assignment.modelId, outcome: 'ERROR', errorCode: normalized.errorCode, durationMs });
+      // Fallback policy (default NEVER): never switch silently — candidates
+      // are computed and surfaced to the user instead.
+      if (assignment.fallbackPolicy !== FALLBACK_POLICIES.NEVER) {
+        const candidates = computeFallbackCandidates(jobId, normalized.errorCode);
+        if (candidates.length > 0) {
+          return { ok: false, jobId, ...normalized, fallbackCandidates: candidates };
+        }
+      }
+      return { ok: false, jobId, ...normalized };
+    }
+
+    clearError(jobId);
+    logActivity({
+      jobId,
+      providerId: assignment.providerId,
+      modelId: assignment.modelId,
+      outcome: 'SUCCESS',
+      inputTokens: transportResult.usage?.inputTokens ?? null,
+      outputTokens: transportResult.usage?.outputTokens ?? null,
+      durationMs
+    });
+
+    // Structured validation for structured modes.
+    const expectsStructured = modeProfile ? modeProfile.expectsStructured : false;
+    let structured = null;
+    if (expectsStructured) {
+      const parsed = extractJsonObject(transportResult.text);
+      if (!parsed) {
+        recordError(jobId, AI_ERROR_CODES.MALFORMED_RESPONSE, 'AI response was not valid structured JSON.');
+        return { ok: false, jobId, errorCode: AI_ERROR_CODES.MALFORMED_RESPONSE, message: 'AI response was not valid structured JSON.', rawText: transportResult.text };
+      }
+      const validation = validateStructuredResponse(parsed, CRITIC_RESPONSE_SCHEMA);
+      if (!validation.ok) {
+        recordError(jobId, AI_ERROR_CODES.MALFORMED_RESPONSE, validation.errors[0]);
+        return { ok: false, jobId, errorCode: AI_ERROR_CODES.MALFORMED_RESPONSE, message: `AI response failed validation: ${validation.errors[0]}`, rawText: transportResult.text };
+      }
+      for (const finding of parsed.findings || []) {
+        if (!finding.trust) finding.trust = 'INFERENCE';
+      }
+      structured = parsed;
+    }
+
+    const numeric = validateNumericClaims(transportResult.text, factChecks);
+    return {
+      ok: true,
+      jobId,
+      providerId: assignment.providerId,
+      modelId: assignment.modelId,
+      text: transportResult.text,
+      structured,
+      usage: transportResult.usage,
+      durationMs,
+      consistency: {
+        numericClaimsChecked: numeric.claims.length,
+        mismatches: numeric.mismatches,
+        status: numeric.mismatches.length === 0 ? 'CONSISTENT' : 'NEEDS VERIFICATION'
+      }
+    };
+  }
+
+  /**
+   * Computes fallback candidates per policy WITHOUT executing: the UI calls
+   * this to offer the user explicit alternatives (no silent switch).
+   */
+  function computeFallbackCandidates(jobId, errorCode) {
+    const a = assignments[jobId];
+    const def = getJobDefinition(jobId);
+    if (!a || !def) return [];
+    if (a.fallbackPolicy === FALLBACK_POLICIES.NEVER) return [];
+    const candidates = [];
+    for (const status of providerManager.listProviderStatuses()) {
+      if (!status.enabled || !status.hasKey) continue;
+      if (a.fallbackPolicy === FALLBACK_POLICIES.SAME_PROVIDER && status.id !== a.providerId) continue;
+      for (const model of modelCatalog.listModels(status.id)) {
+        if (model.status !== 'READY') continue;
+        let okCaps = true;
+        for (const [cap, needed] of Object.entries(def.requiredCapabilities)) {
+          if (needed && !model.capabilities[cap]) okCaps = false;
+        }
+        if (okCaps) candidates.push({ providerId: status.id, modelId: model.modelId, displayName: model.displayName });
+      }
+    }
+    return candidates.slice(0, 10);
+  }
+
+  return {
+    runAIJob,
+    assignModel,
+    clearAssignment,
+    getAssignment,
+    getJobStatus,
+    listJobStatuses,
+    computeFallbackCandidates,
+    getActivityLog,
+    clearActivityLog,
+    getLastError: jobId => lastErrors.get(jobId) || null,
+    clearError,
+    estimateTokens,
+    checkContextBudget,
+    AI_JOB_DEFINITIONS,
+    FALLBACK_POLICIES
+  };
+}
+
+/** Extracts the first JSON object from model text (fence tolerant). */
+function extractJsonObject(text) {
+  if (!text) return null;
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1] : text;
+  const start = candidate.indexOf('{');
+  const end = candidate.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) return null;
+  try {
+    return JSON.parse(candidate.slice(start, end + 1));
+  } catch (e) {
+    return null;
+  }
+}
+
+
+  // =========================================================================
   // MODULE: ViewRegistry
   // =========================================================================
 
