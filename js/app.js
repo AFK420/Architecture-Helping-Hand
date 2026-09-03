@@ -10336,6 +10336,12 @@ function validateStructuredResponse(response, schema) {
       }
       if (spec.item) {
         value.forEach((item, idx) => {
+          // P14 hardening: model output is untrusted — a findings array can
+          // contain null/primitives. Flag them instead of crashing.
+          if (!item || typeof item !== 'object' || Array.isArray(item)) {
+            errors.push(`"${key}[${idx}]" must be an object`);
+            return;
+          }
           for (const [ik, ispec] of Object.entries(spec.item)) {
             if (ispec.required && item[ik] === undefined) {
               errors.push(`"${key}[${idx}].${ik}" missing`);
@@ -10470,42 +10476,55 @@ function classifyTrust(provenance) {
  */
 function buildFactsPack(project, planEntities, options = {}) {
   const p = project || {};
-  const entities = Array.isArray(planEntities) ? planEntities : [];
+  // Defensive normalization (P14): plan entities come from live canvas state
+  // or from imported project documents. Imported data is validated only at the
+  // envelope level, so individual entries may be null/garbage — skip them
+  // instead of crashing the AI context build.
+  const entities = (Array.isArray(planEntities) ? planEntities : [])
+    .filter(e => e && typeof e === 'object' && typeof e.kind === 'string');
   const rooms = entities.filter(e => e.kind === 'room');
   const walls = entities.filter(e => e.kind === 'wall');
   const furniture = entities.filter(e => e.kind === 'furniture');
   const openings = entities.filter(e => e.kind === 'door' || e.kind === 'window');
 
-  const roomFacts = rooms.map(r => ({
-    label: `Room "${r.name}" area`,
-    value: Number(roomArea(r).toFixed(2)),
-    unit: 'm2',
-    id: r.id
-  }));
+  const isFiniteNumber = v => typeof v === 'number' && isFinite(v);
+  const roomHasGeometry = r => isFiniteNumber(r.width) && isFiniteNumber(r.depth);
+  const round2 = v => (isFiniteNumber(v) ? Number(v.toFixed(2)) : null);
+
+  // Only rooms with calculable geometry feed numeric claim validation —
+  // a null-valued fact would be uncheckable noise.
+  const roomFacts = rooms
+    .filter(roomHasGeometry)
+    .map(r => ({
+      label: `Room "${r.name}" area`,
+      value: Number(roomArea(r).toFixed(2)),
+      unit: 'm2',
+      id: r.id
+    }));
 
   const overlaps = checkOverlaps(furniture, rooms, walls);
 
   const data = {
     project: {
       id: p.id || null,
-      name: p.metadata?.name || 'Untitled Project',
-      description: p.metadata?.description || p.site?.description || ''
+      name: (p.metadata && typeof p.metadata === 'object' ? p.metadata.name : null) || 'Untitled Project',
+      description: (p.metadata && p.metadata.description) || (p.site && p.site.description) || ''
     },
     site: p.site ? { location: p.site.location || '', areaM2: p.site.areaM2 || null } : null,
     rooms: rooms.map(r => ({
       id: r.id, name: r.name,
-      widthMeters: r.width, depthMeters: r.depth,
-      areaM2: Number(roomArea(r).toFixed(2)),
-      perimeterM2: Number(roomPerimeter(r).toFixed(2))
+      widthMeters: round2(r.width), depthMeters: round2(r.depth),
+      areaM2: round2(roomArea(r)),
+      perimeterM2: round2(roomPerimeter(r))
     })),
     walls: walls.map(w => ({ id: w.id, name: w.name })),
-    openings: openings.map(o => ({ kind: o.kind, id: o.id, name: o.name, widthMeters: o.width })),
-    furniture: furniture.map(f => ({ id: f.id, name: f.name, x: f.x, y: f.y, widthMeters: f.width, depthMeters: f.depth })),
-    dimensions: (p.dimensions || []).length,
-    measurements: (p.measurements || []).map(m => ({ label: m.label, value: m.value, unit: m.unit, status: m.status })),
-    decisions: (p.decisions || []).map(d => ({ kind: d.kind, name: d.name, createdAt: d.createdAt })),
+    openings: openings.map(o => ({ kind: o.kind, id: o.id, name: o.name, widthMeters: round2(o.width) })),
+    furniture: furniture.map(f => ({ id: f.id, name: f.name, x: round2(f.x), y: round2(f.y), widthMeters: round2(f.width), depthMeters: round2(f.depth) })),
+    dimensions: Array.isArray(p.dimensions) ? p.dimensions.length : 0,
+    measurements: (Array.isArray(p.measurements) ? p.measurements : []).map(m => ({ label: m?.label, value: m?.value, unit: m?.unit, status: m?.status })),
+    decisions: (Array.isArray(p.decisions) ? p.decisions : []).map(d => ({ kind: d?.kind, name: d?.name, createdAt: d?.createdAt })),
     conflicts: overlaps.conflicts,
-    currentOption: (p.snapshots || []).length ? `${p.snapshots.length} snapshots recorded` : 'no snapshots'
+    currentOption: (Array.isArray(p.snapshots) && p.snapshots.length) ? `${p.snapshots.length} snapshots recorded` : 'no snapshots'
   };
 
   const lines = [];
@@ -10516,7 +10535,7 @@ function buildFactsPack(project, planEntities, options = {}) {
   }
   lines.push(`ROOMS (${data.rooms.length}):`);
   for (const r of data.rooms) {
-    lines.push(`  ${r.name}: ${r.widthMeters} × ${r.depthMeters} m = ${r.areaM2} m²`);
+    lines.push(`  ${r.name}: ${r.widthMeters ?? '?'} × ${r.depthMeters ?? '?'} m = ${r.areaM2 ?? '?'} m²`);
   }
   lines.push(`WALLS: ${data.walls.length} · OPENINGS: ${data.openings.length} · FURNITURE: ${data.furniture.length}`);
   if (data.conflicts.length > 0) {
@@ -10872,15 +10891,22 @@ async function interpretImage(provider, { imageBase64, mimeType, question }) {
   if (!imageBase64) {
     return { available: true, ok: false, errorCode: AI_ERROR_CODES.MISSING_INPUT, message: 'No image provided.' };
   }
-  const result = await provider.sendPrompt({
-    systemPrompt: `You analyze architectural images (sketches, plans, site photos).
+  let result;
+  try {
+    result = await provider.sendPrompt({
+      systemPrompt: `You analyze architectural images (sketches, plans, site photos).
 Return STRICT JSON: { "observations": [ { "topic": string, "description": string,
 "confidence": "high"|"medium"|"low" } ], "summary": string }.
 NEVER present pixel-derived measurements as exact geometry — describe
 relationships and likely dimensions with confidence levels only.`,
-    userPrompt: `IMAGE (base64 ${mimeType || 'image/png'}) attached. QUESTION: ${question || 'Describe this architectural image.'}`,
-    options: { imageBase64, mimeType }
-  });
+      userPrompt: `IMAGE (base64 ${mimeType || 'image/png'}) attached. QUESTION: ${question || 'Describe this architectural image.'}`,
+      options: { imageBase64, mimeType }
+    });
+  } catch (err) {
+    // A throwing transport surfaces as a controlled error, never an exception
+    const normalized = normalizeProviderError(err);
+    return { available: true, ok: false, ...normalized };
+  }
   if (!result.ok) return { available: true, ok: false, ...result };
   return {
     available: true,
@@ -10902,11 +10928,18 @@ async function generateConceptImage(provider, { prompt }) {
       reason: `Provider "${provider?.label || 'unknown'}" does not declare image-generation capability. Concept generation is unavailable — the rest of the application is unaffected.`
     };
   }
-  const result = await provider.sendPrompt({
-    systemPrompt: 'Generate a CONCEPTUAL architectural image. Output is for inspiration only.',
-    userPrompt: prompt || 'Conceptual massing study',
-    options: { generateImage: true }
-  });
+  let result;
+  try {
+    result = await provider.sendPrompt({
+      systemPrompt: 'Generate a CONCEPTUAL architectural image. Output is for inspiration only.',
+      userPrompt: prompt || 'Conceptual massing study',
+      options: { generateImage: true }
+    });
+  } catch (err) {
+    // A throwing transport surfaces as a controlled error, never an exception
+    const normalized = normalizeProviderError(err);
+    return { available: true, ok: false, ...normalized };
+  }
   if (!result.ok) return { available: true, ok: false, ...result };
   return {
     available: true,

@@ -50,6 +50,12 @@ export function validateStructuredResponse(response, schema) {
       }
       if (spec.item) {
         value.forEach((item, idx) => {
+          // P14 hardening: model output is untrusted — a findings array can
+          // contain null/primitives. Flag them instead of crashing.
+          if (!item || typeof item !== 'object' || Array.isArray(item)) {
+            errors.push(`"${key}[${idx}]" must be an object`);
+            return;
+          }
           for (const [ik, ispec] of Object.entries(spec.item)) {
             if (ispec.required && item[ik] === undefined) {
               errors.push(`"${key}[${idx}].${ik}" missing`);

@@ -220,6 +220,11 @@ console.log('\n--- 4. Structured validation ---');
 
   const missing = { summary: 's', verdict: 'v', findings: [{ title: 'T' }] };
   assert(!validateStructuredResponse(missing, CRITIC_RESPONSE_SCHEMA).ok, 'Missing required finding fields rejected');
+
+  // P14 hardening: hostile findings arrays must be flagged, never crash
+  const hostile = { summary: 's', verdict: 'v', findings: [null, 'string', 42] };
+  const hostileCheck = validateStructuredResponse(hostile, CRITIC_RESPONSE_SCHEMA);
+  assert(!hostileCheck.ok && hostileCheck.errors.length >= 3, 'Null/primitive findings flagged as invalid objects');
 }
 
 {
