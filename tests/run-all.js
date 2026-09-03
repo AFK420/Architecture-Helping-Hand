@@ -35,6 +35,7 @@ const testFiles = [
   'plan-canvas.test.js',
   'space-planning.test.js',
   'ai.test.js',
+  'visual-ai.test.js',
   'services.test.js',
   'commands.test.js',
   'data-integrity.test.js',
