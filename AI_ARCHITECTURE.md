@@ -1,8 +1,8 @@
 # AI ARCHITECTURE — Architecture Helping Hand
 
-**Status**: Implemented (Phases 9–13) · P14 hardened (see ARCHITECTURE_AUDIT.md §7)  
-**Layers**: `src/ai/` (providers · tools · modes · schemas · context · orchestrator · visual)  
-**Date**: September 3, 2026
+**Status**: Implemented (Phases 9–13) · P14 hardened (see ARCHITECTURE_AUDIT.md §7) · **Phase 15: real provider transport live** (see AI_PROVIDERS.md, AI_JOBS.md, AI_CONTROL_CENTER.md)  
+**Layers**: `src/ai/` (providers · tools · modes · schemas · context · orchestrator · visual) + `src/services/ai/` (http · provider-manager · model-catalog · job-router · transports)  
+**Date**: September 2026
 
 ---
 
@@ -92,9 +92,31 @@ All failures are controlled objects. `MISSING key` message explicitly reassures 
 
 **P14 hardening (all regression-pinned)**: the facts pack filters null/garbage plan entities and only emits finite-geometry factChecks; `validateStructuredResponse` flags null/primitive findings instead of crashing; the visual layer converts throwing transports into the stable controlled error object.
 
-## 10. Limitations
+## 10. Phase 15 — Real Provider Transport
 
-- Real Gemini/GLM fetch transports are not yet implemented (the abstraction + key store are ready for them in `src/services/`) — **by design**: no network code exists anywhere in the repository, so the free-cost and offline guarantees hold by construction
-- No write tools: APPLY flow exists in the store (update/undo/notify) but no UI surface yet
-- No dedicated AI panel in the UI yet: the orchestrator/tool layer is fully tested headlessly; wiring it to a visible assistant panel is future work
-- Vision analysis is heuristic by nature — always NEEDS VERIFICATION
+- **Transport boundary**: `src/services/ai/http.js` is the single fetch point
+  (`fetchImpl` injectable; automated tests bind deterministic mocks — no test
+  touches the network).
+- **Providers**: Gemini (official REST), GLM + DeepSeek (one OpenAI-compatible
+  adapter). Directory + details in AI_PROVIDERS.md.
+- **Model catalog**: per-provider registry with discovery merge, manual entry
+  (user-declared capabilities, labelled NEEDS VERIFICATION), retirement
+  states, context windows.
+- **Job router**: `runAIJob(jobId, …)` — the application-wide entry point.
+  Capability-gated assignments, default NEVER fallback policy, metadata-only
+  activity log. Details in AI_JOBS.md.
+- **Scoped project context**: `ai/context/project-context.js` builds the
+  facts pack from the live store + plan with word-based scope hints and
+  disclosed trimming (`CONTEXT REDUCED: …`).
+- **UI**: AI Studio (Mode 20) and AI Control Center (Mode 21) — see
+  AI_CONTROL_CENTER.md.
+- **Free-cost guarantees unchanged**: no paid fallback, no retries, no
+  telemetry, keys never leave the provider manager except into the request
+  the user triggers.
+
+## 11. Limitations
+
+- AI layout *proposals* (PROPOSE_CHANGE tools) have no visual apply-UI yet; Save-to-Journal is the write path (user-triggered).
+- Vision analysis is heuristic by nature — always NEEDS VERIFICATION.
+- GLM/DeepSeek model lists do not report context windows; the user can override per model in the catalog.
+- Import foundation covers CSV/TSV, 2D ASCII DXF, flat SVG (IMPORTS.md); proprietary CAD formats are intentionally out of scope.

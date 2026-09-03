@@ -78,3 +78,26 @@ Future UI modes (e.g. a Stair Calculator tab or Geometry Explorer) will strictly
 2. **Deterministic Build**: Any new file added to `src/core/`, `src/services/`, or `src/ui/` must be registered in `BUNDLE_MODULES` in `scripts/build.js` (dependency-first order) — `tests/build-integrity.test.js` fails otherwise. See ENGINEERING_RULES.md §6.1.
 3. **Strict Validation**: All geometric parameters must use `requireFiniteNumber` and `requireUnit`.
 4. **Automated Unit Tests**: Every geometric formula must have an accompanying test file in `tests/`.
+
+---
+
+## 5. AI Integration Status (updated September 2026 — Phase 15)
+
+The AI integration planned in early revisions is now real:
+
+* **Provider transport** (`src/services/ai/`): Gemini, GLM, DeepSeek with a
+  single injectable HTTP boundary; details in AI_PROVIDERS.md.
+* **Model catalog + job router**: dynamic model discovery/manual entry, 11
+  capability-gated AI jobs, default-never fallback; details in AI_JOBS.md.
+* **AI Studio (Mode 20) + AI Control Center (Mode 21)**: task-focused
+  assistant and provider/key/model management UI; details in
+  AI_CONTROL_CENTER.md.
+* **Import foundation** (`src/core/import/`): CSV/TSV, 2D ASCII DXF, flat
+  SVG with normalized reports; details in IMPORTS.md.
+
+Remaining AI-adjacent future work: visual apply-UI for PROPOSE_CHANGE
+layout proposals, design-board reference collection, DXF blocks/INSERT
+support, PDF page extraction, OBJ massing import.
+
+All future AI work must respect ENGINEERING_RULES.md §10 (AI network
+boundary, key privacy, free-cost safety, untrusted-output validation).

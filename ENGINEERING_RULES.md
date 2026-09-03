@@ -213,3 +213,30 @@ To preserve lightweight, zero-dependency, and offline compatibility:
 * Do NOT introduce UI frameworks (React, Vue, Angular).
 * Do NOT add runtime NPM dependencies unless technically unavoidable.
 * Keep the application directly runnable via double-clicking `index.html` (`file:///`) and local servers (`http://`).
+
+---
+
+## 10. AI Network Boundary (added Phase 15)
+
+* **Single fetch point**: all AI network traffic flows through
+  `src/services/ai/http.js` (`createAiHttp`). No other module under
+  `src/core/`, `src/ai/`, `src/ui/`, or `src/services/` may call `fetch` for
+  AI traffic. The `fetchImpl` is injectable so automated tests bind
+  deterministic mocks — **test suites never call real APIs and never consume
+  real quota**.
+* **Keys**: API keys live only inside `services/ai/provider-manager.js`.
+  They are never logged, never exported, never written to project documents,
+  history, journal, prompts, or telemetry, and displayed masked only
+  (`••••••••abcd`). Session-only storage is the default; persistent browser
+  storage is an explicit, labelled choice.
+* **Job routing**: application code calls `runAIJob(jobId, request)` from
+  `services/ai/job-router.js` — never a provider or model directly. Model
+  assignments are data, changeable at runtime; no model id is hard-coded as
+  permanent truth.
+* **Free-cost safety**: fallback policy defaults to NEVER; no automatic
+  retries; quota/rate-limit failures return control to the user.
+* **Model output is untrusted**: escape before DOM insertion; validate
+  structured outputs against schemas; compare numeric claims against
+  core-calculated facts (`AI SUGGESTS. CORE VERIFIES.`).
+* **AI write permissions** remain READ / SUGGEST only. Writes to the project
+  happen exclusively through explicit user actions.

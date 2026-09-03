@@ -3,7 +3,7 @@
 > **Professional Architectural Scale, Furniture Sizing & Multi-Unit Calculation Studio**  
 > *A high-precision, zero-dependency, tactile architectural conversion studio built for architects, interior designers, urban planners, physical model makers, and design students.*
 
-[![Tests](https://img.shields.io/badge/Tests-2544%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-2761%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-3--Tier%20Core%20%7C%20Frozen-10b981?style=flat-square)](ENGINEERING_RULES.md)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Vanilla)-f59e0b?style=flat-square)](package.json)
 [![License](https://img.shields.io/badge/License-MIT-6366f1?style=flat-square)](package.json)
@@ -145,7 +145,7 @@ The codebase has evolved through rigorous engineering, auditing, hardening, and 
 This repository serves as:
 1. **An Open-Source Reference Studio**: A tactile, zero-friction architectural scaling studio for architects, interior designers, landscape architects, students, and educators.
 2. **Zero-Dependency Architecture**: No React, no Vue, no webpack, no runtime `node_modules`. Anyone can clone the repository, double-click `index.html`, and use it immediately offline via `file:///`.
-3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **2,544 automated test assertions across 32 test suites** (authoritative count emitted by `npm test`).
+3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **2,761 automated test assertions across 35 test suites** (authoritative count emitted by `npm test`).
 4. **An Extensible Platform**: Prepared for future architectural geometry engines, CAD vector exports (SVG/DXF), and stair/ramp calculations.
 
 ---
@@ -466,7 +466,7 @@ python -m http.server 3500
 ### 3. Run Automated Test Suite
 ```bash
 npm test
-# Executes all 32 test suites (2,544 assertions, 100% passing).
+# Executes all 35 test suites (2,761 assertions, 100% passing).
 # The runner emits the authoritative total assertion count on completion.
 ```
 
@@ -499,9 +499,19 @@ node scripts/build.js --check
 
 ## 🔮 Future Roadmap
 
-* **Status (September 3, 2026)**: Phases 1–13 are complete — Universal Export Center, Project Workspace, Plan Canvas, Architectural Entities, Space Planning, Survey/Calibration, Annotations, AI Foundation (provider abstraction, tool registry, facts pack, orchestrator, 7 specialist modes), and the Visual AI capability layer. P14 final hardening is complete (see ARCHITECTURE_AUDIT.md §7).
-* **AI transports not yet implemented (by design)**: the provider abstraction and key store are ready for real Gemini/GLM fetch transports in `src/services/`, but none exist yet — the app makes no network calls and is fully usable without AI. The Free AI requirement (no hidden keys, no paid fallback, no anonymous requests) is enforced by construction: no network code exists in the repository.
-* **AI proposal UI not yet surfaced**: the store's apply/undo/notify flow exists and is tested, but no UI panel exposes AI proposals yet.
+* **Status (September 2026)**: Phases 1–14 complete, plus **Phase 15: Real AI Integration** —
+  Universal Export Center, Project Workspace, Plan Canvas, Architectural Entities,
+  Space Planning, Survey/Calibration, Annotations, AI Foundation, Visual AI capability
+  layer, P14 final hardening, and now real provider transport.
+* **Phase 15 (September 2026): Real AI Integration — implemented**:
+  - ✅ **AI Providers** — real Gemini (generateContent/ListModels), GLM (OpenAI-compatible v4), and DeepSeek transports with user-supplied keys; see [AI_PROVIDERS.md](AI_PROVIDERS.md).
+  - ✅ **Model catalog** — provider discovery + manual model entry ("I know this model exists"), capability profiles per model, retirement states; no model list is hard-coded as permanent truth.
+  - ✅ **AI jobs** — 11 named jobs (Tutor, Studio/Brutal Critic, Jury, Ideation, Project Analysis, Image Analysis, Concept Image, …) with capability-validated model assignment; see [AI_JOBS.md](AI_JOBS.md).
+  - ✅ **AI Studio (Mode 20)** — task-focused assistant consuming the deterministic facts pack; structured critiques rendered with evidence, trust labels, and numeric fact-check strips; see [AI_CONTROL_CENTER.md](AI_CONTROL_CENTER.md).
+  - ✅ **AI Control Center (Mode 21)** — provider keys (session-only default / labelled persistent), connection tests, model catalog browser, job assignment table, local metadata-only activity log.
+  - ✅ **Import foundation** — CSV/TSV schedules, 2D ASCII DXF, flat SVG with normalized reports and NEEDS VERIFICATION semantics; see [IMPORTS.md](IMPORTS.md).
+  - ✅ **Free-cost safety** — fallback policy defaults to NEVER, no retry loops, no telemetry; automated tests never call real APIs (mocked HTTP at the single `services/ai/http.js` boundary).
+* **AI proposal UI**: the store's apply/undo/notify flow exists and is tested; a visible panel for AI *layout* proposals remains future work (Save-to-Journal is implemented).
 * **Survey/Calibration/Annotations UI not yet surfaced**: the three cores (`src/core/survey.js`, `annotations.js`) are tested pure modules; dedicated modes are future work.
 * **Phase 3 (legacy numbering): Extended Architectural Geometry**:
   - Wall thickness offset and clearance envelope calculator — partially covered by the space-planning core (`checkClearance`, wall footprints in `wallRect`); advanced envelope tools remain future work.

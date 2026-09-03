@@ -2,7 +2,7 @@
 
 **Date**: September 3, 2026  
 **Repository**: [https://github.com/AFK420/Architecture-Helping-Hand.git](https://github.com/AFK420/Architecture-Helping-Hand.git)  
-**Status**: Verified & Hardened (P14 Final Hardening — 2,544 Assertions, 32 Suites)  
+**Status**: Verified & Hardened (P14 + Phase 15 — 2,761 Assertions, 35 Suites)  
 
 ---
 
@@ -174,7 +174,7 @@ Scaling formulas operate strictly on these normalized values:
 
 ## 4. Automated Testing & Verification Matrix
 
-The test suite consists of **32 automated test suites** containing **2,544 exact assertions**, all passing with zero failures. The authoritative total is emitted by `npm test` on every run — documentation should quote that output rather than hard-coded numbers.
+The test suite consists of **35 automated test suites** containing **2,761 exact assertions**, all passing with zero failures. The authoritative total is emitted by `npm test` on every run — documentation should quote that output rather than hard-coded numbers.
 
 | Test Suite File | Focus Area | Assertions | Result |
 | :--- | :--- | :---: | :---: |
@@ -210,7 +210,7 @@ The test suite consists of **32 automated test suites** containing **2,544 exact
 | `tests/plan-canvas.test.js` | Entities, transforms, grid/selection/undo, plan export geometry (SVG/DXF through real exporters) | 84 | ✅ PASS |
 | `tests/space-planning.test.js` | Fit/clearance/overlap/adjacency/efficiency, survey notebook, calibration math, annotations | 75 | ✅ PASS |
 | `tests/data-integrity.test.js`| 28 scale presets uniqueness & ratio validity, 179 furniture records positive dimensions & unique IDs, reference ranges continuity | 9 | ✅ PASS |
-| **Total** | **32 Comprehensive Test Suites** | **2,544 Assertions** | **100% Passing (0 Failures)** |
+| **Total (incl. Phase 15 suites)** | **35 Comprehensive Test Suites** | **2,761 Assertions** | **100% Passing (0 Failures)** |
 
 ---
 
@@ -263,3 +263,22 @@ All findings below were discovered by a full repository audit and fixed with reg
 **Runner**
 - `tests/visual-ai.test.js` existed but was never registered in `tests/run-all.js` — `npm test` silently skipped the entire Phase 13 contract suite. Now registered (32/32 suites).
 - New `tests/integration.test.js`: five end-to-end pipelines (Project→Room→Furniture→Clearance→Facts→Critique; Survey→Calibration→Measurement→Room→Plan→Export; Stair→Project→CSV; Ramp→Slope shared math→DXF; Plan→Space analysis→Snapshot→AI context) through REAL implementations only.
+
+---
+
+## 8. Phase 15 Record — Real AI Integration (September 2026)
+
+**Scope delivered**
+- Real provider transport: Gemini (official generateContent/ListModels REST), GLM (OpenAI-compatible v4), DeepSeek (OpenAI-compatible). Single HTTP boundary in `src/services/ai/http.js` with injectable `fetchImpl` — automated tests bind deterministic mocks and never touch the network.
+- Model catalog (`services/ai/model-catalog.js`): discovery merge (never prunes), manual model entry with user-declared capabilities labelled NEEDS VERIFICATION, retirement/unavailable states, context windows.
+- Job router (`services/ai/job-router.js`): 11 capability-gated AI jobs, default-NEVER fallback policy, quota surfaces as controlled errors, metadata-only activity log (no prompts, no keys, no project data).
+- AI Studio (Mode 20) and AI Control Center (Mode 21) views using the existing design system; command palette entries for both plus Analyze/Critique/Test actions.
+- Scoped project context (`ai/context/project-context.js`): word-based scope hints, disclosed trimming (`CONTEXT REDUCED: …`), P14-grade hostile-input filtering.
+- Import foundation (`core/import/import-model.js` + Mode 22): CSV/TSV schedules, 2D ASCII DXF ($INSUNITS-honoring), flat SVG, normalized reports with confidence and warnings.
+
+**Security findings found & fixed during the phase**
+- The Phase 9 session key store held a SINGLE key slot: configuring a second provider silently dropped the first provider's key (found by the new integration pipeline). Now per-provider; regression-pinned.
+- Key-leakage pins: persistent keys appear in exactly one storage namespace; job assignments, catalog, activity log, and results contain no keys (pinned in `tests/ai-providers.test.js` and `tests/ai-integration.test.js`).
+- Prompt-shape pin: connection tests send a fixed minimal prompt; the integration test asserts no project data and no key in sent bodies or results.
+
+**Test state after the phase**: 2,761 assertions / 35 suites (`tests/run-all.js`), including `ai-providers.test.js` (147), `imports.test.js` (66), `ai-integration.test.js` (51).
