@@ -764,6 +764,12 @@ body.sidebar-hidden .app-sidebar {
   min-width: 0;
 }
 
+/* Wide schedule tables scroll inside their own container — never the page */
+.workspace-table-container {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
 .form-input:focus, .form-select:focus, .text-input:focus, .calc-select:focus {
   border-color: var(--accent-primary);
   background: var(--bg-input-focus);
@@ -4109,7 +4115,7 @@ body.sidebar-hidden .app-sidebar {
   /* Two-column input pairs stack on phones so inputs+unit selects fit
      (QA: detector/rescale/area-volume unit selects sat off-viewport). */
   .grid-two-cols {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .workspace-inputs-grid .col-input,
@@ -4176,7 +4182,7 @@ body.sidebar-hidden .app-sidebar {
   }
 
   .totals-breakdown-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -4297,7 +4303,7 @@ body.sidebar-hidden .app-sidebar {
 /* --- C. Tablet Portrait & Small Laptop (769px - 1024px): drawer sidebar --- */
 @media (max-width: 1024px) {
   .tool-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-lg);
   }
 
@@ -4547,7 +4553,7 @@ body.sidebar-hidden .app-sidebar {
   }
 
   .equiv-columns-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-sm);
   }
 
@@ -4591,7 +4597,7 @@ body.sidebar-hidden .app-sidebar {
   }
 
   .furniture-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-md);
   }
 
@@ -4737,7 +4743,7 @@ body.sidebar-hidden .app-sidebar {
   }
 
   .benchmarks-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .presets-grid {
@@ -5936,7 +5942,7 @@ body.sidebar-hidden .app-sidebar {
 
 @media (max-width: 768px) {
   .quick-dim-main-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .quick-dim-hero-box {
     padding: 0.5rem;

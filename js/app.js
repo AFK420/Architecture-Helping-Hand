@@ -22144,23 +22144,21 @@ function createAiControlCenterView(context) {
         : `${st.providerId || '?'} · ${st.modelId || '?'}`;
       const detail = st.lastError ? ` — ${escape(st.lastError.errorCode)}` : '';
       return `
-        <div class="ai-job-row" role="listitem" data-job="${escape(st.jobId)}" style="border: 1px solid var(--border-color-light); border-radius: 5px; padding: 0.45rem 0.6rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-            <div style="font-size: 0.78rem;">
-              <strong style="color: var(--text-primary);">${escape(st.label)}</strong>
-              <span style="color: var(--text-muted); font-size: 0.7rem;"> · ${escape(modelText)}</span>
-              <span style="color: ${statusColor(st.status)}; font-size: 0.68rem; font-weight: 700;"> ● ${escape(st.status)}${detail}</span>
-            </div>
-            <div style="display: flex; gap: 0.35rem; align-items: center;">
-              <select class="calc-select ai-job-provider" data-job="${escape(st.jobId)}" style="min-width: 110px; font-size: 0.7rem;" aria-label="Provider for ${escape(st.label)}">
-                <option value="">Provider…</option>
-                ${svc.providerManager.listProviderStatuses().map(p =>
-                  `<option value="${escape(p.id)}" ${assigned?.providerId === p.id ? 'selected' : ''}>${escape(p.label)}</option>`).join('')}
-              </select>
-              <select class="calc-select ai-job-model" data-job="${escape(st.jobId)}" style="min-width: 150px; font-size: 0.7rem;" aria-label="Model for ${escape(st.label)}"></select>
-              <button type="button" class="result-action-btn ai-job-save" data-job="${escape(st.jobId)}" style="padding: 0.25rem 0.55rem; font-size: 0.68rem;" title="Assign the selected provider/model"><span>Assign</span></button>
-              <button type="button" class="result-action-btn ai-job-clear" data-job="${escape(st.jobId)}" style="padding: 0.25rem 0.55rem; font-size: 0.68rem;" title="Remove the assignment"><span>✕</span></button>
-            </div>
+        <div class="ai-job-row" role="listitem" data-job="${escape(st.jobId)}" style="border: 1px solid var(--border-color-light); border-radius: 5px; padding: 0.45rem 0.6rem; display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; min-width: 0;">
+          <div style="font-size: 0.78rem; min-width: 0; flex: 1 1 160px;">
+            <strong style="color: var(--text-primary);">${escape(st.label)}</strong>
+            <span style="color: var(--text-muted); font-size: 0.7rem;"> · ${escape(modelText)}</span>
+            <span style="color: ${statusColor(st.status)}; font-size: 0.68rem; font-weight: 700;"> ● ${escape(st.status)}${detail}</span>
+          </div>
+          <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
+            <select class="calc-select ai-job-provider" data-job="${escape(st.jobId)}" style="min-width: 110px; flex: 1 1 110px; max-width: 100%; font-size: 0.7rem;" aria-label="Provider for ${escape(st.label)}">
+              <option value="">Provider…</option>
+              ${svc.providerManager.listProviderStatuses().map(p =>
+                `<option value="${escape(p.id)}" ${assigned?.providerId === p.id ? 'selected' : ''}>${escape(p.label)}</option>`).join('')}
+            </select>
+            <select class="calc-select ai-job-model" data-job="${escape(st.jobId)}" style="min-width: 150px; flex: 1 1 150px; max-width: 100%; font-size: 0.7rem;" aria-label="Model for ${escape(st.label)}"></select>
+            <button type="button" class="result-action-btn ai-job-save" data-job="${escape(st.jobId)}" style="padding: 0.25rem 0.55rem; font-size: 0.68rem;" title="Assign the selected provider/model"><span>Assign</span></button>
+            <button type="button" class="result-action-btn ai-job-clear" data-job="${escape(st.jobId)}" style="padding: 0.25rem 0.55rem; font-size: 0.68rem;" title="Remove the assignment"><span>✕</span></button>
           </div>
         </div>`;
     }).join('');

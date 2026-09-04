@@ -12,66 +12,15 @@
    },
    "rescale": {
     "overflowX": 0,
-    "problems": [
-     {
-      "kind": "offscreen-right",
-      "tag": "INPUT",
-      "id": "rescale-orig-ratio",
-      "cls": "form-input",
-      "left": 72,
-      "right": 398
-     },
-     {
-      "kind": "offscreen-right",
-      "tag": "SELECT",
-      "id": "rescale-orig-unit",
-      "cls": "form-select primary-unit-select",
-      "left": 247,
-      "right": 398
-     }
-    ]
+    "problems": []
    },
    "detector": {
     "overflowX": 0,
-    "problems": [
-     {
-      "kind": "offscreen-right",
-      "tag": "SELECT",
-      "id": "detector-paper-unit",
-      "cls": "form-select primary-unit-select",
-      "left": 247,
-      "right": 398
-     },
-     {
-      "kind": "offscreen-right",
-      "tag": "SELECT",
-      "id": "detector-real-unit",
-      "cls": "form-select primary-unit-select",
-      "left": 247,
-      "right": 398
-     }
-    ]
+    "problems": []
    },
    "area_volume": {
     "overflowX": 0,
-    "problems": [
-     {
-      "kind": "offscreen-right",
-      "tag": "INPUT",
-      "id": "areavol-ratio-input",
-      "cls": "form-input",
-      "left": 72,
-      "right": 398
-     },
-     {
-      "kind": "offscreen-right",
-      "tag": "SELECT",
-      "id": "areavol-input-unit",
-      "cls": "form-select primary-unit-select",
-      "left": 247,
-      "right": 398
-     }
-    ]
+    "problems": []
    },
    "furniture": {
     "overflowX": 0,
@@ -95,40 +44,7 @@
    },
    "chains": {
     "overflowX": 0,
-    "problems": [
-     {
-      "kind": "offscreen-right",
-      "tag": "BUTTON",
-      "id": null,
-      "cls": "dim-type-badge badge-role-seg chain-type-cycle-btn",
-      "left": 397,
-      "right": 429
-     },
-     {
-      "kind": "offscreen-right",
-      "tag": "BUTTON",
-      "id": null,
-      "cls": "chain-reorder-btn chain-move-up",
-      "left": 528,
-      "right": 542
-     },
-     {
-      "kind": "offscreen-right",
-      "tag": "BUTTON",
-      "id": null,
-      "cls": "chain-reorder-btn chain-move-down",
-      "left": 544,
-      "right": 558
-     },
-     {
-      "kind": "offscreen-right",
-      "tag": "BUTTON",
-      "id": null,
-      "cls": "chain-row-del-btn",
-      "left": 580,
-      "right": 599
-     }
-    ]
+    "problems": []
    },
    "cad_clipboard": {
     "overflowX": 0,
@@ -180,40 +96,7 @@
    },
    "ai_settings": {
     "overflowX": 0,
-    "problems": [
-     {
-      "kind": "offscreen-right",
-      "tag": "BUTTON",
-      "id": null,
-      "cls": "result-action-btn ai-job-clear",
-      "left": 362,
-      "right": 392
-     },
-     {
-      "kind": "offscreen-right",
-      "tag": "INPUT",
-      "id": "ai-catalog-search",
-      "cls": "text-input",
-      "left": 21,
-      "right": 402
-     },
-     {
-      "kind": "offscreen-right",
-      "tag": "BUTTON",
-      "id": "btn-ai-refresh-models",
-      "cls": "result-action-btn",
-      "left": 282,
-      "right": 402
-     },
-     {
-      "kind": "offscreen-right",
-      "tag": "BUTTON",
-      "id": null,
-      "cls": "result-action-btn ai-catalog-remove",
-      "left": 363,
-      "right": 392
-     }
-    ]
+    "problems": []
    }
   }
  },
