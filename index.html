@@ -44,7 +44,7 @@
         <!-- Input Group -->
         <div class="quick-dim-input-wrapper">
           <div class="quick-dim-input-box">
-            <input type="text" id="quick-dim-input" class="text-input quick-dim-input" placeholder="e.g. 2400mm, 2.4m, 7' 6&quot;, 5.4m - 1200mm..." autocomplete="off" spellcheck="false" />
+            <input type="text" id="quick-dim-input" class="text-input quick-dim-input" placeholder="e.g. 2400mm, 2.4m, 7' 6&quot;, 5.4m - 1200mm..." autocomplete="off" spellcheck="false" aria-label="Quick dimension input" />
             <button type="button" id="btn-run-quick-dim" class="btn-calc-primary quick-dim-run-btn" title="Calculate (Enter)">
               <span>⚡</span>
             </button>
@@ -96,7 +96,7 @@
         <!-- Custom Scale Input -->
         <div class="quick-dim-custom-scale">
           <span style="font-size: 0.75rem; color: var(--text-muted);">1:</span>
-          <input type="number" id="quick-dim-custom-scale-input" class="text-input" placeholder="custom" style="width: 55px; height: 26px; padding: 2px 6px; font-size: 0.75rem;" min="1" max="50000" />
+          <input type="number" id="quick-dim-custom-scale-input" class="text-input" placeholder="custom" style="width: 55px; height: 26px; padding: 2px 6px; font-size: 0.75rem;" min="1" max="50000" aria-label="Custom scale denominator" />
         </div>
       </div>
 
@@ -4291,6 +4291,7 @@
           placeholder="Search tools, actions, or type a dimension (e.g. 2400mm)…"
           autocomplete="off"
           spellcheck="false"
+          aria-label="Global search"
           aria-autocomplete="list"
           aria-controls="command-palette-list"
           aria-expanded="true"
