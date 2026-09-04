@@ -100,6 +100,107 @@
    }
   }
  },
+ "430x932": {
+  "errors": [],
+  "modes": {
+   "home": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "converter": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "rescale": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "detector": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "area_volume": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "furniture": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "reference": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "workspace": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "expression": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "multiscale": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "chains": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "cad_clipboard": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "batch_cad": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "cad_handoff": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "stairs": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "ramps": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "slopes": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "export": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "projects": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "plan": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "survey": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "imports": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "ai": {
+    "overflowX": 0,
+    "problems": []
+   },
+   "ai_settings": {
+    "overflowX": 0,
+    "problems": []
+   }
+  }
+ },
  "768x1024": {
   "errors": [],
   "modes": {

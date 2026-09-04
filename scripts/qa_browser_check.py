@@ -20,7 +20,7 @@ BASE = "http://127.0.0.1:3578/index.html"
 SHOTS = Path("qa-shots")
 SHOTS.mkdir(exist_ok=True)
 
-VIEWPORTS = [(390, 844), (768, 1024), (1024, 768), (1280, 800), (1440, 900), (1920, 1080)]
+VIEWPORTS = [(390, 844), (430, 932), (768, 1024), (1024, 768), (1280, 800), (1440, 900), (1920, 1080)]
 MODES = [
     "home", "converter", "rescale", "detector", "area_volume", "furniture", "reference",
     "workspace", "expression", "multiscale", "chains", "cad_clipboard", "batch_cad",
