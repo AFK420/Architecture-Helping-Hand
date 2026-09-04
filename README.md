@@ -3,7 +3,7 @@
 > **Professional Architectural Scale, Furniture Sizing & Multi-Unit Calculation Studio**  
 > *A high-precision, zero-dependency, tactile architectural conversion studio built for architects, interior designers, urban planners, physical model makers, and design students.*
 
-[![Tests](https://img.shields.io/badge/Tests-2761%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-2895%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-3--Tier%20Core%20%7C%20Frozen-10b981?style=flat-square)](ENGINEERING_RULES.md)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Vanilla)-f59e0b?style=flat-square)](package.json)
 [![License](https://img.shields.io/badge/License-MIT-6366f1?style=flat-square)](package.json)
@@ -146,7 +146,7 @@ The codebase has evolved through rigorous engineering, auditing, hardening, and 
 This repository serves as:
 1. **An Open-Source Reference Studio**: A tactile, zero-friction architectural scaling studio for architects, interior designers, landscape architects, students, and educators.
 2. **Zero-Dependency Architecture**: No React, no Vue, no webpack, no runtime `node_modules`. Anyone can clone the repository, double-click `index.html`, and use it immediately offline via `file:///`.
-3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **2,863 automated test assertions across 36 test suites** (authoritative count emitted by `npm test`).
+3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **2,895 automated test assertions across 36 test suites** (authoritative count emitted by `npm test`).
 4. **An Extensible Platform**: Prepared for future architectural geometry engines, CAD vector exports (SVG/DXF), and stair/ramp calculations.
 
 ---
@@ -458,12 +458,22 @@ $$\text{Area} = \frac{1}{2} \left| \sum_{i=1}^{n} (x_i y_{i+1} - x_{i+1} y_i) \r
 
 ---
 
+## 🖥️ Application Shell & Navigation
+
+The app opens on a **Home screen** (project snapshot, quick tools, AI status) and is navigated entirely through a **left sidebar + top bar** shell — there is no horizontal mode bar and no need to zoom the browser out.
+
+* **Sidebar** — every tool grouped into collapsible sections (Home · Scale · Dimensions · CAD · Architecture · Space · Project · AI), each entry with a one-line purpose. Live **sidebar search** filters by name, purpose, or keyword.
+* **Top bar** — global controls only: sidebar toggle, breadcrumb back-to-home, **global search** (Ctrl+K), Quick Dim, Journal, theme, sound, help.
+* **Global search / Command Palette** (<kbd>Ctrl</kbd>+<kbd>K</kbd>) — one engine for tools, actions, AI jobs, and live dimension math (type `2400mm` to preview a multi-scale comparison).
+* **Responsive** — desktop shows the sidebar; tablet (≤1024px) turns it into an off-canvas drawer with backdrop; phones get a compact top bar. Every screen is verified overflow-free at 390 / 768 / 1024 / 1280 / 1440 / 1920 px at 100% browser zoom — never zoom out to reach a control.
+* **Browser QA harness** — `scripts/qa_browser_check.py` (overflow + console-error matrix, screenshots) and `scripts/qa_operability.py` (16 click-through workflows) run against a local server with Playwright.
+
+---
+
 ## 💻 How to Run, Build & Test
 
 ### 1. Instant Local Launch (100% Offline)
-Simply double-click `index.html` or open it with any web browser (Chrome, Edge, Safari, Firefox, Opera, Brave).
-
-### 2. Local HTTP Server
+Simply double-click `index.html` or open it with any web browser (Chrome, Edge, Safari, Firefox, Opera, Brave).### 2. Local HTTP Server
 ```bash
 # Using Node.js (Serves on port 3500)
 npm start
@@ -475,7 +485,7 @@ python -m http.server 3500
 ### 3. Run Automated Test Suite
 ```bash
 npm test
-# Executes all 36 test suites (2,863 assertions, 100% passing).
+# Executes all 36 test suites (2,895 assertions, 100% passing).
 # The runner emits the authoritative total assertion count on completion.
 ```
 

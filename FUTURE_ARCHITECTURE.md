@@ -101,3 +101,18 @@ support, PDF page extraction, OBJ massing import.
 
 All future AI work must respect ENGINEERING_RULES.md §10 (AI network
 boundary, key privacy, free-cost safety, untrusted-output validation).
+
+---
+
+## 6. UI Shell Status (updated September 2026)
+
+The horizontal mode-bar navigation is gone, replaced by the sidebar + top
+bar + Home application shell (information architecture, responsive rules,
+and tool page contract documented in UI_UX.md). Any new tool MUST be
+registered in NAV_CATALOG (src/ui/app.js) and given a view section — the
+command palette derives its navigation commands from the same catalog.
+Remaining UI future work: Space Planning dedicated view (checkOverlaps /
+checkFurnitureFit currently reachable only through the AI tools layer and
+Survey's room proposal), annotation overlay rendering on the Plan Canvas,
+and a settings screen consolidating theme/sound/shortcuts preferences
+(currently in the top bar).

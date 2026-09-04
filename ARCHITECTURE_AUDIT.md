@@ -1,8 +1,18 @@
 # Architecture Helping Hand — Codebase Audit & Core Architecture
 
-**Date**: September 3, 2026  
+**Date**: September 3, 2026 (UI/UX reconstruction appended September 4, 2026)  
 **Repository**: [https://github.com/AFK420/Architecture-Helping-Hand.git](https://github.com/AFK420/Architecture-Helping-Hand.git)  
-**Status**: Verified & Hardened (P14 + Phase 15/16 — 2,863 Assertions, 36 Suites)  
+**Status**: Verified & Hardened (P14 + Phase 15/16 + UI Shell Reconstruction — 2,895 Assertions, 36 Suites)  
+
+---
+
+## 0.1 UI Shell Reconstruction Incident Record (September 4, 2026)
+
+Two systemic defects were found by browser QA and fixed; both are pinned by tests:
+
+1. **Bundle namespace collisions (critical, silent)** — the deterministic build concatenates every module into ONE shared IIFE scope. Three top-level helper names were declared by more than one module (`requireLengthMeters` ×2, `fmt` ×3, `buildGeometry` ×2); JavaScript hoisting made the LAST declaration win for the entire scope, so the stair engine was silently computing geometry through the RAMP module's `buildGeometry(rise, run)` — wrong angles, wrong runs, NaN in the stair SVG. Private helpers are now uniquely prefixed per module (`requireStairLengthMeters`, `stairFmt`, `buildStairGeometry`, `requireRampLengthMeters`, `rampFmt`, `buildRampGeometry`, `slopeFmt`). **Rule**: any top-level name in a `src/` module must be unique across the entire bundle (grep the bundle for duplicates before shipping a new helper name).
+2. **Horizontal mode bar overflow** — the 23-item navigation bar extended past every laptop viewport (users were zooming to 50%). Replaced by the sidebar + top bar + Home shell documented in `UI_UX.md`; navigation now renders from one `NAV_CATALOG` shared with the command palette. Responsive QA (Playwright, 6 viewports × 24 screens) verifies zero page-level horizontal overflow and zero console errors; `tests/responsive.test.js` statically forbids bare `1fr` grid tracks (the mechanism behind the remaining 390px input clipping).
+
 
 ---
 
