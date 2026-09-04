@@ -138,7 +138,7 @@ export function initializeApp() {
   }
 
   const state = {
-    currentMode: 'converter',
+    currentMode: 'home',
     activeTheme: StorageService.getItem('archi_theme') || 'dark',
     precision: 3,
 
@@ -384,6 +384,9 @@ export function initializeApp() {
     // Mode 18: Project Workspace
     projects: {},
 
+    // Application shell (UI state, never project data)
+    sidebarCollapsedSections: new Set(),
+
     // Mode 19: Plan Canvas
     plan: {
       tool: 'select',
@@ -395,7 +398,12 @@ export function initializeApp() {
     },
 
     // Modes 20-21: AI Studio + AI Control Center (services attached at boot)
-    ai: null
+    ai: null,
+
+    // Mode 23: Survey Notebook (user preferences only; data lives in the project)
+    survey: {
+      defaultSource: 'Measured'
+    }
   };
 
   // DOM Elements Cache (Strictly normalized with index.html)
@@ -1216,18 +1224,208 @@ export function initializeApp() {
   }
 
   // ---------------------------------------------------------------------------
-  // 3. Mode Navigation Switching
+  // 2b. Navigation Catalog & Sidebar (single source of truth for the shell)
   // ---------------------------------------------------------------------------
+  // Every implemented screen appears exactly once here. The sidebar renders
+  // from this catalog, the sidebar search filters it, and the command
+  // palette derives its Navigation commands from it — no duplicate lists.
+  const NAV_CATALOG = [
+    { id: 'home', section: 'Home', label: 'Home', desc: 'Project snapshot, quick tools, orientation', icon: '⌂', keywords: ['home', 'start', 'dashboard', 'overview'] },
+    { id: 'converter', section: 'Scale', label: 'Scale Converter', desc: 'Paper ⇄ real world at any scale', icon: '📐', shortcut: '1', keywords: ['scale', 'convert', 'drawing', 'real', 'paper', 'ratio'] },
+    { id: 'rescale', section: 'Scale', label: 'Rescaler', desc: 'Move a measurement from one scale to another', icon: '🔄', shortcut: '2', keywords: ['rescale', 'sheet', 'transfer', 'a to b'] },
+    { id: 'detector', section: 'Scale', label: 'Scale Finder', desc: 'Detect an unknown scale from paper + real sizes', icon: '🔍', shortcut: '3', keywords: ['detect', 'find', 'unknown', 'ratio'] },
+    { id: 'area_volume', section: 'Scale', label: 'Area & Volume', desc: 'Scale areas (S²) and volumes (S³)', icon: '📦', shortcut: '4', keywords: ['area', 'volume', 'square', 'cubic', 'm2', 'm3'] },
+    { id: 'workspace', section: 'Dimensions', label: 'Dimension Workspace', desc: 'Measurement schedule with live totals', icon: '📋', shortcut: '7', keywords: ['schedule', 'scratchpad', 'totals', 'segments', 'batch'] },
+    { id: 'expression', section: 'Dimensions', label: 'Dimension Expression', desc: 'Mixed-unit architectural math', icon: '🧮', shortcut: '8', keywords: ['expression', 'math', 'arithmetic', 'sum', 'evaluate'] },
+    { id: 'multiscale', section: 'Dimensions', label: 'Multi-Scale', desc: 'One dimension compared across many scales', icon: '📊', shortcut: '9', keywords: ['multi', 'compare', 'scales', 'paper fit'] },
+    { id: 'chains', section: 'Dimensions', label: 'Dimension Chains', desc: 'Running sequences with cumulative coordinates', icon: '🔗', shortcut: '0', keywords: ['chain', 'sequence', 'cumulative', 'offsets', 'string'] },
+    { id: 'cad_clipboard', section: 'CAD', label: 'CAD Clipboard', desc: 'CAD-ready copy formats for major tools', icon: '📌', shortcut: 'C', keywords: ['cad', 'clipboard', 'autocad', 'rhino', 'revit', 'sketchup'] },
+    { id: 'batch_cad', section: 'CAD', label: 'Batch CAD', desc: 'Bulk conversion for schedules and lists', icon: '⚡', shortcut: 'B', keywords: ['batch', 'bulk', 'table', 'schedule'] },
+    { id: 'cad_handoff', section: 'CAD', label: 'CAD Handoff', desc: 'Target-specific payloads for Rhino / AutoCAD / SketchUp', icon: '🚀', keywords: ['handoff', 'send', 'rhino', 'autocad', 'sketchup', 'paste'] },
+    { id: 'stairs', section: 'Architecture', label: 'Stair Calculator', desc: 'Risers, goings, Blondel proportion, angle', icon: '🪜', keywords: ['stair', 'riser', 'tread', 'going', 'blondel', 'flight'] },
+    { id: 'ramps', section: 'Architecture', label: 'Ramp Calculator', desc: 'Accessible ramp geometry and targets', icon: '♿', keywords: ['ramp', 'accessibility', '1:12', 'slope'] },
+    { id: 'slopes', section: 'Architecture', label: 'Slope Analyzer', desc: 'General rise/run grading analysis', icon: '📉', keywords: ['slope', 'grade', 'gradient', 'drainage', 'terrain'] },
+    { id: 'furniture', section: 'Space', label: 'Furniture & Clearances', desc: '179 scaled standards with footprints', icon: '🛋️', shortcut: '5', keywords: ['furniture', 'clearance', 'ada', 'sofa', 'bed', 'desk', 'door'] },
+    { id: 'reference', section: 'Space', label: 'Reference Chart', desc: 'Printable scale ruler, benchmarks, tables', icon: '📚', shortcut: '6', keywords: ['reference', 'ruler', 'benchmark', 'print', 'neufert'] },
+    { id: 'projects', section: 'Project', label: 'Projects', desc: 'Library, save, duplicates, snapshots', icon: '🗂', keywords: ['project', 'library', 'snapshot', 'save', 'open', 'duplicate'] },
+    { id: 'plan', section: 'Project', label: 'Plan Canvas', desc: '2D plan editor: rooms, walls, furniture', icon: '▭', keywords: ['plan', 'canvas', 'room', 'wall', 'draw', 'layout'] },
+    { id: 'survey', section: 'Project', label: 'Survey Notebook', desc: 'Field measurements, provenance, calibration', icon: '📏', keywords: ['survey', 'measurement', 'calibration', 'provenance', 'site'] },
+    { id: 'imports', section: 'Project', label: 'Importer', desc: 'CSV/TSV, DXF, SVG ingestion with review', icon: '📥', keywords: ['import', 'csv', 'tsv', 'dxf', 'svg', 'ingest'] },
+    { id: 'export', section: 'Project', label: 'Export Center', desc: 'JSON, DXF, SVG, CSV, TSV, TXT with preview', icon: '📤', keywords: ['export', 'download', 'json', 'dxf', 'svg', 'csv', 'backup'] },
+    { id: 'ai', section: 'AI', label: 'AI Studio', desc: 'One job, one question, one validated answer', icon: '🤖', keywords: ['ai', 'studio', 'critique', 'tutor', 'jury', 'vision', 'brutal'] },
+    { id: 'ai_settings', section: 'AI', label: 'AI Control Center', desc: 'Providers, keys, model catalog, assignments', icon: '⚙️', keywords: ['ai', 'provider', 'api key', 'gemini', 'glm', 'deepseek', 'model', 'catalog', 'job'] }
+  ];
+
+  const NAV_SECTIONS = ['Home', 'Scale', 'Dimensions', 'CAD', 'Architecture', 'Space', 'Project', 'AI'];
+
+  /** Renders the sidebar nav from NAV_CATALOG, optionally filtered by query. */
+  function renderSidebar(query = '') {
+    const nav = document.getElementById('sidebar-nav');
+    if (!nav) return;
+    const q = (query || '').trim().toLowerCase();
+    const tokens = q.split(/\s+/).filter(Boolean);
+
+    const matches = item => {
+      if (!q) return true;
+      const hay = [
+        item.label, item.desc, item.section, (item.keywords || []).join(' '),
+        (item.shortcut ? String(item.shortcut) : '')
+      ].join(' ').toLowerCase();
+      return tokens.every(t => hay.includes(t));
+    };
+
+    let html = '';
+    for (const section of NAV_SECTIONS) {
+      const items = NAV_CATALOG.filter(i => i.section === section && matches(i));
+      if (items.length === 0) continue;
+      const collapsed = state.sidebarCollapsedSections.has(section) && !q;
+      html += `
+        <div class="sidebar-section ${collapsed ? 'collapsed' : ''}" data-section="${section}">
+          <button type="button" class="sidebar-section-header" data-section="${section}" aria-expanded="${collapsed ? 'false' : 'true'}">
+            <span class="sidebar-section-title">${section}</span>
+            <span class="sidebar-section-caret" aria-hidden="true">${collapsed ? '▸' : '▾'}</span>
+          </button>
+          <div class="sidebar-section-body">
+            ${items.map(item => `
+              <button type="button" class="sidebar-item ${state.currentMode === item.id ? 'active' : ''}" data-mode="${item.id}"
+                title="${item.desc}" aria-label="${item.label} — ${item.desc}">
+                <span class="sidebar-item-icon" aria-hidden="true">${item.icon}</span>
+                <span class="sidebar-item-text">
+                  <span class="sidebar-item-label">${item.label}</span>
+                  <span class="sidebar-item-desc">${item.desc}</span>
+                </span>
+                ${item.shortcut ? `<span class="sidebar-item-key" aria-hidden="true">${item.shortcut}</span>` : ''}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    if (!html) {
+      html = '<div class="sidebar-empty">No tools match — try fewer words, or press Ctrl+K for the command palette.</div>';
+    }
+    nav.innerHTML = html;
+
+    // Wire section collapse + item activation
+    nav.querySelectorAll('.sidebar-section-header').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sec = btn.dataset.section;
+        if (state.sidebarCollapsedSections.has(sec)) state.sidebarCollapsedSections.delete(sec);
+        else state.sidebarCollapsedSections.add(sec);
+        renderSidebar(query);
+      });
+    });
+    nav.querySelectorAll('.sidebar-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        switchMode(btn.dataset.mode);
+        closeSidebarDrawer();
+      });
+    });
+  }
+
+  /** Highlights the active sidebar entry + top bar breadcrumb. */
+  function syncSidebarActive() {
+    document.querySelectorAll('.sidebar-item').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === state.currentMode);
+    });
+    const labelEl = document.getElementById('topbar-current-tool');
+    if (labelEl) {
+      const item = NAV_CATALOG.find(i => i.id === state.currentMode);
+      labelEl.textContent = item ? item.label : 'Home';
+    }
+  }
+
+  /** Sidebar drawer state for tablet/mobile; desktop uses body class. */
+  function openSidebarDrawer() {
+    document.body.classList.add('sidebar-open');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (backdrop) backdrop.classList.add('visible');
+    const toggle = document.getElementById('sidebar-toggle-btn');
+    if (toggle) toggle.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeSidebarDrawer() {
+    document.body.classList.remove('sidebar-open');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (backdrop) backdrop.classList.remove('visible');
+  }
+
+  function toggleSidebar() {
+    if (window.innerWidth <= 1024) {
+      if (document.body.classList.contains('sidebar-open')) closeSidebarDrawer();
+      else openSidebarDrawer();
+    } else {
+      document.body.classList.toggle('sidebar-hidden');
+      const toggle = document.getElementById('sidebar-toggle-btn');
+      if (toggle) toggle.setAttribute('aria-expanded', document.body.classList.contains('sidebar-hidden') ? 'false' : 'true');
+    }
+  }
+
+  /** Home screen: honest project snapshot + AI availability. */
+  function renderHome() {
+    const nameEl = document.getElementById('home-project-name');
+    if (!nameEl) return;
+    let p = null;
+    try { p = projectStore.getProject(); } catch (e) { p = null; }
+
+    const badge = document.getElementById('home-project-badge');
+    const descEl = document.getElementById('home-project-desc');
+    const statsEl = document.getElementById('home-project-stats');
+
+    if (p && p.metadata) {
+      nameEl.textContent = p.metadata.name || 'Untitled Project';
+      if (badge) badge.textContent = 'ACTIVE';
+      if (descEl) {
+        const d = p.site?.description || p.metadata.description || '';
+        descEl.textContent = d || 'Add a description in Projects to describe the site and concept.';
+      }
+      if (statsEl) {
+        const rooms = (state.plan.entities || []).filter(e => e.kind === 'room').length;
+        const entities = (state.plan.entities || []).length;
+        const snapshots = (p.snapshots || []).length;
+        const measurements = (p.measurements || []).length;
+        const notes = (p.notes || []).length;
+        statsEl.innerHTML = [
+          { label: 'Rooms', value: rooms },
+          { label: 'Plan entities', value: entities },
+          { label: 'Measurements', value: measurements },
+          { label: 'Decisions', value: (p.decisions || []).length },
+          { label: 'Snapshots', value: snapshots },
+          { label: 'Journal notes', value: notes }
+        ].map(s => `<div class="home-stat"><span class="home-stat-value">${s.value}</span><span class="home-stat-label">${s.label}</span></div>`).join('');
+      }
+    } else {
+      nameEl.textContent = 'No project yet';
+      if (badge) badge.textContent = 'EMPTY';
+      if (descEl) descEl.textContent = 'Create a project to organize rooms, dimensions, furniture, and layouts.';
+      if (statsEl) statsEl.innerHTML = '';
+    }
+
+    const aiEl = document.getElementById('home-ai-status');
+    if (aiEl) {
+      const svc = state.ai;
+      if (!svc) {
+        aiEl.textContent = 'UNAVAILABLE';
+        aiEl.style.color = 'var(--text-muted)';
+      } else {
+        const ready = svc.router ? svc.router.listJobStatuses().filter(s => s.status === 'READY').length : 0;
+        aiEl.textContent = ready > 0 ? `${ready} JOB${ready === 1 ? '' : 'S'} READY` : 'NOT CONFIGURED';
+        aiEl.style.color = ready > 0 ? 'var(--color-success)' : 'var(--text-muted)';
+      }
+    }
+  }
+
   function switchMode(targetMode) {
+    if (targetMode === 'home' || !NAV_CATALOG.some(i => i.id === targetMode) && targetMode !== 'furniture') {
+      // unknown ids fall back to home so a stale link never dead-ends
+      if (!NAV_CATALOG.some(i => i.id === targetMode)) targetMode = 'home';
+    }
     state.currentMode = targetMode;
 
-    // Update Mode Tabs
-    dom.modeTabs.forEach(tab => {
-      const mode = tab.dataset.mode;
-      const isActive = mode === targetMode;
-      tab.classList.toggle('active', isActive);
-      tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
-    });
+    // Sidebar + breadcrumb sync (mode tabs no longer exist; ids kept for tests)
+    syncSidebarActive();
+    document.getElementById('app-shell')?.classList.toggle('mode-home', targetMode === 'home');
 
     // Update Tool Views
     dom.modeViews.forEach(view => {
@@ -1240,6 +1438,10 @@ export function initializeApp() {
         view.setAttribute('hidden', '');
       }
     });
+
+    if (targetMode === 'home') {
+      renderHome();
+    }
 
     AudioService.playTick();
 
@@ -2858,6 +3060,45 @@ export function initializeApp() {
   // 14. Event Listener Wire-up
   // ---------------------------------------------------------------------------
   function attachEventListeners() {
+    // --- Application shell: sidebar toggle, drawer, search, home buttons ---
+    const sidebarToggle = document.getElementById('sidebar-toggle-btn');
+    if (sidebarToggle) sidebarToggle.addEventListener('click', toggleSidebar);
+    const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+    if (sidebarBackdrop) sidebarBackdrop.addEventListener('click', closeSidebarDrawer);
+    const topbarHome = document.getElementById('topbar-home-btn');
+    if (topbarHome) topbarHome.addEventListener('click', () => switchMode('home'));
+
+    const sidebarSearch = document.getElementById('sidebar-search');
+    const sidebarSearchClear = document.getElementById('sidebar-search-clear');
+    if (sidebarSearch) {
+      sidebarSearch.addEventListener('input', () => {
+        renderSidebar(sidebarSearch.value);
+        if (sidebarSearchClear) sidebarSearchClear.hidden = !sidebarSearch.value;
+      });
+      // Esc inside the search clears it first, then blurs (global Esc handler closes drawers)
+      sidebarSearch.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && sidebarSearch.value) {
+          e.stopPropagation();
+          sidebarSearch.value = '';
+          renderSidebar('');
+          if (sidebarSearchClear) sidebarSearchClear.hidden = true;
+        }
+      });
+    }
+    if (sidebarSearchClear) {
+      sidebarSearchClear.addEventListener('click', () => {
+        sidebarSearch.value = '';
+        renderSidebar('');
+        sidebarSearchClear.hidden = true;
+        sidebarSearch?.focus();
+      });
+    }
+
+    // Home screen quick links
+    document.querySelectorAll('.home-nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchMode(btn.dataset.mode));
+    });
+
     // Theme Selector
     if (dom.themeSelect) {
       dom.themeSelect.addEventListener('change', (e) => {
@@ -5288,13 +5529,16 @@ export function initializeApp() {
   renderPresetChips(state.selectedCategory);
   attachEventListeners();
   views.mountAll();
+  renderSidebar('');
   if (state.quickDimension.isOpen || state.quickDimension.pinned) {
     views.callController('quick_dimension', 'toggleQuickDimension', true);
     if (state.quickDimension.pinned && dom.quickDimPinBtn) {
       dom.quickDimPinBtn.classList.add('pinned');
     }
   }
-  switchMode(state.currentMode);
+  // The app opens on Home so a new session always gets oriented.
+  state.currentMode = 'home';
+  switchMode('home');
 
   // QA/test hook (idempotent): lets browser automation drive mode switching
   // through the same entry point as the UI without touching internals.

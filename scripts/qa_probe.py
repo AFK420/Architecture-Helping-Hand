@@ -21,7 +21,7 @@ MODES = [
     "converter", "rescale", "detector", "area_volume", "furniture", "reference",
     "workspace", "expression", "multiscale", "chains", "cad_clipboard", "batch_cad",
     "cad_handoff", "stairs", "ramps", "slopes", "export", "projects", "plan",
-    "imports", "ai", "ai_settings",
+    "survey", "imports", "ai", "ai_settings",
 ]
 
 FIND_OVERFLOW_JS = """

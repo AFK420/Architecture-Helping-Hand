@@ -17,80 +17,6 @@
   <!-- Decorative Drafting Grid & Crosshairs -->
   <div class="grid-overlay" aria-hidden="true"></div>
 
-  <!-- App Header -->
-  <header class="app-header">
-    <div class="brand-section">
-      <div class="brand-logo-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 3h18v18H3z"></path>
-          <path d="M3 9h18"></path>
-          <path d="M9 21V9"></path>
-          <path d="M15 9v4"></path>
-          <path d="M3 15h6"></path>
-        </svg>
-      </div>
-      <div class="brand-titles">
-        <h1>Architecture Helping Hand <span class="brand-badge">STUDIO v2.0</span></h1>
-        <p class="brand-subtitle">Architectural Scaling, Furniture Reference & Multi-Unit Studio</p>
-      </div>
-    </div>
-
-    <div class="header-controls">
-      <!-- Theme Switcher -->
-      <select id="theme-select" class="theme-dropdown" title="Select Theme" aria-label="Theme selector">
-        <option value="dark" selected>📐 Studio Dark</option>
-        <option value="paper">📜 Drafting Paper</option>
-        <option value="blueprint">🟦 Blueprint Cyan</option>
-      </select>
-
-      <!-- Sound Toggle -->
-      <button id="sound-toggle-btn" class="control-btn" title="Toggle Tactile Sounds" aria-label="Toggle sound">
-        <svg class="sound-icon-on" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-        </svg>
-        <span id="sound-toggle-label">Sound: On</span>
-      </button>
-
-      <!-- Command Palette Trigger -->
-      <button id="command-palette-btn" class="control-btn command-palette-trigger" title="Command Palette (Ctrl+K / ⌘K)" aria-label="Open Command Palette">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-        </svg>
-        <span class="cmd-palette-btn-text">Commands</span>
-        <span class="cmd-palette-kbd-hint"><kbd>Ctrl</kbd><kbd>K</kbd></span>
-      </button>
-
-      <!-- History Drawer Toggle -->
-      <button id="history-toggle-btn" class="control-btn" title="View Calculation History (H)" aria-label="View history">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"></circle>
-          <polyline points="12 6 12 12 16 14"></polyline>
-        </svg>
-        <span>History</span>
-      </button>
-
-      <!-- Quick Dimension Strip Trigger -->
-      <button id="quick-dim-toggle-btn" class="control-btn quick-dim-trigger" title="Quick Dimension Strip (Q)" aria-label="Toggle Quick Dimension Strip">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-        </svg>
-        <span class="cmd-palette-btn-text">Quick Dim</span>
-        <span class="cmd-palette-kbd-hint"><kbd>Q</kbd></span>
-      </button>
-
-      <!-- Shortcuts / Help Modal Trigger -->
-      <button id="shortcuts-help-btn" class="control-btn" title="Keyboard Shortcuts (?)" aria-label="Keyboard shortcuts">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"></circle>
-          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-          <line x1="12" y1="17" x2="12.01" y2="17"></line>
-        </svg>
-      </button>
-    </div>
-  </header>
-
   <!-- ======================================================== -->
   <!-- QUICK DIMENSION STRIP (Always-Accessible Micro-Tool)     -->
   <!-- ======================================================== -->
@@ -230,255 +156,221 @@
     </div>
   </aside>
 
-  <!-- Main Content Wrapper -->
-  <main class="main-wrapper">
-    <!-- Mode Selection Navigation Bar -->
-    <nav class="modes-nav" aria-label="Tool Modes">
-      <button class="mode-tab active" data-mode="converter" aria-selected="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4 21v-7a4 4 0 0 1 4-4h12"></path>
-          <polyline points="16 6 20 10 16 14"></polyline>
-          <path d="M20 3v7a4 4 0 0 1-4 4H4"></path>
-          <polyline points="8 18 4 14 8 10"></polyline>
-        </svg>
-        <span>Scale Converter</span>
-        <span class="mode-key-hint">1</span>
-      </button>
+  <!-- ======================================================== -->
+  <!-- APPLICATION SHELL: Sidebar + Top Bar + Workspace         -->
+  <!-- ======================================================== -->
+  <div class="app-shell" id="app-shell">
+      <!-- Backdrop for the mobile drawer -->
+      <div id="sidebar-backdrop" class="sidebar-backdrop" aria-hidden="true"></div>
 
-      <button class="mode-tab" data-mode="rescale" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="2" y="2" width="20" height="8" rx="2"></rect>
-          <rect x="2" y="14" width="20" height="8" rx="2"></rect>
-          <line x1="6" y1="6" x2="6.01" y2="6"></line>
-          <line x1="6" y1="18" x2="6.01" y2="18"></line>
-        </svg>
-        <span>Rescaler (A ➔ B)</span>
-        <span class="mode-key-hint">2</span>
-      </button>
+      <!-- LEFT SIDEBAR: all tools grouped by purpose, searchable -->
+      <aside id="app-sidebar" class="app-sidebar" aria-label="Tool navigation">
+        <div class="sidebar-brand">
+          <div class="brand-logo-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 3h18v18H3z"></path>
+              <path d="M3 9h18"></path>
+              <path d="M9 21V9"></path>
+              <path d="M15 9v4"></path>
+              <path d="M3 15h6"></path>
+            </svg>
+          </div>
+          <div class="sidebar-brand-titles">
+            <span class="sidebar-brand-name">Helping Hand</span>
+            <span class="sidebar-brand-sub">Architectural Workbench</span>
+          </div>
+        </div>
 
-      <button class="mode-tab" data-mode="detector" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          <line x1="11" y1="8" x2="11" y2="14"></line>
-          <line x1="8" y1="11" x2="14" y2="11"></line>
-        </svg>
-        <span>Scale Finder</span>
-        <span class="mode-key-hint">3</span>
-      </button>
+        <!-- Sidebar search: filters every tool live -->
+        <div class="sidebar-search-box">
+          <svg class="sidebar-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="sidebar-search" class="sidebar-search-input" placeholder="Search tools…" autocomplete="off" spellcheck="false" aria-label="Search tools" />
+          <button type="button" id="sidebar-search-clear" class="sidebar-search-clear" title="Clear search" aria-label="Clear search" hidden>✕</button>
+        </div>
 
-      <button class="mode-tab" data-mode="area_volume" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-          <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-          <line x1="12" y1="22.08" x2="12" y2="12"></line>
-        </svg>
-        <span>Area & Volume</span>
-        <span class="mode-key-hint">4</span>
-      </button>
+        <!-- Sections are rendered by JS from the single NAV_CATALOG (app.js) -->
+        <nav id="sidebar-nav" class="sidebar-nav" aria-label="Tools"></nav>
 
-      <button class="mode-tab" data-mode="furniture" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M20 9V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v2"></path>
-          <path d="M2 11a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7z"></path>
-          <path d="M4 18v2"></path>
-          <path d="M20 18v2"></path>
-          <path d="M12 11v4"></path>
-        </svg>
-        <span>Furniture Scales</span>
-        <span class="mode-key-hint">5</span>
-      </button>
+        <div class="sidebar-footer">
+          <span class="sidebar-footer-hint"><kbd>Ctrl</kbd>+<kbd>K</kbd> command palette</span>
+        </div>
+      </aside>
 
-      <button class="mode-tab" data-mode="reference" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-          <polyline points="14 2 14 8 20 8"></polyline>
-          <line x1="16" y1="13" x2="8" y2="13"></line>
-          <line x1="16" y1="17" x2="8" y2="17"></line>
-          <polyline points="10 9 9 9 8 9"></polyline>
-        </svg>
-        <span>Reference Chart</span>
-        <span class="mode-key-hint">6</span>
-      </button>
+      <!-- RIGHT COLUMN: top bar + current tool -->
+      <div class="app-workbench" id="app-workbench">
+        <!-- TOP BAR: global controls only -->
+        <header class="app-topbar" id="app-topbar">
+          <div class="topbar-left">
+            <button type="button" id="sidebar-toggle-btn" class="control-btn icon-only" title="Toggle sidebar" aria-label="Toggle sidebar" aria-expanded="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </svg>
+            </button>
+            <button type="button" id="topbar-home-btn" class="topbar-breadcrumb" title="Back to Home">
+              <span class="topbar-crumb-root">Helping Hand</span>
+              <span class="topbar-crumb-sep" aria-hidden="true">/</span>
+              <span id="topbar-current-tool" class="topbar-crumb-current">Home</span>
+            </button>
+          </div>
 
-      <button class="mode-tab" data-mode="workspace" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 3h18v18H3z"></path>
-          <path d="M3 9h18"></path>
-          <path d="M9 21V9"></path>
-          <path d="M15 9v12"></path>
-        </svg>
-        <span>Dimension Workspace</span>
-        <span class="mode-key-hint">7</span>
-      </button>
+          <div class="topbar-controls">
+            <!-- Global Search (opens the command palette; same engine) -->
+            <button id="command-palette-btn" class="control-btn topbar-search-trigger" title="Search everything (Ctrl+K / ⌘K)" aria-label="Global search and commands">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <span class="cmd-palette-btn-text">Search…</span>
+              <span class="cmd-palette-kbd-hint"><kbd>Ctrl</kbd><kbd>K</kbd></span>
+            </button>
 
-      <button class="mode-tab" data-mode="expression" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="4" y="2" width="16" height="20" rx="2"></rect>
-          <line x1="8" y1="6" x2="16" y2="6"></line>
-          <line x1="16" y1="14" x2="16" y2="18"></line>
-          <path d="M16 10h.01"></path>
-          <path d="M12 10h.01"></path>
-          <path d="M8 10h.01"></path>
-          <path d="M12 14h.01"></path>
-          <path d="M8 14h.01"></path>
-          <path d="M12 18h.01"></path>
-          <path d="M8 18h.01"></path>
-        </svg>
-        <span>Dimension Expression</span>
-        <span class="mode-key-hint">8</span>
-      </button>
+            <!-- Quick Dimension Strip Trigger -->
+            <button id="quick-dim-toggle-btn" class="control-btn" title="Quick Dimension Strip (Q)" aria-label="Toggle Quick Dimension Strip">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+              <span class="cmd-palette-btn-text">Quick Dim</span>
+              <span class="cmd-palette-kbd-hint"><kbd>Q</kbd></span>
+            </button>
 
-      <button class="mode-tab" data-mode="multiscale" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="20" x2="18" y2="10"></line>
-          <line x1="12" y1="20" x2="12" y2="4"></line>
-          <line x1="6" y1="20" x2="6" y2="14"></line>
-          <line x1="2" y1="20" x2="22" y2="20"></line>
-        </svg>
-        <span>Multi-Scale</span>
-        <span class="mode-key-hint">9</span>
-      </button>
+            <!-- History Drawer Toggle -->
+            <button id="history-toggle-btn" class="control-btn" title="Calculation Journal (H)" aria-label="View history">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              <span class="cmd-palette-btn-text">Journal</span>
+            </button>
 
-      <button class="mode-tab" data-mode="chains" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-        </svg>
-        <span>Dimension Chains</span>
-        <span class="mode-key-hint">0</span>
-      </button>
+            <!-- Theme Switcher -->
+            <select id="theme-select" class="theme-dropdown" title="Select Theme" aria-label="Theme selector">
+              <option value="dark" selected>📐 Studio Dark</option>
+              <option value="paper">📜 Drafting Paper</option>
+              <option value="blueprint">🟦 Blueprint Cyan</option>
+            </select>
 
-      <button class="mode-tab" data-mode="cad_clipboard" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-          <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-          <path d="M9 14l2 2 4-4"></path>
-        </svg>
-        <span>CAD Clipboard</span>
-        <span class="mode-key-hint">C</span>
-      </button>
+            <!-- Sound Toggle -->
+            <button id="sound-toggle-btn" class="control-btn icon-only" title="Toggle Tactile Sounds" aria-label="Toggle sound">
+              <svg class="sound-icon-on" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+              </svg>
+              <span id="sound-toggle-label">Sound: On</span>
+            </button>
 
-      <button class="mode-tab" data-mode="batch_cad" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-        </svg>
-        <span>Batch CAD</span>
-        <span class="mode-key-hint">B</span>
-      </button>
+            <!-- Shortcuts / Help Modal Trigger -->
+            <button id="shortcuts-help-btn" class="control-btn icon-only" title="Keyboard Shortcuts (?)" aria-label="Keyboard shortcuts">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+            </button>
+          </div>
+        </header>
 
-      <button class="mode-tab" data-mode="cad_handoff" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="7" height="7" rx="1" ry="1"></rect>
-          <rect x="14" y="3" width="7" height="7" rx="1" ry="1"></rect>
-          <rect x="14" y="14" width="7" height="7" rx="1" ry="1"></rect>
-          <rect x="3" y="14" width="7" height="7" rx="1" ry="1"></rect>
-        </svg>
-        <span>CAD Handoff</span>
-        <span class="mode-key-hint">⇧C</span>
-      </button>
+        <!-- Tool Surface -->
+        <main class="tool-surface" id="tool-surface">
 
-      <button class="mode-tab" data-mode="stairs" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 20h4v-4h4v-4h4V8h4V4"></path>
-        </svg>
-        <span>Stairs</span>
-        <span class="mode-key-hint">—</span>
-      </button>
+<!-- HOME VIEW: orientation, project snapshot, quick access -->
+    <section id="mode-view-home" class="tool-mode-view active" aria-labelledby="heading-home">
+      <div class="home-wrap">
+        <div class="home-hero archi-card">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+          <div class="home-hero-inner">
+            <span class="card-tag">PERSONAL ARCHITECTURAL WORKBENCH</span>
+            <h2 id="heading-home" class="home-title">Architecture Helping Hand</h2>
+            <p class="home-subtitle">Scale, dimension, plan, and review architectural work — everything reachable from the sidebar, no zoom tricks needed.</p>
+          </div>
+        </div>
 
-      <button class="mode-tab" data-mode="ramps" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 20h18"></path>
-          <path d="M3 20L21 6"></path>
-          <path d="M7 20V16"></path>
-        </svg>
-        <span>Ramps</span>
-        <span class="mode-key-hint">—</span>
-      </button>
+        <div class="home-grid">
+          <!-- CURRENT PROJECT -->
+          <div class="archi-card home-card home-project">
+            <div class="corner-mark top-left"></div>
+            <div class="corner-mark top-right"></div>
+            <div class="corner-mark bottom-left"></div>
+            <div class="corner-mark bottom-right"></div>
+            <div class="result-header">
+              <span class="result-label">CURRENT PROJECT</span>
+              <span id="home-project-badge" class="unit-system-tag" style="font-size: 0.7rem;">—</span>
+            </div>
+            <h3 id="home-project-name" class="home-project-name">No project yet</h3>
+            <p id="home-project-desc" class="home-project-desc">Create a project to organize rooms, dimensions, furniture, and layouts.</p>
+            <div id="home-project-stats" class="home-project-stats"></div>
+            <div class="result-actions-strip">
+              <button type="button" class="result-action-btn home-nav-btn" data-mode="projects"><span>🗂 Open Projects</span></button>
+              <button type="button" class="result-action-btn home-nav-btn" data-mode="plan"><span>▭ Open Plan Canvas</span></button>
+            </div>
+          </div>
 
-      <button class="mode-tab" data-mode="slopes" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 20h18"></path>
-          <path d="M3 20L21 8"></path>
-          <path d="M17 8h4"></path>
-          <path d="M21 8l-2.5-2.5"></path>
-        </svg>
-        <span>Slopes</span>
-        <span class="mode-key-hint">—</span>
-      </button>
+          <!-- QUICK TOOLS -->
+          <div class="archi-card home-card">
+            <div class="corner-mark top-left"></div>
+            <div class="corner-mark top-right"></div>
+            <div class="corner-mark bottom-left"></div>
+            <div class="corner-mark bottom-right"></div>
+            <div class="result-header"><span class="result-label">QUICK TOOLS</span></div>
+            <div class="home-links-grid">
+              <button type="button" class="home-nav-btn" data-mode="converter"><strong>Scale Converter</strong><span>Paper ⇄ real world</span></button>
+              <button type="button" class="home-nav-btn" data-mode="stairs"><strong>Stairs</strong><span>Risers, goings, Blondel</span></button>
+              <button type="button" class="home-nav-btn" data-mode="ramps"><strong>Ramps</strong><span>Rise, run, 1:X ratio</span></button>
+              <button type="button" class="home-nav-btn" data-mode="slopes"><strong>Slopes</strong><span>Grade analysis</span></button>
+              <button type="button" class="home-nav-btn" data-mode="workspace"><strong>Dimension Workspace</strong><span>Measurement schedule</span></button>
+              <button type="button" class="home-nav-btn" data-mode="furniture"><strong>Furniture</strong><span>179 standards & clearances</span></button>
+            </div>
+          </div>
 
-      <button class="mode-tab" data-mode="export" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="7 10 12 15 17 10"></polyline>
-          <line x1="12" y1="15" x2="12" y2="3"></line>
-        </svg>
-        <span>Export</span>
-        <span class="mode-key-hint">—</span>
-      </button>
+          <!-- PROJECT TOOLS -->
+          <div class="archi-card home-card">
+            <div class="corner-mark top-left"></div>
+            <div class="corner-mark top-right"></div>
+            <div class="corner-mark bottom-left"></div>
+            <div class="corner-mark bottom-right"></div>
+            <div class="result-header"><span class="result-label">PROJECT</span></div>
+            <div class="home-links-grid">
+              <button type="button" class="home-nav-btn" data-mode="plan"><strong>Plan Canvas</strong><span>Rooms, walls, furniture</span></button>
+              <button type="button" class="home-nav-btn" data-mode="survey"><strong>Survey</strong><span>Measurements & calibration</span></button>
+              <button type="button" class="home-nav-btn" data-mode="imports"><strong>Import</strong><span>CSV · DXF · SVG</span></button>
+              <button type="button" class="home-nav-btn" data-mode="export"><strong>Export Center</strong><span>DXF · SVG · JSON · CSV</span></button>
+              <button type="button" class="home-nav-btn" data-mode="projects"><strong>Projects</strong><span>Library & snapshots</span></button>
+              <button type="button" class="home-nav-btn" data-mode="reference"><strong>Reference</strong><span>Scale ruler & benchmarks</span></button>
+            </div>
+          </div>
 
-      <button class="mode-tab" data-mode="projects" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-        </svg>
-        <span>Projects</span>
-        <span class="mode-key-hint">—</span>
-      </button>
+          <!-- AI TOOLS -->
+          <div class="archi-card home-card">
+            <div class="corner-mark top-left"></div>
+            <div class="corner-mark top-right"></div>
+            <div class="corner-mark bottom-left"></div>
+            <div class="corner-mark bottom-right"></div>
+            <div class="result-header">
+              <span class="result-label">AI</span>
+              <span id="home-ai-status" class="unit-system-tag" style="font-size: 0.7rem;">—</span>
+            </div>
+            <div class="home-links-grid">
+              <button type="button" class="home-nav-btn" data-mode="ai"><strong>AI Studio</strong><span>Critique, tutor, jury</span></button>
+              <button type="button" class="home-nav-btn" data-mode="ai_settings"><strong>AI Control Center</strong><span>Providers, models, jobs</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-      <button class="mode-tab" data-mode="plan" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-          <line x1="3" y1="12" x2="21" y2="12"></line>
-          <line x1="12" y1="3" x2="12" y2="21"></line>
-        </svg>
-        <span>Plan</span>
-        <span class="mode-key-hint">—</span>
-      </button>
 
-      <button class="mode-tab" data-mode="ai" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2a4 4 0 0 1 4 4c0 1.1-.45 2.1-1.17 2.83A4 4 0 0 1 18 12a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4c0-1.1.45-2.1 1.17-2.83A4 4 0 0 1 8 6a4 4 0 0 1 4-4z"></path>
-          <circle cx="9" cy="10" r="1"></circle>
-          <circle cx="15" cy="10" r="1"></circle>
-          <path d="M9.5 13.5c.7.5 1.5.75 2.5.75s1.8-.25 2.5-.75"></path>
-          <path d="M12 16v6M8 22h8"></path>
-        </svg>
-        <span>AI Studio</span>
-        <span class="mode-key-hint">—</span>
-      </button>
-
-      <button class="mode-tab" data-mode="ai_settings" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-        </svg>
-        <span>AI Settings</span>
-        <span class="mode-key-hint">—</span>
-      </button>
-
-      <button class="mode-tab" data-mode="imports" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="17 8 12 3 7 8"></polyline>
-          <line x1="12" y1="3" x2="12" y2="15"></line>
-        </svg>
-        <span>Importer</span>
-        <span class="mode-key-hint">—</span>
-      </button>
-
-      <button class="mode-tab" data-mode="survey" aria-selected="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M2 12h4l3-8 4 16 3-8h6"></path>
-        </svg>
-        <span>Survey</span>
-        <span class="mode-key-hint">—</span>
-      </button>
-    </nav>
 
     <!-- ======================================================== -->
     <!-- MODE 1: SCALE CONVERTER (Drawing <-> Real World)         -->
     <!-- ======================================================== -->
-    <section id="mode-view-converter" class="tool-mode-view active" aria-labelledby="heading-converter">
+    <section id="mode-view-converter" class="tool-mode-view" aria-labelledby="heading-converter">
       <div class="tool-layout">
         <!-- Left Column: Primary Instrument Faceplate -->
         <div class="archi-card main-calc-card">
@@ -4330,7 +4222,9 @@
         </div>
       </div>
     </section>
-  </main>
+        </main>
+      </div>
+    </div>
 
   <!-- History Drawer Side Panel -->
   <div id="history-overlay" class="history-drawer-overlay"></div>
