@@ -1019,11 +1019,18 @@ export function initializeApp() {
     btnPlanSave: document.getElementById('btn-plan-save'),
     btnPlanExportSvg: document.getElementById('btn-plan-export-svg'),
     btnPlanExportDxf: document.getElementById('btn-plan-export-dxf'),
+    planPropertiesPanel: document.getElementById('plan-properties-panel'),
+    planPropContent: document.getElementById('plan-prop-content'),
+    planPropTypeBadge: document.getElementById('plan-prop-type-badge'),
+    planEntitiesCount: document.getElementById('plan-entities-count'),
+    planModeLabel: document.getElementById('plan-mode-label'),
 
     // Mode 20: AI Studio Elements
     aiJobSelect: document.getElementById('ai-job-select'),
     aiImageGroup: document.getElementById('ai-image-group'),
     aiImageInput: document.getElementById('ai-image-input'),
+    aiImageRoleSelect: document.getElementById('ai-image-role-select'),
+    aiContextScopeSelect: document.getElementById('ai-context-scope-select'),
     aiQuestionInput: document.getElementById('ai-question-input'),
     aiIncludeContextToggle: document.getElementById('ai-include-context-toggle'),
     aiRunBtn: document.getElementById('btn-ai-run'),

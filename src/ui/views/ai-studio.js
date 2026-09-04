@@ -150,31 +150,60 @@ export function createAiStudioView(context) {
     renderConsistency();
   }
 
+  function trustBadge(trust) {
+    if (!trust) return '';
+    const t = String(trust).toUpperCase();
+    let bg = 'rgba(73, 137, 217, 0.15)';
+    let color = 'var(--accent-primary, #4989D9)';
+    let border = '1px solid rgba(73, 137, 217, 0.4)';
+    if (t.includes('CALCULATED') || t.includes('FACT')) {
+      bg = 'rgba(63, 174, 110, 0.16)';
+      color = 'var(--accent-success, #3fae6e)';
+      border = '1px solid var(--accent-success, #3fae6e)';
+    } else if (t.includes('SPECULATION') || t.includes('UNVERIFIED') || t.includes('VERIFICATION')) {
+      bg = 'rgba(211, 47, 47, 0.16)';
+      color = 'var(--dark-danger, #D32F2F)';
+      border = '1px solid var(--dark-danger, #D32F2F)';
+    } else if (t.includes('JUDGMENT') || t.includes('DESIGN')) {
+      bg = 'rgba(240, 122, 118, 0.16)';
+      color = 'var(--dark-step, #F07A76)';
+      border = '1px solid var(--dark-step, #F07A76)';
+    } else if (t.includes('REFERENCE')) {
+      bg = 'rgba(73, 137, 217, 0.2)';
+      color = '#7aa2ff';
+      border = '1px solid #7aa2ff';
+    }
+    return `<span style="display: inline-block; padding: 0.1rem 0.45rem; font-size: 0.65rem; font-weight: 800; font-family: var(--font-mono); border-radius: 3px; background: ${bg}; color: ${color}; border: ${border}; text-transform: uppercase;">${escape(t)}</span>`;
+  }
+
   function renderStructured(structured) {
     const parts = [];
     if (structured.summary) {
-      parts.push(`<div style="margin-bottom: 0.6rem;"><strong>SUMMARY</strong><br/>${escape(structured.summary)}</div>`);
+      parts.push(`<div style="margin-bottom: 0.6rem; padding: 0.6rem 0.75rem; background: var(--bg-surface-elevated, #28292e); border: 1px solid var(--border-subtle); border-radius: 5px;"><strong style="font-size: 0.74rem; color: var(--text-secondary); text-transform: uppercase;">Executive Summary</strong><div style="margin-top: 0.3rem;">${escape(structured.summary)}</div></div>`);
     }
     if (structured.verdict) {
-      parts.push(`<div style="margin-bottom: 0.8rem;"><strong>VERDICT</strong><br/>${escape(structured.verdict)}</div>`);
+      parts.push(`<div style="margin-bottom: 0.8rem; padding: 0.6rem 0.75rem; background: var(--bg-surface-elevated, #28292e); border-left: 3px solid var(--accent-action, #D32F2F); border-radius: 5px;"><strong style="font-size: 0.74rem; color: var(--accent-action, #D32F2F); text-transform: uppercase;">Architectural Verdict</strong><div style="margin-top: 0.3rem; font-weight: 600;">${escape(structured.verdict)}</div></div>`);
     }
     const findings = Array.isArray(structured.findings) ? structured.findings : [];
     findings.forEach((f, idx) => {
       const severity = f.severity === 'high' ? 'var(--color-error)' : f.severity === 'medium' ? 'var(--color-warning)' : 'var(--text-tertiary)';
-      const evidence = Array.isArray(f.evidence) ? f.evidence.map(e => `<li>${escape(e)}</li>`).join('') : '';
+      const evidence = Array.isArray(f.evidence) ? f.evidence.map(e => `<li style="margin-bottom: 0.2rem;">${escape(e)}</li>`).join('') : '';
       parts.push(`
-        <div style="border: 1px solid var(--border-color-light); border-left: 3px solid ${severity}; border-radius: 5px; padding: 0.55rem 0.7rem; margin-bottom: 0.55rem; background: var(--bg-card-header);">
-          <div style="font-weight: 700; font-size: 0.78rem; margin-bottom: 0.25rem;">${escape(f.title || `Finding ${idx + 1}`)}
-            <span style="color: ${severity}; font-weight: 400; font-size: 0.68rem;"> · ${escape((f.severity || 'low').toUpperCase())}</span>
-            ${f.trust ? `<span style="color: var(--text-muted); font-weight: 400; font-size: 0.66rem;"> · ${escape(f.trust)}</span>` : ''}
+        <div style="border: 1px solid var(--border-color-light); border-left: 4px solid ${severity}; border-radius: 6px; padding: 0.65rem 0.85rem; margin-bottom: 0.65rem; background: var(--bg-surface-elevated, #28292e);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.45rem;">
+            <div>
+              <strong style="font-size: 0.82rem; color: var(--text-primary);">${escape(f.title || `Finding ${idx + 1}`)}</strong>
+              <span style="color: ${severity}; font-weight: 700; font-size: 0.68rem; font-family: var(--font-mono); margin-left: 0.35rem;">[${escape((f.severity || 'low').toUpperCase())}]</span>
+            </div>
+            ${trustBadge(f.trust)}
           </div>
-          ${f.observation ? `<div style="margin-bottom: 0.3rem;">${escape(f.observation)}</div>` : ''}
-          ${evidence ? `<div style="margin-bottom: 0.3rem;"><span style="font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase;">Evidence</span><ul style="margin: 0.15rem 0 0.3rem 1.1rem; padding: 0; font-size: 0.76rem;">${evidence}</ul></div>` : ''}
-          ${f.whyItMatters ? `<div style="margin-bottom: 0.3rem;"><em>Why it matters:</em> ${escape(f.whyItMatters)}</div>` : ''}
-          ${f.recommendation ? `<div style="margin-bottom: 0.3rem;"><strong>Recommendation:</strong> ${escape(f.recommendation)}</div>` : ''}
-          ${f.alternative ? `<div style="margin-bottom: 0.3rem;"><em>Alternative:</em> ${escape(f.alternative)}</div>` : ''}
-          ${f.tradeOff ? `<div style="margin-bottom: 0.3rem;"><em>Trade-off:</em> ${escape(f.tradeOff)}</div>` : ''}
-          ${f.testNext ? `<div style="font-size: 0.72rem; color: var(--text-secondary);">→ Test next: ${escape(f.testNext)}</div>` : ''}
+          ${f.observation ? `<div style="margin-bottom: 0.4rem; line-height: 1.5;"><strong style="font-size: 0.70rem; color: var(--text-muted); text-transform: uppercase;">Observation:</strong> ${escape(f.observation)}</div>` : ''}
+          ${evidence ? `<div style="margin-bottom: 0.4rem;"><strong style="font-size: 0.70rem; color: var(--note-number, #4989D9); text-transform: uppercase;">Evidence:</strong><ul style="margin: 0.2rem 0 0.3rem 1.2rem; padding: 0; font-size: 0.76rem; font-family: var(--font-mono);">${evidence}</ul></div>` : ''}
+          ${f.whyItMatters ? `<div style="margin-bottom: 0.4rem; line-height: 1.45;"><strong style="font-size: 0.70rem; color: var(--dark-step, #F07A76); text-transform: uppercase;">Why it matters:</strong> ${escape(f.whyItMatters)}</div>` : ''}
+          ${f.recommendation ? `<div style="margin-bottom: 0.4rem; padding: 0.4rem 0.6rem; background: var(--bg-surface, #222327); border-radius: 4px; border-left: 2px solid var(--accent-success);"><strong style="font-size: 0.72rem; color: var(--accent-success); text-transform: uppercase;">Recommendation:</strong> ${escape(f.recommendation)}</div>` : ''}
+          ${f.alternative ? `<div style="margin-bottom: 0.35rem; font-size: 0.78rem; color: var(--text-secondary);"><em style="color: var(--text-muted);">Alternative:</em> ${escape(f.alternative)}</div>` : ''}
+          ${f.tradeOff ? `<div style="margin-bottom: 0.35rem; font-size: 0.78rem; color: var(--text-secondary);"><em style="color: var(--text-muted);">Trade-off:</em> ${escape(f.tradeOff)}</div>` : ''}
+          ${f.testNext ? `<div style="margin-top: 0.45rem; padding-top: 0.35rem; border-top: 1px dashed var(--border-subtle); font-size: 0.74rem; font-family: var(--font-mono); color: var(--note-number, #4989D9);">→ Test next: ${escape(f.testNext)}</div>` : ''}
         </div>`);
     });
     return parts.join('');
@@ -202,6 +231,11 @@ export function createAiStudioView(context) {
 
   function updateContextSummary(dropped) {
     if (!dom.aiContextSummary) return;
+    const scope = dom.aiContextScopeSelect?.value || 'all';
+    if (scope === 'none' || (dom.aiIncludeContextToggle && !dom.aiIncludeContextToggle.checked)) {
+      dom.aiContextSummary.textContent = 'Context: No background facts included.';
+      return;
+    }
     const pack = buildScopedFactsPack({
       project: currentProject(),
       planEntities: currentPlanEntities(),
@@ -214,7 +248,7 @@ export function createAiStudioView(context) {
     const decisions = pack.data.decisions.length;
     const droppedNote = (dropped && dropped.length) ? ` · REDUCED: ${dropped.join('; ')}` : '';
     dom.aiContextSummary.textContent =
-      `Context: ${rooms} rooms · ${furn} furniture · ${conflicts} conflicts · ${meas} measurements · ${decisions} decisions${droppedNote}`;
+      `Context (${scope.replace('_', ' ')}): ${rooms} rooms · ${furn} furniture · ${conflicts} conflicts · ${meas} measurements · ${decisions} decisions${droppedNote}`;
   }
 
   // ------------------------------------------------------------------
@@ -230,7 +264,8 @@ export function createAiStudioView(context) {
     if (busy) return;
     const jobId = selectedJobId();
     const userMessage = dom.aiQuestionInput?.value?.trim() || '';
-    const includeContext = dom.aiIncludeContextToggle ? dom.aiIncludeContextToggle.checked : true;
+    const scope = dom.aiContextScopeSelect?.value || 'all';
+    const includeContext = (dom.aiIncludeContextToggle ? dom.aiIncludeContextToggle.checked : true) && scope !== 'none';
 
     if (requiresImage(jobId) && !imageData) {
       showError('Choose an image for the vision job first.');
@@ -252,11 +287,18 @@ export function createAiStudioView(context) {
     updateContextSummary(null);
 
     try {
+      const imageRole = dom.aiImageRoleSelect?.value || 'plan';
+      let promptMsg = userMessage || (requiresImage(jobId) ? 'Describe this architectural image.' : '');
+      if (requiresImage(jobId) && imageData) {
+        promptMsg = `[Vision Role: ${imageRole.toUpperCase()}] ${promptMsg}`;
+      }
+
       const request = {
-        userMessage: userMessage || (requiresImage(jobId) ? 'Describe this architectural image.' : '')
+        userMessage: promptMsg
       };
       if (requiresImage(jobId) && imageData) {
         request.image = imageData;
+        request.imageRole = imageRole;
       }
       if (includeContext) {
         // Scope hint: use the question so a named-room question narrows context.

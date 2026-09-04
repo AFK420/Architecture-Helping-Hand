@@ -69,7 +69,7 @@ export function createAiControlCenterView(context) {
               Enabled
             </label>
           </div>
-          <div class="ai-provider-detail" style="display: none; margin-top: 0.55rem;">
+          <div class="ai-provider-detail" style="display: block; margin-top: 0.55rem;">
             <p style="margin: 0 0 0.5rem; font-size: 0.72rem; color: var(--text-muted);">${escape(s.description)} <a href="${escape(s.docsUrl)}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary);">Docs ↗</a></p>
             <div class="input-row-group" style="margin-bottom: 0.5rem;">
               <label class="input-label" style="font-size: 0.68rem;" for="ai-provider-key-${escape(s.id)}">API key ${s.hasKey ? '(paste a new key to replace)' : ''}</label>
@@ -99,7 +99,7 @@ export function createAiControlCenterView(context) {
             </div>
             <div class="ai-provider-status" data-provider="${escape(s.id)}" style="margin-top: 0.45rem; font-size: 0.7rem; color: var(--text-muted);"></div>
           </div>
-          <button type="button" class="ai-provider-toggle" data-provider="${escape(s.id)}" style="background: none; border: none; color: var(--text-tertiary); font-size: 0.68rem; cursor: pointer; padding: 0; margin-top: 0.2rem;">Details ▾</button>
+          <button type="button" class="ai-provider-toggle" data-provider="${escape(s.id)}" style="background: none; border: none; color: var(--text-tertiary); font-size: 0.68rem; cursor: pointer; padding: 0; margin-top: 0.3rem;">Details ▴</button>
         </div>`;
     }).join('');
 

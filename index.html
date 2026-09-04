@@ -3659,9 +3659,9 @@
     <!-- MODE 19: PLAN CANVAS                                     -->
     <!-- ======================================================== -->
     <section id="mode-view-plan" class="tool-mode-view" aria-labelledby="heading-plan" hidden>
-      <div class="tool-layout tool-layout-plan">
-        <!-- Left Column: Tools & Entity List -->
-        <div class="archi-card main-calc-card">
+      <div class="tool-layout tool-layout-plan-3col">
+        <!-- Column 1: Tools & Navigation / History (Left) -->
+        <div class="archi-card main-calc-card plan-tools-card">
           <div class="corner-mark top-left"></div>
           <div class="corner-mark top-right"></div>
           <div class="corner-mark bottom-left"></div>
@@ -3669,7 +3669,7 @@
 
           <div class="card-header">
             <div>
-              <span class="card-tag">MODE 19 • PLAN CANVAS</span>
+              <span class="card-tag">MODE 19 • DRAFTING WORKSTATION</span>
               <h2 id="heading-plan" class="card-title">Plan Canvas</h2>
             </div>
             <div class="status-indicator">
@@ -3678,35 +3678,41 @@
           </div>
 
           <p class="tool-description">
-            Lightweight 2D plan editor over real project geometry (meters). Draw rooms, place walls and furniture, snap to grid. Coordinates are world meters; the diagram is a view transform — never pixel-true.
+            Architectural 2D plan workstation. Coordinates are real-world meters with snapping, properties inspection, and space planning validation.
           </p>
 
-          <div class="input-row-group" style="margin-bottom: 1rem;">
+          <div class="input-row-group" style="margin-bottom: 0.75rem;">
             <label for="plan-tool-select" class="input-label">Active Tool</label>
             <select id="plan-tool-select" class="calc-select">
               <option value="select" selected>➤ Select / Move</option>
-              <option value="room">▭ Room (drag rectangle)</option>
               <option value="wall">─ Wall (drag segment)</option>
-              <option value="furniture">🪑 Furniture (click to drop)</option>
+              <option value="room">▭ Room (drag rectangle)</option>
+              <option value="door">🚪 Door (place on wall)</option>
+              <option value="window">🪟 Window (place on wall)</option>
+              <option value="furniture">🛋️ Furniture (catalog footprint)</option>
+              <option value="dimension">📏 Dimension (2-point string)</option>
+              <option value="text">🔤 Text (annotation label)</option>
+              <option value="measure">📐 Measure (distance glance)</option>
             </select>
           </div>
 
-          <div class="input-row-group" id="plan-furniture-group" style="display: none; margin-bottom: 1rem;">
-            <label for="plan-furniture-select" class="input-label">Furniture Piece (real catalog dimensions)</label>
+          <div class="input-row-group" id="plan-furniture-group" style="display: none; margin-bottom: 0.75rem;">
+            <label for="plan-furniture-select" class="input-label">Furniture Catalog Piece</label>
             <select id="plan-furniture-select" class="calc-select"></select>
           </div>
 
-          <div class="input-row-group" style="margin-bottom: 1rem;">
-            <label for="plan-grid-select" class="input-label">Grid / Snap</label>
+          <div class="input-row-group" style="margin-bottom: 0.75rem;">
+            <label for="plan-grid-select" class="input-label">Grid Snap Increment</label>
             <select id="plan-grid-select" class="calc-select">
-              <option value="0.1">0.1 m (fine)</option>
+              <option value="0.05">0.05 m (50 mm detail)</option>
+              <option value="0.1">0.10 m (100 mm module)</option>
               <option value="0.25">0.25 m</option>
-              <option value="0.5" selected>0.5 m</option>
-              <option value="1">1 m (coarse)</option>
+              <option value="0.5" selected>0.50 m (planning grid)</option>
+              <option value="1">1.00 m (structural grid)</option>
             </select>
           </div>
 
-          <div class="calc-actions-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.5rem;">
+          <div class="calc-actions-row" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem; margin-bottom: 0.75rem;">
             <button type="button" id="btn-plan-undo" class="result-action-btn" title="Undo (Ctrl+Z)">
               <span>↶ Undo</span>
             </button>
@@ -3717,24 +3723,26 @@
               <span>🗑 Delete</span>
             </button>
             <button type="button" id="btn-plan-clear" class="result-action-btn" title="Remove all entities (asks first)">
-              <span>Clear</span>
+              <span>Clear All</span>
             </button>
           </div>
 
-          <div id="plan-error-msg" class="input-error-banner" style="display: none; margin-top: 0.75rem;" role="alert"></div>
+          <div id="plan-error-msg" class="input-error-banner" style="display: none; margin-top: 0.5rem;" role="alert"></div>
 
-          <div style="margin-top: 1rem;">
-            <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.4rem;">Entities</div>
-            <div id="plan-entity-list" style="display: flex; flex-direction: column; gap: 0.3rem; max-height: 260px; overflow-y: auto;"></div>
+          <div style="margin-top: 0.75rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+              <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary);">Plan Entities</span>
+              <span id="plan-entities-count" style="font-size: 0.70rem; color: var(--note-number, #4989D9); font-family: var(--font-mono);">0</span>
+            </div>
+            <div id="plan-entity-list" style="display: flex; flex-direction: column; gap: 0.25rem; max-height: 220px; overflow-y: auto;"></div>
           </div>
 
-          <div style="margin-top: 1rem; font-size: 0.72rem; color: var(--text-muted); line-height: 1.5;">
-            <strong>Save to project:</strong> the plan persists as part of the Project Document through the project store. Rectilinear scope: rooms are rectangles, walls axis-aligned — documented limitation.
+          <div style="margin-top: 0.8rem; font-size: 0.70rem; color: var(--text-muted); line-height: 1.45;">
+            <strong>Save to project:</strong> the plan persists into your project store. Rooms and walls are axis-aligned architectural primitives.
           </div>
         </div>
 
-        <!-- Right Column: SVG Canvas (large drawing viewport — the plan is
-             the primary work surface and takes the available height) -->
+        <!-- Column 2: SVG Canvas Workstation (Center) -->
         <div class="archi-card result-panel plan-canvas-panel" id="plan-result-panel" data-state="ready">
           <div class="corner-mark top-left"></div>
           <div class="corner-mark top-right"></div>
@@ -3742,7 +3750,10 @@
           <div class="corner-mark bottom-right"></div>
 
           <div class="result-header">
-            <span class="result-label">PLAN</span>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span class="result-label">DRAWING VIEWPORT</span>
+              <span id="plan-mode-label" class="plan-mode-badge" style="font-size: 0.68rem; font-family: var(--font-mono); color: var(--accent-primary);">SELECT</span>
+            </div>
             <span id="plan-status-badge" class="unit-system-tag" style="font-size: 0.7rem;">zoom 40 px/m</span>
           </div>
 
@@ -3754,7 +3765,7 @@
             <button type="button" id="btn-plan-zoom-100" class="result-action-btn plan-zoom-btn wide" title="Zoom to 1:1 (100 px per meter)">100%</button>
             <button type="button" id="btn-plan-zoom-50" class="result-action-btn plan-zoom-btn wide" title="Zoom to 50 px/m">50%</button>
             <button type="button" id="btn-plan-zoom-200" class="result-action-btn plan-zoom-btn wide" title="Zoom to 200 px/m">200%</button>
-            <span class="plan-toolbar-hint">scroll = zoom · space+drag or middle-drag = pan</span>
+            <span class="plan-toolbar-hint">scroll = zoom · space+drag = pan · del = delete</span>
           </div>
 
           <div id="plan-svg-wrap" class="plan-svg-wrap" style="cursor: crosshair;">
@@ -3771,6 +3782,27 @@
             <button type="button" id="btn-plan-export-dxf" class="result-action-btn" title="Open Export Center with this plan as DXF">
               <span>📤 Export DXF</span>
             </button>
+          </div>
+        </div>
+
+        <!-- Column 3: Properties & Verification Inspector (Right) -->
+        <div class="archi-card plan-properties-panel" id="plan-properties-panel">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <div class="card-header">
+            <div>
+              <span class="card-tag">INSPECTOR</span>
+              <h3 class="card-title" style="font-size: 0.95rem;">Properties &amp; Verification</h3>
+            </div>
+            <span id="plan-prop-type-badge" class="badge-status-ready" style="font-size: 0.68rem;">PLAN</span>
+          </div>
+
+          <!-- Dynamic container updated whenever selection changes -->
+          <div id="plan-prop-content" class="plan-prop-content" style="display: flex; flex-direction: column; gap: 0.65rem; font-size: 0.82rem;">
+            <!-- Populated dynamically by plan.js -->
           </div>
         </div>
       </div>
@@ -4071,6 +4103,21 @@
           <div class="input-row-group" id="ai-image-group" style="display: none; margin-bottom: 1rem;">
             <label for="ai-image-input" class="input-label">Image (vision job) — analysis is approximate, never measured geometry</label>
             <input type="file" id="ai-image-input" accept="image/png,image/jpeg,image/webp" class="text-input" />
+            <div style="margin-top: 0.5rem;">
+              <label for="ai-image-role-select" class="input-label" style="font-size: 0.72rem;">Vision Subject Role</label>
+              <select id="ai-image-role-select" class="calc-select" style="font-size: 0.80rem;">
+                <option value="plan" selected>📐 Plan Drawing</option>
+                <option value="section">🏛️ Section</option>
+                <option value="elevation">🏢 Elevation</option>
+                <option value="sketch">✏️ Hand Sketch / Diagram</option>
+                <option value="site">🌳 Site / Masterplan</option>
+                <option value="furniture">🛋️ Furniture Layout</option>
+                <option value="material">🧱 Material Study</option>
+                <option value="reference">📖 Precedent / Reference</option>
+                <option value="photo">📷 Site Photo</option>
+                <option value="concept">💡 Concept Parti</option>
+              </select>
+            </div>
           </div>
 
           <div class="input-row-group" style="margin-bottom: 1rem;">
@@ -4079,10 +4126,18 @@
           </div>
 
           <div class="input-row-group" style="margin-bottom: 1rem;">
-            <label class="input-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-              <input type="checkbox" id="ai-include-context-toggle" checked style="width: auto;" />
-              Include project context (rooms, conflicts, measurements, decisions)
-            </label>
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+              <label class="input-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
+                <input type="checkbox" id="ai-include-context-toggle" checked style="width: auto;" />
+                Include project context facts
+              </label>
+              <select id="ai-context-scope-select" class="calc-select" style="width: auto; padding: 0.25rem 0.6rem; font-size: 0.75rem;" aria-label="Context scope selector">
+                <option value="all" selected>Scope: Entire Project</option>
+                <option value="plan_only">Scope: Active Plan Only</option>
+                <option value="room_current">Scope: Selected Room Only</option>
+                <option value="none">Scope: No Background Facts</option>
+              </select>
+            </div>
           </div>
 
           <div class="calc-actions-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem; margin-bottom: 0.6rem;">
