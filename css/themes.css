@@ -24,21 +24,21 @@
 
   --bg-app: var(--dark-bg);
   --bg-base: var(--dark-bg);
-  --bg-surface: #18181b;
-  --bg-surface-elevated: var(--dark-surface);
-  --bg-surface-raised: #29292e;
+  --bg-surface: var(--dark-surface);
+  --bg-surface-elevated: #28292e;
+  --bg-surface-raised: #2f3036;
   --bg-surface-overlay: #26262b;
-  --bg-surface-translucent: rgba(24, 24, 27, 0.94);
+  --bg-surface-translucent: rgba(34, 35, 39, 0.94);
 
-  --bg-input: #1b1b1f;
-  --bg-input-focus: #202024;
-  --bg-chip: var(--dark-surface);
-  --bg-chip-hover: #2e2e34;
+  --bg-input: #17171a;
+  --bg-input-focus: #1f1f24;
+  --bg-chip: #2a2b30;
+  --bg-chip-hover: #35363c;
   --bg-chip-active: #4989D9;
 
   --panel-bg: var(--dark-surface);
   --panel-border: #34343a;
-  --panel-header-bg: #202024;
+  --panel-header-bg: #1b1b1e;
 
   /* -------------------------------------------------------------------------
      2. Border Strengths & Separators
@@ -55,13 +55,13 @@
      #4989D9 via --note-number (see .col-notes strong / .note-number).
      ------------------------------------------------------------------------- */
   --text-primary: var(--dark-text);
-  --text-secondary: #b9b9bf;
+  --text-secondary: var(--dark-muted);
   --text-tertiary: #96969d;
   --text-muted: var(--dark-muted);
   --text-inverse: #121214;
   --text-accent: #4989D9;
 
-  /* Numbers inside notes (user-specified) */
+  /* Numbers inside notes (user-specified #4989D9) */
   --note-number: var(--dark-note-number);
 
   /* -------------------------------------------------------------------------
@@ -78,6 +78,11 @@
   --accent-danger: var(--dark-danger);
   --accent-action: var(--dark-danger);
 
+  /* Run button tokens (user-specified #D32F2F) */
+  --btn-run-accent: var(--dark-danger);
+  --btn-run-hover: #e04343;
+  --btn-run-text: #ffffff;
+
   --color-success: #3fae6e;
   --color-success-subtle: rgba(63, 174, 110, 0.14);
   --color-warning: #c98a2b;
@@ -85,7 +90,7 @@
   --color-error: var(--dark-danger);
   --color-error-subtle: rgba(211, 47, 47, 0.15);
 
-  /* Step boxes & explanation boxes (user-specified) */
+  /* Step boxes & explanation boxes (user-specified #F07A76 & #29292D) */
   --step-accent: var(--dark-step);
   --step-help-bg: var(--dark-step-help);
   --step-help-text: var(--dark-step-help-text);
@@ -199,6 +204,14 @@
   --accent-success: #15803d;
   --accent-danger: #b91c1c;
 
+  --btn-run-accent: #b85d19;
+  --btn-run-hover: #9c4c12;
+  --btn-run-text: #ffffff;
+  --note-number: #b85d19;
+  --step-accent: #2563eb;
+  --step-help-bg: #ebe4d2;
+  --step-help-text: #181511;
+
   --color-success: #15803d;
   --color-success-subtle: rgba(21, 128, 61, 0.12);
   --color-warning: #b45309;
@@ -252,6 +265,8 @@
   --text-inverse: #04101e;
   --text-accent: #00e5ff;
 
+  --note-number: #00e5ff;
+
   --accent-primary: #00e5ff;
   --accent-primary-hover: #33ecff;
   --accent-primary-subtle: rgba(0, 229, 255, 0.16);
@@ -261,6 +276,13 @@
   --accent-blueprint: #00e5ff;
   --accent-success: #34d399;
   --accent-danger: #fb7185;
+
+  --btn-run-accent: #00e5ff;
+  --btn-run-hover: #33ecff;
+  --btn-run-text: #04101e;
+  --step-accent: #38bdf8;
+  --step-help-bg: #0c2544;
+  --step-help-text: #ffffff;
 
   --color-success: #34d399;
   --color-success-subtle: rgba(52, 211, 153, 0.15);
