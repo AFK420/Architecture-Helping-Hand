@@ -14314,6 +14314,7 @@ function createProviderManager(options = {}) {
       label: entry.label,
       description: entry.description,
       docsUrl: entry.docsUrl,
+      keyHint: entry.keyHint || null,
       enabled: conf.enabled !== false,
       endpoint: conf.endpoint,
       endpointEditable: entry.endpointEditable,
@@ -21538,6 +21539,36 @@ function createAiStudioView(context) {
       const mark = !st ? '' : (st.status === 'READY' ? '✓' : `· ${st.status.toLowerCase()}`);
       return `<option value="${escape(def.jobId)}">${escape(def.label)} ${escape(mark)}</option>`;
     }).join('');
+    renderJobHint();
+  }
+
+  /** Plain-language description of the selected job (what it does, what it needs). */
+  function renderJobHint() {
+    if (!dom.aiJobHint) return;
+    const jobId = selectedJobId();
+    const def = AI_JOB_DEFINITIONS.find(j => j.jobId === jobId);
+    if (!def) {
+      dom.aiJobHint.textContent = '';
+      dom.aiJobHint.style.display = 'none';
+      return;
+    }
+    const caps = Object.entries(def.requiredCapabilities)
+      .filter(([, needed]) => needed)
+      .map(([cap]) => capName(cap));
+    const capText = caps.length > 0 ? ` Needs: ${caps.join(', ')}.` : '';
+    dom.aiJobHint.textContent = `${def.description}${capText}`;
+    dom.aiJobHint.style.display = 'block';
+  }
+
+  function capName(cap) {
+    return {
+      structuredOutput: 'structured output',
+      toolCalling: 'tool calling',
+      imageGen: 'image generation',
+      vision: 'vision (an image upload)',
+      text: 'text',
+      reasoning: 'reasoning'
+    }[cap] || cap;
   }
 
   function selectedJobId() {
@@ -21553,6 +21584,7 @@ function createAiStudioView(context) {
     if (dom.aiImageGroup) {
       dom.aiImageGroup.style.display = requiresImage(selectedJobId()) ? 'block' : 'none';
     }
+    renderJobHint();
   }
 
   // ------------------------------------------------------------------
@@ -21929,12 +21961,13 @@ function createAiControlCenterView(context) {
           <div class="ai-provider-detail" style="display: none; margin-top: 0.55rem;">
             <p style="margin: 0 0 0.5rem; font-size: 0.72rem; color: var(--text-muted);">${escape(s.description)} <a href="${escape(s.docsUrl)}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary);">Docs ↗</a></p>
             <div class="input-row-group" style="margin-bottom: 0.5rem;">
-              <label class="input-label" style="font-size: 0.68rem;">API key ${s.hasKey ? '(paste a new key to replace)' : ''}</label>
+              <label class="input-label" style="font-size: 0.68rem;" for="ai-provider-key-${escape(s.id)}">API key ${s.hasKey ? '(paste a new key to replace)' : ''}</label>
               <div style="display: flex; gap: 0.5rem;">
-                <input type="password" class="text-input ai-provider-key-input" data-provider="${escape(s.id)}" placeholder="${escape(s.hasKey ? '•••••••• (stored)' : s.id === 'gemini' ? 'AIza…' : 'API key')}" autocomplete="off" style="flex: 1;" aria-label="API key for ${escape(s.label)}" />
+                <input type="password" id="ai-provider-key-${escape(s.id)}" class="text-input ai-provider-key-input" data-provider="${escape(s.id)}" placeholder="${escape(s.hasKey ? '•••••••• (stored)' : (s.keyHint || 'API key'))}" autocomplete="off" style="flex: 1;" aria-label="API key for ${escape(s.label)}" aria-describedby="ai-provider-key-hint-${escape(s.id)}" />
                 <button type="button" class="result-action-btn ai-provider-key-save" data-provider="${escape(s.id)}" title="Save the key" style="padding: 0.3rem 0.6rem;"><span>💾</span></button>
                 <button type="button" class="result-action-btn ai-provider-key-clear" data-provider="${escape(s.id)}" title="Remove the stored key" style="padding: 0.3rem 0.6rem;"><span>🗑</span></button>
               </div>
+              <p id="ai-provider-key-hint-${escape(s.id)}" class="field-hint" style="font-size: 0.66rem; color: var(--text-muted); margin: 0.3rem 0 0;">${escape(s.keyHint || 'Paste the API key from the provider\'s dashboard. It is shown masked only and never enters a project document.')}</p>
               <label style="display: flex; gap: 0.4rem; align-items: center; font-size: 0.68rem; color: var(--text-secondary); margin-top: 0.35rem; cursor: pointer;">
                 <input type="radio" name="ai-key-mode-${escape(s.id)}" class="ai-key-mode" data-provider="${escape(s.id)}" value="session" ${s.keyMode === 'session' ? 'checked' : ''} style="width: auto;" />
                 Session only (safest — cleared when the tab closes)
@@ -22139,16 +22172,23 @@ function createAiControlCenterView(context) {
 
     dom.aiJobsList.innerHTML = statuses.map(st => {
       const assigned = svc.router.getAssignment(st.jobId);
+      const def = AI_JOB_DEFINITIONS.find(j => j.jobId === st.jobId);
       const modelText = st.status === 'NOT CONFIGURED'
         ? 'Not configured'
         : `${st.providerId || '?'} · ${st.modelId || '?'}`;
       const detail = st.lastError ? ` — ${escape(st.lastError.errorCode)}` : '';
+      const caps = def
+        ? Object.entries(def.requiredCapabilities).filter(([, needed]) => needed).map(([cap]) => cap === 'structuredOutput' ? 'structured' : (cap === 'imageGen' ? 'image gen' : cap))
+        : [];
+      const capsText = caps.length > 0 ? caps.join(' · ') : '';
       return `
         <div class="ai-job-row" role="listitem" data-job="${escape(st.jobId)}" style="border: 1px solid var(--border-color-light); border-radius: 5px; padding: 0.45rem 0.6rem; display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; min-width: 0;">
           <div style="font-size: 0.78rem; min-width: 0; flex: 1 1 160px;">
             <strong style="color: var(--text-primary);">${escape(st.label)}</strong>
-            <span style="color: var(--text-muted); font-size: 0.7rem;"> · ${escape(modelText)}</span>
             <span style="color: ${statusColor(st.status)}; font-size: 0.68rem; font-weight: 700;"> ● ${escape(st.status)}${detail}</span>
+            <div style="color: var(--text-muted); font-size: 0.68rem; margin-top: 0.1rem;">${escape(def ? def.description : '')}</div>
+            ${capsText ? `<div style="color: var(--text-muted); font-size: 0.64rem;">Requires: ${escape(capsText)}</div>` : ''}
+            <div style="color: var(--text-muted); font-size: 0.66rem; margin-top: 0.1rem; font-family: var(--font-family-mono);">${escape(modelText)}</div>
           </div>
           <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
             <select class="calc-select ai-job-provider" data-job="${escape(st.jobId)}" style="min-width: 110px; flex: 1 1 110px; max-width: 100%; font-size: 0.7rem;" aria-label="Provider for ${escape(st.label)}">
@@ -24022,6 +24062,7 @@ function initializeApp() {
     aiResponseBody: document.getElementById('ai-response-body'),
     aiConsistencyStrip: document.getElementById('ai-consistency-strip'),
     aiContextSummary: document.getElementById('ai-context-summary'),
+    aiJobHint: document.getElementById('ai-job-hint'),
 
     // Mode 21: AI Control Center Elements
     aiProvidersList: document.getElementById('ai-providers-list'),

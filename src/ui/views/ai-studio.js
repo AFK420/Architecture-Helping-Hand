@@ -73,6 +73,36 @@ export function createAiStudioView(context) {
       const mark = !st ? '' : (st.status === 'READY' ? '✓' : `· ${st.status.toLowerCase()}`);
       return `<option value="${escape(def.jobId)}">${escape(def.label)} ${escape(mark)}</option>`;
     }).join('');
+    renderJobHint();
+  }
+
+  /** Plain-language description of the selected job (what it does, what it needs). */
+  function renderJobHint() {
+    if (!dom.aiJobHint) return;
+    const jobId = selectedJobId();
+    const def = AI_JOB_DEFINITIONS.find(j => j.jobId === jobId);
+    if (!def) {
+      dom.aiJobHint.textContent = '';
+      dom.aiJobHint.style.display = 'none';
+      return;
+    }
+    const caps = Object.entries(def.requiredCapabilities)
+      .filter(([, needed]) => needed)
+      .map(([cap]) => capName(cap));
+    const capText = caps.length > 0 ? ` Needs: ${caps.join(', ')}.` : '';
+    dom.aiJobHint.textContent = `${def.description}${capText}`;
+    dom.aiJobHint.style.display = 'block';
+  }
+
+  function capName(cap) {
+    return {
+      structuredOutput: 'structured output',
+      toolCalling: 'tool calling',
+      imageGen: 'image generation',
+      vision: 'vision (an image upload)',
+      text: 'text',
+      reasoning: 'reasoning'
+    }[cap] || cap;
   }
 
   function selectedJobId() {
@@ -88,6 +118,7 @@ export function createAiStudioView(context) {
     if (dom.aiImageGroup) {
       dom.aiImageGroup.style.display = requiresImage(selectedJobId()) ? 'block' : 'none';
     }
+    renderJobHint();
   }
 
   // ------------------------------------------------------------------

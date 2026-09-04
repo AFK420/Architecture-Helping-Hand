@@ -1031,6 +1031,7 @@ export function initializeApp() {
     aiResponseBody: document.getElementById('ai-response-body'),
     aiConsistencyStrip: document.getElementById('ai-consistency-strip'),
     aiContextSummary: document.getElementById('ai-context-summary'),
+    aiJobHint: document.getElementById('ai-job-hint'),
 
     // Mode 21: AI Control Center Elements
     aiProvidersList: document.getElementById('ai-providers-list'),

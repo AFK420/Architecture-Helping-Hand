@@ -271,6 +271,7 @@ export function createProviderManager(options = {}) {
       label: entry.label,
       description: entry.description,
       docsUrl: entry.docsUrl,
+      keyHint: entry.keyHint || null,
       enabled: conf.enabled !== false,
       endpoint: conf.endpoint,
       endpointEditable: entry.endpointEditable,
