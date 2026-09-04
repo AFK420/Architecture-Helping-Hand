@@ -214,6 +214,27 @@ assert(
   }
 }
 
+// 2b. Unique top-level name rule (regression pin for the stair-corruption
+//     incident): the bundle concatenates all modules into one scope, so two
+//     declarations of the same top-level function name silently merge via
+//     hoisting (the last one wins) — this corrupted stair geometry with the
+//     ramp's 2-arg buildGeometry. Parse the bundle and fail on ANY duplicate
+//     top-level function name.
+{
+  const re = /^function\s+([A-Za-z0-9_$]+)\s*\(/gm;
+  const counts = new Map();
+  let m;
+  while ((m = re.exec(bundleCode)) !== null) {
+    counts.set(m[1], (counts.get(m[1]) || 0) + 1);
+  }
+  const duplicates = [...counts.entries()].filter(([, c]) => c > 1);
+  assert(
+    duplicates.length === 0,
+    'Unique top-level names: no function name is declared twice in the bundle scope',
+    duplicates.length > 0 ? duplicates.map(([n, c]) => `${n} x${c}`).join(', ') : 'all unique'
+  );
+}
+
 // 3. Runtime smoke test — execute the bundle in a minimal mocked browser
 //    environment. This catches ReferenceErrors from modules that are present
 //    in the bundle but whose *dependencies* were not (the historical failure:

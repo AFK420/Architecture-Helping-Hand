@@ -32,15 +32,29 @@ const appJsPath = path.join(rootDir, 'src', 'ui', 'app.js');
 const htmlContent = fs.readFileSync(htmlPath, 'utf-8');
 const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
-// 1. Verify Mode Navigation Targets in HTML
+// 1. Verify Mode Navigation Targets
+// Navigation is now rendered from the NAV_CATALOG in src/ui/app.js (sidebar),
+// so the catalog must list every mode and index.html must contain every view
+// container. Static nav tabs no longer exist; the contract follows the source.
 {
-  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff', 'stairs', 'ramps', 'slopes', 'export', 'projects', 'plan', 'ai', 'ai_settings', 'imports', 'survey'];
-  
+  const expectedModes = ['home', 'converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff', 'stairs', 'ramps', 'slopes', 'export', 'projects', 'plan', 'ai', 'ai_settings', 'imports', 'survey'];
+
+  const catalogMatch = appJsContent.match(/const NAV_CATALOG = \[([\s\S]*?)\];/);
+  assert(catalogMatch, 'src/ui/app.js declares the NAV_CATALOG (single navigation source of truth)');
+  const catalog = catalogMatch ? catalogMatch[1] : '';
+
   for (const mode of expectedModes) {
-    const hasTab = htmlContent.includes(`data-mode="${mode}"`);
+    const inCatalog = catalog.includes(`id: '${mode}'`);
     const hasView = htmlContent.includes(`id="mode-view-${mode}"`);
-    assert(hasTab, `index.html has navigation tab for mode "${mode}"`);
+    assert(inCatalog, `NAV_CATALOG lists mode "${mode}"`);
     assert(hasView, `index.html has view container "mode-view-${mode}"`);
+  }
+
+  // Every catalog id must have a view container (no dead sidebar links)
+  if (catalogMatch) {
+    const catalogIds = [...catalog.matchAll(/id:\s*'([a-z_0-9]+)'/g)].map(m => m[1]);
+    const missingViews = catalogIds.filter(id => !htmlContent.includes(`id="mode-view-${id}"`));
+    assert(missingViews.length === 0, 'Every NAV_CATALOG entry has a matching view container', missingViews);
   }
 }
 

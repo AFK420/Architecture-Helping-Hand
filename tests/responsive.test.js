@@ -56,7 +56,7 @@ const css = fs.readFileSync(cssPath, 'utf8');
 
 // 4. Horizontal Touch Scroll Affordances
 {
-  assert(css.includes('.modes-nav') && css.includes('-webkit-overflow-scrolling: touch'), 'Mode navigation tabs support momentum touch scrolling');
+  assert(css.includes('.sidebar-nav') && css.includes('-webkit-overflow-scrolling: touch'), 'Sidebar tool navigation supports momentum touch scrolling');
   assert(css.includes('.preset-category-pills') && css.includes('-webkit-overflow-scrolling: touch'), 'Preset category pills support momentum touch scrolling');
   assert(css.includes('.furn-cat-pills-row') && css.includes('-webkit-overflow-scrolling: touch'), 'Furniture category pills support momentum touch scrolling');
   assert(css.includes('.ref-quick-chips') && css.includes('-webkit-overflow-scrolling: touch'), 'Reference scale chips support momentum touch scrolling');
@@ -64,7 +64,7 @@ const css = fs.readFileSync(cssPath, 'utf8');
 
 // 5. Responsive Multi-Column Layout Flow
 {
-  assert(css.includes('grid-template-columns: 1.05fr 0.95fr'), 'Desktop utilizes multi-column calculation instrument workspace');
+  assert(css.includes('grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr)'), 'Desktop utilizes multi-column calculation instrument workspace');
   assert(css.includes('repeat(3, 1fr)'), 'Desktop furniture catalog utilizes 3-column space-planning grid');
   assert(css.includes('pipeline-flow-banner') && css.includes('flex-direction: column'), 'Calculation pipeline stacks gracefully into vertical flow on mobile');
 }
