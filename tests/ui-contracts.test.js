@@ -28,7 +28,6 @@ console.log('🧪 Running tests/ui-contracts.test.js...');
 
 const htmlPath = path.join(rootDir, 'index.html');
 const appJsPath = path.join(rootDir, 'src', 'ui', 'app.js');
-
 const htmlContent = fs.readFileSync(htmlPath, 'utf-8');
 const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
@@ -56,6 +55,28 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     const missingViews = catalogIds.filter(id => !htmlContent.includes(`id="mode-view-${id}"`));
     assert(missingViews.length === 0, 'Every NAV_CATALOG entry has a matching view container', missingViews);
   }
+}
+
+// 1b. Application shell contract: sidebar, top bar, and Home screen elements
+//     must exist and the shell CSS must be present (regression pins for the
+//     sidebar/topbar layout that replaced the horizontal mode bar).
+{
+  const shellIds = [
+    'app-shell', 'app-sidebar', 'app-workbench', 'app-topbar',
+    'tool-surface', 'sidebar-toggle-btn', 'sidebar-backdrop',
+    'sidebar-search', 'sidebar-search-clear', 'sidebar-nav',
+    'topbar-current-tool', 'topbar-home-btn',
+    // Home screen
+    'mode-view-home', 'home-project-name', 'home-project-badge',
+    'home-project-desc', 'home-project-stats', 'home-ai-status',
+    // AI Studio job hint
+    'ai-job-hint'
+  ];
+  for (const id of shellIds) {
+    assert(htmlContent.includes(`id="${id}"`), `index.html contains shell element: #${id}`);
+  }
+  assert(appJsContent.includes('renderSidebar'), 'app.js renders the sidebar (renderSidebar)');
+  assert(appJsContent.includes('NAV_CATALOG'), 'app.js declares NAV_CATALOG');
 }
 
 // 2. Verify Critical DOM Element IDs exist in index.html

@@ -40,10 +40,25 @@ const css = fs.readFileSync(cssPath, 'utf8');
 
 // 2. Viewport Overflow Protection
 {
-  assert(css.includes('overflow-x: hidden'), 'Global overflow-x protection enabled for mobile');
+  assert(css.includes('overflow-x: clip') || css.includes('overflow-x: hidden'), 'Global overflow-x protection enabled (page never scrolls horizontally)');
   assert(css.includes('max-width: 100vw'), 'Main wrapper bounded to viewport width on small screens');
-  assert(css.includes('.table-scroll-container'), 'Data tables wrapped in scroll container');
+  assert(css.includes('.table-scroll-container') || css.includes('.workspace-table-container'), 'Data tables wrapped in scroll containers');
   assert(css.includes('.col-paper') && css.includes('position: sticky'), 'First column of reference table is sticky on mobile');
+}
+
+// 2b. Application Shell Responsive Behavior (sidebar / top bar)
+{
+  assert(css.includes('.app-sidebar'), 'Sidebar shell styles defined');
+  assert(css.includes('.app-topbar'), 'Top bar shell styles defined');
+  assert(css.includes('.tool-surface'), 'Tool surface container defined');
+  assert(css.includes('body.sidebar-open .app-sidebar'), 'Mobile drawer opens via body.sidebar-open');
+  assert(css.includes('body.sidebar-hidden .app-sidebar'), 'Desktop sidebar can be toggled hidden');
+  // Every grid template in the sheet must be minmax-safe or explicitly single-column
+  const gridTemplates = [...css.matchAll(/grid-template-columns:\s*([^;]+);/g)].map(m => m[1].trim());
+  const unsafe = gridTemplates.filter(t =>
+    /^1fr/.test(t) || /(^|\s)1fr(\s|$)/.test(t) && !t.includes('minmax(') && !t.includes('repeat(') && !t.includes('auto')
+  );
+  assert(unsafe.length === 0, 'No bare 1fr grid templates that ignore min-content (QA regression pin)', unsafe.slice(0, 4));
 }
 
 // 3. Touch Ergonomics & Form Controls

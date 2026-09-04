@@ -1688,7 +1688,7 @@ body.sidebar-hidden .app-sidebar {
 
 .equiv-columns-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-md);
 }
 
@@ -2886,7 +2886,7 @@ body.sidebar-hidden .app-sidebar {
 /* Title Block (Screen Hidden, Print Visible) */
 .ref-sheet-titleblock {
   display: none;
-  grid-template-columns: 2fr 1fr 1fr 1fr;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   border: 1.5pt solid #000000;
   margin-top: 15mm;
   font-family: var(--font-mono);
@@ -4109,7 +4109,7 @@ body.sidebar-hidden .app-sidebar {
 
 @media (max-width: 768px) {
   .workspace-inputs-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
   /* Two-column input pairs stack on phones so inputs+unit selects fit
@@ -5705,7 +5705,7 @@ body.sidebar-hidden .app-sidebar {
 
 .quick-dim-main-row {
   display: grid;
-  grid-template-columns: 1.3fr 1fr;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
   gap: 0.85rem;
   align-items: center;
 }
