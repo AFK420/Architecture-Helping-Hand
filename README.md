@@ -34,6 +34,7 @@
    - [16. Stair Calculator (Mode 14) — Architectural Tools](#16-stair-calculator-mode-14--architectural-tools)
    - [17. Ramp Calculator (Mode 15) — Architectural Tools](#17-ramp-calculator-mode-15--architectural-tools)
    - [18. Slope Analyzer (Mode 16) — Architectural Tools](#18-slope-analyzer-mode-16--architectural-tools)
+   - [19. Survey Notebook (Mode 23) — Measurements & Calibration](#19-survey-notebook-mode-23--measurements--calibration)
 5. [📐 Architectural Scale Presets (All 28 Presets)](#-architectural-scale-presets-all-28-presets)
 6. [🛋️ Architectural Furniture & Fixtures Database (179 Items Across 9 Domains)](#️-architectural-furniture--fixtures-database-179-items-across-9-domains)
 7. [📏 Supported Measurement Units](#-supported-measurement-units)
