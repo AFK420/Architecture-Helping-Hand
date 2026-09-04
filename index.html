@@ -1666,7 +1666,7 @@
             </div>
 
             <!-- Workspace Default Unit & Scale Ratio Row -->
-            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-row" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
               <div class="form-group">
                 <label for="expression-default-unit" class="form-label">DEFAULT UNIT (FOR BARE NUMBERS)</label>
                 <select id="expression-default-unit" class="form-select" aria-label="Default input unit">
@@ -1799,7 +1799,7 @@
             <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
               Directly insert this calculated expression result into your active Dimension Workspace schedule.
             </p>
-            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+            <div class="form-row" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-bottom: 0.75rem;">
               <div>
                 <label for="expression-add-name" class="form-label">MEMBER / ROW NAME</label>
                 <input type="text" id="expression-add-name" class="form-input" placeholder="e.g. Total Wall Run" value="Expression Result" />
@@ -1888,7 +1888,7 @@
             </div>
 
             <!-- Units Configuration Row -->
-            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-row" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
               <div class="form-group">
                 <label for="multiscale-default-unit" class="form-label">DEFAULT INPUT UNIT</label>
                 <select id="multiscale-default-unit" class="form-select" aria-label="Default input unit">
@@ -1928,7 +1928,7 @@
             </div>
 
             <!-- Custom Scale Adder & Sort Controls -->
-            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-row" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
               <div class="form-group">
                 <label for="multiscale-custom-scale-input" class="form-label">ADD CUSTOM SCALE (1:X)</label>
                 <div style="display: flex; gap: 6px;">
@@ -1949,7 +1949,7 @@
             </div>
 
             <!-- Context Helpers: Paper Size & Target Fit Range -->
-            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-row" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
               <div class="form-group">
                 <label for="multiscale-paper-select" class="form-label">SHEET PAPER CONTEXT</label>
                 <select id="multiscale-paper-select" class="form-select">
@@ -2099,7 +2099,7 @@
           </div>
 
           <!-- Chain Settings: Name, Scale, Unit -->
-          <div class="instrument-grid" style="grid-template-columns: 2fr 1fr 1fr; gap: 0.75rem; margin-bottom: 0.85rem;">
+          <div class="instrument-grid" style="grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-bottom: 0.85rem;">
             <div class="input-group">
               <label for="chains-name-input" class="input-label">Chain Name</label>
               <input type="text" id="chains-name-input" class="text-input" value="North Wall Sequence" placeholder="e.g. North Wall Grid" />
@@ -2132,7 +2132,7 @@
           </div>
 
           <!-- Offsets Row -->
-          <div class="instrument-grid" style="grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.85rem;">
+          <div class="instrument-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-bottom: 0.85rem;">
             <div class="input-group">
               <label for="chains-start-offset-input" class="input-label">Start Offset (e.g. Datum / Wall Thickness)</label>
               <input type="text" id="chains-start-offset-input" class="text-input" placeholder="0 or 300mm" value="0" />
@@ -2260,7 +2260,7 @@
           </div>
 
           <!-- Breakdown Summary Cards -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 1rem;">
+          <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.6rem; margin-bottom: 1rem;">
             <div class="metric-card" style="padding: 0.65rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: 4px;">
               <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Segment Sum (SEG)</div>
               <div id="chains-seg-total-val" style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); font-family: var(--font-family-mono);">0 mm</div>
@@ -2987,7 +2987,7 @@
             </select>
           </div>
 
-          <div class="stairs-inputs-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.1rem;">
+          <div class="stairs-inputs-grid" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-bottom: 1.1rem;">
             <div class="input-group">
               <label for="stairs-total-rise" class="input-label">Total Rise</label>
               <input type="text" id="stairs-total-rise" class="text-input" value="2.8m" placeholder="e.g. 2.8m or 2800mm" style="font-family: var(--font-family-mono);" />
@@ -3036,7 +3036,7 @@
           <details style="margin-top: 1rem; border: 1px solid var(--border-color-light); border-radius: 6px; padding: 0.6rem 0.75rem; background: var(--bg-card-header);">
             <summary style="cursor: pointer; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.04em;">Reference Ranges (configurable heuristics)</summary>
             <p style="font-size: 0.74rem; color: var(--text-muted); margin: 0.5rem 0 0.75rem; line-height: 1.5;" id="stairs-reference-note"></p>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.5rem;">
               <div class="input-group">
                 <label for="stairs-ref-riser-min" class="input-label" style="font-size: 0.72rem;">Riser min (mm)</label>
                 <input type="number" id="stairs-ref-riser-min" class="text-input" value="130" style="font-family: var(--font-family-mono);" />
@@ -3157,7 +3157,7 @@
             </select>
           </div>
 
-          <div class="ramps-inputs-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.1rem;">
+          <div class="ramps-inputs-grid" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-bottom: 1.1rem;">
             <div class="input-group" id="ramps-rise-group">
               <label for="ramps-rise" class="input-label">Rise</label>
               <input type="text" id="ramps-rise" class="text-input" value="1.2m" placeholder="e.g. 1.2m or 1200mm" style="font-family: var(--font-family-mono);" />
@@ -3185,7 +3185,7 @@
           <details style="margin-top: 1rem; border: 1px solid var(--border-color-light); border-radius: 6px; padding: 0.6rem 0.75rem; background: var(--bg-card-header);">
             <summary style="cursor: pointer; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.04em;">Educational Reference (configurable)</summary>
             <p style="font-size: 0.74rem; color: var(--text-muted); margin: 0.5rem 0 0.75rem; line-height: 1.5;" id="ramps-reference-note"></p>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.5rem;">
               <div class="input-group">
                 <label for="ramps-ref-target" class="input-label" style="font-size: 0.72rem;">Target ratio (1 : X)</label>
                 <input type="number" id="ramps-ref-target" class="text-input" value="12" min="1" step="0.5" style="font-family: var(--font-family-mono);" />
@@ -3319,7 +3319,7 @@
             </select>
           </div>
 
-          <div class="slopes-inputs-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.1rem;">
+          <div class="slopes-inputs-grid" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-bottom: 1.1rem;">
             <div class="input-group" id="slopes-rise-group">
               <label for="slopes-rise" class="input-label">Rise (− = descending)</label>
               <input type="text" id="slopes-rise" class="text-input" value="1.2m" placeholder="e.g. 1.2m or -0.5m" style="font-family: var(--font-family-mono);" />
@@ -3863,7 +3863,7 @@
             <input type="text" id="survey-label" class="text-input" placeholder="e.g. Room W" />
           </div>
 
-          <div class="input-row-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+          <div class="input-row-group" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-bottom: 1rem;">
             <div class="input-group">
               <label for="survey-value" class="input-label">Length (e.g. 4.8m, 3200mm)</label>
               <input type="text" id="survey-value" class="text-input" placeholder="4.8m" style="font-family: var(--font-family-mono);" />
@@ -3880,7 +3880,7 @@
             </div>
           </div>
 
-          <div class="input-row-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+          <div class="input-row-group" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-bottom: 1rem;">
             <div class="input-group">
               <label for="survey-location" class="input-label">Location (optional)</label>
               <input type="text" id="survey-location" class="text-input" placeholder="e.g. North wall" />
@@ -3930,7 +3930,7 @@
             Calibrate a scanned plan or photo: pick two image pixel points with a known real-world distance between them. Calibration is pure math — the image itself never leaves your device and never enters storage.
           </p>
 
-          <div class="input-row-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+          <div class="input-row-group" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
             <div class="input-group">
               <label for="survey-cal-ax" class="input-label">Point A — x (px)</label>
               <input type="number" id="survey-cal-ax" class="text-input" value="0" step="any" style="font-family: var(--font-family-mono);" />
@@ -3964,7 +3964,7 @@
 
           <div style="margin-top: 1.2rem;">
             <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.4rem;">Measure on the Calibrated Image</div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.6rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(140px, 100%), 1fr)); gap: 0.75rem; margin-bottom: 0.6rem;">
               <div class="input-group">
                 <label for="survey-meas-p1x" class="input-label">P1 — x, y (px)</label>
                 <div style="display: flex; gap: 0.4rem;">

@@ -55,9 +55,23 @@ CHECK_JS = """
     // Fixed off-canvas drawer is fine when body lacks sidebar-open
     if (el.closest('.app-sidebar') && !document.body.classList.contains('sidebar-open') && vw <= 1024) continue;
     if (el.closest('.quick-dim-strip') && vw <= 1024) continue;
+    // The history drawer and command palette are intentionally off-viewport
+    // until opened (transform/translate transitions) — skip their shells.
+    if (el.closest('.history-drawer') && !el.closest('.history-drawer.open')) continue;
+    if (el.closest('.command-palette-modal') && !el.closest('.command-palette-modal.open')) continue;
 
     const offRight = r.right > vw + 2;
     const offLeft = r.left < -2;
+    // Elements inside an intentional horizontal scroll container (category
+    // pill rows etc.) are reachable by scrolling that container — not clipped.
+    let inHScroll = false;
+    p = el;
+    while (p && p !== document.body) {
+      const pcs = getComputedStyle(p);
+      if ((pcs.overflowX === 'auto' || pcs.overflowX === 'scroll') && p.scrollWidth > p.clientWidth + 2) { inHScroll = true; break; }
+      p = p.parentElement;
+    }
+    if (inHScroll) continue;
     const clippedBottom = r.bottom > window.innerHeight + 400; // far below fold is fine, scroll exists
     if (offRight || offLeft) {
       const key = `${el.tagName}|${el.id || el.className}`;

@@ -664,6 +664,11 @@ body.sidebar-hidden .app-sidebar {
   border-radius: var(--radius-lg);
   padding: var(--space-xl) var(--space-2xl);
   box-shadow: var(--shadow-sm);
+  /* Never let a wide child push the card past its grid track */
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .single-tool-card {
@@ -727,7 +732,7 @@ body.sidebar-hidden .app-sidebar {
 /* ==========================================================================
    6. Form Controls: Inputs & Selects
    ========================================================================== */
-.form-input, .form-select {
+.form-input, .form-select, .text-input, .calc-select {
   height: var(--control-height-md);
   max-width: 100%;
   min-width: 0;
@@ -741,9 +746,10 @@ body.sidebar-hidden .app-sidebar {
   font-variant-numeric: tabular-nums;
   transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
   outline: none;
+  width: 100%;
 }
 
-.form-input:hover, .form-select:hover {
+.form-input:hover, .form-select:hover, .text-input:hover, .calc-select:hover {
   border-color: var(--border-strong);
 }
 
@@ -758,7 +764,7 @@ body.sidebar-hidden .app-sidebar {
   min-width: 0;
 }
 
-.form-input:focus, .form-select:focus {
+.form-input:focus, .form-select:focus, .text-input:focus, .calc-select:focus {
   border-color: var(--accent-primary);
   background: var(--bg-input-focus);
   box-shadow: var(--shadow-focus);
@@ -905,6 +911,7 @@ body.sidebar-hidden .app-sidebar {
   gap: var(--space-sm);
   padding-top: var(--space-sm);
   border-top: 1px solid var(--border-subtle);
+  min-width: 0;
 }
 
 .custom-scale-prefix {
@@ -916,6 +923,32 @@ body.sidebar-hidden .app-sidebar {
 
 .scale-input-box {
   flex: 1;
+  min-width: 0;
+}
+
+.scale-input-box .form-input {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Inputs with a paired unit select shrink instead of overflowing */
+.input-with-unit-row {
+  display: flex;
+  gap: var(--space-xs);
+  width: 100%;
+  min-width: 0;
+}
+
+.input-with-unit-row .form-input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
+.input-with-unit-row .form-select {
+  flex: 0 1 auto;
+  min-width: 96px;
+  max-width: 100%;
 }
 
 /* ==========================================================================
@@ -1435,6 +1468,8 @@ body.sidebar-hidden .app-sidebar {
   display: flex;
   gap: var(--space-xs);
   align-items: center;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .input-with-unit-row .form-input {
@@ -1442,11 +1477,14 @@ body.sidebar-hidden .app-sidebar {
   height: var(--control-height-lg);
   font-size: var(--font-size-md);
   font-weight: 700;
+  min-width: 0;
 }
 
 .input-with-unit-row .form-select {
   flex: 1;
   height: var(--control-height-lg);
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* ==========================================================================
@@ -1686,7 +1724,7 @@ body.sidebar-hidden .app-sidebar {
    ========================================================================== */
 .grid-two-cols {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-md);
 }
 
@@ -4059,7 +4097,13 @@ body.sidebar-hidden .app-sidebar {
   .workspace-inputs-grid {
     grid-template-columns: 1fr 1fr;
   }
-  
+
+  /* Two-column input pairs stack on phones so inputs+unit selects fit
+     (QA: detector/rescale/area-volume unit selects sat off-viewport). */
+  .grid-two-cols {
+    grid-template-columns: 1fr;
+  }
+
   .workspace-inputs-grid .col-input,
   .workspace-inputs-grid .col-notes,
   .workspace-inputs-grid .col-btn {
