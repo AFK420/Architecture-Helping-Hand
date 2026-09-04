@@ -25554,6 +25554,29 @@ function initializeApp() {
   let paletteItems = [];
   let previousActiveElement = null;
 
+  // ---------------------------------------------------------------------------
+  // 3b. Command Palette — the single global search surface (Ctrl+K / top bar).
+  // Navigation commands are derived from NAV_CATALOG so the palette can never
+  // drift from the sidebar; utility/AI actions stay registered separately.
+  // ---------------------------------------------------------------------------
+  function registerCatalogCommands() {
+    for (const item of NAV_CATALOG) {
+      if (item.id === 'home') continue;
+      CommandRegistry.register({
+        id: `nav-${item.id}`,
+        title: item.label,
+        description: item.desc,
+        category: 'Navigation',
+        icon: item.icon,
+        keywords: [...(item.keywords || []), item.section.toLowerCase(), item.label.toLowerCase()],
+        shortcut: item.shortcut || null,
+        actionType: 'navigation',
+        available: true
+      });
+    }
+    CommandRegistry.unregister('future-space-planner'); // the space planner shipped as Plan Canvas
+  }
+
   function openCommandPalette() {
     if (!dom.commandPaletteModal || !dom.commandPaletteOverlay) return;
     previousActiveElement = document.activeElement;
@@ -25856,6 +25879,17 @@ function initializeApp() {
 
     CommandRegistry.addRecentCommand(cmd.id);
     closeCommandPalette();
+
+    // Catalog-derived navigation commands resolve through NAV_CATALOG first,
+    // so a palette entry can never point at a screen the sidebar lacks.
+    const catalogMatch = cmd.id.startsWith('nav-')
+      ? NAV_CATALOG.find(i => i.id === cmd.id.slice(4))
+      : null;
+    if (catalogMatch) {
+      switchMode(catalogMatch.id);
+      AudioService.playTick();
+      return;
+    }
 
     switch (cmd.id) {
       case 'nav-converter':
@@ -28523,6 +28557,7 @@ function initializeApp() {
   attachEventListeners();
   views.mountAll();
   renderSidebar('');
+  registerCatalogCommands();
   if (state.quickDimension.isOpen || state.quickDimension.pinned) {
     views.callController('quick_dimension', 'toggleQuickDimension', true);
     if (state.quickDimension.pinned && dom.quickDimPinBtn) {
