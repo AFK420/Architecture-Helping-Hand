@@ -1,8 +1,19 @@
 # Architecture Helping Hand — Codebase Audit & Core Architecture
 
-**Date**: September 3, 2026 (UI/UX reconstruction appended September 4, 2026)  
+**Date**: September 3, 2026 (UI/UX reconstruction appended September 4, 2026; focused correction pass appended September 4, 2026)  
 **Repository**: [https://github.com/AFK420/Architecture-Helping-Hand.git](https://github.com/AFK420/Architecture-Helping-Hand.git)  
-**Status**: Verified & Hardened (P14 + Phase 15/16 + UI Shell Reconstruction — 2,895 Assertions, 36 Suites)  
+**Status**: Verified & Hardened (P14 + Phase 15/16 + UI Shell Reconstruction + Correction Pass — 2,896 Assertions, 36 Suites)  
+
+---
+
+## 0.2 Focused Correction Pass Incident Record (September 4, 2026)
+
+Real-user testing surfaced four defects, all fixed and verified in-browser (Playwright):
+
+1. **Keyboard copy interception** — the global `keydown` handler navigated to CAD Clipboard on plain **Ctrl+C** whenever focus was outside an input. All letter/number shortcuts are now gated to plain key presses (`ctrl/meta/alt` combos fall through to native browser behavior); the one modified shortcut the Workspace genuinely owns (Ctrl+C copying selected rows) fires only when rows are selected, otherwise native copy proceeds. Verified live: Ctrl+C / Ctrl+A no longer navigate.
+2. **Blank dropdowns (Rescaler + Scale Detector + Reference)** — `rescale-orig-unit`, `rescale-target-unit`, `detector-paper-unit`, `detector-real-unit`, and `ref-scale-select` were left empty in the static HTML and no code ever populated them, so all five rendered as blank boxes that could not be used. `populateUnitSelects()` now fills them (with state-backed defaults); the Reference select is built from standard ratios. Verified live: options render, selection changes recalculate results.
+3. **Plan Canvas pointer mismatch + sliver furniture** — the SVG's `viewBox` stayed at the hard-coded 800×460 default while the element rendered at its real CSS size, so `svgToWorld()` mapped clicks away from the cursor; additionally furniture rectangles used a negative height (`p1.y − p2.y` without `Math.abs`) clamped by `Math.max(...,4)`, rendering every footprint as a 4-pixel sliver. The viewBox now tracks the element's real box via `ResizeObserver`, the canvas fills a viewport-height panel with a zoom toolbar (+/−/Fit/50/100/200 %), scroll-zoom, space+drag and middle-drag pan, and placed furniture renders the catalog's real plan symbol scaled into the footprint box. Verified live: drag-drawn rooms land exactly at the pointer, symbols embed, entity list/selection/delete work.
+4. **Furniture catalog breadth** — expanded 179 → 215 items with healthcare, educational, laboratory, industrial, storage, and service-space planning footprints (typical/reference dimensions, clearly described); category counts updated honestly; new breadth pinned in `tests/furniture.test.js`.
 
 ---
 
