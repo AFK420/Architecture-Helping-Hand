@@ -218,10 +218,20 @@ console.log('\n--- 6. Survey notebook ---');
   assertEqual(summary.needsAttention.length, 2, 'Non-verified flagged');
 
   const proposal = proposeRoomFromMeasurements(survey, 'Studio Room');
-  assert(proposal.proposal, 'Room proposal produced');
-  assertClose(proposal.proposal.widthMeters, 4.2, 'Proposal width from W measurement');
-  assert(proposal.proposal.note.includes('Proposal only'), 'Proposal explicitly non-destructive');
+  // Verified-only contract (Phase 16): the W record verifies; D is
+  // unverified and must NOT silently become geometry.
+  assertEqual(proposal.proposal, null, 'Unverified depth produces no proposal (verified-only)');
+  assertEqual(proposal.needsMore, true, 'Proposal reports it needs more verified data');
   assertEqual(proposal.unverifiedCount, 2, 'Unverified count surfaces');
+
+  // Verifying the depth record completes the proposal.
+  const dVerified = setMeasurementStatus(survey[1], 'Verified');
+  const complete = proposeRoomFromMeasurements([survey[0], dVerified], 'Studio Room');
+  assert(complete.proposal, 'Room proposal produced once both W/D are verified');
+  assertClose(complete.proposal.widthMeters, 4.2, 'Proposal width from W measurement');
+  assertClose(complete.proposal.depthMeters, 3.1, 'Proposal depth from verified D measurement');
+  assert(complete.proposal.note.includes('Proposal only'), 'Proposal explicitly non-destructive');
+  assertEqual(complete.unverifiedCount, 0, 'No unverified records remain');
 }
 
 // ---------------------------------------------------------------------------

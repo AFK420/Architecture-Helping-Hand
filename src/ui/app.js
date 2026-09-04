@@ -111,6 +111,7 @@ import { createPlanView } from './views/plan.js';
 import { createAiStudioView } from './views/ai-studio.js';
 import { createAiControlCenterView } from './views/ai-control-center.js';
 import { createImportsView } from './views/imports.js';
+import { createSurveyView } from './views/survey.js';
 import { buildScopedFactsPack } from '../ai/context/project-context.js';
 import { createAiHttp } from '../services/ai/http.js';
 import { createTransports } from '../services/ai/transports/index.js';
@@ -1056,7 +1057,38 @@ export function initializeApp() {
     importsSendPlanBtn: document.getElementById('btn-imports-send-plan'),
     importsErrorMsg: document.getElementById('imports-error-msg'),
     importsReportBox: document.getElementById('imports-report-box'),
-    importsEntityList: document.getElementById('imports-entity-list')
+    importsEntityList: document.getElementById('imports-entity-list'),
+
+    // Mode 23: Survey Notebook Elements
+    surveyLabel: document.getElementById('survey-label'),
+    surveyValue: document.getElementById('survey-value'),
+    surveySource: document.getElementById('survey-source'),
+    surveyLocation: document.getElementById('survey-location'),
+    surveyNote: document.getElementById('survey-note'),
+    surveyRunBtn: document.getElementById('btn-run-survey'),
+    surveyErrorMsg: document.getElementById('survey-error-msg'),
+    surveySummary: document.getElementById('survey-summary'),
+    surveyMeasurementList: document.getElementById('survey-measurement-list'),
+    surveyRoomName: document.getElementById('survey-room-name'),
+    surveyProposalBox: document.getElementById('survey-proposal-box'),
+    surveyCalAx: document.getElementById('survey-cal-ax'),
+    surveyCalAy: document.getElementById('survey-cal-ay'),
+    surveyCalBx: document.getElementById('survey-cal-bx'),
+    surveyCalBy: document.getElementById('survey-cal-by'),
+    surveyCalDistance: document.getElementById('survey-cal-distance'),
+    surveyCalibrateBtn: document.getElementById('btn-survey-calibrate'),
+    surveyCalStatus: document.getElementById('survey-cal-status'),
+    surveyMeasP1x: document.getElementById('survey-meas-p1x'),
+    surveyMeasP1y: document.getElementById('survey-meas-p1y'),
+    surveyMeasP2x: document.getElementById('survey-meas-p2x'),
+    surveyMeasP2y: document.getElementById('survey-meas-p2y'),
+    surveyMeasP3x: document.getElementById('survey-meas-p3x'),
+    surveyMeasP3y: document.getElementById('survey-meas-p3y'),
+    surveyMeasP4x: document.getElementById('survey-meas-p4x'),
+    surveyMeasP4y: document.getElementById('survey-meas-p4y'),
+    surveyMeasureDistanceBtn: document.getElementById('btn-survey-measure-distance'),
+    surveyMeasureChainBtn: document.getElementById('btn-survey-measure-chain'),
+    surveyMeasureAreaBtn: document.getElementById('btn-survey-measure-area')
   };
 
   // ---------------------------------------------------------------------------
@@ -1264,6 +1296,9 @@ export function initializeApp() {
     }
     else if (targetMode === 'imports') {
       views.callController('imports', 'runImport');
+    }
+    else if (targetMode === 'survey') {
+      views.callController('survey', 'renderMeasurements');
     }
   }
 
@@ -2684,6 +2719,12 @@ export function initializeApp() {
         break;
       case 'nav-ai-control-center':
         switchMode('ai_settings');
+        break;
+      case 'nav-imports':
+        switchMode('imports');
+        break;
+      case 'nav-survey':
+        switchMode('survey');
         break;
       case 'ai-analyze-project':
         switchMode('ai');
@@ -4976,6 +5017,23 @@ export function initializeApp() {
       });
     }
 
+    // Mode 23: Survey Notebook listeners
+    if (dom.surveyRunBtn) {
+      dom.surveyRunBtn.addEventListener('click', () => views.callController('survey', 'addMeasurement'));
+    }
+    if (dom.surveyCalibrateBtn) {
+      dom.surveyCalibrateBtn.addEventListener('click', () => views.callController('survey', 'setCalibration'));
+    }
+    if (dom.surveyMeasureDistanceBtn) {
+      dom.surveyMeasureDistanceBtn.addEventListener('click', () => views.callController('survey', 'measureCalibrated', 'distance'));
+    }
+    if (dom.surveyMeasureChainBtn) {
+      dom.surveyMeasureChainBtn.addEventListener('click', () => views.callController('survey', 'measureCalibrated', 'chain'));
+    }
+    if (dom.surveyMeasureAreaBtn) {
+      dom.surveyMeasureAreaBtn.addEventListener('click', () => views.callController('survey', 'measureCalibrated', 'area'));
+    }
+
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
       const activeEl = document.activeElement;
@@ -5222,6 +5280,7 @@ export function initializeApp() {
   views.register(createAiStudioView(viewContext));
   views.register(createAiControlCenterView(viewContext));
   views.register(createImportsView(viewContext));
+  views.register(createSurveyView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();
@@ -5236,4 +5295,11 @@ export function initializeApp() {
     }
   }
   switchMode(state.currentMode);
+
+  // QA/test hook (idempotent): lets browser automation drive mode switching
+  // through the same entry point as the UI without touching internals.
+  if (typeof window !== 'undefined') {
+    window.__ahhSwitchMode = switchMode;
+    window.__ahhState = state;
+  }
 }

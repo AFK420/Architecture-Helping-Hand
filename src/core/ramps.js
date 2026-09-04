@@ -102,7 +102,7 @@ function slopeConversions(riseMeters, runMeters) {
  * Accepts a number (already meters) or a { value, unitKey } pair.
  * @private
  */
-function requireLengthMeters(input, paramName, errorCode) {
+function requireRampLengthMeters(input, paramName, errorCode) {
   if (input && typeof input === 'object' && !Array.isArray(input)) {
     const unitDef = requireUnit(input.unitKey, 'length');
     if (typeof input.value !== 'number' || !isFinite(input.value) || input.value <= 0) {
@@ -176,7 +176,7 @@ export function evaluateRatioStatus(ratioValue, reference) {
 }
 
 /** Formats canonical meters in the requested display unit (reuses app formatter). */
-function fmt(meters, displayUnitKey, precision) {
+function rampFmt(meters, displayUnitKey, precision) {
   const unitDef = requireUnit(displayUnitKey, 'length');
   if (displayUnitKey === 'ft-in') {
     return formatFeetInches(meters / UNITS.in.toMeters);
@@ -206,7 +206,7 @@ export function formatRatio(ratioValue) {
  * Builds the geometric core shared by every mode.
  * @private
  */
-function buildGeometry(riseMeters, runMeters) {
+function buildRampGeometry(riseMeters, runMeters) {
   const { slopePercent, ratioValue, angleDegrees } = slopeConversions(riseMeters, runMeters);
   const flightLengthMeters = Math.sqrt(riseMeters * riseMeters + runMeters * runMeters);
   return { riseMeters, runMeters, slopePercent, ratioValue, angleDegrees, flightLengthMeters };
@@ -248,7 +248,7 @@ export function calculateRamp(input = {}) {
         err.code = RAMP_ERROR_CODES.MISSING_INPUT;
         throw err;
       }
-      riseMeters = requireLengthMeters(input.rise, 'Rise', RAMP_ERROR_CODES.INVALID_RISE);
+      riseMeters = requireRampLengthMeters(input.rise, 'Rise', RAMP_ERROR_CODES.INVALID_RISE);
       slopePercent = requireSlopePercent(input.slopePercent);
       runMeters = riseMeters / (slopePercent / 100);
     } else if (mode === RAMP_INPUT_MODES.RISE_AVAILABLE_RUN) {
@@ -257,15 +257,15 @@ export function calculateRamp(input = {}) {
         err.code = RAMP_ERROR_CODES.MISSING_INPUT;
         throw err;
       }
-      riseMeters = requireLengthMeters(input.rise, 'Rise', RAMP_ERROR_CODES.INVALID_RISE);
-      runMeters = requireLengthMeters(input.run, 'Available run', RAMP_ERROR_CODES.INVALID_RUN);
+      riseMeters = requireRampLengthMeters(input.rise, 'Rise', RAMP_ERROR_CODES.INVALID_RISE);
+      runMeters = requireRampLengthMeters(input.run, 'Available run', RAMP_ERROR_CODES.INVALID_RUN);
     } else if (mode === RAMP_INPUT_MODES.RUN_DESIRED_SLOPE) {
       if (input.run === undefined || input.slopePercent === undefined) {
         const err = new Error('This mode requires both run and desired slope.');
         err.code = RAMP_ERROR_CODES.MISSING_INPUT;
         throw err;
       }
-      runMeters = requireLengthMeters(input.run, 'Run', RAMP_ERROR_CODES.INVALID_RUN);
+      runMeters = requireRampLengthMeters(input.run, 'Run', RAMP_ERROR_CODES.INVALID_RUN);
       slopePercent = requireSlopePercent(input.slopePercent);
       riseMeters = runMeters * (slopePercent / 100);
     } else if (mode === RAMP_INPUT_MODES.RISE_RUN_DIRECT) {
@@ -274,8 +274,8 @@ export function calculateRamp(input = {}) {
         err.code = RAMP_ERROR_CODES.MISSING_INPUT;
         throw err;
       }
-      riseMeters = requireLengthMeters(input.rise, 'Rise', RAMP_ERROR_CODES.INVALID_RISE);
-      runMeters = requireLengthMeters(input.run, 'Run', RAMP_ERROR_CODES.INVALID_RUN);
+      riseMeters = requireRampLengthMeters(input.rise, 'Rise', RAMP_ERROR_CODES.INVALID_RISE);
+      runMeters = requireRampLengthMeters(input.run, 'Run', RAMP_ERROR_CODES.INVALID_RUN);
     }
   } catch (e) {
     if (e.code === undefined && /measurement unit/i.test(e.message)) {
@@ -300,7 +300,7 @@ export function calculateRamp(input = {}) {
     };
   }
 
-  const geometry = buildGeometry(riseMeters, runMeters);
+  const geometry = buildRampGeometry(riseMeters, runMeters);
   const ratioStatus = evaluateRatioStatus(geometry.ratioValue, references.slope);
 
   const result = {
@@ -369,9 +369,9 @@ export function buildTargetComparison(riseMeters, references = resolveRampRefere
 export function formatRampResult(result, displayUnit = 'm', precision = 2) {
   const g = result.geometry;
   const f = {
-    rise: fmt(g.riseMeters, displayUnit, precision),
-    run: fmt(g.runMeters, displayUnit, precision),
-    flightLength: fmt(g.flightLengthMeters, displayUnit, precision),
+    rise: rampFmt(g.riseMeters, displayUnit, precision),
+    run: rampFmt(g.runMeters, displayUnit, precision),
+    flightLength: rampFmt(g.flightLengthMeters, displayUnit, precision),
     slopePercent: `${formatNumber(g.slopePercent, 2)}%`,
     ratio: formatRatio(g.ratioValue),
     angle: `${formatNumber(g.angleDegrees, 2)}°`
@@ -383,7 +383,7 @@ export function formatRampResult(result, displayUnit = 'm', precision = 2) {
     f.referenceLabel = result.reference.label;
     f.referenceNote = result.reference.note;
     f.referenceTargetRatio = formatRatio(result.reference.targetRatio);
-    f.referenceTargetRun = fmt(result.reference.targetRunMeters, displayUnit, precision);
+    f.referenceTargetRun = rampFmt(result.reference.targetRunMeters, displayUnit, precision);
   }
   return f;
 }

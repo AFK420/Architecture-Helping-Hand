@@ -97,8 +97,12 @@ export const RISER_COUNT_MAX = 60;
  * Validates and converts a length input to canonical meters.
  * Accepts a number (already meters) or a { value, unitKey } pair.
  * Throws TypeError/Error with the given code embedded for controlled handling.
+ *
+ * NOTE: deliberately named with the Stair prefix — the bundle concatenates
+ * every module into one shared scope, so any two modules declaring the same
+ * top-level name silently collide (the last one wins). See ENGINEERING_RULES.
  */
-function requireLengthMeters(input, paramName, errorCode) {
+function requireStairLengthMeters(input, paramName, errorCode) {
   if (input && typeof input === 'object' && !Array.isArray(input)) {
     const unitDef = requireUnit(input.unitKey, 'length');
     if (typeof input.value !== 'number' || !isFinite(input.value) || input.value <= 0) {
@@ -147,7 +151,7 @@ export function evaluateRangeStatus(valueMeters, range) {
 }
 
 /** Formats canonical meters in the requested display unit. */
-function fmt(meters, displayUnitKey, precision) {
+function stairFmt(meters, displayUnitKey, precision) {
   const unitDef = requireUnit(displayUnitKey, 'length');
   if (displayUnitKey === 'ft-in') {
     return formatFeetInches(meters / UNITS.in.toMeters);
@@ -160,7 +164,7 @@ function fmt(meters, displayUnitKey, precision) {
  * Convention: N risers, N - 1 goings.
  * @private
  */
-function buildGeometry(totalRiseMeters, riserCount, riserMeters, treadMeters) {
+function buildStairGeometry(totalRiseMeters, riserCount, riserMeters, treadMeters) {
   const goingCount = riserCount - 1;
   const totalRunMeters = goingCount * treadMeters;
   const slopedLengthMeters = Math.sqrt(totalRiseMeters * totalRiseMeters + totalRunMeters * totalRunMeters);
@@ -224,7 +228,7 @@ function buildCandidate(totalRiseMeters, riserCount, references, objective, para
       break;
   }
 
-  const geometry = buildGeometry(totalRiseMeters, riserCount, riserMeters, treadMeters);
+  const geometry = buildStairGeometry(totalRiseMeters, riserCount, riserMeters, treadMeters);
   const proportion = buildProportion(riserMeters, treadMeters, references);
 
   return {
@@ -296,7 +300,7 @@ export function calculateStair(input = {}) {
   // ---- validate rise ----
   let totalRiseMeters;
   try {
-    totalRiseMeters = requireLengthMeters(input.totalRise, 'Total rise', STAIR_ERROR_CODES.INVALID_RISE);
+    totalRiseMeters = requireStairLengthMeters(input.totalRise, 'Total rise', STAIR_ERROR_CODES.INVALID_RISE);
   } catch (e) {
     if (e.code === undefined && /measurement unit/i.test(e.message)) {
       return { valid: false, errorCode: STAIR_ERROR_CODES.INVALID_UNIT, errorMessage: e.message };
@@ -317,7 +321,7 @@ export function calculateStair(input = {}) {
   let desiredTreadMeters = null;
   if (input.desiredTread !== undefined && input.desiredTread !== null) {
     try {
-      desiredTreadMeters = requireLengthMeters(input.desiredTread, 'Desired tread', STAIR_ERROR_CODES.INVALID_TREAD);
+      desiredTreadMeters = requireStairLengthMeters(input.desiredTread, 'Desired tread', STAIR_ERROR_CODES.INVALID_TREAD);
     } catch (e) {
       return { valid: false, errorCode: e.code || STAIR_ERROR_CODES.INVALID_TREAD, errorMessage: e.message };
     }
@@ -336,7 +340,7 @@ export function calculateStair(input = {}) {
   // ---- mode-specific validation and input resolution ----
   try {
     if (mode === STAIR_INPUT_MODES.RISE_DESIRED_RISER) {
-      desiredRiserMeters = requireLengthMeters(input.desiredRiser, 'Desired riser', STAIR_ERROR_CODES.INVALID_RISER);
+      desiredRiserMeters = requireStairLengthMeters(input.desiredRiser, 'Desired riser', STAIR_ERROR_CODES.INVALID_RISER);
     } else if (mode === STAIR_INPUT_MODES.RISE_RISER_COUNT) {
       if (!Number.isInteger(input.riserCount)) {
         const err = new Error('Riser count must be a whole number.');
@@ -350,9 +354,9 @@ export function calculateStair(input = {}) {
       }
       riserCount = input.riserCount;
     } else if (mode === STAIR_INPUT_MODES.RISE_AVAILABLE_RUN) {
-      availableRunMeters = requireLengthMeters(input.availableRun, 'Available run', STAIR_ERROR_CODES.INVALID_RUN);
+      availableRunMeters = requireStairLengthMeters(input.availableRun, 'Available run', STAIR_ERROR_CODES.INVALID_RUN);
     } else if (mode === STAIR_INPUT_MODES.RISE_RUN_DIRECT) {
-      directRunMeters = requireLengthMeters(input.totalRun, 'Total run', STAIR_ERROR_CODES.INVALID_RUN);
+      directRunMeters = requireStairLengthMeters(input.totalRun, 'Total run', STAIR_ERROR_CODES.INVALID_RUN);
     } else {
       const err = new Error(`Unknown stair input mode: "${mode}"`);
       err.code = STAIR_ERROR_CODES.INVALID_RISE;
@@ -373,7 +377,7 @@ export function calculateStair(input = {}) {
     const treadMeters = (desiredTreadMeters !== null)
       ? desiredTreadMeters
       : Math.max(0.001, ((references.blondel.minMeters + references.blondel.maxMeters) / 2) - 2 * riserMeters);
-    const geometry = buildGeometry(totalRiseMeters, riserCount, riserMeters, treadMeters);
+    const geometry = buildStairGeometry(totalRiseMeters, riserCount, riserMeters, treadMeters);
     const proportion = buildProportion(riserMeters, treadMeters, references);
 
     const result = {
@@ -515,17 +519,17 @@ export function calculateStair(input = {}) {
  */
 export function formatStairResult(result, displayUnit = 'mm', precision = 0) {
   const f = {
-    totalRise: fmt(result.input.totalRiseMeters, displayUnit, precision),
-    riser: result.risers ? fmt(result.risers.heightMeters, displayUnit, precision) : null,
-    tread: result.treads ? fmt(result.treads.depthMeters, displayUnit, precision) : null,
-    totalRun: fmt(result.geometry.totalRunMeters, displayUnit, precision),
-    slopedLength: fmt(result.geometry.slopedLengthMeters, displayUnit, precision),
+    totalRise: stairFmt(result.input.totalRiseMeters, displayUnit, precision),
+    riser: result.risers ? stairFmt(result.risers.heightMeters, displayUnit, precision) : null,
+    tread: result.treads ? stairFmt(result.treads.depthMeters, displayUnit, precision) : null,
+    totalRun: stairFmt(result.geometry.totalRunMeters, displayUnit, precision),
+    slopedLength: stairFmt(result.geometry.slopedLengthMeters, displayUnit, precision),
     angle: `${formatNumber(result.geometry.angleDegrees, 1)}°`,
     slopePercent: `${formatNumber(result.geometry.slopePercent, 1)}%`,
     riseRunRatio: `1 : ${formatNumber(result.geometry.riseRunRatio, 2)}`,
     riserCount: result.risers ? String(result.risers.count) : null,
     goingCount: result.risers ? String(result.risers.count - 1) : null,
-    twoRPlusT: result.proportion ? fmt(result.proportion.twoRPlusTMeters, displayUnit, precision) : null,
+    twoRPlusT: result.proportion ? stairFmt(result.proportion.twoRPlusTMeters, displayUnit, precision) : null,
     proportionStatus: result.proportion
       ? (result.proportion.status === 'within'
           ? 'Within configured reference range'
@@ -535,10 +539,10 @@ export function formatStairResult(result, displayUnit = 'mm', precision = 0) {
   if (Array.isArray(result.candidates)) {
     f.candidates = result.candidates.map(c => ({
       riserCount: c.riserCount,
-      riser: fmt(c.riserMeters, displayUnit, precision),
-      tread: fmt(c.treadMeters, displayUnit, precision),
-      totalRun: fmt(c.geometry.totalRunMeters, displayUnit, precision),
-      twoRPlusT: fmt(c.proportion.twoRPlusTMeters, displayUnit, precision),
+      riser: stairFmt(c.riserMeters, displayUnit, precision),
+      tread: stairFmt(c.treadMeters, displayUnit, precision),
+      totalRun: stairFmt(c.geometry.totalRunMeters, displayUnit, precision),
+      twoRPlusT: stairFmt(c.proportion.twoRPlusTMeters, displayUnit, precision),
       proportionStatus: c.proportion.status,
       angle: `${formatNumber(c.geometry.angleDegrees, 1)}°`
     }));

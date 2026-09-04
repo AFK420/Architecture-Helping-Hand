@@ -39,6 +39,7 @@ const testFiles = [
   'ai-providers.test.js',
   'ai-integration.test.js',
   'imports.test.js',
+  'survey.test.js',
   'integration.test.js',
   'services.test.js',
   'commands.test.js',

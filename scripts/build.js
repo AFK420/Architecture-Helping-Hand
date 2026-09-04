@@ -108,6 +108,7 @@ export const BUNDLE_MODULES = [
   { name: 'ViewAiStudio', file: path.join(srcDir, 'ui', 'views', 'ai-studio.js') },
   { name: 'ViewAiControlCenter', file: path.join(srcDir, 'ui', 'views', 'ai-control-center.js') },
   { name: 'ViewImports', file: path.join(srcDir, 'ui', 'views', 'imports.js') },
+  { name: 'ViewSurvey', file: path.join(srcDir, 'ui', 'views', 'survey.js') },
   { name: 'App', file: path.join(srcDir, 'ui', 'app.js') }
 ];
 

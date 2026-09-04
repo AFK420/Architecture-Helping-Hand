@@ -334,6 +334,26 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
+    id: 'nav-imports',
+    title: 'Importer',
+    description: 'Bring in CSV/TSV dimension schedules, 2D DXF, and flat SVG geometry with a review report before anything touches the project',
+    category: 'Navigation',
+    icon: '📥',
+    keywords: ['import', 'importer', 'csv', 'tsv', 'dxf', 'svg', 'schedule', 'ingest', 'mode 22'],
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-survey',
+    title: 'Survey Notebook',
+    description: 'Measurement notebook with provenance and verification, room proposals from verified records, and two-point image calibration',
+    category: 'Navigation',
+    icon: '📏',
+    keywords: ['survey', 'notebook', 'measurement', 'provenance', 'verify', 'calibration', 'calibrate', 'image', 'scale', 'mode 23'],
+    actionType: 'navigation',
+    available: true
+  },
+  {
     id: 'ai-analyze-project',
     title: 'Analyze Current Project',
     description: 'Run the whole-project AI analysis job (structured strengths/problems report)',

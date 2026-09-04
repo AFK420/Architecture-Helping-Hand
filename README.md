@@ -145,7 +145,7 @@ The codebase has evolved through rigorous engineering, auditing, hardening, and 
 This repository serves as:
 1. **An Open-Source Reference Studio**: A tactile, zero-friction architectural scaling studio for architects, interior designers, landscape architects, students, and educators.
 2. **Zero-Dependency Architecture**: No React, no Vue, no webpack, no runtime `node_modules`. Anyone can clone the repository, double-click `index.html`, and use it immediately offline via `file:///`.
-3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **2,761 automated test assertions across 35 test suites** (authoritative count emitted by `npm test`).
+3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **2,863 automated test assertions across 36 test suites** (authoritative count emitted by `npm test`).
 4. **An Extensible Platform**: Prepared for future architectural geometry engines, CAD vector exports (SVG/DXF), and stair/ramp calculations.
 
 ---
@@ -278,6 +278,14 @@ This repository serves as:
 * **Educational Explanation**: every result explains itself in plain language ("For every 12 units horizontally, the surface rises 1 unit") built from the actual geometry.
 * **Study Targets & Diagram**: fixed target table (1% drainage → 100%) mapped to required runs; directional SVG side elevation with a visual-normalization disclosure for extreme ratios (numeric values always exact).
 * **Persistence & Handoffs**: *Save to Project* → versioned Project Document via the project store; Journal / Workspace / CAD Handoff reuse the existing systems. See **SLOPES.md** for the full contract.
+
+### 19. Survey Notebook (Mode 23) — Measurements & Calibration
+* **Measurement Notebook with Provenance**: every record keeps its source (`Measured`, `Estimated`, `Imported`, `AI Interpreted`, `User Entered`) and verification status (`Verified`, `Unverified`, `Needs Review`) — uncertain records stay records; recording never forces geometry.
+* **Immutable Status Transitions**: verify / needs-review return new records through the tested pure core; delete removes exactly the targeted record. Imported measurements (from the Importer) are first-class records the notebook can verify.
+* **Room Proposals — Never Applied Silently**: two verified W/D measurements propose a room that names its sources; accepting is an explicit click that creates a real room through the same plan-entity path as drawing. Unverified records produce no proposal.
+* **Two-Point Image Calibration**: two pixel points + one known real distance → m/px scale; calibrated point-to-point distance, chained point walks, and polygon areas record back into the notebook as Unverified measurements with the calibration noted.
+* **Privacy & Limits**: image bytes never persist — only calibration numbers; 10 MB import cap, 2000 px longest-side downscale disclosure.
+* **Persistence**: measurements live in the versioned Project Document (`project.measurements[]`) via the project store and automatically feed the AI facts pack. See **SURVEY.md** for the full contract.
 
 ---
 
@@ -466,7 +474,7 @@ python -m http.server 3500
 ### 3. Run Automated Test Suite
 ```bash
 npm test
-# Executes all 35 test suites (2,761 assertions, 100% passing).
+# Executes all 36 test suites (2,863 assertions, 100% passing).
 # The runner emits the authoritative total assertion count on completion.
 ```
 
@@ -503,6 +511,8 @@ node scripts/build.js --check
   Universal Export Center, Project Workspace, Plan Canvas, Architectural Entities,
   Space Planning, Survey/Calibration, Annotations, AI Foundation, Visual AI capability
   layer, P14 final hardening, and now real provider transport.
+* **Phase 16 (September 2026): Surface the Tested Cores — in progress**:
+  - ✅ **Survey Notebook (Mode 23)** — measurement provenance UI over `src/core/survey.js`: record/verify/delete with status transitions, room proposals from verified records only, two-point image calibration feeding the notebook; see [SURVEY.md](SURVEY.md).
 * **Phase 15 (September 2026): Real AI Integration — implemented**:
   - ✅ **AI Providers** — real Gemini (generateContent/ListModels), GLM (OpenAI-compatible v4), and DeepSeek transports with user-supplied keys; see [AI_PROVIDERS.md](AI_PROVIDERS.md).
   - ✅ **Model catalog** — provider discovery + manual model entry ("I know this model exists"), capability profiles per model, retirement states; no model list is hard-coded as permanent truth.
@@ -512,7 +522,7 @@ node scripts/build.js --check
   - ✅ **Import foundation** — CSV/TSV schedules, 2D ASCII DXF, flat SVG with normalized reports and NEEDS VERIFICATION semantics; see [IMPORTS.md](IMPORTS.md).
   - ✅ **Free-cost safety** — fallback policy defaults to NEVER, no retry loops, no telemetry; automated tests never call real APIs (mocked HTTP at the single `services/ai/http.js` boundary).
 * **AI proposal UI**: the store's apply/undo/notify flow exists and is tested; a visible panel for AI *layout* proposals remains future work (Save-to-Journal is implemented).
-* **Survey/Calibration/Annotations UI not yet surfaced**: the three cores (`src/core/survey.js`, `annotations.js`) are tested pure modules; dedicated modes are future work.
+* **Survey/Calibration/Annotations UI not yet surfaced**: the **Survey Notebook (Mode 23)** now covers measurement provenance and two-point calibration ([SURVEY.md](SURVEY.md)); the annotations core (`src/core/annotations.js`) remains a tested pure module without a dedicated mode — future work.
 * **Phase 3 (legacy numbering): Extended Architectural Geometry**:
   - Wall thickness offset and clearance envelope calculator — partially covered by the space-planning core (`checkClearance`, wall footprints in `wallRect`); advanced envelope tools remain future work.
 * **Phase 4 (legacy numbering): Stair & Ramp Compliance Suite**:

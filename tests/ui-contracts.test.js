@@ -34,7 +34,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
 // 1. Verify Mode Navigation Targets in HTML
 {
-  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff', 'stairs', 'ramps', 'slopes', 'export', 'projects', 'plan', 'ai', 'ai_settings', 'imports'];
+  const expectedModes = ['converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff', 'stairs', 'ramps', 'slopes', 'export', 'projects', 'plan', 'ai', 'ai_settings', 'imports', 'survey'];
   
   for (const mode of expectedModes) {
     const hasTab = htmlContent.includes(`data-mode="${mode}"`);
@@ -661,7 +661,38 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'btn-run-ramps',
     'btn-run-slopes',
     'btn-run-export',
-    'btn-run-quick-dim'
+    'btn-run-quick-dim',
+
+    // Mode 23: Survey Notebook
+    'survey-label',
+    'survey-value',
+    'survey-source',
+    'survey-location',
+    'survey-note',
+    'btn-run-survey',
+    'survey-error-msg',
+    'survey-summary',
+    'survey-measurement-list',
+    'survey-room-name',
+    'survey-proposal-box',
+    'survey-cal-ax',
+    'survey-cal-ay',
+    'survey-cal-bx',
+    'survey-cal-by',
+    'survey-cal-distance',
+    'btn-survey-calibrate',
+    'survey-cal-status',
+    'survey-meas-p1x',
+    'survey-meas-p1y',
+    'survey-meas-p2x',
+    'survey-meas-p2y',
+    'survey-meas-p3x',
+    'survey-meas-p3y',
+    'survey-meas-p4x',
+    'survey-meas-p4y',
+    'btn-survey-measure-distance',
+    'btn-survey-measure-chain',
+    'btn-survey-measure-area'
   ];
 
   for (const rBtn of runButtons) {

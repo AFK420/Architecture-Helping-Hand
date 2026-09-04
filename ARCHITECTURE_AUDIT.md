@@ -2,7 +2,7 @@
 
 **Date**: September 3, 2026  
 **Repository**: [https://github.com/AFK420/Architecture-Helping-Hand.git](https://github.com/AFK420/Architecture-Helping-Hand.git)  
-**Status**: Verified & Hardened (P14 + Phase 15 — 2,761 Assertions, 35 Suites)  
+**Status**: Verified & Hardened (P14 + Phase 15/16 — 2,863 Assertions, 36 Suites)  
 
 ---
 
@@ -61,6 +61,8 @@ Architecture-Helping-Hand/
 │   │   ├── ramps.js               # Ramp Calculator engine: slope/ratio/angle, targets, SVG (Architectural Tools)
 │   │   ├── slope-math.js          # SHARED canonical slope math: rise/run → percent/ratio/angle (Ramps + Slopes)
 │   │   ├── slopes.js              # Slope Analyzer engine: signed geometry, consistency checks, targets (Architectural Tools)
+│   │   ├── survey.js              # Survey & calibration core: measurement provenance, two-point image calibration (Phase 16)
+│   │   ├── annotations.js         # Annotation core: structured 2D annotation objects (tested pure module)
 │   │   └── project.js             # Project Document Model: versioned, validated, serializable envelope (Stabilization 2)
 │   ├── services/
 │   │   ├── storage.js             # Safe LocalStorage wrapper with memory fallback
@@ -85,7 +87,9 @@ Architecture-Helping-Hand/
 │           ├── history.js         # Calculation Journal drawer
 │           ├── stairs.js          # Mode 14: Stair Calculator
 │           ├── ramps.js           # Mode 15: Ramp Calculator
-│           └── slopes.js          # Mode 16: Slope Analyzer
+│           ├── slopes.js          # Mode 16: Slope Analyzer
+│           ├── imports.js         # Mode 22: Importer (CSV/DXF/SVG ingestion)
+│           └── survey.js          # Mode 23: Survey Notebook (measurements + calibration)
 │   └── ai/                          # AI layer (Phases 9-13): reasoning over deterministic data
 │       ├── providers/provider.js    # Provider abstraction: capability manifest, error taxonomy, key store
 │       ├── tools/registry.js        # Tool registry: schema validation, permission tiers
@@ -174,11 +178,11 @@ Scaling formulas operate strictly on these normalized values:
 
 ## 4. Automated Testing & Verification Matrix
 
-The test suite consists of **35 automated test suites** containing **2,761 exact assertions**, all passing with zero failures. The authoritative total is emitted by `npm test` on every run — documentation should quote that output rather than hard-coded numbers.
+The test suite consists of **36 automated test suites** containing **2,863 exact assertions**, all passing with zero failures. The authoritative total is emitted by `npm test` on every run — documentation should quote that output rather than hard-coded numbers.
 
 | Test Suite File | Focus Area | Assertions | Result |
 | :--- | :--- | :---: | :---: |
-| `tests/ui-contracts.test.js` | Full DOM ID verification, mode switching targets, Run buttons presence, bundle cleanliness, escapeHtml resolution pins & zero-syntax error parsing | 611 | ✅ PASS |
+| `tests/ui-contracts.test.js` | Full DOM ID verification, mode switching targets, Run buttons presence, bundle cleanliness, escapeHtml resolution pins & zero-syntax error parsing | 648 | ✅ PASS |
 | `tests/integration.test.js` | P14 end-to-end pipelines: Room→Furniture→Clearance→Facts→Critique, Survey→Calibration→Export, Stair/Ramp→Project→CAD, Plan→Analysis→Snapshot→AI context (real engines only) | 39 | ✅ PASS |
 | `tests/cad-targets.test.js` | Part 9 CAD target profiles, all-source handoff payloads with real engine outputs, order/selection/precision pins | 106 | ✅ PASS |
 | `tests/project.test.js` | Stabilization 2: project model create/validate/normalize, unknown-field preservation, round-trips | 58 | ✅ PASS |
@@ -188,7 +192,7 @@ The test suite consists of **35 automated test suites** containing **2,761 exact
 | `tests/slopes.test.js` | Slope Analyzer: all 7 definitions, signed geometry, singularities, consistency tolerance, cross-engine regression | 143 | ✅ PASS |
 | `tests/ai.test.js` | AI layer: provider gating/error taxonomy, tool registry, hardened facts pack, structured validation (hostile-input safe), numeric claim checking, orchestrator flows | 73 | ✅ PASS |
 | `tests/visual-ai.test.js` | Visual AI capability gating, honest unavailability, label enforcement, controlled errors on throwing transports | 17 | ✅ PASS |
-| `tests/commands.test.js` | Command registry: registration, execution, categories, favorites, dynamic commands | 204 | ✅ PASS |
+| `tests/commands.test.js` | Command registry: registration, execution, categories, favorites, dynamic commands | 246 | ✅ PASS |
 | `tests/dimension-workspace.test.js` | Dimension Workspace entries, groups, serialization, persistence | 103 | ✅ PASS |
 | `tests/dimension-expression.test.js` | Expression parser determinism, validation, error codes, scale integration | 79 | ✅ PASS |
 | `tests/batch-cad.test.js` | Delimiter detection, row parsing, bulk conversion, export formatting | 76 | ✅ PASS |
@@ -208,9 +212,10 @@ The test suite consists of **35 automated test suites** containing **2,761 exact
 | `tests/export.test.js` | Universal Export Center: real-engine tables, JSON round-trip, DXF/SVG/TXT/CSV/TSV through the real exporters, store integration | 55 | ✅ PASS |
 | `tests/project-workspace.test.js` | Multi-project library, snapshots (linear-storage pin), import validation, future-version refusal | 37 | ✅ PASS |
 | `tests/plan-canvas.test.js` | Entities, transforms, grid/selection/undo, plan export geometry (SVG/DXF through real exporters) | 84 | ✅ PASS |
-| `tests/space-planning.test.js` | Fit/clearance/overlap/adjacency/efficiency, survey notebook, calibration math, annotations | 75 | ✅ PASS |
+| `tests/space-planning.test.js` | Fit/clearance/overlap/adjacency/efficiency, survey notebook (verified-only proposal contract), calibration math, annotations | 79 | ✅ PASS |
+| `tests/survey.test.js` | Survey Notebook integration (Phase 16): measurement lifecycle through the real store, imported-record interop, verified-only room proposal → plan → export, calibration → records, image limits | 55 | ✅ PASS |
 | `tests/data-integrity.test.js`| 28 scale presets uniqueness & ratio validity, 179 furniture records positive dimensions & unique IDs, reference ranges continuity | 9 | ✅ PASS |
-| **Total (incl. Phase 15 suites)** | **35 Comprehensive Test Suites** | **2,761 Assertions** | **100% Passing (0 Failures)** |
+| **Total (incl. Phase 15/16 suites)** | **36 Comprehensive Test Suites** | **2,863 Assertions** | **100% Passing (0 Failures)** |
 
 ---
 

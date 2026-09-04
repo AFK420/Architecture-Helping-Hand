@@ -336,7 +336,7 @@ export function buildSlopeTargetComparison(riseMagnitudeMeters) {
 }
 
 /** Formats canonical meters in the requested display unit. */
-function fmt(meters, displayUnitKey, precision) {
+function slopeFmt(meters, displayUnitKey, precision) {
   const unitDef = requireUnit(displayUnitKey, 'length');
   if (displayUnitKey === 'ft-in') {
     return formatFeetInches(Math.abs(meters) / UNITS.in.toMeters);
@@ -365,9 +365,9 @@ export function formatSlopeResult(result, displayUnit = 'm', precision = 2) {
   const g = result.geometry;
   const isVertical = g.kind === 'vertical';
   const f = {
-    rise: fmt(g.riseMeters, displayUnit, precision),
-    run: fmt(g.runMeters, displayUnit, precision),
-    flightLength: fmt(g.flightLengthMeters, displayUnit, precision),
+    rise: slopeFmt(g.riseMeters, displayUnit, precision),
+    run: slopeFmt(g.runMeters, displayUnit, precision),
+    flightLength: slopeFmt(g.flightLengthMeters, displayUnit, precision),
     slopePercent: isVertical
       ? (g.slopePercent > 0 ? 'Undefined / Infinite (vertical)' : 'Undefined / −Infinite (vertical)')
       : `${formatNumber(g.slopePercent, 2)}%`,

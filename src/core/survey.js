@@ -77,13 +77,14 @@ export function summarizeSurvey(measurements) {
 /**
  * Converts recorded survey measurements into room-candidate dimensions when
  * the student explicitly chooses (label convention: "Room W" / "Room D").
- * Returns a proposal — never silently mutates the plan.
+ * Only VERIFIED records become proposal geometry — unverified measurements
+ * stay records. Returns a proposal — never silently mutates the plan.
  */
 export function proposeRoomFromMeasurements(measurements, roomName) {
   const list = measurements || [];
   const verified = list.filter(m => m.status === 'Verified');
-  const width = list.find(m => /(^|\s)(W|width)$/i.test(m.label)) || verified[0] || null;
-  const depth = list.find(m => /(^|\s)(D|depth)$/i.test(m.label)) || verified[1] || null;
+  const width = verified.find(m => /(^|\s)(W|width)$/i.test(m.label)) || verified[0] || null;
+  const depth = verified.find(m => /(^|\s)(D|depth)$/i.test(m.label)) || verified[1] || null;
   return {
     proposal: width && depth ? {
       name: roomName || 'Surveyed Room',
