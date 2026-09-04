@@ -93,10 +93,13 @@ export function createChainsView(context) {
 
   function renderChainSVGView(calc) {
     if (!dom.chainsSvgViewportWrapper) return;
+    // Large drafting viewport: taller canvas with more label headroom. The
+    // SVG keeps its aspect via CSS (.chain-svg-viewport) and scales to fill
+    // the wide chain container.
     const svgMarkup = generateChainSVG(calc, {
       selectedSegmentId: state.chainSelectedSegmentId,
-      svgWidth: 860,
-      svgHeight: 180
+      svgWidth: 1000,
+      svgHeight: 340
     });
     dom.chainsSvgViewportWrapper.innerHTML = svgMarkup;
   }

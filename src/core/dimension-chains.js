@@ -405,17 +405,19 @@ export function generateChainSVG(calculatedChain, options = {}) {
 
   const {
     selectedSegmentId = null,
-    svgWidth = 860,
-    svgHeight = 180
+    svgWidth = 1000,
+    svgHeight = 340
   } = options;
 
-  const padLeft = 60;
-  const padRight = 60;
+  const padLeft = 70;
+  const padRight = 70;
   const usableWidth = svgWidth - padLeft - padRight;
 
-  const baselineY = 90;
-  const dimLineY = 52;
-  const totalDimLineY = 145;
+  // Vertical layout scales with the taller viewport so labels keep clear
+  // headroom at both the default and enlarged drafting sizes.
+  const baselineY = Math.round(svgHeight * 0.52);
+  const dimLineY = Math.round(svgHeight * 0.30);
+  const totalDimLineY = Math.round(svgHeight * 0.85);
 
   const totalExtent = Math.max(calculatedChain.overallExtentMeters, 0.001);
 
@@ -437,8 +439,8 @@ export function generateChainSVG(calculatedChain, options = {}) {
   if (calculatedChain.startOffsetMeters > 0) {
     const startOffsetEndX = getX(calculatedChain.startOffsetMeters);
     svgElements.push(`
-      <rect x="${padLeft}" y="${baselineY - 12}" width="${startOffsetEndX - padLeft}" height="24" fill="rgba(245, 158, 11, 0.12)" stroke="#f59e0b" stroke-dasharray="3 3" stroke-width="1" />
-      <text x="${(padLeft + startOffsetEndX) / 2}" y="${baselineY + 4}" font-family="monospace" font-size="9" font-weight="600" fill="#f59e0b" text-anchor="middle">OFFSET: ${calculatedChain.startOffsetFormatted}</text>
+      <rect x="${padLeft}" y="${baselineY - 12}" width="${startOffsetEndX - padLeft}" height="24" fill="rgba(201, 138, 43, 0.14)" stroke="var(--color-warning, #c98a2b)" stroke-dasharray="3 3" stroke-width="1" />
+      <text x="${(padLeft + startOffsetEndX) / 2}" y="${baselineY + 4}" font-family="monospace" font-size="9" font-weight="600" fill="var(--color-warning, #c98a2b)" text-anchor="middle">OFFSET: ${calculatedChain.startOffsetFormatted}</text>
     `);
   }
 
@@ -481,26 +483,26 @@ export function generateChainSVG(calculatedChain, options = {}) {
     const isAlw = seg.dimensionType === 'allowance';
 
     const strokeColor = isSelected
-      ? '#38bdf8'
+      ? 'var(--accent-primary, #4989D9)'
       : isRef
-      ? '#94a3b8'
+      ? 'var(--text-muted, #76767C)'
       : isAlw
-      ? '#f59e0b'
-      : 'var(--accent-primary, #38bdf8)';
+      ? 'var(--color-warning, #c98a2b)'
+      : 'var(--accent-primary, #4989D9)';
 
     // Highlight background slice if selected
     if (isSelected) {
       svgElements.push(`
-        <rect x="${x1}" y="20" width="${segWidth}" height="110" fill="rgba(56, 189, 248, 0.12)" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 2" rx="4" />
+        <rect x="${x1}" y="${Math.round(svgHeight * 0.10)}" width="${segWidth}" height="${Math.round(svgHeight * 0.78)}" fill="rgba(73, 137, 217, 0.12)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.5" stroke-dasharray="4 2" rx="4" />
       `);
     }
 
     if (isRef) {
       // Reference Dimension (Annotation Pin at coordinate)
       svgElements.push(`
-        <circle cx="${x1}" cy="${baselineY}" r="4" fill="#94a3b8" />
-        <line x1="${x1}" y1="${baselineY - 20}" x2="${x1}" y2="${baselineY + 20}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="2 2" />
-        <text x="${x1}" y="${baselineY + 34}" font-family="monospace" font-size="9" fill="#94a3b8" text-anchor="middle">${seg.name} [REF]</text>
+        <circle cx="${x1}" cy="${baselineY}" r="4" fill="var(--text-muted, #76767C)" />
+        <line x1="${x1}" y1="${baselineY - 20}" x2="${x1}" y2="${baselineY + 20}" stroke="var(--text-muted, #76767C)" stroke-width="1" stroke-dasharray="2 2" />
+        <text x="${x1}" y="${baselineY + 34}" font-family="monospace" font-size="9" fill="var(--text-muted, #76767C)" text-anchor="middle">${seg.name} [REF]</text>
       `);
     } else {
       // Standard or Allowance Dimension Segment
@@ -546,8 +548,8 @@ export function generateChainSVG(calculatedChain, options = {}) {
 
   // 7. Scale Ratio Stamp Badge (Top Right)
   svgElements.push(`
-    <rect x="${svgWidth - 110}" y="8" width="95" height="20" rx="3" fill="rgba(56, 189, 248, 0.15)" stroke="#38bdf8" stroke-width="1" />
-    <text x="${svgWidth - 62}" y="22" font-family="monospace" font-size="10" font-weight="700" fill="#38bdf8" text-anchor="middle">SCALE 1:${calculatedChain.scaleRatio}</text>
+    <rect x="${svgWidth - 110}" y="8" width="95" height="20" rx="3" fill="rgba(73, 137, 217, 0.15)" stroke="var(--accent-primary, #4989D9)" stroke-width="1" />
+    <text x="${svgWidth - 62}" y="22" font-family="monospace" font-size="10" font-weight="700" fill="var(--accent-primary, #4989D9)" text-anchor="middle">SCALE 1:${calculatedChain.scaleRatio}</text>
   `);
 
   return `

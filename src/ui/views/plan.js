@@ -22,6 +22,7 @@ import {
   placeFurniture, roomArea, wallLength
 } from '../../core/entities.js';
 import { FURNITURE_DATABASE } from '../../core/furniture.js';
+import { getFurniturePlanSVG } from '../visualizer.js';
 import { parseInput } from '../../core/parser.js';
 import { UNITS } from '../../core/units.js';
 import { wrapSVGDocument, createExportProvenance, EXPORT_FORMATS } from '../../core/export/export-model.js';
@@ -41,6 +42,64 @@ export function createPlanView(context) {
   let history = createHistory(100);
   let dragState = null; // { mode: 'pan'|'create'|'move', ... }
   let furnitureCatalog = [];
+  let catalogById = new Map(); // catalog id -> item (footprint symbols)
+  let resizeObserver = null;
+
+  /** Keeps svg.width/height synced to the element's real box so the
+   * viewBox always equals the pixel box — pointer mapping then never
+   * drifts (QA bug: clicks landed away from the cursor). */
+  function syncSvgSize() {
+    if (!dom.planSvg) return;
+    const rect = dom.planSvg.getBoundingClientRect();
+    if (rect.width > 10 && rect.height > 10) {
+      svg.width = Math.round(rect.width);
+      svg.height = Math.round(rect.height);
+    }
+  }
+
+  function fitToContent() {
+    const es = entities();
+    if (es.length === 0) {
+      // Sensible default framing: a 12m-wide view centered near origin
+      transform = createViewTransform({ zoom: Math.max(20, Math.min(svg.width / 14, 200)) });
+      transform.offsetX = svg.width / 2 - 6 * transform.zoom;
+      transform.offsetY = svg.height / 2 + 5 * transform.zoom;
+      return;
+    }
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const e of es) {
+      const r = e.kind === 'wall' ? wallRect(e)
+        : { x: e.x, y: e.y, width: e.width ?? 0, depth: e.depth ?? 0 };
+      minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
+      maxX = Math.max(maxX, r.x + r.width); maxY = Math.max(maxY, r.y + r.depth);
+    }
+    const wM = Math.max(maxX - minX, 0.5);
+    const dM = Math.max(maxY - minY, 0.5);
+    const padFactor = 1.25;
+    const zoom = Math.min((svg.width / (wM * padFactor)), (svg.height / (dM * padFactor)));
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    transform = {
+      zoom,
+      offsetX: svg.width / 2 - cx * zoom,
+      offsetY: svg.height / 2 + cy * zoom
+    };
+  }
+
+  function setZoomPercent(targetZoom) {
+    const cx = svg.width / 2;
+    const cy = svg.height / 2;
+    const world = svgToWorld(transform, cx, cy);
+    const zoom = Math.max(4, Math.min(400, targetZoom));
+    transform = { zoom, offsetX: cx - world.x * zoom, offsetY: cy + world.y * zoom };
+    savePrefs();
+    render();
+  }
+
+  /** Zoom in/out by a multiplicative factor around the view center. */
+  function zoomStep(factor) {
+    setZoomPercent(transform.zoom * factor);
+  }
 
   function entities() { return state.plan.entities; }
 
@@ -70,6 +129,7 @@ export function createPlanView(context) {
   // ------------------------------------------------------------------
   function render() {
     if (!dom.planSvg) return;
+    syncSvgSize();
     dom.planSvg.setAttribute('viewBox', `0 0 ${svg.width} ${svg.height}`);
     const gridLines = buildGrid(transform, svg.width, svg.height, state.plan.grid, 4)
       .map(l => {
@@ -113,10 +173,30 @@ export function createPlanView(context) {
         const p1 = worldToSvg(transform, e.x, e.y + e.depth);
         const p2 = worldToSvg(transform, e.x + e.width, e.y);
         const labelPos = worldToSvg(transform, e.x + e.width / 2, e.y + e.depth / 2);
+        // Recognizable footprint symbol: reuse the catalog's plan drawing
+        // (same shapes as the Furniture tool) scaled into the footprint box.
+        const item = catalogById.get(e.catalogId);
+        // NOTE: p1.y is the BOTTOM edge (larger SVG y) and p2.y the top, so the
+        // raw difference is negative — Math.abs is required. This was the
+        // historical "furniture renders as a 4px sliver" bug (Math.max kept
+        // the clamp value, shrinking every footprint to a thin strip).
+        const wPx = Math.max(Math.abs(p2.x - p1.x), 4);
+        const hPx = Math.max(Math.abs(p1.y - p2.y), 4);
+        let symbol = '';
+        if (item && wPx > 14 && hPx > 14) {
+          const shapeSvg = getFurniturePlanSVG(item);
+          const shapeRaw = shapeSvg
+            .replace(/<svg[^>]*>/, '')
+            .replace(/<\/svg>/, '');
+          const vbM = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(shapeSvg) || [];
+          symbol = `<svg x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}"
+            viewBox="0 0 ${vbM[1] || 100} ${vbM[2] || 100}" preserveAspectRatio="xMidYMid meet" style="color: var(--color-success,#4ade80); opacity: 0.9; pointer-events: none;">${shapeRaw}</svg>`;
+        }
         return `<g>
-          <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${(p2.x - p1.x).toFixed(1)}" height="${(p1.y - p2.y).toFixed(1)}"
+          <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}"
             fill="rgba(74,222,128,0.10)" stroke="${stroke}" stroke-width="${selected ? 2 : 1.2}" data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>
-          <text x="${labelPos.x.toFixed(1)}" y="${labelPos.y.toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-muted,#889)" font-family="var(--font-family-mono,monospace)">${escapeHtml(e.name)}</text>
+          ${symbol}
+          <text x="${labelPos.x.toFixed(1)}" y="${(p1.y + 12).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-muted,#889)" font-family="var(--font-family-mono,monospace)">${escapeHtml(e.name)}</text>
         </g>`;
       }
       return '';
@@ -180,6 +260,10 @@ export function createPlanView(context) {
   // Pointer interaction
   // ------------------------------------------------------------------
   function svgPoint(event) {
+    // CRITICAL: the viewBox is kept identical to the element's pixel box
+    // (syncSvgSize on mount + resize), so screen offset == SVG coordinates
+    // and this mapping is exact. Previously the viewBox stayed 800×460 while
+    // the element rendered wider, so every click landed away from the cursor.
     const rect = dom.planSvg.getBoundingClientRect();
     const sx = event.clientX - rect.left;
     const sy = event.clientY - rect.top;
@@ -188,6 +272,12 @@ export function createPlanView(context) {
 
   function onPointerDown(event) {
     if (event.button !== 0) return;
+    // Middle mouse or space-held drag pans regardless of active tool
+    if (event.button === 1 || isPanHotkey()) {
+      event.preventDefault();
+      dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
+      return;
+    }
     const world = svgPoint(event);
     const snapped = { x: snapToGrid(world.x, state.plan.grid), y: snapToGrid(world.y, state.plan.grid) };
     const tool = state.plan.tool;
@@ -208,6 +298,11 @@ export function createPlanView(context) {
     } else if (tool === 'furniture') {
       dropFurniture(snapped);
     }
+  }
+
+  let spaceHeld = false;
+  function isPanHotkey() {
+    return spaceHeld;
   }
 
   function onPointerMove(event) {
@@ -335,6 +430,7 @@ export function createPlanView(context) {
     state.plan.selectedIds = new Set([placed.id]);
     showToast(`${item.name} placed (${placed.width.toFixed(2)} × ${placed.depth.toFixed(2)} m)`);
     AudioService.playTick();
+    render();
   }
 
   function showError(message) {
@@ -442,12 +538,42 @@ export function createPlanView(context) {
   // ------------------------------------------------------------------
   function populateFurniture() {
     if (!dom.planFurnitureSelect) return;
-    furnitureCatalog = FURNITURE_DATABASE.filter(f => f.wCm && f.dCm).slice(0, 60);
-    dom.planFurnitureSelect.innerHTML = furnitureCatalog.map((item, idx) =>
-      `<option value="${idx}">${escapeHtml(item.name)} (${item.wCm}×${item.dCm} cm)</option>`
-    ).join('');
+    // Full catalog, grouped by category — the plan canvas should offer the
+    // same breadth as the Furniture tool, not a 60-item slice.
+    furnitureCatalog = FURNITURE_DATABASE.filter(f => f.wCm && f.dCm);
+    catalogById = new Map(furnitureCatalog.map(item => [item.id, item]));
+    const byCat = new Map();
+    for (const item of furnitureCatalog) {
+      if (!byCat.has(item.category)) byCat.set(item.category, []);
+      byCat.get(item.category).push(item);
+    }
+    const CAT_LABELS = {
+      living: 'Living Room', bedroom: 'Bedroom', dining: 'Dining', kitchen: 'Kitchen',
+      bathroom: 'Bathroom & Sanitary', office: 'Office', doors: 'Doors & Circulation',
+      outdoor: 'Outdoor & Site', commercial: 'Commercial, Retail & Fitness'
+    };
+    let optHtml = '';
+    for (const [cat, items] of byCat) {
+      optHtml += `<optgroup label="${escapeHtml(CAT_LABELS[cat] || cat)}">`;
+      for (const item of items) {
+        optHtml += `<option value="${item.id}">${escapeHtml(item.name)} (${item.wCm}×${item.dCm} cm)</option>`;
+      }
+      optHtml += '</optgroup>';
+    }
+    dom.planFurnitureSelect.innerHTML = optHtml;
+    // Keep selection stable by catalog id (index-based selection broke when
+    // the filtered list changed between sessions).
+    const savedId = state.plan.furnitureCatalogId;
+    if (savedId && catalogById.has(savedId)) {
+      dom.planFurnitureSelect.value = savedId;
+    } else {
+      dom.planFurnitureSelect.value = furnitureCatalog[0]?.id || '';
+      state.plan.furnitureCatalogId = furnitureCatalog[0]?.id;
+    }
+    state.plan.furnitureIndex = furnitureCatalog.findIndex(f => f.id === dom.planFurnitureSelect.value);
     dom.planFurnitureSelect.addEventListener('change', () => {
-      state.plan.furnitureIndex = parseInt(dom.planFurnitureSelect.value, 10) || 0;
+      state.plan.furnitureCatalogId = dom.planFurnitureSelect.value;
+      state.plan.furnitureIndex = furnitureCatalog.findIndex(f => f.id === dom.planFurnitureSelect.value);
     });
   }
 
@@ -458,7 +584,15 @@ export function createPlanView(context) {
     if (state.currentMode !== 'plan') return;
     const activeEl = document.activeElement;
     const isInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT' || activeEl.tagName === 'TEXTAREA');
-    if (isInput) return;
+    if (isInput) {
+      if (event.key === ' ' && activeEl.tagName !== 'TEXTAREA') return; // inputs keep native space
+      return;
+    }
+
+    if (event.key === ' ') {
+      spaceHeld = true; // hold space + drag = pan (CAD convention)
+      return;
+    }
 
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
       event.preventDefault();
@@ -491,6 +625,10 @@ export function createPlanView(context) {
     }
   }
 
+  function onKeyUp(event) {
+    if (event.key === ' ') spaceHeld = false;
+  }
+
   function syncToolVisibility() {
     if (dom.planFurnitureGroup) {
       dom.planFurnitureGroup.style.display = state.plan.tool === 'furniture' ? 'block' : 'none';
@@ -509,6 +647,18 @@ export function createPlanView(context) {
       populateFurniture();
       syncToolVisibility();
       loadFromProject();
+
+      // Size the SVG to its real element box BEFORE the first render so the
+      // viewBox always matches the pixel box (exact pointer mapping).
+      syncSvgSize();
+      if (dom.planSvg && typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => {
+          const before = { w: svg.width, h: svg.height };
+          syncSvgSize();
+          if (svg.width !== before.w || svg.height !== before.h) render();
+        });
+        resizeObserver.observe(dom.planSvg);
+      }
       render();
 
       if (dom.planSvg) {
@@ -523,9 +673,16 @@ export function createPlanView(context) {
         }, { passive: false });
       }
       document.addEventListener('keydown', onKeyDown);
+      document.addEventListener('keyup', onKeyUp);
+
+      // First visit this session: frame the view at a useful zoom
+      if (!prefs.zoom && entities().length > 0) fitToContent();
     },
     getController() {
-      return { render, undo, redo, deleteSelected, clearPlan, saveToProject, exportPlan, syncToolVisibility };
+      return {
+        render, undo, redo, deleteSelected, clearPlan, saveToProject, exportPlan,
+        syncToolVisibility, fitToContent, setZoomPercent, zoomStep, syncSvgSize
+      };
     }
   };
 }

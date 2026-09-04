@@ -648,6 +648,66 @@ body.sidebar-hidden .app-sidebar {
   align-items: start;
 }
 
+/* Plan Canvas: the drawing surface is the primary work area — give it a
+   tall, viewport-anchored layout instead of a small embedded card. */
+.tool-layout-plan {
+  grid-template-columns: minmax(260px, 0.62fr) minmax(0, 1.38fr);
+}
+
+.plan-svg-wrap {
+  height: calc(100vh - 320px);
+  min-height: 460px;
+  margin: 0.5rem 0 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-card-header);
+  overflow: hidden;
+}
+
+.plan-svg-wrap svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.plan-canvas-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.plan-zoom-btn {
+  min-width: 40px;
+  padding: 0.3rem 0.55rem;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  justify-content: center;
+}
+
+.plan-zoom-btn.wide {
+  min-width: 56px;
+}
+
+.plan-toolbar-hint {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-left: auto;
+}
+
+@media (max-width: 1024px) {
+  .tool-layout-plan {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .plan-svg-wrap {
+    height: 62vh;
+    min-height: 380px;
+  }
+}
+
 .visual-column {
   display: flex;
   flex-direction: column;
@@ -1048,12 +1108,13 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .step-input {
-  border-left: 4px solid var(--accent-primary);
+  border-left: 4px solid var(--step-accent, var(--accent-primary));
 }
 
 .step-operator {
   border-left: 4px solid var(--accent-secondary);
-  background: var(--bg-surface-raised);
+  background: var(--step-help-bg, var(--bg-surface-raised));
+  color: var(--step-help-text, inherit);
 }
 
 .step-output {
@@ -1104,13 +1165,13 @@ body.sidebar-hidden .app-sidebar {
 .step-kind-tag.system-calc {
   background: var(--color-warning-subtle);
   color: var(--color-warning);
-  border: 1px solid rgba(245, 158, 11, 0.4);
+  border: 1px solid rgba(201, 138, 43, 0.4);
 }
 
 .step-kind-tag.final-answer {
   background: var(--color-success-subtle);
   color: var(--color-success);
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  border: 1px solid rgba(63, 174, 110, 0.4);
 }
 
 .step-context-badge {
@@ -1299,7 +1360,7 @@ body.sidebar-hidden .app-sidebar {
   font-weight: 700;
   background: var(--color-warning-subtle);
   color: var(--color-warning);
-  border: 1px solid rgba(245, 158, 11, 0.4);
+  border: 1px solid rgba(201, 138, 43, 0.4);
   padding: 0.15rem 0.45rem;
   border-radius: var(--radius-xs);
 }
@@ -1315,7 +1376,7 @@ body.sidebar-hidden .app-sidebar {
 /* Subtle, professional tactile pulse transition on successful calculation */
 @keyframes resultTactileConfirmation {
   0% { transform: scale(1); }
-  50% { transform: scale(1.008); box-shadow: 0 0 14px rgba(16, 185, 129, 0.22); }
+  50% { transform: scale(1.008); box-shadow: 0 0 14px rgba(63, 174, 110, 0.22); }
   100% { transform: scale(1); }
 }
 
@@ -1345,7 +1406,7 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .result-state-pill.state-running {
-  background: rgba(56, 189, 248, 0.15);
+  background: rgba(73, 137, 217, 0.15);
   color: var(--accent-primary);
   border: 1px solid var(--accent-primary-border);
   animation: pulseState 0.8s infinite alternate;
@@ -1357,9 +1418,9 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .result-state-pill.state-success {
-  background: rgba(16, 185, 129, 0.12);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  background: rgba(63, 174, 110, 0.12);
+  color: var(--color-success, #3fae6e);
+  border: 1px solid rgba(63, 174, 110, 0.4);
 }
 
 .result-state-pill.state-error {
@@ -2188,9 +2249,9 @@ body.sidebar-hidden .app-sidebar {
   font-weight: 700;
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-xs);
-  background: rgba(56, 189, 248, 0.1);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.25);
+  background: rgba(73, 137, 217, 0.1);
+  color: var(--accent-primary, #4989D9);
+  border: 1px solid rgba(73, 137, 217, 0.25);
   white-space: nowrap;
 }
 
@@ -2227,8 +2288,8 @@ body.sidebar-hidden .app-sidebar {
   color: var(--accent-primary);
   box-shadow: var(--shadow-inset);
   background-image: 
-    linear-gradient(to right, rgba(56, 189, 248, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(56, 189, 248, 0.05) 1px, transparent 1px);
+    linear-gradient(to right, rgba(73, 137, 217, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(73, 137, 217, 0.05) 1px, transparent 1px);
   background-size: 16px 16px;
   position: relative;
   overflow: hidden;
@@ -2605,8 +2666,8 @@ body.sidebar-hidden .app-sidebar {
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: rgba(201, 138, 43, 0.08);
+  border: 1px solid rgba(201, 138, 43, 0.3);
   border-radius: var(--radius-sm);
   margin-bottom: var(--space-md);
   font-size: var(--font-size-xs);
@@ -2614,7 +2675,7 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .print-warning-banner .warn-icon {
-  color: #f59e0b;
+  color: var(--color-warning, #c98a2b);
   flex-shrink: 0;
 }
 
@@ -2863,7 +2924,7 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .ref-data-table tr.benchmark-row td {
-  background: rgba(56, 189, 248, 0.04);
+  background: rgba(73, 137, 217, 0.04);
   font-weight: 700;
 }
 
@@ -3478,11 +3539,11 @@ body.sidebar-hidden .app-sidebar {
 
 .cmd-fav-btn:hover {
   transform: scale(1.15);
-  color: #f59e0b;
+  color: var(--color-warning, #c98a2b);
 }
 
 .cmd-fav-btn.is-fav {
-  color: #f59e0b;
+  color: var(--color-warning, #c98a2b);
 }
 
 .command-shortcut-badge {
@@ -3508,9 +3569,9 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .command-badge.badge-upcoming {
-  background: rgba(245, 158, 11, 0.1);
+  background: rgba(201, 138, 43, 0.1);
   color: var(--color-warning);
-  border-color: rgba(245, 158, 11, 0.3);
+  border-color: rgba(201, 138, 43, 0.3);
 }
 
 .command-palette-empty {
@@ -3702,10 +3763,10 @@ body.sidebar-hidden .app-sidebar {
   font-size: 0.7rem;
   font-weight: 700;
   color: var(--accent-primary);
-  background: rgba(56, 189, 248, 0.12);
+  background: rgba(73, 137, 217, 0.12);
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-xs);
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  border: 1px solid rgba(73, 137, 217, 0.3);
 }
 
 .workspace-schedule-container {
@@ -3744,7 +3805,7 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .workspace-table tr.row-selected td {
-  background: rgba(56, 189, 248, 0.1) !important;
+  background: rgba(73, 137, 217, 0.1) !important;
 }
 
 .workspace-table.compact-mode th {
@@ -3785,9 +3846,9 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .type-badge.badge-seg {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  background: rgba(63, 174, 110, 0.15);
+  color: var(--color-success, #3fae6e);
+  border: 1px solid rgba(63, 174, 110, 0.4);
 }
 
 .type-badge.badge-ref {
@@ -3797,9 +3858,9 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .type-badge.badge-alw {
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.4);
+  background: rgba(201, 138, 43, 0.15);
+  color: var(--color-warning, #c98a2b);
+  border: 1px solid rgba(201, 138, 43, 0.4);
 }
 
 .workspace-table .col-input-badge {
@@ -4029,7 +4090,7 @@ body.sidebar-hidden .app-sidebar {
 
 .totals-col-metric.highlight-metric {
   border-color: var(--accent-primary);
-  background: rgba(56, 189, 248, 0.06);
+  background: rgba(73, 137, 217, 0.06);
 }
 
 .totals-col-metric.ref-metric {
@@ -4146,7 +4207,7 @@ body.sidebar-hidden .app-sidebar {
 
   .dim-card.row-selected {
     border-color: var(--accent-primary);
-    background: rgba(56, 189, 248, 0.08);
+    background: rgba(73, 137, 217, 0.08);
   }
 
   .dim-card.row-disabled {
@@ -4881,7 +4942,7 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .multiscale-row.is-current {
-  background-color: rgba(56, 189, 248, 0.08);
+  background-color: rgba(73, 137, 217, 0.08);
   border-left: 3px solid var(--accent-primary);
 }
 
@@ -4923,14 +4984,14 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .multiscale-row.is-current .multiscale-bar-fill {
-  background: linear-gradient(90deg, #38bdf8, #818cf8);
-  box-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
+  background: linear-gradient(90deg, var(--accent-primary, #4989D9), #818cf8);
+  box-shadow: 0 0 6px rgba(73, 137, 217, 0.4);
 }
 
 .badge-current-scale {
-  background: rgba(56, 189, 248, 0.18);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.4);
+  background: rgba(73, 137, 217, 0.18);
+  color: var(--accent-primary, #4989D9);
+  border: 1px solid rgba(73, 137, 217, 0.4);
   font-size: 0.65rem;
   font-weight: 800;
   padding: 2px 6px;
@@ -5043,11 +5104,14 @@ body.sidebar-hidden .app-sidebar {
   padding: 0.25rem 0;
 }
 
+/* The drafting chain is the primary output of this tool — give it real
+   screen area (not a 140px thumbnail). Tall viewport, larger generated SVG,
+   horizontal internal scroll when a long chain needs more room. */
 .chain-svg-viewport {
   width: 100%;
   max-width: 100%;
-  height: auto;
-  min-height: 140px;
+  min-height: 320px;
+  height: 340px;
   display: block;
 }
 
@@ -5058,8 +5122,8 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .chain-selected-inspector {
-  background: rgba(56, 189, 248, 0.08);
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  background: rgba(73, 137, 217, 0.08);
+  border: 1px solid rgba(73, 137, 217, 0.3);
   border-left: 3px solid var(--accent-primary);
   border-radius: var(--radius-sm);
   padding: 0.5rem 0.75rem;
@@ -5141,7 +5205,7 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .chain-row.is-selected {
-  background-color: rgba(56, 189, 248, 0.12);
+  background-color: rgba(73, 137, 217, 0.12);
   border-left: 3px solid var(--accent-primary);
 }
 
@@ -5202,7 +5266,7 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .cad-preset-chip.active {
-  background: var(--accent-primary-dim, rgba(56, 189, 248, 0.15));
+  background: var(--accent-primary-dim, rgba(73, 137, 217, 0.15));
   color: var(--accent-primary);
   border-color: var(--accent-primary);
   font-weight: 700;
@@ -5235,7 +5299,7 @@ body.sidebar-hidden .app-sidebar {
 .cad-preview-textarea:focus {
   outline: none;
   border-color: var(--accent-primary) !important;
-  box-shadow: 0 0 0 2px var(--accent-primary-dim, rgba(56, 189, 248, 0.25));
+  box-shadow: 0 0 0 2px var(--accent-primary-dim, rgba(73, 137, 217, 0.25));
 }
 
 /* ==========================================================================
@@ -5262,14 +5326,14 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .batch-preset-chip.active {
-  background: var(--accent-primary-dim, rgba(56, 189, 248, 0.15));
+  background: var(--accent-primary-dim, rgba(73, 137, 217, 0.15));
   color: var(--accent-primary);
   border-color: var(--accent-primary);
   font-weight: 700;
 }
 
 .batch-row.is-selected td {
-  background: rgba(56, 189, 248, 0.12) !important;
+  background: rgba(73, 137, 217, 0.12) !important;
 }
 
 .batch-row.is-invalid td {
@@ -5608,7 +5672,7 @@ body.sidebar-hidden .app-sidebar {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border-subtle);
-  border-top: 1px solid rgba(56, 189, 248, 0.15);
+  border-top: 1px solid rgba(73, 137, 217, 0.15);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
   position: relative;
   z-index: 90;
@@ -5699,7 +5763,7 @@ body.sidebar-hidden .app-sidebar {
 
 .quick-dim-icon-btn.pinned {
   border-color: var(--accent-primary);
-  background: rgba(56, 189, 248, 0.15);
+  background: rgba(73, 137, 217, 0.15);
   color: var(--accent-primary);
 }
 
@@ -5841,7 +5905,7 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .quick-scale-chip.active {
-  background: rgba(56, 189, 248, 0.15);
+  background: rgba(73, 137, 217, 0.15);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
   font-weight: 700;
@@ -5877,7 +5941,7 @@ body.sidebar-hidden .app-sidebar {
 
 .quick-matrix-cell.selected {
   border-color: var(--accent-primary);
-  background: rgba(56, 189, 248, 0.08);
+  background: rgba(73, 137, 217, 0.08);
 }
 
 .quick-matrix-scale {
@@ -5894,7 +5958,7 @@ body.sidebar-hidden .app-sidebar {
 }
 
 .quick-dim-context-card {
-  background: rgba(56, 189, 248, 0.03);
+  background: rgba(73, 137, 217, 0.03);
   border: 1px dashed var(--border-subtle);
   border-radius: 5px;
   padding: 0.35rem 0.65rem;

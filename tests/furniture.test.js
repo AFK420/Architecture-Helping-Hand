@@ -29,7 +29,7 @@ console.log('🧪 Running tests/furniture.test.js...');
 
 // 1. Database Integrity Checks
 {
-  assert(FURNITURE_DATABASE.length >= 170, `Catalog contains 170+ items (Found: ${FURNITURE_DATABASE.length})`, FURNITURE_DATABASE.length);
+  assert(FURNITURE_DATABASE.length >= 215, `Catalog contains 215+ items (Found: ${FURNITURE_DATABASE.length})`, FURNITURE_DATABASE.length);
 
   let allValid = true;
   for (const item of FURNITURE_DATABASE) {
@@ -39,6 +39,19 @@ console.log('🧪 Running tests/furniture.test.js...');
     }
   }
   assert(allValid, 'All furniture items have valid IDs, names, categories, and positive dimensions');
+}
+
+// 1b. Healthcare / educational / industrial breadth expansion (QA pass pin)
+{
+  const requiredIds = [
+    'waiting-room-chair', 'hospital-bed-icu', 'classroom-desk-single', 'lecture-hall-seat',
+    'library-stack-double', 'lab-bench-island', 'pallet-standard', 'forklift-aisle',
+    'walkin-coldroom', 'goods-lift', 'cleaners-cupboard'
+  ];
+  const present = requiredIds.filter(id => FURNITURE_DATABASE.some(i => i.id === id));
+  assert(present.length === requiredIds.length,
+    'Healthcare / educational / industrial catalog breadth items present',
+    requiredIds.filter(id => !present.includes(id)));
 }
 
 // 2. Scaling Accuracy Tests

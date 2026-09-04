@@ -222,7 +222,52 @@ export const FURNITURE_DATABASE = Object.freeze([
   { id: 'medical-exam-table', name: 'Medical Examination Table (70×190)', category: 'commercial', wCm: 70, dCm: 190, hCm: 80, desc: 'Clinic doctor examination bed with paper roll holder', type: 'table' },
   { id: 'dental-chair', name: 'Dental Operatory Chair & Delivery (90×180)', category: 'commercial', wCm: 90, dCm: 180, hCm: 140, desc: 'Dental patient treatment chair with instrument arm', type: 'chair' },
   { id: 'massage-treatment-table', name: 'Spa / Massage Treatment Table (80×195)', category: 'commercial', wCm: 80, dCm: 195, hCm: 75, desc: 'Physiotherapy & spa massage therapy table', type: 'table' },
-  { id: 'salon-styling-chair', name: 'Hair Salon Hydraulic Chair & Mirror (80×90)', category: 'commercial', wCm: 80, dCm: 90, hCm: 110, desc: 'Styling station swivel chair with floor clearance', type: 'chair_round' }
+  { id: 'salon-styling-chair', name: 'Hair Salon Hydraulic Chair & Mirror (80×90)', category: 'commercial', wCm: 80, dCm: 90, hCm: 110, desc: 'Styling station swivel chair with floor clearance', type: 'chair_round' },
+
+  // =========================================================================
+  // 10. HEALTHCARE, EDUCATIONAL & INSTITUTIONAL (18 Items)
+  // Typical/reference planning dimensions — verify against local guidance.
+  // =========================================================================
+  { id: 'waiting-room-chair', name: 'Waiting Room Beam Seating (4-Seat)', category: 'commercial', wCm: 260, dCm: 65, hCm: 85, desc: 'Typical linked waiting-area bench row unit', type: 'chair' },
+  { id: 'hospital-bed-icu', name: 'ICU Bed with Surround Zone (120×230)', category: 'commercial', wCm: 120, dCm: 230, hCm: 95, desc: 'Critical-care bed allowing staff access both sides', type: 'bed' },
+  { id: 'bedside-screen', name: 'Medical Privacy Screen (3-Panel)', category: 'commercial', wCm: 170, dCm: 20, hCm: 180, desc: 'Foldable ward privacy screening panel', type: 'structure' },
+  { id: 'medication-cart', name: 'Medication / Treatment Trolley (90×55)', category: 'commercial', wCm: 90, dCm: 55, hCm: 95, desc: 'Ward mobile medicine distribution cart', type: 'appliance' },
+  { id: 'wheelchair-parking-bay', name: 'Wheelchair Storage Bay (90×120)', category: 'commercial', wCm: 90, dCm: 120, hCm: 120, desc: 'Typical indoor wheelchair parking footprint', type: 'clearance' },
+  { id: 'classroom-desk-single', name: 'Classroom Single Student Desk (60×45)', category: 'commercial', wCm: 60, dCm: 45, hCm: 73, desc: 'Typical primary/secondary school pupil desk', type: 'table' },
+  { id: 'classroom-desk-double', name: 'Classroom Double Student Desk (120×50)', category: 'commercial', wCm: 120, dCm: 50, hCm: 73, desc: 'Two-student shared school desk footprint', type: 'table' },
+  { id: 'lecture-hall-seat', name: 'Lecture Hall Tip-Up Seat Row (55 deep)', category: 'commercial', wCm: 55, dCm: 55, hCm: 85, desc: 'Per-seat module of tiered lecture seating', type: 'chair_small' },
+  { id: 'teacher-desk', name: 'Teacher / Lecturer Desk (160×80)', category: 'commercial', wCm: 160, dCm: 80, hCm: 75, desc: 'Classroom front teaching desk with storage', type: 'table' },
+  { id: 'whiteboard-wall', name: 'Wall Whiteboard Panel (240×120)', category: 'commercial', wCm: 240, dCm: 10, hCm: 120, desc: 'Classroom wall-mounted writing surface', type: 'window' },
+  { id: 'library-stack-double', name: 'Library Double-Sided Stack (200×60)', category: 'commercial', wCm: 200, dCm: 60, hCm: 180, desc: 'Double-faced book shelving stack run', type: 'storage' },
+  { id: 'library-carrel', name: 'Library Study Carrel (120×75)', category: 'commercial', wCm: 120, dCm: 75, hCm: 120, desc: 'Individual study carrel with side screens', type: 'table' },
+  { id: 'lab-bench-island', name: 'Laboratory Bench Island (300×150)', category: 'commercial', wCm: 300, dCm: 150, hCm: 90, desc: 'Science lab double-sided working island', type: 'counter' },
+  { id: 'fume-hood', name: 'Laboratory Fume Hood (120×90)', category: 'commercial', wCm: 120, dCm: 90, hCm: 250, desc: 'Walk-up chemical fume extraction cabinet', type: 'appliance' },
+  { id: 'kindergarten-cot', name: 'Kindergarten Nap Cot (60×140)', category: 'commercial', wCm: 60, dCm: 140, hCm: 30, desc: 'Stackable preschool rest cot footprint', type: 'bed_small' },
+  { id: 'cafeteria-table-8', name: 'Cafeteria Long Table (8-Seat 240×75)', category: 'commercial', wCm: 240, dCm: 75, hCm: 75, desc: 'Institutional canteen fixed bench table unit', type: 'table' },
+  { id: 'prayer-room-screen', name: 'Multi-Faith Room Screen (160×50)', category: 'commercial', wCm: 160, dCm: 50, hCm: 190, desc: 'Quiet-room partition and ablation screen', type: 'structure' },
+  { id: 'childcare-cubby', name: 'Childcare Cubby Locker Unit (150×40)', category: 'commercial', wCm: 150, dCm: 40, hCm: 110, desc: 'Children coat & bag pigeonhole storage', type: 'storage' },
+
+  // =========================================================================
+  // 11. INDUSTRIAL, STORAGE & SERVICE SPACES (18 Items)
+  // =========================================================================
+  { id: 'pallet-standard', name: 'Standard Euro Pallet (120×80)', category: 'commercial', wCm: 120, dCm: 80, hCm: 15, desc: 'Standard EUR-pallet logistics footprint', type: 'structure' },
+  { id: 'pallet-rack-bay', name: 'Pallet Racking Bay (270×110)', category: 'commercial', wCm: 270, dCm: 110, hCm: 500, desc: 'Typical single warehouse racking bay', type: 'storage' },
+  { id: 'forklift-aisle', name: 'Counterbalance Forklift Aisle (350 wide)', category: 'commercial', wCm: 350, dCm: 110, hCm: 300, desc: 'Minimum counterbalance forklift aisle envelope', type: 'clearance' },
+  { id: 'workbench-heavy', name: 'Heavy-Duty Workbench (200×75)', category: 'commercial', wCm: 200, dCm: 75, hCm: 90, desc: 'Industrial steel workbench with lower shelf', type: 'table' },
+  { id: 'packing-station', name: 'Packing / Dispatch Station (150×80)', category: 'commercial', wCm: 150, dCm: 80, hCm: 95, desc: 'Warehouse parcel packing bench with roll holder', type: 'table' },
+  { id: 'loading-dock', name: 'Loading Dock Door Bay (300×350)', category: 'commercial', wCm: 300, dCm: 350, hCm: 300, desc: 'Typical dock leveler and door opening envelope', type: 'structure' },
+  { id: 'chest-freezer-comm', name: 'Commercial Chest Freezer (200×70)', category: 'commercial', wCm: 200, dCm: 70, hCm: 90, desc: 'Back-of-house commercial chest freezer', type: 'fridge' },
+  { id: 'prep-table-ss', name: 'Stainless Prep Table (180×70)', category: 'commercial', wCm: 180, dCm: 70, hCm: 90, desc: 'Commercial kitchen stainless steel prep table', type: 'counter' },
+  { id: 'walkin-coldroom', name: 'Walk-In Cold Room (300×300)', category: 'commercial', wCm: 300, dCm: 300, hCm: 250, desc: 'Modular insulated cold room footprint', type: 'structure' },
+  { id: 'dishwasher-hood', name: 'Pass-Through Hood Dishwasher (75×75)', category: 'commercial', wCm: 75, dCm: 75, hCm: 150, desc: 'Commercial hood-type dishwashing machine', type: 'appliance' },
+  { id: 'laundry-industrial', name: 'Industrial Washer-Extractor (95×95)', category: 'commercial', wCm: 95, dCm: 95, hCm: 145, desc: 'On-premise laundry heavy washer footprint', type: 'appliance' },
+  { id: 'cleaners-cupboard', name: 'Cleaner’s Cupboard (120×90)', category: 'commercial', wCm: 120, dCm: 90, hCm: 220, desc: 'Janitorial store with mop sink allowance', type: 'storage' },
+  { id: 'server-room-rack-row', name: 'Data Rack Cold-Aisle Containment (600×300)', category: 'commercial', wCm: 600, dCm: 300, hCm: 220, desc: 'Small server room twin rack row envelope', type: 'storage' },
+  { id: 'waste-compound', name: 'Refuse / Waste Compound (300×200)', category: 'commercial', wCm: 300, dCm: 200, hCm: 200, desc: 'External bin store enclosure footprint', type: 'structure' },
+  { id: 'goods-lift', name: 'Goods Elevator Car (200×250)', category: 'commercial', wCm: 200, dCm: 250, hCm: 250, desc: 'Typical 2-tonne goods lift car footprint', type: 'structure' },
+  { id: 'mezz-stair-industrial', name: 'Industrial Mezzanine Stair (100×280)', category: 'commercial', wCm: 100, dCm: 280, hCm: 300, desc: 'Steep-service mezzanine access stair footprint', type: 'stair' },
+  { id: 'fire-hose-cabinet', name: 'Fire Hose / Extinguisher Cabinet (60×30)', category: 'commercial', wCm: 60, dCm: 30, hCm: 80, desc: 'Wall-recessed firefighting equipment cabinet', type: 'structure' },
+  { id: 'ev-charger-wall', name: 'Wall-Mounted EV Charger (40×20)', category: 'commercial', wCm: 40, dCm: 20, hCm: 60, desc: 'Parking bay wall-pedestal charging unit', type: 'appliance' }
 ]);
 
 /**

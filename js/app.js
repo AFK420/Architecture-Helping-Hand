@@ -1142,7 +1142,52 @@ const FURNITURE_DATABASE = Object.freeze([
   { id: 'medical-exam-table', name: 'Medical Examination Table (70×190)', category: 'commercial', wCm: 70, dCm: 190, hCm: 80, desc: 'Clinic doctor examination bed with paper roll holder', type: 'table' },
   { id: 'dental-chair', name: 'Dental Operatory Chair & Delivery (90×180)', category: 'commercial', wCm: 90, dCm: 180, hCm: 140, desc: 'Dental patient treatment chair with instrument arm', type: 'chair' },
   { id: 'massage-treatment-table', name: 'Spa / Massage Treatment Table (80×195)', category: 'commercial', wCm: 80, dCm: 195, hCm: 75, desc: 'Physiotherapy & spa massage therapy table', type: 'table' },
-  { id: 'salon-styling-chair', name: 'Hair Salon Hydraulic Chair & Mirror (80×90)', category: 'commercial', wCm: 80, dCm: 90, hCm: 110, desc: 'Styling station swivel chair with floor clearance', type: 'chair_round' }
+  { id: 'salon-styling-chair', name: 'Hair Salon Hydraulic Chair & Mirror (80×90)', category: 'commercial', wCm: 80, dCm: 90, hCm: 110, desc: 'Styling station swivel chair with floor clearance', type: 'chair_round' },
+
+  // =========================================================================
+  // 10. HEALTHCARE, EDUCATIONAL & INSTITUTIONAL (18 Items)
+  // Typical/reference planning dimensions — verify against local guidance.
+  // =========================================================================
+  { id: 'waiting-room-chair', name: 'Waiting Room Beam Seating (4-Seat)', category: 'commercial', wCm: 260, dCm: 65, hCm: 85, desc: 'Typical linked waiting-area bench row unit', type: 'chair' },
+  { id: 'hospital-bed-icu', name: 'ICU Bed with Surround Zone (120×230)', category: 'commercial', wCm: 120, dCm: 230, hCm: 95, desc: 'Critical-care bed allowing staff access both sides', type: 'bed' },
+  { id: 'bedside-screen', name: 'Medical Privacy Screen (3-Panel)', category: 'commercial', wCm: 170, dCm: 20, hCm: 180, desc: 'Foldable ward privacy screening panel', type: 'structure' },
+  { id: 'medication-cart', name: 'Medication / Treatment Trolley (90×55)', category: 'commercial', wCm: 90, dCm: 55, hCm: 95, desc: 'Ward mobile medicine distribution cart', type: 'appliance' },
+  { id: 'wheelchair-parking-bay', name: 'Wheelchair Storage Bay (90×120)', category: 'commercial', wCm: 90, dCm: 120, hCm: 120, desc: 'Typical indoor wheelchair parking footprint', type: 'clearance' },
+  { id: 'classroom-desk-single', name: 'Classroom Single Student Desk (60×45)', category: 'commercial', wCm: 60, dCm: 45, hCm: 73, desc: 'Typical primary/secondary school pupil desk', type: 'table' },
+  { id: 'classroom-desk-double', name: 'Classroom Double Student Desk (120×50)', category: 'commercial', wCm: 120, dCm: 50, hCm: 73, desc: 'Two-student shared school desk footprint', type: 'table' },
+  { id: 'lecture-hall-seat', name: 'Lecture Hall Tip-Up Seat Row (55 deep)', category: 'commercial', wCm: 55, dCm: 55, hCm: 85, desc: 'Per-seat module of tiered lecture seating', type: 'chair_small' },
+  { id: 'teacher-desk', name: 'Teacher / Lecturer Desk (160×80)', category: 'commercial', wCm: 160, dCm: 80, hCm: 75, desc: 'Classroom front teaching desk with storage', type: 'table' },
+  { id: 'whiteboard-wall', name: 'Wall Whiteboard Panel (240×120)', category: 'commercial', wCm: 240, dCm: 10, hCm: 120, desc: 'Classroom wall-mounted writing surface', type: 'window' },
+  { id: 'library-stack-double', name: 'Library Double-Sided Stack (200×60)', category: 'commercial', wCm: 200, dCm: 60, hCm: 180, desc: 'Double-faced book shelving stack run', type: 'storage' },
+  { id: 'library-carrel', name: 'Library Study Carrel (120×75)', category: 'commercial', wCm: 120, dCm: 75, hCm: 120, desc: 'Individual study carrel with side screens', type: 'table' },
+  { id: 'lab-bench-island', name: 'Laboratory Bench Island (300×150)', category: 'commercial', wCm: 300, dCm: 150, hCm: 90, desc: 'Science lab double-sided working island', type: 'counter' },
+  { id: 'fume-hood', name: 'Laboratory Fume Hood (120×90)', category: 'commercial', wCm: 120, dCm: 90, hCm: 250, desc: 'Walk-up chemical fume extraction cabinet', type: 'appliance' },
+  { id: 'kindergarten-cot', name: 'Kindergarten Nap Cot (60×140)', category: 'commercial', wCm: 60, dCm: 140, hCm: 30, desc: 'Stackable preschool rest cot footprint', type: 'bed_small' },
+  { id: 'cafeteria-table-8', name: 'Cafeteria Long Table (8-Seat 240×75)', category: 'commercial', wCm: 240, dCm: 75, hCm: 75, desc: 'Institutional canteen fixed bench table unit', type: 'table' },
+  { id: 'prayer-room-screen', name: 'Multi-Faith Room Screen (160×50)', category: 'commercial', wCm: 160, dCm: 50, hCm: 190, desc: 'Quiet-room partition and ablation screen', type: 'structure' },
+  { id: 'childcare-cubby', name: 'Childcare Cubby Locker Unit (150×40)', category: 'commercial', wCm: 150, dCm: 40, hCm: 110, desc: 'Children coat & bag pigeonhole storage', type: 'storage' },
+
+  // =========================================================================
+  // 11. INDUSTRIAL, STORAGE & SERVICE SPACES (18 Items)
+  // =========================================================================
+  { id: 'pallet-standard', name: 'Standard Euro Pallet (120×80)', category: 'commercial', wCm: 120, dCm: 80, hCm: 15, desc: 'Standard EUR-pallet logistics footprint', type: 'structure' },
+  { id: 'pallet-rack-bay', name: 'Pallet Racking Bay (270×110)', category: 'commercial', wCm: 270, dCm: 110, hCm: 500, desc: 'Typical single warehouse racking bay', type: 'storage' },
+  { id: 'forklift-aisle', name: 'Counterbalance Forklift Aisle (350 wide)', category: 'commercial', wCm: 350, dCm: 110, hCm: 300, desc: 'Minimum counterbalance forklift aisle envelope', type: 'clearance' },
+  { id: 'workbench-heavy', name: 'Heavy-Duty Workbench (200×75)', category: 'commercial', wCm: 200, dCm: 75, hCm: 90, desc: 'Industrial steel workbench with lower shelf', type: 'table' },
+  { id: 'packing-station', name: 'Packing / Dispatch Station (150×80)', category: 'commercial', wCm: 150, dCm: 80, hCm: 95, desc: 'Warehouse parcel packing bench with roll holder', type: 'table' },
+  { id: 'loading-dock', name: 'Loading Dock Door Bay (300×350)', category: 'commercial', wCm: 300, dCm: 350, hCm: 300, desc: 'Typical dock leveler and door opening envelope', type: 'structure' },
+  { id: 'chest-freezer-comm', name: 'Commercial Chest Freezer (200×70)', category: 'commercial', wCm: 200, dCm: 70, hCm: 90, desc: 'Back-of-house commercial chest freezer', type: 'fridge' },
+  { id: 'prep-table-ss', name: 'Stainless Prep Table (180×70)', category: 'commercial', wCm: 180, dCm: 70, hCm: 90, desc: 'Commercial kitchen stainless steel prep table', type: 'counter' },
+  { id: 'walkin-coldroom', name: 'Walk-In Cold Room (300×300)', category: 'commercial', wCm: 300, dCm: 300, hCm: 250, desc: 'Modular insulated cold room footprint', type: 'structure' },
+  { id: 'dishwasher-hood', name: 'Pass-Through Hood Dishwasher (75×75)', category: 'commercial', wCm: 75, dCm: 75, hCm: 150, desc: 'Commercial hood-type dishwashing machine', type: 'appliance' },
+  { id: 'laundry-industrial', name: 'Industrial Washer-Extractor (95×95)', category: 'commercial', wCm: 95, dCm: 95, hCm: 145, desc: 'On-premise laundry heavy washer footprint', type: 'appliance' },
+  { id: 'cleaners-cupboard', name: 'Cleaner’s Cupboard (120×90)', category: 'commercial', wCm: 120, dCm: 90, hCm: 220, desc: 'Janitorial store with mop sink allowance', type: 'storage' },
+  { id: 'server-room-rack-row', name: 'Data Rack Cold-Aisle Containment (600×300)', category: 'commercial', wCm: 600, dCm: 300, hCm: 220, desc: 'Small server room twin rack row envelope', type: 'storage' },
+  { id: 'waste-compound', name: 'Refuse / Waste Compound (300×200)', category: 'commercial', wCm: 300, dCm: 200, hCm: 200, desc: 'External bin store enclosure footprint', type: 'structure' },
+  { id: 'goods-lift', name: 'Goods Elevator Car (200×250)', category: 'commercial', wCm: 200, dCm: 250, hCm: 250, desc: 'Typical 2-tonne goods lift car footprint', type: 'structure' },
+  { id: 'mezz-stair-industrial', name: 'Industrial Mezzanine Stair (100×280)', category: 'commercial', wCm: 100, dCm: 280, hCm: 300, desc: 'Steep-service mezzanine access stair footprint', type: 'stair' },
+  { id: 'fire-hose-cabinet', name: 'Fire Hose / Extinguisher Cabinet (60×30)', category: 'commercial', wCm: 60, dCm: 30, hCm: 80, desc: 'Wall-recessed firefighting equipment cabinet', type: 'structure' },
+  { id: 'ev-charger-wall', name: 'Wall-Mounted EV Charger (40×20)', category: 'commercial', wCm: 40, dCm: 20, hCm: 60, desc: 'Parking bay wall-pedestal charging unit', type: 'appliance' }
 ]);
 
 /**
@@ -4287,17 +4332,19 @@ function generateChainSVG(calculatedChain, options = {}) {
 
   const {
     selectedSegmentId = null,
-    svgWidth = 860,
-    svgHeight = 180
+    svgWidth = 1000,
+    svgHeight = 340
   } = options;
 
-  const padLeft = 60;
-  const padRight = 60;
+  const padLeft = 70;
+  const padRight = 70;
   const usableWidth = svgWidth - padLeft - padRight;
 
-  const baselineY = 90;
-  const dimLineY = 52;
-  const totalDimLineY = 145;
+  // Vertical layout scales with the taller viewport so labels keep clear
+  // headroom at both the default and enlarged drafting sizes.
+  const baselineY = Math.round(svgHeight * 0.52);
+  const dimLineY = Math.round(svgHeight * 0.30);
+  const totalDimLineY = Math.round(svgHeight * 0.85);
 
   const totalExtent = Math.max(calculatedChain.overallExtentMeters, 0.001);
 
@@ -4319,8 +4366,8 @@ function generateChainSVG(calculatedChain, options = {}) {
   if (calculatedChain.startOffsetMeters > 0) {
     const startOffsetEndX = getX(calculatedChain.startOffsetMeters);
     svgElements.push(`
-      <rect x="${padLeft}" y="${baselineY - 12}" width="${startOffsetEndX - padLeft}" height="24" fill="rgba(245, 158, 11, 0.12)" stroke="#f59e0b" stroke-dasharray="3 3" stroke-width="1" />
-      <text x="${(padLeft + startOffsetEndX) / 2}" y="${baselineY + 4}" font-family="monospace" font-size="9" font-weight="600" fill="#f59e0b" text-anchor="middle">OFFSET: ${calculatedChain.startOffsetFormatted}</text>
+      <rect x="${padLeft}" y="${baselineY - 12}" width="${startOffsetEndX - padLeft}" height="24" fill="rgba(201, 138, 43, 0.14)" stroke="var(--color-warning, #c98a2b)" stroke-dasharray="3 3" stroke-width="1" />
+      <text x="${(padLeft + startOffsetEndX) / 2}" y="${baselineY + 4}" font-family="monospace" font-size="9" font-weight="600" fill="var(--color-warning, #c98a2b)" text-anchor="middle">OFFSET: ${calculatedChain.startOffsetFormatted}</text>
     `);
   }
 
@@ -4363,26 +4410,26 @@ function generateChainSVG(calculatedChain, options = {}) {
     const isAlw = seg.dimensionType === 'allowance';
 
     const strokeColor = isSelected
-      ? '#38bdf8'
+      ? 'var(--accent-primary, #4989D9)'
       : isRef
-      ? '#94a3b8'
+      ? 'var(--text-muted, #76767C)'
       : isAlw
-      ? '#f59e0b'
-      : 'var(--accent-primary, #38bdf8)';
+      ? 'var(--color-warning, #c98a2b)'
+      : 'var(--accent-primary, #4989D9)';
 
     // Highlight background slice if selected
     if (isSelected) {
       svgElements.push(`
-        <rect x="${x1}" y="20" width="${segWidth}" height="110" fill="rgba(56, 189, 248, 0.12)" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 2" rx="4" />
+        <rect x="${x1}" y="${Math.round(svgHeight * 0.10)}" width="${segWidth}" height="${Math.round(svgHeight * 0.78)}" fill="rgba(73, 137, 217, 0.12)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.5" stroke-dasharray="4 2" rx="4" />
       `);
     }
 
     if (isRef) {
       // Reference Dimension (Annotation Pin at coordinate)
       svgElements.push(`
-        <circle cx="${x1}" cy="${baselineY}" r="4" fill="#94a3b8" />
-        <line x1="${x1}" y1="${baselineY - 20}" x2="${x1}" y2="${baselineY + 20}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="2 2" />
-        <text x="${x1}" y="${baselineY + 34}" font-family="monospace" font-size="9" fill="#94a3b8" text-anchor="middle">${seg.name} [REF]</text>
+        <circle cx="${x1}" cy="${baselineY}" r="4" fill="var(--text-muted, #76767C)" />
+        <line x1="${x1}" y1="${baselineY - 20}" x2="${x1}" y2="${baselineY + 20}" stroke="var(--text-muted, #76767C)" stroke-width="1" stroke-dasharray="2 2" />
+        <text x="${x1}" y="${baselineY + 34}" font-family="monospace" font-size="9" fill="var(--text-muted, #76767C)" text-anchor="middle">${seg.name} [REF]</text>
       `);
     } else {
       // Standard or Allowance Dimension Segment
@@ -4428,8 +4475,8 @@ function generateChainSVG(calculatedChain, options = {}) {
 
   // 7. Scale Ratio Stamp Badge (Top Right)
   svgElements.push(`
-    <rect x="${svgWidth - 110}" y="8" width="95" height="20" rx="3" fill="rgba(56, 189, 248, 0.15)" stroke="#38bdf8" stroke-width="1" />
-    <text x="${svgWidth - 62}" y="22" font-family="monospace" font-size="10" font-weight="700" fill="#38bdf8" text-anchor="middle">SCALE 1:${calculatedChain.scaleRatio}</text>
+    <rect x="${svgWidth - 110}" y="8" width="95" height="20" rx="3" fill="rgba(73, 137, 217, 0.15)" stroke="var(--accent-primary, #4989D9)" stroke-width="1" />
+    <text x="${svgWidth - 62}" y="22" font-family="monospace" font-size="10" font-weight="700" fill="var(--accent-primary, #4989D9)" text-anchor="middle">SCALE 1:${calculatedChain.scaleRatio}</text>
   `);
 
   return `
@@ -17474,10 +17521,13 @@ function createChainsView(context) {
 
   function renderChainSVGView(calc) {
     if (!dom.chainsSvgViewportWrapper) return;
+    // Large drafting viewport: taller canvas with more label headroom. The
+    // SVG keeps its aspect via CSS (.chain-svg-viewport) and scales to fill
+    // the wide chain container.
     const svgMarkup = generateChainSVG(calc, {
       selectedSegmentId: state.chainSelectedSegmentId,
-      svgWidth: 860,
-      svgHeight: 180
+      svgWidth: 1000,
+      svgHeight: 340
     });
     dom.chainsSvgViewportWrapper.innerHTML = svgMarkup;
   }
@@ -20985,6 +21035,7 @@ function createProjectsView(context) {
 
 
 
+
 const PLAN_STATE_KEY = 'archiscale_plan_prefs'; // user preferences only
 
 function createPlanView(context) {
@@ -21000,6 +21051,64 @@ function createPlanView(context) {
   let history = createHistory(100);
   let dragState = null; // { mode: 'pan'|'create'|'move', ... }
   let furnitureCatalog = [];
+  let catalogById = new Map(); // catalog id -> item (footprint symbols)
+  let resizeObserver = null;
+
+  /** Keeps svg.width/height synced to the element's real box so the
+   * viewBox always equals the pixel box — pointer mapping then never
+   * drifts (QA bug: clicks landed away from the cursor). */
+  function syncSvgSize() {
+    if (!dom.planSvg) return;
+    const rect = dom.planSvg.getBoundingClientRect();
+    if (rect.width > 10 && rect.height > 10) {
+      svg.width = Math.round(rect.width);
+      svg.height = Math.round(rect.height);
+    }
+  }
+
+  function fitToContent() {
+    const es = entities();
+    if (es.length === 0) {
+      // Sensible default framing: a 12m-wide view centered near origin
+      transform = createViewTransform({ zoom: Math.max(20, Math.min(svg.width / 14, 200)) });
+      transform.offsetX = svg.width / 2 - 6 * transform.zoom;
+      transform.offsetY = svg.height / 2 + 5 * transform.zoom;
+      return;
+    }
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const e of es) {
+      const r = e.kind === 'wall' ? wallRect(e)
+        : { x: e.x, y: e.y, width: e.width ?? 0, depth: e.depth ?? 0 };
+      minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
+      maxX = Math.max(maxX, r.x + r.width); maxY = Math.max(maxY, r.y + r.depth);
+    }
+    const wM = Math.max(maxX - minX, 0.5);
+    const dM = Math.max(maxY - minY, 0.5);
+    const padFactor = 1.25;
+    const zoom = Math.min((svg.width / (wM * padFactor)), (svg.height / (dM * padFactor)));
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    transform = {
+      zoom,
+      offsetX: svg.width / 2 - cx * zoom,
+      offsetY: svg.height / 2 + cy * zoom
+    };
+  }
+
+  function setZoomPercent(targetZoom) {
+    const cx = svg.width / 2;
+    const cy = svg.height / 2;
+    const world = svgToWorld(transform, cx, cy);
+    const zoom = Math.max(4, Math.min(400, targetZoom));
+    transform = { zoom, offsetX: cx - world.x * zoom, offsetY: cy + world.y * zoom };
+    savePrefs();
+    render();
+  }
+
+  /** Zoom in/out by a multiplicative factor around the view center. */
+  function zoomStep(factor) {
+    setZoomPercent(transform.zoom * factor);
+  }
 
   function entities() { return state.plan.entities; }
 
@@ -21029,6 +21138,7 @@ function createPlanView(context) {
   // ------------------------------------------------------------------
   function render() {
     if (!dom.planSvg) return;
+    syncSvgSize();
     dom.planSvg.setAttribute('viewBox', `0 0 ${svg.width} ${svg.height}`);
     const gridLines = buildGrid(transform, svg.width, svg.height, state.plan.grid, 4)
       .map(l => {
@@ -21072,10 +21182,30 @@ function createPlanView(context) {
         const p1 = worldToSvg(transform, e.x, e.y + e.depth);
         const p2 = worldToSvg(transform, e.x + e.width, e.y);
         const labelPos = worldToSvg(transform, e.x + e.width / 2, e.y + e.depth / 2);
+        // Recognizable footprint symbol: reuse the catalog's plan drawing
+        // (same shapes as the Furniture tool) scaled into the footprint box.
+        const item = catalogById.get(e.catalogId);
+        // NOTE: p1.y is the BOTTOM edge (larger SVG y) and p2.y the top, so the
+        // raw difference is negative — Math.abs is required. This was the
+        // historical "furniture renders as a 4px sliver" bug (Math.max kept
+        // the clamp value, shrinking every footprint to a thin strip).
+        const wPx = Math.max(Math.abs(p2.x - p1.x), 4);
+        const hPx = Math.max(Math.abs(p1.y - p2.y), 4);
+        let symbol = '';
+        if (item && wPx > 14 && hPx > 14) {
+          const shapeSvg = getFurniturePlanSVG(item);
+          const shapeRaw = shapeSvg
+            .replace(/<svg[^>]*>/, '')
+            .replace(/<\/svg>/, '');
+          const vbM = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(shapeSvg) || [];
+          symbol = `<svg x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}"
+            viewBox="0 0 ${vbM[1] || 100} ${vbM[2] || 100}" preserveAspectRatio="xMidYMid meet" style="color: var(--color-success,#4ade80); opacity: 0.9; pointer-events: none;">${shapeRaw}</svg>`;
+        }
         return `<g>
-          <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${(p2.x - p1.x).toFixed(1)}" height="${(p1.y - p2.y).toFixed(1)}"
+          <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}"
             fill="rgba(74,222,128,0.10)" stroke="${stroke}" stroke-width="${selected ? 2 : 1.2}" data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>
-          <text x="${labelPos.x.toFixed(1)}" y="${labelPos.y.toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-muted,#889)" font-family="var(--font-family-mono,monospace)">${escapeHtml(e.name)}</text>
+          ${symbol}
+          <text x="${labelPos.x.toFixed(1)}" y="${(p1.y + 12).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-muted,#889)" font-family="var(--font-family-mono,monospace)">${escapeHtml(e.name)}</text>
         </g>`;
       }
       return '';
@@ -21139,6 +21269,10 @@ function createPlanView(context) {
   // Pointer interaction
   // ------------------------------------------------------------------
   function svgPoint(event) {
+    // CRITICAL: the viewBox is kept identical to the element's pixel box
+    // (syncSvgSize on mount + resize), so screen offset == SVG coordinates
+    // and this mapping is exact. Previously the viewBox stayed 800×460 while
+    // the element rendered wider, so every click landed away from the cursor.
     const rect = dom.planSvg.getBoundingClientRect();
     const sx = event.clientX - rect.left;
     const sy = event.clientY - rect.top;
@@ -21147,6 +21281,12 @@ function createPlanView(context) {
 
   function onPointerDown(event) {
     if (event.button !== 0) return;
+    // Middle mouse or space-held drag pans regardless of active tool
+    if (event.button === 1 || isPanHotkey()) {
+      event.preventDefault();
+      dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
+      return;
+    }
     const world = svgPoint(event);
     const snapped = { x: snapToGrid(world.x, state.plan.grid), y: snapToGrid(world.y, state.plan.grid) };
     const tool = state.plan.tool;
@@ -21167,6 +21307,11 @@ function createPlanView(context) {
     } else if (tool === 'furniture') {
       dropFurniture(snapped);
     }
+  }
+
+  let spaceHeld = false;
+  function isPanHotkey() {
+    return spaceHeld;
   }
 
   function onPointerMove(event) {
@@ -21294,6 +21439,7 @@ function createPlanView(context) {
     state.plan.selectedIds = new Set([placed.id]);
     showToast(`${item.name} placed (${placed.width.toFixed(2)} × ${placed.depth.toFixed(2)} m)`);
     AudioService.playTick();
+    render();
   }
 
   function showError(message) {
@@ -21401,12 +21547,42 @@ function createPlanView(context) {
   // ------------------------------------------------------------------
   function populateFurniture() {
     if (!dom.planFurnitureSelect) return;
-    furnitureCatalog = FURNITURE_DATABASE.filter(f => f.wCm && f.dCm).slice(0, 60);
-    dom.planFurnitureSelect.innerHTML = furnitureCatalog.map((item, idx) =>
-      `<option value="${idx}">${escapeHtml(item.name)} (${item.wCm}×${item.dCm} cm)</option>`
-    ).join('');
+    // Full catalog, grouped by category — the plan canvas should offer the
+    // same breadth as the Furniture tool, not a 60-item slice.
+    furnitureCatalog = FURNITURE_DATABASE.filter(f => f.wCm && f.dCm);
+    catalogById = new Map(furnitureCatalog.map(item => [item.id, item]));
+    const byCat = new Map();
+    for (const item of furnitureCatalog) {
+      if (!byCat.has(item.category)) byCat.set(item.category, []);
+      byCat.get(item.category).push(item);
+    }
+    const CAT_LABELS = {
+      living: 'Living Room', bedroom: 'Bedroom', dining: 'Dining', kitchen: 'Kitchen',
+      bathroom: 'Bathroom & Sanitary', office: 'Office', doors: 'Doors & Circulation',
+      outdoor: 'Outdoor & Site', commercial: 'Commercial, Retail & Fitness'
+    };
+    let optHtml = '';
+    for (const [cat, items] of byCat) {
+      optHtml += `<optgroup label="${escapeHtml(CAT_LABELS[cat] || cat)}">`;
+      for (const item of items) {
+        optHtml += `<option value="${item.id}">${escapeHtml(item.name)} (${item.wCm}×${item.dCm} cm)</option>`;
+      }
+      optHtml += '</optgroup>';
+    }
+    dom.planFurnitureSelect.innerHTML = optHtml;
+    // Keep selection stable by catalog id (index-based selection broke when
+    // the filtered list changed between sessions).
+    const savedId = state.plan.furnitureCatalogId;
+    if (savedId && catalogById.has(savedId)) {
+      dom.planFurnitureSelect.value = savedId;
+    } else {
+      dom.planFurnitureSelect.value = furnitureCatalog[0]?.id || '';
+      state.plan.furnitureCatalogId = furnitureCatalog[0]?.id;
+    }
+    state.plan.furnitureIndex = furnitureCatalog.findIndex(f => f.id === dom.planFurnitureSelect.value);
     dom.planFurnitureSelect.addEventListener('change', () => {
-      state.plan.furnitureIndex = parseInt(dom.planFurnitureSelect.value, 10) || 0;
+      state.plan.furnitureCatalogId = dom.planFurnitureSelect.value;
+      state.plan.furnitureIndex = furnitureCatalog.findIndex(f => f.id === dom.planFurnitureSelect.value);
     });
   }
 
@@ -21417,7 +21593,15 @@ function createPlanView(context) {
     if (state.currentMode !== 'plan') return;
     const activeEl = document.activeElement;
     const isInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT' || activeEl.tagName === 'TEXTAREA');
-    if (isInput) return;
+    if (isInput) {
+      if (event.key === ' ' && activeEl.tagName !== 'TEXTAREA') return; // inputs keep native space
+      return;
+    }
+
+    if (event.key === ' ') {
+      spaceHeld = true; // hold space + drag = pan (CAD convention)
+      return;
+    }
 
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
       event.preventDefault();
@@ -21450,6 +21634,10 @@ function createPlanView(context) {
     }
   }
 
+  function onKeyUp(event) {
+    if (event.key === ' ') spaceHeld = false;
+  }
+
   function syncToolVisibility() {
     if (dom.planFurnitureGroup) {
       dom.planFurnitureGroup.style.display = state.plan.tool === 'furniture' ? 'block' : 'none';
@@ -21468,6 +21656,18 @@ function createPlanView(context) {
       populateFurniture();
       syncToolVisibility();
       loadFromProject();
+
+      // Size the SVG to its real element box BEFORE the first render so the
+      // viewBox always matches the pixel box (exact pointer mapping).
+      syncSvgSize();
+      if (dom.planSvg && typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => {
+          const before = { w: svg.width, h: svg.height };
+          syncSvgSize();
+          if (svg.width !== before.w || svg.height !== before.h) render();
+        });
+        resizeObserver.observe(dom.planSvg);
+      }
       render();
 
       if (dom.planSvg) {
@@ -21482,9 +21682,16 @@ function createPlanView(context) {
         }, { passive: false });
       }
       document.addEventListener('keydown', onKeyDown);
+      document.addEventListener('keyup', onKeyUp);
+
+      // First visit this session: frame the view at a useful zoom
+      if (!prefs.zoom && entities().length > 0) fitToContent();
     },
     getController() {
-      return { render, undo, redo, deleteSelected, clearPlan, saveToProject, exportPlan, syncToolVisibility };
+      return {
+        render, undo, redo, deleteSelected, clearPlan, saveToProject, exportPlan,
+        syncToolVisibility, fitToContent, setZoomPercent, zoomStep, syncSvgSize
+      };
     }
   };
 }
@@ -24071,6 +24278,12 @@ function initializeApp() {
     planStatusBadge: document.getElementById('plan-status-badge'),
     planSvg: document.getElementById('plan-svg'),
     planSvgWrap: document.getElementById('plan-svg-wrap'),
+    btnPlanZoomIn: document.getElementById('btn-plan-zoom-in'),
+    btnPlanZoomOut: document.getElementById('btn-plan-zoom-out'),
+    btnPlanFit: document.getElementById('btn-plan-fit'),
+    btnPlanZoom100: document.getElementById('btn-plan-zoom-100'),
+    btnPlanZoom50: document.getElementById('btn-plan-zoom-50'),
+    btnPlanZoom200: document.getElementById('btn-plan-zoom-200'),
     btnPlanSave: document.getElementById('btn-plan-save'),
     btnPlanExportSvg: document.getElementById('btn-plan-export-svg'),
     btnPlanExportDxf: document.getElementById('btn-plan-export-dxf'),
@@ -24307,7 +24520,7 @@ function initializeApp() {
     { id: 'stairs', section: 'Architecture', label: 'Stair Calculator', desc: 'Risers, goings, Blondel proportion, angle', icon: '🪜', keywords: ['stair', 'riser', 'tread', 'going', 'blondel', 'flight'] },
     { id: 'ramps', section: 'Architecture', label: 'Ramp Calculator', desc: 'Accessible ramp geometry and targets', icon: '♿', keywords: ['ramp', 'accessibility', '1:12', 'slope'] },
     { id: 'slopes', section: 'Architecture', label: 'Slope Analyzer', desc: 'General rise/run grading analysis', icon: '📉', keywords: ['slope', 'grade', 'gradient', 'drainage', 'terrain'] },
-    { id: 'furniture', section: 'Space', label: 'Furniture & Clearances', desc: '179 scaled standards with footprints', icon: '🛋️', shortcut: '5', keywords: ['furniture', 'clearance', 'ada', 'sofa', 'bed', 'desk', 'door'] },
+    { id: 'furniture', section: 'Space', label: 'Furniture & Clearances', desc: '215 scaled standards with footprints', icon: '🛋️', shortcut: '5', keywords: ['furniture', 'clearance', 'ada', 'sofa', 'bed', 'desk', 'door'] },
     { id: 'reference', section: 'Space', label: 'Reference Chart', desc: 'Printable scale ruler, benchmarks, tables', icon: '📚', shortcut: '6', keywords: ['reference', 'ruler', 'benchmark', 'print', 'neufert'] },
     { id: 'projects', section: 'Project', label: 'Projects', desc: 'Library, save, duplicates, snapshots', icon: '🗂', keywords: ['project', 'library', 'snapshot', 'save', 'open', 'duplicate'] },
     { id: 'plan', section: 'Project', label: 'Plan Canvas', desc: '2D plan editor: rooms, walls, furniture', icon: '▭', keywords: ['plan', 'canvas', 'room', 'wall', 'draw', 'layout'] },
@@ -24609,6 +24822,27 @@ function initializeApp() {
     // Converter unit selects
     if (dom.converterInputUnit) dom.converterInputUnit.innerHTML = lengthOptions;
     if (dom.converterOutputUnit) dom.converterOutputUnit.innerHTML = lengthOptions;
+
+    // Rescaler + Detector unit selects — these were historically left EMPTY in
+    // the static HTML and never populated, so both dropdowns rendered as blank
+    // boxes that could not be used (QA bug: "both dropdown menus not working").
+    if (dom.rescaleOrigUnit) dom.rescaleOrigUnit.innerHTML = lengthOptions;
+    if (dom.rescaleTargetUnit) dom.rescaleTargetUnit.innerHTML = lengthOptions;
+    if (dom.detectorPaperUnit) dom.detectorPaperUnit.innerHTML = lengthOptions;
+    if (dom.detectorRealUnit) dom.detectorRealUnit.innerHTML = lengthOptions;
+    if (dom.rescaleOrigUnit) dom.rescaleOrigUnit.value = state.rescaleOrigUnit && UNITS[state.rescaleOrigUnit] ? state.rescaleOrigUnit : 'cm';
+    if (dom.rescaleTargetUnit) dom.rescaleTargetUnit.value = state.rescaleTargetUnit && UNITS[state.rescaleTargetUnit] ? state.rescaleTargetUnit : 'cm';
+    if (dom.detectorPaperUnit) dom.detectorPaperUnit.value = state.detectPaperUnit && UNITS[state.detectPaperUnit] ? state.detectPaperUnit : 'cm';
+    if (dom.detectorRealUnit) dom.detectorRealUnit.value = state.detectRealUnit && UNITS[state.detectRealUnit] ? state.detectRealUnit : 'm';
+
+    // Reference Chart scale select — left EMPTY in the static HTML, so the
+    // Reference tool's scale dropdown rendered as a blank unusable box.
+    if (dom.refScaleSelect && dom.refScaleSelect.options.length === 0) {
+      const refRatios = [1, 2, 5, 10, 20, 25, 48, 50, 75, 96, 100, 125, 200, 250, 500, 1000];
+      dom.refScaleSelect.innerHTML = refRatios.map(r =>
+        `<option value="${r}">1:${r}</option>`).join('');
+      dom.refScaleSelect.value = String(state.refScaleRatio || 50);
+    }
 
     // Area & Volume unit selects
     if (dom.areavolInputUnit) {
@@ -28285,6 +28519,24 @@ function initializeApp() {
     if (dom.btnPlanExportDxf) {
       dom.btnPlanExportDxf.addEventListener('click', () => views.callController('plan', 'exportPlan', 'dxf'));
     }
+    if (dom.btnPlanZoomIn) {
+      dom.btnPlanZoomIn.addEventListener('click', () => views.callController('plan', 'zoomStep', 1.3));
+    }
+    if (dom.btnPlanZoomOut) {
+      dom.btnPlanZoomOut.addEventListener('click', () => views.callController('plan', 'zoomStep', 1 / 1.3));
+    }
+    if (dom.btnPlanFit) {
+      dom.btnPlanFit.addEventListener('click', () => views.callController('plan', 'fitToContent'));
+    }
+    if (dom.btnPlanZoom100) {
+      dom.btnPlanZoom100.addEventListener('click', () => views.callController('plan', 'setZoomPercent', 100));
+    }
+    if (dom.btnPlanZoom50) {
+      dom.btnPlanZoom50.addEventListener('click', () => views.callController('plan', 'setZoomPercent', 50));
+    }
+    if (dom.btnPlanZoom200) {
+      dom.btnPlanZoom200.addEventListener('click', () => views.callController('plan', 'setZoomPercent', 200));
+    }
 
     // Mode 20: AI Studio listeners
     if (dom.aiRunBtn) {
@@ -28432,6 +28684,27 @@ function initializeApp() {
       // If user is focused inside an input field, do not hijack letter/number shortcuts
       if (isInputFocused) return;
 
+      // Workspace-specific Ctrl+C: copy selected rows to clipboard (the one
+      // modified shortcut this tool explicitly owns). With no selection,
+      // Ctrl+C falls through to native browser copy.
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')
+          && state.currentMode === 'workspace' && state.workspaceSelectedIds.size > 0) {
+        e.preventDefault();
+        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+          mode: 'selected',
+          selectedIds: Array.from(state.workspaceSelectedIds),
+          groups: state.workspace.groups
+        });
+        copyToClipboard(text, `${state.workspaceSelectedIds.size} Selected Dimensions`);
+        return;
+      }
+
+      // Keyboard safety gate (regression pin: Ctrl+C must stay native copy).
+      // Every shortcut below is a PLAIN key press — any ctrl/meta/alt
+      // combination reaching this point is native browser/OS behavior
+      // (copy, paste, select-all, undo, dev tools) and is NEVER intercepted.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
       // Mode 7 Workspace-specific shortcuts (when not focused in inputs)
       if (state.currentMode === 'workspace') {
         if (e.key === 'n' || e.key === 'N') {
@@ -28466,18 +28739,6 @@ function initializeApp() {
             renderWorkspace();
             AudioService.playTick();
             showToast(`Deleted ${count} selected dimension${count > 1 ? 's' : ''}`);
-            return;
-          }
-        }
-        if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
-          if (state.workspaceSelectedIds.size > 0) {
-            e.preventDefault();
-            const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
-              mode: 'selected',
-              selectedIds: Array.from(state.workspaceSelectedIds),
-              groups: state.workspace.groups
-            });
-            copyToClipboard(text, `${state.workspaceSelectedIds.size} Selected Dimensions`);
             return;
           }
         }
@@ -28642,6 +28903,7 @@ function initializeApp() {
   if (typeof window !== 'undefined') {
     window.__ahhSwitchMode = switchMode;
     window.__ahhState = state;
+    window.__ahhViews = views;
   }
 }
 

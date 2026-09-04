@@ -325,7 +325,7 @@
               <button type="button" class="home-nav-btn" data-mode="ramps"><strong>Ramps</strong><span>Rise, run, 1:X ratio</span></button>
               <button type="button" class="home-nav-btn" data-mode="slopes"><strong>Slopes</strong><span>Grade analysis</span></button>
               <button type="button" class="home-nav-btn" data-mode="workspace"><strong>Dimension Workspace</strong><span>Measurement schedule</span></button>
-              <button type="button" class="home-nav-btn" data-mode="furniture"><strong>Furniture</strong><span>179 standards & clearances</span></button>
+              <button type="button" class="home-nav-btn" data-mode="furniture"><strong>Furniture</strong><span>215 standards & clearances</span></button>
             </div>
           </div>
 
@@ -1013,7 +1013,7 @@
               <button id="clear-furniture-search-btn" class="clear-search-btn" title="Clear search" aria-label="Clear search">✕</button>
             </div>
             <div id="furniture-results-count" class="furniture-count-badge">
-              179 items
+              215 items
             </div>
           </div>
           <div class="furn-search-hint">
@@ -1077,7 +1077,7 @@
 
           <!-- Category Navigation Pills -->
           <div class="furniture-category-nav" id="furn-category-nav">
-            <button class="furn-cat-pill active" data-cat="all">All Standards <span class="furn-cat-count" id="count-all">179</span></button>
+            <button class="furn-cat-pill active" data-cat="all">All Standards <span class="furn-cat-count" id="count-all">215</span></button>
             <button class="furn-cat-pill" data-cat="living">🛋️ Living & Lounge <span class="furn-cat-count" id="count-living">23</span></button>
             <button class="furn-cat-pill" data-cat="bedroom">🛏️ Bedroom & Wardrobe <span class="furn-cat-count" id="count-bedroom">20</span></button>
             <button class="furn-cat-pill" data-cat="dining">🍽️ Dining & Bar <span class="furn-cat-count" id="count-dining">18</span></button>
@@ -1086,7 +1086,7 @@
             <button class="furn-cat-pill" data-cat="office">💼 Office & Workplace <span class="furn-cat-count" id="count-office">22</span></button>
             <button class="furn-cat-pill" data-cat="doors">🚪 Doors & Circulation <span class="furn-cat-count" id="count-doors">22</span></button>
             <button class="furn-cat-pill" data-cat="outdoor">🌳 Outdoor & Site <span class="furn-cat-count" id="count-outdoor">16</span></button>
-            <button class="furn-cat-pill" data-cat="commercial">🏪 Retail & Fitness <span class="furn-cat-count" id="count-commercial">16</span></button>
+            <button class="furn-cat-pill" data-cat="commercial">🏪 Commercial, Retail & Fitness <span class="furn-cat-count" id="count-commercial">52</span></button>
           </div>
         </div>
 
@@ -3659,7 +3659,7 @@
     <!-- MODE 19: PLAN CANVAS                                     -->
     <!-- ======================================================== -->
     <section id="mode-view-plan" class="tool-mode-view" aria-labelledby="heading-plan" hidden>
-      <div class="tool-layout">
+      <div class="tool-layout tool-layout-plan">
         <!-- Left Column: Tools & Entity List -->
         <div class="archi-card main-calc-card">
           <div class="corner-mark top-left"></div>
@@ -3733,8 +3733,9 @@
           </div>
         </div>
 
-        <!-- Right Column: SVG Canvas -->
-        <div class="archi-card result-panel" id="plan-result-panel" data-state="ready">
+        <!-- Right Column: SVG Canvas (large drawing viewport — the plan is
+             the primary work surface and takes the available height) -->
+        <div class="archi-card result-panel plan-canvas-panel" id="plan-result-panel" data-state="ready">
           <div class="corner-mark top-left"></div>
           <div class="corner-mark top-right"></div>
           <div class="corner-mark bottom-left"></div>
@@ -3745,8 +3746,19 @@
             <span id="plan-status-badge" class="unit-system-tag" style="font-size: 0.7rem;">zoom 40 px/m</span>
           </div>
 
-          <div id="plan-svg-wrap" style="margin: 0.75rem 0; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card-header); overflow: hidden; cursor: crosshair;">
-            <svg id="plan-svg" xmlns="http://www.w3.org/2000/svg" width="100%" height="460" role="application" aria-label="Architectural plan canvas — arrow keys pan, plus/minus zoom"></svg>
+          <!-- Zoom / view controls -->
+          <div class="plan-canvas-toolbar" role="toolbar" aria-label="Canvas zoom controls">
+            <button type="button" id="btn-plan-zoom-out" class="result-action-btn plan-zoom-btn" title="Zoom out">−</button>
+            <button type="button" id="btn-plan-zoom-in" class="result-action-btn plan-zoom-btn" title="Zoom in">+</button>
+            <button type="button" id="btn-plan-fit" class="result-action-btn plan-zoom-btn wide" title="Fit plan to view">Fit</button>
+            <button type="button" id="btn-plan-zoom-100" class="result-action-btn plan-zoom-btn wide" title="Zoom to 1:1 (100 px per meter)">100%</button>
+            <button type="button" id="btn-plan-zoom-50" class="result-action-btn plan-zoom-btn wide" title="Zoom to 50 px/m">50%</button>
+            <button type="button" id="btn-plan-zoom-200" class="result-action-btn plan-zoom-btn wide" title="Zoom to 200 px/m">200%</button>
+            <span class="plan-toolbar-hint">scroll = zoom · space+drag or middle-drag = pan</span>
+          </div>
+
+          <div id="plan-svg-wrap" class="plan-svg-wrap" style="cursor: crosshair;">
+            <svg id="plan-svg" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" role="application" aria-label="Architectural plan canvas — scroll zooms, space+drag pans, arrow keys pan, plus/minus zoom"></svg>
           </div>
 
           <div class="result-actions-strip" style="flex-wrap: wrap; gap: 0.5rem;">

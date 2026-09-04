@@ -6,70 +6,95 @@
 
 :root, [data-theme="dark"] {
   /* -------------------------------------------------------------------------
-     1. Background & Panel Levels (Studio Dark - Graphite Workstation)
+     1. Background & Panel Levels (User-Specified Dark Palette)
+     Anchored on the user's chosen values:
+       bg #121214 · boxes #222327 · text #EAEAEC · muted #76767C ·
+       note numbers #4989D9 · danger/action #D32F2F · step #F07A76 ·
+       step-help #29292D. Intermediate surfaces derive from these.
      ------------------------------------------------------------------------- */
-  --bg-app: #080c14;
-  --bg-base: #080c14;
-  --bg-surface: #0f1624;
-  --bg-surface-elevated: #162032;
-  --bg-surface-raised: #1d2b42;
-  --bg-surface-overlay: #1a253a;
-  --bg-surface-translucent: rgba(15, 22, 36, 0.94);
-  
-  --bg-input: #0a0f1a;
-  --bg-input-focus: #111b2c;
-  --bg-chip: #162032;
-  --bg-chip-hover: #223048;
-  --bg-chip-active: #38bdf8;
+  --dark-bg: #121214;
+  --dark-surface: #222327;
+  --dark-text: #EAEAEC;
+  --dark-muted: #76767C;
+  --dark-note-number: #4989D9;
+  --dark-danger: #D32F2F;
+  --dark-step: #F07A76;
+  --dark-step-help: #29292D;
+  --dark-step-help-text: #EAEAEC;
 
-  --panel-bg: #0f1624;
-  --panel-border: #25334a;
-  --panel-header-bg: #141d2e;
+  --bg-app: var(--dark-bg);
+  --bg-base: var(--dark-bg);
+  --bg-surface: #18181b;
+  --bg-surface-elevated: var(--dark-surface);
+  --bg-surface-raised: #29292e;
+  --bg-surface-overlay: #26262b;
+  --bg-surface-translucent: rgba(24, 24, 27, 0.94);
+
+  --bg-input: #1b1b1f;
+  --bg-input-focus: #202024;
+  --bg-chip: var(--dark-surface);
+  --bg-chip-hover: #2e2e34;
+  --bg-chip-active: #4989D9;
+
+  --panel-bg: var(--dark-surface);
+  --panel-border: #34343a;
+  --panel-header-bg: #202024;
 
   /* -------------------------------------------------------------------------
      2. Border Strengths & Separators
      ------------------------------------------------------------------------- */
   --border-hairline: 1px solid rgba(255, 255, 255, 0.08);
-  --border-subtle: #223046;
-  --border-medium: #364864;
-  --border-strong: #5a7398;
-  --border-active: #38bdf8;
+  --border-subtle: #303036;
+  --border-medium: #45454d;
+  --border-strong: #5d5d66;
+  --border-active: #4989D9;
 
   /* -------------------------------------------------------------------------
-     3. Text Hierarchy & Readability (WCAG AAA Slate Palette)
+     3. Text Hierarchy & Readability
+     Primary #EAEAEC; secondary/notes #76767C; numbers inside notes use
+     #4989D9 via --note-number (see .col-notes strong / .note-number).
      ------------------------------------------------------------------------- */
-  --text-primary: #f8fafc;
-  --text-secondary: #cbd5e1;
-  --text-tertiary: #94a3b8;
-  --text-muted: #64748b;
-  --text-inverse: #080c14;
-  --text-accent: #38bdf8;
+  --text-primary: var(--dark-text);
+  --text-secondary: #b9b9bf;
+  --text-tertiary: #96969d;
+  --text-muted: var(--dark-muted);
+  --text-inverse: #121214;
+  --text-accent: #4989D9;
+
+  /* Numbers inside notes (user-specified) */
+  --note-number: var(--dark-note-number);
 
   /* -------------------------------------------------------------------------
-     4. Accent & Semantic Status Colors
+     4. Accent & Semantic Status Colors (danger/action = #D32F2F)
      ------------------------------------------------------------------------- */
-  --accent-primary: #38bdf8;
-  --accent-primary-hover: #0ea5e9;
-  --accent-primary-subtle: rgba(56, 189, 248, 0.16);
-  --accent-primary-border: rgba(56, 189, 248, 0.40);
-  
-  --accent-secondary: #f59e0b;
-  --accent-blueprint: #60a5fa;
-  --accent-success: #10b981;
-  --accent-danger: #f43f5e;
+  --accent-primary: #4989D9;
+  --accent-primary-hover: #5c99e6;
+  --accent-primary-subtle: rgba(73, 137, 217, 0.16);
+  --accent-primary-border: rgba(73, 137, 217, 0.42);
 
-  --color-success: #10b981;
-  --color-success-subtle: rgba(16, 185, 129, 0.14);
-  --color-warning: #f59e0b;
-  --color-warning-subtle: rgba(245, 158, 11, 0.14);
-  --color-error: #f43f5e;
-  --color-error-subtle: rgba(244, 63, 94, 0.14);
+  --accent-secondary: #F07A76;
+  --accent-blueprint: #7aa2ff;
+  --accent-success: #3fae6e;
+  --accent-danger: var(--dark-danger);
+  --accent-action: var(--dark-danger);
+
+  --color-success: #3fae6e;
+  --color-success-subtle: rgba(63, 174, 110, 0.14);
+  --color-warning: #c98a2b;
+  --color-warning-subtle: rgba(201, 138, 43, 0.15);
+  --color-error: var(--dark-danger);
+  --color-error-subtle: rgba(211, 47, 47, 0.15);
+
+  /* Step boxes & explanation boxes (user-specified) */
+  --step-accent: var(--dark-step);
+  --step-help-bg: var(--dark-step-help);
+  --step-help-text: var(--dark-step-help-text);
 
   /* -------------------------------------------------------------------------
      5. CAD Drawing Grid & Technical Overlays
      ------------------------------------------------------------------------- */
-  --grid-line-color: rgba(255, 255, 255, 0.04);
-  --grid-cross-color: rgba(56, 189, 248, 0.28);
+  --grid-line-color: rgba(255, 255, 255, 0.035);
+  --grid-cross-color: rgba(73, 137, 217, 0.26);
 
   /* -------------------------------------------------------------------------
      6. Technical Shadows
@@ -79,7 +104,7 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
   --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.7), 0 4px 10px rgba(0, 0, 0, 0.4);
-  --shadow-focus: 0 0 0 2px rgba(56, 189, 248, 0.5);
+  --shadow-focus: 0 0 0 2px rgba(73, 137, 217, 0.5);
 
   /* -------------------------------------------------------------------------
      7. Spacing Scale (8pt Grid Standard)

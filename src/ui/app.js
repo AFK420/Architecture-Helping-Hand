@@ -1010,6 +1010,12 @@ export function initializeApp() {
     planStatusBadge: document.getElementById('plan-status-badge'),
     planSvg: document.getElementById('plan-svg'),
     planSvgWrap: document.getElementById('plan-svg-wrap'),
+    btnPlanZoomIn: document.getElementById('btn-plan-zoom-in'),
+    btnPlanZoomOut: document.getElementById('btn-plan-zoom-out'),
+    btnPlanFit: document.getElementById('btn-plan-fit'),
+    btnPlanZoom100: document.getElementById('btn-plan-zoom-100'),
+    btnPlanZoom50: document.getElementById('btn-plan-zoom-50'),
+    btnPlanZoom200: document.getElementById('btn-plan-zoom-200'),
     btnPlanSave: document.getElementById('btn-plan-save'),
     btnPlanExportSvg: document.getElementById('btn-plan-export-svg'),
     btnPlanExportDxf: document.getElementById('btn-plan-export-dxf'),
@@ -1246,7 +1252,7 @@ export function initializeApp() {
     { id: 'stairs', section: 'Architecture', label: 'Stair Calculator', desc: 'Risers, goings, Blondel proportion, angle', icon: '🪜', keywords: ['stair', 'riser', 'tread', 'going', 'blondel', 'flight'] },
     { id: 'ramps', section: 'Architecture', label: 'Ramp Calculator', desc: 'Accessible ramp geometry and targets', icon: '♿', keywords: ['ramp', 'accessibility', '1:12', 'slope'] },
     { id: 'slopes', section: 'Architecture', label: 'Slope Analyzer', desc: 'General rise/run grading analysis', icon: '📉', keywords: ['slope', 'grade', 'gradient', 'drainage', 'terrain'] },
-    { id: 'furniture', section: 'Space', label: 'Furniture & Clearances', desc: '179 scaled standards with footprints', icon: '🛋️', shortcut: '5', keywords: ['furniture', 'clearance', 'ada', 'sofa', 'bed', 'desk', 'door'] },
+    { id: 'furniture', section: 'Space', label: 'Furniture & Clearances', desc: '215 scaled standards with footprints', icon: '🛋️', shortcut: '5', keywords: ['furniture', 'clearance', 'ada', 'sofa', 'bed', 'desk', 'door'] },
     { id: 'reference', section: 'Space', label: 'Reference Chart', desc: 'Printable scale ruler, benchmarks, tables', icon: '📚', shortcut: '6', keywords: ['reference', 'ruler', 'benchmark', 'print', 'neufert'] },
     { id: 'projects', section: 'Project', label: 'Projects', desc: 'Library, save, duplicates, snapshots', icon: '🗂', keywords: ['project', 'library', 'snapshot', 'save', 'open', 'duplicate'] },
     { id: 'plan', section: 'Project', label: 'Plan Canvas', desc: '2D plan editor: rooms, walls, furniture', icon: '▭', keywords: ['plan', 'canvas', 'room', 'wall', 'draw', 'layout'] },
@@ -1548,6 +1554,27 @@ export function initializeApp() {
     // Converter unit selects
     if (dom.converterInputUnit) dom.converterInputUnit.innerHTML = lengthOptions;
     if (dom.converterOutputUnit) dom.converterOutputUnit.innerHTML = lengthOptions;
+
+    // Rescaler + Detector unit selects — these were historically left EMPTY in
+    // the static HTML and never populated, so both dropdowns rendered as blank
+    // boxes that could not be used (QA bug: "both dropdown menus not working").
+    if (dom.rescaleOrigUnit) dom.rescaleOrigUnit.innerHTML = lengthOptions;
+    if (dom.rescaleTargetUnit) dom.rescaleTargetUnit.innerHTML = lengthOptions;
+    if (dom.detectorPaperUnit) dom.detectorPaperUnit.innerHTML = lengthOptions;
+    if (dom.detectorRealUnit) dom.detectorRealUnit.innerHTML = lengthOptions;
+    if (dom.rescaleOrigUnit) dom.rescaleOrigUnit.value = state.rescaleOrigUnit && UNITS[state.rescaleOrigUnit] ? state.rescaleOrigUnit : 'cm';
+    if (dom.rescaleTargetUnit) dom.rescaleTargetUnit.value = state.rescaleTargetUnit && UNITS[state.rescaleTargetUnit] ? state.rescaleTargetUnit : 'cm';
+    if (dom.detectorPaperUnit) dom.detectorPaperUnit.value = state.detectPaperUnit && UNITS[state.detectPaperUnit] ? state.detectPaperUnit : 'cm';
+    if (dom.detectorRealUnit) dom.detectorRealUnit.value = state.detectRealUnit && UNITS[state.detectRealUnit] ? state.detectRealUnit : 'm';
+
+    // Reference Chart scale select — left EMPTY in the static HTML, so the
+    // Reference tool's scale dropdown rendered as a blank unusable box.
+    if (dom.refScaleSelect && dom.refScaleSelect.options.length === 0) {
+      const refRatios = [1, 2, 5, 10, 20, 25, 48, 50, 75, 96, 100, 125, 200, 250, 500, 1000];
+      dom.refScaleSelect.innerHTML = refRatios.map(r =>
+        `<option value="${r}">1:${r}</option>`).join('');
+      dom.refScaleSelect.value = String(state.refScaleRatio || 50);
+    }
 
     // Area & Volume unit selects
     if (dom.areavolInputUnit) {
@@ -5224,6 +5251,24 @@ export function initializeApp() {
     if (dom.btnPlanExportDxf) {
       dom.btnPlanExportDxf.addEventListener('click', () => views.callController('plan', 'exportPlan', 'dxf'));
     }
+    if (dom.btnPlanZoomIn) {
+      dom.btnPlanZoomIn.addEventListener('click', () => views.callController('plan', 'zoomStep', 1.3));
+    }
+    if (dom.btnPlanZoomOut) {
+      dom.btnPlanZoomOut.addEventListener('click', () => views.callController('plan', 'zoomStep', 1 / 1.3));
+    }
+    if (dom.btnPlanFit) {
+      dom.btnPlanFit.addEventListener('click', () => views.callController('plan', 'fitToContent'));
+    }
+    if (dom.btnPlanZoom100) {
+      dom.btnPlanZoom100.addEventListener('click', () => views.callController('plan', 'setZoomPercent', 100));
+    }
+    if (dom.btnPlanZoom50) {
+      dom.btnPlanZoom50.addEventListener('click', () => views.callController('plan', 'setZoomPercent', 50));
+    }
+    if (dom.btnPlanZoom200) {
+      dom.btnPlanZoom200.addEventListener('click', () => views.callController('plan', 'setZoomPercent', 200));
+    }
 
     // Mode 20: AI Studio listeners
     if (dom.aiRunBtn) {
@@ -5371,6 +5416,27 @@ export function initializeApp() {
       // If user is focused inside an input field, do not hijack letter/number shortcuts
       if (isInputFocused) return;
 
+      // Workspace-specific Ctrl+C: copy selected rows to clipboard (the one
+      // modified shortcut this tool explicitly owns). With no selection,
+      // Ctrl+C falls through to native browser copy.
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')
+          && state.currentMode === 'workspace' && state.workspaceSelectedIds.size > 0) {
+        e.preventDefault();
+        const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
+          mode: 'selected',
+          selectedIds: Array.from(state.workspaceSelectedIds),
+          groups: state.workspace.groups
+        });
+        copyToClipboard(text, `${state.workspaceSelectedIds.size} Selected Dimensions`);
+        return;
+      }
+
+      // Keyboard safety gate (regression pin: Ctrl+C must stay native copy).
+      // Every shortcut below is a PLAIN key press — any ctrl/meta/alt
+      // combination reaching this point is native browser/OS behavior
+      // (copy, paste, select-all, undo, dev tools) and is NEVER intercepted.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
       // Mode 7 Workspace-specific shortcuts (when not focused in inputs)
       if (state.currentMode === 'workspace') {
         if (e.key === 'n' || e.key === 'N') {
@@ -5405,18 +5471,6 @@ export function initializeApp() {
             renderWorkspace();
             AudioService.playTick();
             showToast(`Deleted ${count} selected dimension${count > 1 ? 's' : ''}`);
-            return;
-          }
-        }
-        if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
-          if (state.workspaceSelectedIds.size > 0) {
-            e.preventDefault();
-            const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
-              mode: 'selected',
-              selectedIds: Array.from(state.workspaceSelectedIds),
-              groups: state.workspace.groups
-            });
-            copyToClipboard(text, `${state.workspaceSelectedIds.size} Selected Dimensions`);
             return;
           }
         }
@@ -5581,5 +5635,6 @@ export function initializeApp() {
   if (typeof window !== 'undefined') {
     window.__ahhSwitchMode = switchMode;
     window.__ahhState = state;
+    window.__ahhViews = views;
   }
 }
