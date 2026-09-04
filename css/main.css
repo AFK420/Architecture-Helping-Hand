@@ -209,6 +209,7 @@ body.sidebar-hidden .app-sidebar {
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  min-height: 42px;
   background: transparent;
   border: none;
   padding: 6px 10px 4px;
