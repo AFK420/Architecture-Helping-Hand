@@ -18,7 +18,7 @@
       "tag": "INPUT",
       "id": "rescale-orig-ratio",
       "cls": "form-input",
-      "left": 70,
+      "left": 72,
       "right": 398
      },
      {
@@ -60,7 +60,7 @@
       "tag": "INPUT",
       "id": "areavol-ratio-input",
       "cls": "form-input",
-      "left": 70,
+      "left": 72,
       "right": 398
      },
      {
