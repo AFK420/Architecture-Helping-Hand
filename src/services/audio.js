@@ -148,5 +148,35 @@ export const AudioService = {
         osc.stop(noteTime + 0.13);
       });
     } catch (e) {}
+  },
+
+  /**
+   * Success arpeggio for completed multi-step actions (AI jobs, imports,
+   * exports, saves). A brighter variant of the copy chime.
+   */
+  playSuccess() {
+    if (!isSoundEnabled) return;
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+
+      const now = ctx.currentTime;
+      [587.33, 739.99, 880.00].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const noteTime = now + (i * 0.06);
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, noteTime);
+        gain.gain.setValueAtTime(0.05, noteTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, noteTime + 0.18);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(noteTime);
+        osc.stop(noteTime + 0.2);
+      });
+    } catch (e) {}
   }
 };
