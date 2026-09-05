@@ -15,7 +15,8 @@
 import {
   createViewTransform, worldToSvg, svgToWorld, zoomAt, panBy,
   buildGrid, snapToGrid, snapRect, pickEntities, wallRect,
-  createHistory, entityAddRemoveCommand, entityMoveCommand
+  createHistory, entityAddRemoveCommand, entityMoveCommand,
+  findSnapPoint, computeAlignmentGuides, computeMeasurement, duplicateEntity
 } from '../../core/plan-canvas.js';
 import {
   createRoom, createWall, createDoor, createWindow,
@@ -45,6 +46,9 @@ export function createPlanView(context) {
   let transform = createViewTransform({});
   let history = createHistory(100);
   let dragState = null; // { mode: 'pan'|'create'|'move', ... }
+  let activeSnap = null; // active snap point indicator { x, y, type, targetEntity }
+  let activeGuides = { guidesX: [], guidesY: [] }; // smart alignment guidelines
+  const GRID_PRESETS = [0.05, 0.1, 0.25, 0.5, 1.0];
   let furnitureCatalog = [];
   let catalogById = new Map(); // catalog id -> item (footprint symbols)
   let resizeObserver = null;
@@ -112,6 +116,7 @@ export function createPlanView(context) {
       StorageService.setItem(PLAN_STATE_KEY, JSON.stringify({
         tool: state.plan.tool,
         grid: state.plan.grid,
+        snap: state.plan.snap !== false,
         zoom: transform.zoom
       }));
     } catch (e) {}
@@ -126,6 +131,280 @@ export function createPlanView(context) {
       }
     } catch (e) {}
     return {};
+  }
+
+  function cycleGrid() {
+    const cur = state.plan.grid || 0.5;
+    let idx = GRID_PRESETS.findIndex(g => Math.abs(g - cur) < 0.001);
+    if (idx === -1) idx = 3;
+    const nextIdx = (idx + 1) % GRID_PRESETS.length;
+    state.plan.grid = GRID_PRESETS[nextIdx];
+    if (dom.planGridSelect) dom.planGridSelect.value = String(state.plan.grid);
+    updateStatusBar();
+    savePrefs();
+    render();
+    showToast(`Grid: ${state.plan.grid}m`);
+    AudioService.playTick();
+  }
+
+  function toggleSnap() {
+    state.plan.snap = state.plan.snap === false ? true : false;
+    updateStatusBar();
+    savePrefs();
+    showToast(`Object & Grid Snap: ${state.plan.snap ? 'ON' : 'OFF'}`);
+    AudioService.playTick();
+  }
+
+  function setTool(newTool) {
+    if (!newTool) return;
+    state.plan.tool = newTool;
+    const palette = dom.planToolPalette || document.getElementById('plan-tool-palette');
+    if (palette) {
+      palette.querySelectorAll('.tool-palette-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tool === newTool);
+      });
+    }
+    if (dom.planToolSelect) dom.planToolSelect.value = newTool;
+    if (dom.planModeLabel) dom.planModeLabel.textContent = newTool.toUpperCase();
+    syncToolVisibility();
+    savePrefs();
+    renderContextualToolbar();
+    showToast(`Tool: ${newTool.charAt(0).toUpperCase() + newTool.slice(1)}`);
+  }
+
+  function duplicateSelected() {
+    const selectedId = Array.from(state.plan.selectedIds || [])[0];
+    if (!selectedId) {
+      showToast('Select an entity to duplicate', 'warning');
+      return;
+    }
+    const original = entities().find(x => x.id === selectedId);
+    if (!original) return;
+    const clone = duplicateEntity(original, { x: 0.5, y: 0.5 });
+    const cmd = entityAddRemoveCommand(entities(), clone, `duplicate ${original.name || original.kind}`);
+    cmd.redo();
+    history.push(cmd);
+    state.plan.selectedIds = new Set([clone.id]);
+    showToast(`Duplicated ${clone.name || clone.kind}`);
+    AudioService.playTick();
+    render();
+  }
+
+  function updateStatusBar(coords) {
+    const statusBar = dom.planStatusBar || document.getElementById('plan-status-bar');
+    if (!statusBar) return;
+
+    const coordsEl = dom.statusCoordsVal || document.getElementById('status-coords-val');
+    if (coordsEl && coords && typeof coords.x === 'number' && isFinite(coords.x)) {
+      coordsEl.textContent = `X: ${coords.x.toFixed(2)}m  Y: ${coords.y.toFixed(2)}m`;
+    }
+
+    const gridEl = dom.statusGridVal || document.getElementById('status-grid-val');
+    if (gridEl) {
+      gridEl.textContent = `${(state.plan.grid || 0.5).toFixed(2)}m`;
+    }
+
+    const snapEl = dom.statusSnapVal || document.getElementById('status-snap-val');
+    const snapBtn = dom.statusSnapBtn || document.getElementById('status-snap-btn');
+    const snapOn = state.plan.snap !== false;
+    if (snapEl) snapEl.textContent = snapOn ? 'ON' : 'OFF';
+    if (snapBtn) snapBtn.classList.toggle('active', snapOn);
+
+    const zoomEl = dom.statusZoomVal || document.getElementById('status-zoom-val');
+    if (zoomEl) zoomEl.textContent = `${transform.zoom.toFixed(0)} px/m`;
+
+    const selEl = dom.statusSelVal || document.getElementById('status-sel-val');
+    if (selEl) {
+      const selCount = state.plan.selectedIds ? state.plan.selectedIds.size : 0;
+      if (selCount === 0) {
+        selEl.textContent = 'None';
+      } else if (selCount === 1) {
+        const selId = Array.from(state.plan.selectedIds)[0];
+        const ent = entities().find(e => e.id === selId);
+        selEl.textContent = ent ? (ent.name || ent.kind) : '1 Item';
+      } else {
+        selEl.textContent = `${selCount} Items`;
+      }
+    }
+  }
+
+  function renderContextualToolbar() {
+    const bar = dom.planContextualToolbar || document.getElementById('plan-contextual-toolbar');
+    if (!bar) return;
+
+    const selCount = state.plan.selectedIds ? state.plan.selectedIds.size : 0;
+    const selectedId = selCount === 1 ? Array.from(state.plan.selectedIds)[0] : null;
+    const sel = selectedId ? entities().find(e => e.id === selectedId) : null;
+
+    if (!sel || selCount === 0) {
+      bar.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <span class="context-tag-badge">READY</span>
+          <span style="font-size: 0.72rem; color: var(--text-muted);">Active: <strong style="color: var(--accent-primary);">${(state.plan.tool || 'select').toUpperCase()}</strong> · Quick Add:</span>
+          <button type="button" class="context-action-btn" id="ctx-quick-room"><span>+ 4×3m Room</span></button>
+          <button type="button" class="context-action-btn" id="ctx-quick-wall"><span>+ 5m Wall</span></button>
+          <button type="button" class="context-action-btn" id="ctx-quick-desk"><span>+ Desk</span></button>
+          <button type="button" class="context-action-btn" id="ctx-quick-stair"><span>+ Stair</span></button>
+        </div>
+      `;
+      bar.querySelector('#ctx-quick-room')?.addEventListener('click', () => {
+        createRoomEntity({ x: 2, y: 2 }, { x: 6, y: 5 });
+      });
+      bar.querySelector('#ctx-quick-wall')?.addEventListener('click', () => {
+        createWallEntity({ x: 2, y: 6 }, { x: 7, y: 6 });
+      });
+      bar.querySelector('#ctx-quick-desk')?.addEventListener('click', () => {
+        dropFurniture({ x: 4, y: 3.5 });
+      });
+      bar.querySelector('#ctx-quick-stair')?.addEventListener('click', () => {
+        createStairEntityFromDrag({ x: 2, y: 7 }, { x: 3.2, y: 10.5 });
+      });
+      return;
+    }
+
+    if (sel.kind === 'room') {
+      bar.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <span class="context-tag-badge" style="background: rgba(73,137,217,0.18); color: var(--note-number, #4989D9); border-color: rgba(73,137,217,0.4);">ROOM</span>
+          <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(sel.name)} (${roomArea(sel).toFixed(1)}m²)</span>
+          <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate (Ctrl+D)</span></button>
+          <button type="button" class="context-action-btn" id="ctx-overlap-btn"><span>✓ Check Overlaps</span></button>
+          <button type="button" class="context-action-btn" id="ctx-ai-room-btn"><span>🤖 AI Review</span></button>
+          <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete (Del)</span></button>
+        </div>
+      `;
+      bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
+      bar.querySelector('#ctx-overlap-btn')?.addEventListener('click', () => {
+        const furn = entities().filter(e => e.kind === 'furniture');
+        const walls = entities().filter(e => e.kind === 'wall');
+        const conflicts = checkOverlaps(furn, [sel], walls);
+        if (conflicts.length === 0) {
+          showToast('✓ No spatial conflicts detected in this room', 'success');
+        } else {
+          showToast(`⚠️ ${conflicts.length} spatial conflict(s) detected`, 'warning');
+        }
+        AudioService.playTick();
+      });
+      bar.querySelector('#ctx-ai-room-btn')?.addEventListener('click', () => {
+        triggerAiCritique('room', { name: sel.name, width: sel.width, depth: sel.depth, area: roomArea(sel) });
+      });
+      bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
+      return;
+    }
+
+    if (sel.kind === 'furniture') {
+      bar.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <span class="context-tag-badge" style="background: rgba(74,222,128,0.15); color: var(--color-success, #4ade80); border-color: rgba(74,222,128,0.35);">FURNITURE</span>
+          <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(sel.name)} (${(sel.width||0).toFixed(2)}×${(sel.depth||0).toFixed(2)}m)</span>
+          <button type="button" class="context-action-btn" id="ctx-rot-btn"><span>↻ Rotate 90°</span></button>
+          <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate (Ctrl+D)</span></button>
+          <button type="button" class="context-action-btn" id="ctx-clearance-btn"><span>📏 Check Clearance</span></button>
+          <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete (Del)</span></button>
+        </div>
+      `;
+      bar.querySelector('#ctx-rot-btn')?.addEventListener('click', () => {
+        const before = JSON.parse(JSON.stringify(sel));
+        sel.rotated = !sel.rotated;
+        const cx = sel.x + sel.width / 2;
+        const cy = sel.y + sel.depth / 2;
+        const oldW = sel.width;
+        sel.width = sel.depth;
+        sel.depth = oldW;
+        sel.x = snapToGrid(cx - sel.width / 2, state.plan.grid);
+        sel.y = snapToGrid(cy - sel.depth / 2, state.plan.grid);
+        const after = JSON.parse(JSON.stringify(sel));
+        history.push({
+          label: `rotate ${sel.name}`,
+          redo() { Object.assign(sel, after); render(); },
+          undo() { Object.assign(sel, before); render(); }
+        });
+        showToast(`Rotated ${sel.name} 90°`);
+        AudioService.playTick();
+        render();
+      });
+      bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
+      bar.querySelector('#ctx-clearance-btn')?.addEventListener('click', () => {
+        const cl = checkClearance(sel, entities().filter(e => e.id !== sel.id), 0.9);
+        if (!cl.clear) {
+          showToast(`Clearance issue: ${cl.issues.map(i => i.reason).join('; ')}`, 'warning');
+        } else {
+          showToast('0.9m circulation clearance verified!', 'success');
+        }
+        AudioService.playTick();
+      });
+      bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
+      return;
+    }
+
+    if (sel.kind === 'wall') {
+      const len = wallLength(sel);
+      bar.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <span class="context-tag-badge">WALL</span>
+          <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(sel.name)} (${len.toFixed(2)}m)</span>
+          <button type="button" class="context-action-btn" id="ctx-wall-door"><span>🚪 + Door</span></button>
+          <button type="button" class="context-action-btn" id="ctx-wall-win"><span>🪟 + Window</span></button>
+          <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate (Ctrl+D)</span></button>
+          <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete (Del)</span></button>
+        </div>
+      `;
+      bar.querySelector('#ctx-wall-door')?.addEventListener('click', () => {
+        try {
+          const door = createDoor({ wallId: sel.id, position: len / 2, width: 0.9 });
+          const cmd = entityAddRemoveCommand(entities(), door, `add door on ${sel.name}`);
+          cmd.redo();
+          history.push(cmd);
+          showToast('Door placed at wall center');
+          AudioService.playTick();
+          render();
+        } catch (e) { showToast(e.message, 'warning'); }
+      });
+      bar.querySelector('#ctx-wall-win')?.addEventListener('click', () => {
+        try {
+          const win = createWindow({ wallId: sel.id, position: Math.max(0.1, len / 2 - 0.6), width: 1.2 });
+          const cmd = entityAddRemoveCommand(entities(), win, `add window on ${sel.name}`);
+          cmd.redo();
+          history.push(cmd);
+          showToast('Window placed at wall center');
+          AudioService.playTick();
+          render();
+        } catch (e) { showToast(e.message, 'warning'); }
+      });
+      bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
+      bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
+      return;
+    }
+
+    if (sel.kind === 'stair' || sel.kind === 'ramp') {
+      const isStair = sel.kind === 'stair';
+      bar.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <span class="context-tag-badge" style="background: rgba(211,47,47,0.15); color: var(--accent-action, #D32F2F);">${isStair ? 'STAIR' : 'RAMP'}</span>
+          <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(sel.name)}</span>
+          <button type="button" class="context-action-btn" id="ctx-edit-calc"><span>⚙️ Edit in ${isStair ? 'Stairs' : 'Ramps'} Calc</span></button>
+          <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate (Ctrl+D)</span></button>
+          <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete (Del)</span></button>
+        </div>
+      `;
+      bar.querySelector('#ctx-edit-calc')?.addEventListener('click', () => {
+        switchMode(isStair ? 'stairs' : 'ramps');
+      });
+      bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
+      bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
+      return;
+    }
+
+    bar.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <span class="context-tag-badge">${selCount > 1 ? 'MULTI-SELECT' : (sel.kind || 'ITEM').toUpperCase()}</span>
+        <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${selCount} selected</span>
+        <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate (Ctrl+D)</span></button>
+        <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete (Del)</span></button>
+      </div>
+    `;
+    bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
+    bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
   }
 
   function escapeHtml(str) {
@@ -405,18 +684,45 @@ export function createPlanView(context) {
     // Rubber-band rectangle / line while creating
     let dragMarkup = '';
     if (dragState && dragState.mode === 'create' && dragState.current) {
-      if (dragState.tool === 'wall' || dragState.tool === 'dimension' || dragState.tool === 'measure') {
+      if (dragState.tool === 'measure') {
+        const a = worldToSvg(transform, dragState.start.x, dragState.start.y);
+        const b = worldToSvg(transform, dragState.current.x, dragState.current.y);
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        const meas = computeMeasurement(dragState.start, dragState.current);
+        const col = 'var(--accent-action, #D32F2F)';
+        dragMarkup = `
+          <g class="measure-indicator" pointer-events="none">
+            <line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${col}" stroke-width="2" stroke-dasharray="4 3"/>
+            <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="4" fill="${col}"/>
+            <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="4" fill="${col}"/>
+            <rect x="${(mid.x - 48).toFixed(1)}" y="${(mid.y - 20).toFixed(1)}" width="96" height="20" rx="3" fill="var(--bg-surface-elevated, #222327)" stroke="${col}" stroke-width="1.2"/>
+            <text x="${mid.x.toFixed(1)}" y="${(mid.y - 6).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="#ffffff" font-weight="700">${meas.distance.toFixed(2)}m · ${meas.angleDeg.toFixed(0)}°</text>
+          </g>`;
+      } else if (dragState.tool === 'wall' || dragState.tool === 'dimension') {
         const a = worldToSvg(transform, dragState.start.x, dragState.start.y);
         const b = worldToSvg(transform, dragState.current.x, dragState.current.y);
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         const dM = Math.hypot(dragState.current.x - dragState.start.x, dragState.current.y - dragState.start.y);
-        const col = dragState.tool === 'measure' ? 'var(--accent-action, #D32F2F)' : 'var(--color-warning, #fbbf24)';
+        const col = 'var(--color-warning, #fbbf24)';
         dragMarkup = `
           <line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${col}" stroke-width="2" stroke-dasharray="5 3"/>
           <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="3.5" fill="${col}"/>
           <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="3.5" fill="${col}"/>
           <rect x="${(mid.x - 30).toFixed(1)}" y="${(mid.y - 18).toFixed(1)}" width="60" height="18" rx="3" fill="var(--bg-surface-raised, #29292e)" stroke="${col}" stroke-width="1"/>
           <text x="${mid.x.toFixed(1)}" y="${(mid.y - 5).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" fill="#ffffff" font-weight="700">${dM.toFixed(2)}m</text>`;
+      } else if (dragState.tool === 'room') {
+        const a = worldToSvg(transform, Math.min(dragState.start.x, dragState.current.x), Math.max(dragState.start.y, dragState.current.y));
+        const b = worldToSvg(transform, Math.max(dragState.start.x, dragState.current.x), Math.min(dragState.start.y, dragState.current.y));
+        const rw = Math.abs(dragState.current.x - dragState.start.x);
+        const rd = Math.abs(dragState.current.y - dragState.start.y);
+        const area = rw * rd;
+        const midX = (a.x + b.x) / 2;
+        const midY = (a.y + b.y) / 2;
+        dragMarkup = `
+          <rect x="${a.x.toFixed(1)}" y="${a.y.toFixed(1)}" width="${(b.x - a.x).toFixed(1)}" height="${(a.y - b.y).toFixed(1)}"
+            fill="rgba(73,137,217,0.12)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.8" stroke-dasharray="5 3"/>
+          <rect x="${(midX - 35).toFixed(1)}" y="${(midY - 10).toFixed(1)}" width="70" height="18" rx="3" fill="var(--bg-surface-elevated, #222327)" stroke="var(--accent-primary, #4989D9)" stroke-width="0.8"/>
+          <text x="${midX.toFixed(1)}" y="${(midY + 3).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="var(--text-primary, #EAEAEC)">${rw.toFixed(2)}×${rd.toFixed(2)}m · ${area.toFixed(1)}m²</text>`;
       } else if (dragState.tool === 'stair' || dragState.tool === 'ramp') {
         const a = worldToSvg(transform, Math.min(dragState.start.x, dragState.current.x), Math.max(dragState.start.y, dragState.current.y));
         const b = worldToSvg(transform, Math.max(dragState.start.x, dragState.current.x), Math.min(dragState.start.y, dragState.current.y));
@@ -431,17 +737,48 @@ export function createPlanView(context) {
       }
     }
 
+    let guidesMarkup = '';
+    if (activeGuides && activeGuides.guidesX && activeGuides.guidesX.length > 0) {
+      guidesMarkup += activeGuides.guidesX.map(x => {
+        const p = worldToSvg(transform, x, 0);
+        return `<line x1="${p.x.toFixed(1)}" y1="0" x2="${p.x.toFixed(1)}" y2="${svg.height}" stroke="var(--cyan-glow, #38bdf8)" stroke-width="1.2" stroke-dasharray="4 3" class="smart-guide-line" opacity="0.85"/>`;
+      }).join('');
+    }
+    if (activeGuides && activeGuides.guidesY && activeGuides.guidesY.length > 0) {
+      guidesMarkup += activeGuides.guidesY.map(y => {
+        const p = worldToSvg(transform, 0, y);
+        return `<line x1="0" y1="${p.y.toFixed(1)}" x2="${svg.width}" y2="${p.y.toFixed(1)}" stroke="var(--cyan-glow, #38bdf8)" stroke-width="1.2" stroke-dasharray="4 3" class="smart-guide-line" opacity="0.85"/>`;
+      }).join('');
+    }
+
+    let snapMarkup = '';
+    if (activeSnap && activeSnap.snapped && activeSnap.type !== 'grid' && activeSnap.type !== 'none') {
+      const sp = worldToSvg(transform, activeSnap.x, activeSnap.y);
+      const snapCol = activeSnap.type === 'corner' ? 'var(--cyan-glow, #38bdf8)' : activeSnap.type === 'midpoint' ? 'var(--color-warning, #fbbf24)' : 'var(--color-success, #4ade80)';
+      snapMarkup = `
+        <g class="smart-snap-point" pointer-events="none">
+          <circle cx="${sp.x.toFixed(1)}" cy="${sp.y.toFixed(1)}" r="5" fill="none" stroke="${snapCol}" stroke-width="2"/>
+          <line x1="${(sp.x - 7).toFixed(1)}" y1="${sp.y.toFixed(1)}" x2="${(sp.x + 7).toFixed(1)}" y2="${sp.y.toFixed(1)}" stroke="${snapCol}" stroke-width="1.2"/>
+          <line x1="${sp.x.toFixed(1)}" y1="${(sp.y - 7).toFixed(1)}" x2="${(sp.x + 7).toFixed(1)}" y2="${(sp.y + 7).toFixed(1)}" stroke="${snapCol}" stroke-width="1.2"/>
+          <text x="${(sp.x + 8).toFixed(1)}" y="${(sp.y - 6).toFixed(1)}" fill="${snapCol}" font-size="9" font-family="var(--font-mono)" font-weight="700">${activeSnap.type.toUpperCase()}</text>
+        </g>`;
+    }
+
     dom.planSvg.innerHTML = `
       <g class="plan-grid">${gridLines}</g>
       <g class="plan-entities">${entityMarkup}</g>
+      ${guidesMarkup}
       ${renderHandles()}
-      ${dragMarkup}`;
+      ${dragMarkup}
+      ${snapMarkup}`;
 
     if (dom.planStatusBadge) {
       dom.planStatusBadge.textContent = `zoom ${transform.zoom.toFixed(0)} px/m · ${entities().length} entities`;
     }
     renderEntityList();
     renderPropertiesInspector();
+    renderContextualToolbar();
+    updateStatusBar();
   }
 
   function renderEntityList() {
@@ -1293,7 +1630,8 @@ export function createPlanView(context) {
       return;
     }
     const world = svgPoint(event);
-    const snapped = { x: snapToGrid(world.x, state.plan.grid), y: snapToGrid(world.y, state.plan.grid) };
+    const snapOn = state.plan.snap !== false;
+    let initialPt = { x: snapToGrid(world.x, state.plan.grid), y: snapToGrid(world.y, state.plan.grid) };
     const tool = state.plan.tool;
 
     // 1. Check for handle hit (resize / rotate)
@@ -1308,8 +1646,8 @@ export function createPlanView(context) {
           handle,
           entity,
           initial: JSON.parse(JSON.stringify(entity)),
-          startWorld: snapped,
-          lastWorld: snapped
+          startWorld: initialPt,
+          lastWorld: initialPt
         };
         event.preventDefault();
         event.stopPropagation();
@@ -1328,20 +1666,28 @@ export function createPlanView(context) {
       if (hitId) {
         state.plan.selectedIds = new Set([hitId]);
         const e = entities().find(x => x.id === hitId);
-        dragState = { mode: 'move', entity: e, start: snapped, last: snapped, initial: JSON.parse(JSON.stringify(e)) };
+        dragState = { mode: 'move', entity: e, start: initialPt, last: initialPt, initial: JSON.parse(JSON.stringify(e)) };
       } else {
         state.plan.selectedIds = new Set();
         dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
       }
       render();
     } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'measure') {
-      dragState = { mode: 'create', tool, start: snapped, current: snapped };
+      if (snapOn) {
+        const snapRes = findSnapPoint(world, entities(), { threshold: 0.35, snapGrid: true, gridSize: state.plan.grid });
+        if (snapRes.snapped) {
+          initialPt = { x: snapRes.x, y: snapRes.y };
+          activeSnap = snapRes;
+        }
+      }
+      dragState = { mode: 'create', tool, start: initialPt, current: initialPt };
+      render();
     } else if (tool === 'furniture') {
-      dropFurniture(snapped);
+      dropFurniture(initialPt);
     } else if (tool === 'door' || tool === 'window') {
       placeOpening(world, tool);
     } else if (tool === 'text') {
-      placeTextAnnotation(snapped);
+      placeTextAnnotation(initialPt);
     }
   }
 
@@ -1351,6 +1697,8 @@ export function createPlanView(context) {
   }
 
   function onPointerMove(event) {
+    const world = svgPoint(event);
+    updateStatusBar(world);
     if (!dragState) return;
     if (dragState.mode === 'pan') {
       const dx = event.clientX - dragState.startClient.x;
@@ -1359,7 +1707,7 @@ export function createPlanView(context) {
       render();
       return;
     }
-    const world = svgPoint(event);
+    const snapOn = state.plan.snap !== false;
     const snapped = { x: snapToGrid(world.x, state.plan.grid), y: snapToGrid(world.y, state.plan.grid) };
 
     if (dragState.mode === 'resize' && dragState.entity) {
@@ -1432,12 +1780,33 @@ export function createPlanView(context) {
     }
 
     if (dragState.mode === 'create') {
-      dragState.current = snapped;
-      if (dragState.tool === 'measure') {
-        const d = Math.hypot(snapped.x - dragState.start.x, snapped.y - dragState.start.y);
-        if (dom.planStatusBadge) {
-          dom.planStatusBadge.textContent = `Measure: ${d.toFixed(2)} m (${(d * 100).toFixed(0)} cm)`;
+      let targetPt = snapped;
+      if (snapOn) {
+        const snapRes = findSnapPoint(world, entities(), { threshold: 0.35, snapGrid: true, gridSize: state.plan.grid });
+        if (snapRes.snapped) {
+          targetPt = { x: snapRes.x, y: snapRes.y };
+          activeSnap = snapRes;
+        } else {
+          activeSnap = null;
         }
+      } else {
+        activeSnap = null;
+      }
+      dragState.current = targetPt;
+
+      if (dragState.tool === 'measure') {
+        const m = computeMeasurement(dragState.start, dragState.current);
+        if (dom.planStatusBadge) {
+          dom.planStatusBadge.textContent = m.formatted;
+        }
+      } else if (dragState.tool === 'room') {
+        const curRect = {
+          x: Math.min(dragState.start.x, targetPt.x),
+          y: Math.min(dragState.start.y, targetPt.y),
+          width: Math.abs(targetPt.x - dragState.start.x),
+          depth: Math.abs(targetPt.y - dragState.start.y)
+        };
+        activeGuides = computeAlignmentGuides(curRect, entities(), 0.15);
       }
       render();
     } else if (dragState.mode === 'move' && dragState.entity) {
@@ -1456,6 +1825,13 @@ export function createPlanView(context) {
         } else {
           dragState.entity.x += dx;
           dragState.entity.y += dy;
+          if (snapOn) {
+            activeGuides = computeAlignmentGuides(
+              { x: dragState.entity.x, y: dragState.entity.y, width: dragState.entity.width || 0, depth: dragState.entity.depth || 0 },
+              entities().filter(e => e.id !== dragState.entity.id),
+              0.15
+            );
+          }
         }
         dragState.last = snapped;
         render();
@@ -1465,6 +1841,9 @@ export function createPlanView(context) {
 
   function onPointerUp(event) {
     if (!dragState) return;
+    activeSnap = null;
+    activeGuides = { guidesX: [], guidesY: [] };
+
     if (dragState.mode === 'resize' && dragState.entity) {
       const e = dragState.entity;
       const init = dragState.initial;
@@ -1508,7 +1887,7 @@ export function createPlanView(context) {
       }
     } else if (dragState.mode === 'create') {
       const start = dragState.start;
-      const end = { x: snapToGrid(svgPoint(event).x, state.plan.grid), y: snapToGrid(svgPoint(event).y, state.plan.grid) };
+      const end = dragState.current;
       if (dragState.tool === 'room') {
         createRoomEntity(start, end);
       } else if (dragState.tool === 'wall') {
@@ -1520,8 +1899,8 @@ export function createPlanView(context) {
       } else if (dragState.tool === 'dimension') {
         createDimensionEntity(start, end);
       } else if (dragState.tool === 'measure') {
-        const d = Math.hypot(end.x - start.x, end.y - start.y);
-        showToast(`Measured: ${d.toFixed(3)} m (${(d * 100).toFixed(1)} cm / ${(d * 1000).toFixed(0)} mm)`);
+        const m = computeMeasurement(start, end);
+        showToast(`Measured: ${m.formatted}`);
         AudioService.playTick();
       }
     } else if (dragState.mode === 'move' && dragState.entity) {
@@ -1904,17 +2283,26 @@ export function createPlanView(context) {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
       event.preventDefault();
       undo();
+      return;
     } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
       event.preventDefault();
       redo();
+      return;
+    } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd') {
+      event.preventDefault();
+      duplicateSelected();
+      return;
     } else if (event.key === 'Delete' || event.key === 'Backspace') {
       if (state.plan.selectedIds.size > 0) {
         event.preventDefault();
         deleteSelected();
       }
+      return;
     } else if (event.key === 'Escape') {
       state.plan.selectedIds = new Set();
+      setTool('select');
       render();
+      return;
     } else if (event.key.startsWith('Arrow')) {
       event.preventDefault();
       const step = event.shiftKey ? 40 : 10;
@@ -1923,12 +2311,32 @@ export function createPlanView(context) {
       else if (event.key === 'ArrowUp') transform = panBy(transform, 0, step);
       else transform = panBy(transform, 0, -step);
       render();
+      return;
     } else if (event.key === '+' || event.key === '=') {
       transform = zoomAt(transform, 1.25, svg.width / 2, svg.height / 2);
       render();
+      return;
     } else if (event.key === '-') {
       transform = zoomAt(transform, 0.8, svg.width / 2, svg.height / 2);
       render();
+      return;
+    }
+
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+    const k = event.key.toLowerCase();
+    if (k === 'v') { event.preventDefault(); setTool('select'); }
+    else if (k === 'r') { event.preventDefault(); setTool('room'); }
+    else if (k === 'w') { event.preventDefault(); setTool('wall'); }
+    else if (k === 'f') { event.preventDefault(); setTool('furniture'); }
+    else if (k === 'm') { event.preventDefault(); setTool('measure'); }
+    else if (k === 'd') { event.preventDefault(); setTool('dimension'); }
+    else if (k === 'g') { event.preventDefault(); cycleGrid(); }
+    else if (k === 's') { event.preventDefault(); toggleSnap(); }
+    else if (event.key === '?') {
+      event.preventDefault();
+      dom.shortcutsModal?.classList.add('open');
+      dom.modalBackdrop?.classList.add('open');
     }
   }
 
@@ -1948,12 +2356,38 @@ export function createPlanView(context) {
       const prefs = loadPrefs();
       if (prefs.tool) state.plan.tool = prefs.tool;
       if (prefs.grid) state.plan.grid = prefs.grid;
+      if (typeof prefs.snap === 'boolean') state.plan.snap = prefs.snap;
+      else if (state.plan.snap === undefined) state.plan.snap = true;
       if (prefs.zoom) transform.zoom = prefs.zoom;
       if (dom.planToolSelect) dom.planToolSelect.value = state.plan.tool;
       if (dom.planGridSelect) dom.planGridSelect.value = String(state.plan.grid);
       populateFurniture();
       syncToolVisibility();
       loadFromProject();
+
+      // Tool palette buttons
+      const palette = dom.planToolPalette || document.getElementById('plan-tool-palette');
+      if (palette) {
+        palette.addEventListener('click', (e) => {
+          const btn = e.target.closest('.tool-palette-btn');
+          if (btn && btn.dataset.tool) {
+            setTool(btn.dataset.tool);
+          }
+        });
+        palette.querySelectorAll('.tool-palette-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.tool === state.plan.tool);
+        });
+      }
+
+      // Status bar buttons
+      const gridBtn = dom.statusGridBtn || document.getElementById('status-grid-btn');
+      if (gridBtn) {
+        gridBtn.addEventListener('click', () => cycleGrid());
+      }
+      const snapBtn = dom.statusSnapBtn || document.getElementById('status-snap-btn');
+      if (snapBtn) {
+        snapBtn.addEventListener('click', () => toggleSnap());
+      }
 
       // Size the SVG to its real element box BEFORE the first render so the
       // viewBox always matches the pixel box (exact pointer mapping).
@@ -1970,6 +2404,10 @@ export function createPlanView(context) {
 
       if (dom.planSvg) {
         dom.planSvg.addEventListener('pointerdown', onPointerDown);
+        dom.planSvg.addEventListener('pointermove', (e) => {
+          const world = svgPoint(e);
+          updateStatusBar(world);
+        });
         window.addEventListener('pointermove', onPointerMove);
         window.addEventListener('pointerup', onPointerUp);
         dom.planSvg.addEventListener('wheel', (e) => {
@@ -1990,7 +2428,8 @@ export function createPlanView(context) {
       return {
         render, undo, redo, deleteSelected, clearPlan, saveToProject, exportPlan,
         syncToolVisibility, fitToContent, setZoomPercent, zoomStep, syncSvgSize,
-        triggerAiCritique
+        triggerAiCritique, setTool, cycleGrid, toggleSnap, duplicateSelected,
+        renderContextualToolbar, updateStatusBar
       };
     }
   };

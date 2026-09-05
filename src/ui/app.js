@@ -395,6 +395,7 @@ export function initializeApp() {
     plan: {
       tool: 'select',
       grid: 0.5,
+      snap: true,
       selectedIds: new Set(),
       furnitureIndex: 0,
       furnitureRotated: false,
@@ -1047,6 +1048,18 @@ export function initializeApp() {
     planPropTypeBadge: document.getElementById('plan-prop-type-badge'),
     planEntitiesCount: document.getElementById('plan-entities-count'),
     planModeLabel: document.getElementById('plan-mode-label'),
+    planToolPalette: document.getElementById('plan-tool-palette'),
+    planContextualToolbar: document.getElementById('plan-contextual-toolbar'),
+    planStatusBar: document.getElementById('plan-status-bar'),
+    statusGridBtn: document.getElementById('status-grid-btn'),
+    statusGridVal: document.getElementById('status-grid-val'),
+    statusSnapBtn: document.getElementById('status-snap-btn'),
+    statusSnapVal: document.getElementById('status-snap-val'),
+    statusZoomVal: document.getElementById('status-zoom-val'),
+    statusCoordsVal: document.getElementById('status-coords-val'),
+    statusSelVal: document.getElementById('status-sel-val'),
+    statusAiBadge: document.getElementById('status-ai-badge'),
+    shortcutsSearchInput: document.getElementById('shortcuts-search-input'),
 
     // Mode 20: AI Studio Elements
     aiJobSelect: document.getElementById('ai-job-select'),
@@ -3405,7 +3418,24 @@ export function initializeApp() {
       dom.shortcutsHelpBtn.addEventListener('click', () => {
         dom.shortcutsModal?.classList.add('open');
         dom.modalBackdrop?.classList.add('open');
+        if (dom.shortcutsSearchInput) {
+          dom.shortcutsSearchInput.value = '';
+          dom.shortcutsModal?.querySelectorAll('.shortcut-row').forEach(r => r.style.display = 'flex');
+          setTimeout(() => dom.shortcutsSearchInput.focus(), 60);
+        }
         AudioService.playTick();
+      });
+    }
+
+    if (dom.shortcutsSearchInput) {
+      dom.shortcutsSearchInput.addEventListener('input', (e) => {
+        const q = (e.target.value || '').toLowerCase().trim();
+        const rows = dom.shortcutsModal?.querySelectorAll('.shortcut-row');
+        if (!rows) return;
+        rows.forEach(row => {
+          const text = row.textContent.toLowerCase();
+          row.style.display = (!q || text.includes(q)) ? 'flex' : 'none';
+        });
       });
     }
 
@@ -5432,8 +5462,7 @@ export function initializeApp() {
     // Mode 19: Plan Canvas Listeners
     if (dom.planToolSelect) {
       dom.planToolSelect.addEventListener('change', () => {
-        state.plan.tool = dom.planToolSelect.value;
-        views.callController('plan', 'syncToolVisibility');
+        views.callController('plan', 'setTool', dom.planToolSelect.value);
       });
     }
     if (dom.planGridSelect) {
@@ -5727,12 +5756,21 @@ export function initializeApp() {
       else if (e.key === 'c' || e.key === 'C') { e.preventDefault(); switchMode('cad_clipboard'); }
       else if (e.key === 'b' || e.key === 'B') { e.preventDefault(); switchMode('batch_cad'); }
       else if (e.key === 'q' || e.key === 'Q') { e.preventDefault(); views.callController('quick_dimension', 'toggleQuickDimension'); }
-      else if (e.key === 's' || e.key === 'S') { e.preventDefault(); views.callController('converter', 'swapDirection'); }
+      else if (e.key === 's' || e.key === 'S') {
+        if (state.currentMode === 'plan') return;
+        e.preventDefault();
+        views.callController('converter', 'swapDirection');
+      }
       else if (e.key === 'h' || e.key === 'H') { e.preventDefault(); views.callController('history', 'toggleHistoryDrawer'); }
       else if (e.key === '?') {
         e.preventDefault();
         dom.shortcutsModal?.classList.add('open');
         dom.modalBackdrop?.classList.add('open');
+        if (dom.shortcutsSearchInput) {
+          dom.shortcutsSearchInput.value = '';
+          dom.shortcutsModal?.querySelectorAll('.shortcut-row').forEach(r => r.style.display = 'flex');
+          setTimeout(() => dom.shortcutsSearchInput.focus(), 60);
+        }
       }
     });
   }

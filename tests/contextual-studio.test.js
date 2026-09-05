@@ -10,7 +10,14 @@ import {
   createRoom,
   createFurnitureEntity
 } from '../src/core/entities.js';
-import { planToExportGeometry, generatePlanSVG } from '../src/core/plan-canvas.js';
+import {
+  planToExportGeometry,
+  generatePlanSVG,
+  findSnapPoint,
+  computeAlignmentGuides,
+  computeMeasurement,
+  duplicateEntity
+} from '../src/core/plan-canvas.js';
 import { buildDXF } from '../src/core/export/export-model.js';
 import { createProject, validateProject, normalizeProject } from '../src/core/project.js';
 import { parseNaturalLanguageCommand } from '../src/services/commands.js';
@@ -196,6 +203,51 @@ console.log('--- 4. Contextual Space Planning & Clearance Verification ---');
 
   const clearance = checkClearance(bed, room, 0.6);
   assert(typeof clearance.satisfied === 'boolean', 'CheckClearance produces boolean satisfied status');
+}
+
+console.log('--- 5. Workstation Snapping, Smart Guides, Measurement & Duplication ---');
+{
+  const roomA = createRoom({ name: 'Living', x: 2.0, y: 3.0, width: 4.0, depth: 5.0 });
+  const roomB = createRoom({ name: 'Dining', x: 6.0, y: 3.0, width: 3.0, depth: 4.0 });
+  const entities = [roomA, roomB];
+
+  // 5a. Object corner snap: point near roomA's top-right corner (6.0, 8.0)
+  const snapCorner = findSnapPoint({ x: 6.05, y: 7.95 }, entities, { snapDistance: 0.2 });
+  assertEqual(snapCorner.snapped, true, 'Snap detects nearby room corner');
+  assertEqual(snapCorner.type, 'corner', 'Snap type is "corner"');
+  assertEqual(snapCorner.x, 6.0, 'Corner x snapped exactly to 6.0');
+  assertEqual(snapCorner.y, 8.0, 'Corner y snapped exactly to 8.0');
+
+  // 5b. Grid snap fallback
+  const snapGrid = findSnapPoint({ x: 1.23, y: 4.48 }, entities, { snapDistance: 0.1, gridMeters: 0.5 });
+  assertEqual(snapGrid.snapped, true, 'Falls back to grid snap');
+  assertEqual(snapGrid.type, 'grid', 'Snap type is "grid"');
+  assertEqual(snapGrid.x, 1.0, 'Grid x snapped to 1.0m');
+  assertEqual(snapGrid.y, 4.5, 'Grid y snapped to 4.5m');
+
+  // 5c. Alignment guides: dragging an entity that aligns with roomA
+  const dragged = { x: 2.02, y: 10.0, width: 3.0, depth: 2.0 };
+  const guides = computeAlignmentGuides(dragged, entities, { threshold: 0.05 });
+  assert(guides.guidesX.length > 0, 'Generates x-axis alignment guide for left edge');
+  assertEqual(guides.guidesX[0].x, 2.0, 'Guide x matches target left coordinate 2.0');
+
+  // 5d. Tape measure geometry calculation
+  const meas = computeMeasurement({ x: 0, y: 0 }, { x: 3, y: 4 });
+  assert(meas !== null, 'Computes measurement between two points');
+  assertEqual(meas.distanceMeters, 5, '3-4-5 triangle yields exactly 5.0m distance');
+  assertEqual(meas.formattedM, '5.000 m', 'Formatted meters string matches "5.000 m"');
+  assertEqual(meas.formattedMm, '5000 mm', 'Formatted mm string matches "5000 mm"');
+  assert(Math.abs(meas.angleDegrees - 53.13) < 0.1, 'Angle is approx 53.13 degrees');
+
+  // 5e. Entity duplication
+  const dup = duplicateEntity(roomA, 1.0);
+  assert(dup !== null, 'Duplicate creates a new entity');
+  assert(dup.id !== roomA.id, 'Duplicate has a unique generated ID');
+  assertEqual(dup.name, 'Living (Copy)', 'Duplicate has "(Copy)" appended to name');
+  assertEqual(dup.x, 3.0, 'Duplicate shifted by offset 1.0m along x');
+  assertEqual(dup.y, 4.0, 'Duplicate shifted by offset 1.0m along y');
+  assertEqual(dup.width, roomA.width, 'Duplicate preserves width');
+  assertEqual(dup.depth, roomA.depth, 'Duplicate preserves depth');
 }
 
 console.log(`\nSummary: ${passed} passed, ${failed} failed.`);

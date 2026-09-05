@@ -9,7 +9,7 @@
  * view; persistence in the project document via the store.
  */
 
-import { rectsIntersect } from './entities.js';
+import { rectsIntersect, generateEntityId } from './entities.js';
 
 /**
  * Creates a view transform for the plan canvas.
@@ -100,6 +100,226 @@ export function snapRect(rect, gridMeters) {
     width: Math.max(gridMeters, snapToGrid(rect.width, gridMeters)),
     depth: Math.max(gridMeters, snapToGrid(rect.depth, gridMeters))
   };
+}
+
+/**
+ * Detects nearby object snap targets (corners, midpoints, endpoints) or falls back to grid.
+ *
+ * @param {{x: number, y: number}} point - Candidate world coordinate
+ * @param {Array<Object>} entities - Project entities list
+ * @param {Object} [options]
+ * @param {number} [options.snapDistance=0.20] - Max distance in meters to latch onto an object target
+ * @param {boolean} [options.snapGrid=true] - Whether to snap to grid when no object is nearby
+ * @param {number} [options.gridMeters=0.5] - Grid increment in meters
+ * @param {string} [options.excludeId] - Optional ID of entity being moved/modified
+ * @returns {{ x: number, y: number, type: 'corner'|'midpoint'|'endpoint'|'grid'|'none', snapped: boolean, targetId?: string }}
+ */
+export function findSnapPoint(point, entities = [], options = {}) {
+  const snapDist = typeof options.snapDistance === 'number' ? options.snapDistance : 0.20;
+  const snapGrid = options.snapGrid !== false;
+  const gridMeters = options.gridMeters || 0.5;
+  const excludeId = options.excludeId || null;
+
+  let bestHit = null;
+  let bestDist = snapDist;
+
+  for (const e of entities) {
+    if (!e || e.id === excludeId) continue;
+
+    // Walls
+    if (e.kind === 'wall' && typeof e.x1 === 'number') {
+      const p1 = { x: e.x1, y: e.y1, type: 'endpoint', targetId: e.id };
+      const p2 = { x: e.x2, y: e.y2, type: 'endpoint', targetId: e.id };
+      const mid = { x: (e.x1 + e.x2) / 2, y: (e.y1 + e.y2) / 2, type: 'midpoint', targetId: e.id };
+      for (const cand of [p1, p2, mid]) {
+        const d = Math.hypot(cand.x - point.x, cand.y - point.y);
+        if (d < bestDist) {
+          bestDist = d;
+          bestHit = cand;
+        }
+      }
+    } else if (typeof e.x === 'number' && typeof e.width === 'number') {
+      const w = e.width;
+      const d = e.depth || e.run || 0;
+      const corners = [
+        { x: e.x, y: e.y, type: 'corner', targetId: e.id },
+        { x: e.x + w, y: e.y, type: 'corner', targetId: e.id },
+        { x: e.x + w, y: e.y + d, type: 'corner', targetId: e.id },
+        { x: e.x, y: e.y + d, type: 'corner', targetId: e.id }
+      ];
+      const midpoints = [
+        { x: e.x + w / 2, y: e.y, type: 'midpoint', targetId: e.id },
+        { x: e.x + w, y: e.y + d / 2, type: 'midpoint', targetId: e.id },
+        { x: e.x + w / 2, y: e.y + d, type: 'midpoint', targetId: e.id },
+        { x: e.x, y: e.y + d / 2, type: 'midpoint', targetId: e.id }
+      ];
+      for (const cand of [...corners, ...midpoints]) {
+        const dist = Math.hypot(cand.x - point.x, cand.y - point.y);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestHit = cand;
+        }
+      }
+    }
+  }
+
+  if (bestHit) {
+    return {
+      x: bestHit.x,
+      y: bestHit.y,
+      type: bestHit.type,
+      snapped: true,
+      targetId: bestHit.targetId
+    };
+  }
+
+  if (snapGrid && gridMeters > 0) {
+    return {
+      x: snapToGrid(point.x, gridMeters),
+      y: snapToGrid(point.y, gridMeters),
+      type: 'grid',
+      snapped: true
+    };
+  }
+
+  return {
+    x: point.x,
+    y: point.y,
+    type: 'none',
+    snapped: false
+  };
+}
+
+/**
+ * Computes dynamic dashed alignment guidelines between a dragged entity rect and all other entities.
+ *
+ * @param {{x: number, y: number, width: number, depth: number}} draggedRect
+ * @param {Array<Object>} allEntities
+ * @param {Object} [options] - { threshold = 0.08, excludeId }
+ * @returns {{ guidesX: Array<{x: number, y1: number, y2: number}>, guidesY: Array<{y: number, x1: number, x2: number}> }}
+ */
+export function computeAlignmentGuides(draggedRect, allEntities = [], options = {}) {
+  const threshold = typeof options.threshold === 'number' ? options.threshold : 0.08;
+  const excludeId = options.excludeId || null;
+  const guidesX = [];
+  const guidesY = [];
+
+  if (!draggedRect || typeof draggedRect.x !== 'number') return { guidesX, guidesY };
+
+  const left = draggedRect.x;
+  const right = draggedRect.x + draggedRect.width;
+  const centerX = draggedRect.x + draggedRect.width / 2;
+
+  const bottom = draggedRect.y;
+  const top = draggedRect.y + draggedRect.depth;
+  const centerY = draggedRect.y + draggedRect.depth / 2;
+
+  const xCands = [left, centerX, right];
+  const yCands = [bottom, centerY, top];
+
+  for (const e of allEntities) {
+    if (!e || e.id === excludeId) continue;
+    const r = e.kind === 'wall' ? wallRect(e) : (typeof e.x === 'number' ? { x: e.x, y: e.y, width: e.width || 0, depth: e.depth || 0 } : null);
+    if (!r) continue;
+
+    const eLeft = r.x;
+    const eRight = r.x + r.width;
+    const eCenterX = r.x + r.width / 2;
+    const targetXs = [eLeft, eCenterX, eRight];
+
+    for (const tx of targetXs) {
+      for (const mx of xCands) {
+        if (Math.abs(mx - tx) <= threshold) {
+          const minY = Math.min(bottom, r.y);
+          const maxY = Math.max(top, r.y + r.depth);
+          guidesX.push({ x: tx, y1: minY - 0.2, y2: maxY + 0.2 });
+        }
+      }
+    }
+
+    const eBottom = r.y;
+    const eTop = r.y + r.depth;
+    const eCenterY = r.y + r.depth / 2;
+    const targetYs = [eBottom, eCenterY, eTop];
+
+    for (const ty of targetYs) {
+      for (const my of yCands) {
+        if (Math.abs(my - ty) <= threshold) {
+          const minX = Math.min(left, r.x);
+          const maxX = Math.max(right, r.x + r.width);
+          guidesY.push({ y: ty, x1: minX - 0.2, x2: maxX + 0.2 });
+        }
+      }
+    }
+  }
+
+  // Deduplicate and cap to at most 4 guides (weak laptop protection)
+  const uniqueX = [];
+  for (const g of guidesX) {
+    if (!uniqueX.some(u => Math.abs(u.x - g.x) < 0.01)) uniqueX.push(g);
+  }
+  const uniqueY = [];
+  for (const g of guidesY) {
+    if (!uniqueY.some(u => Math.abs(u.y - g.y) < 0.01)) uniqueY.push(g);
+  }
+
+  return { guidesX: uniqueX.slice(0, 4), guidesY: uniqueY.slice(0, 4) };
+}
+
+/**
+ * Computes live measurement metrics between two world points.
+ *
+ * @param {{x: number, y: number}} p1 - Start point
+ * @param {{x: number, y: number}} p2 - End point
+ * @returns {{ p1: Object, p2: Object, dx: number, dy: number, distanceMeters: number, distanceMm: number, angleDegrees: number, formattedM: string, formattedMm: string, formattedAngle: string }|null}
+ */
+export function computeMeasurement(p1, p2) {
+  if (!p1 || !p2) return null;
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const distanceMeters = Math.hypot(dx, dy);
+  const distanceMm = distanceMeters * 1000;
+  let angle = Math.atan2(dy, dx) * (180 / Math.PI);
+  if (angle < 0) angle += 360;
+
+  return {
+    p1: { x: p1.x, y: p1.y },
+    p2: { x: p2.x, y: p2.y },
+    dx,
+    dy,
+    distanceMeters,
+    distanceMm,
+    angleDegrees: angle,
+    formattedM: `${distanceMeters.toFixed(3)} m`,
+    formattedMm: `${Math.round(distanceMm)} mm`,
+    formattedAngle: `${angle.toFixed(1)}°`
+  };
+}
+
+/**
+ * Duplicates an entity with an offset and unique identity.
+ *
+ * @param {Object} entity
+ * @param {number} [offset=0.5] - Meters offset along x and y
+ * @returns {Object|null} Fresh duplicated entity
+ */
+export function duplicateEntity(entity, offset = 0.5) {
+  if (!entity || typeof entity !== 'object') return null;
+  const clone = JSON.parse(JSON.stringify(entity));
+  clone.id = generateEntityId(clone.kind || 'item');
+  clone.name = clone.name ? `${clone.name} (Copy)` : 'Copy';
+  clone.locked = false;
+
+  if (clone.kind === 'wall' && typeof clone.x1 === 'number') {
+    clone.x1 += offset;
+    clone.x2 += offset;
+    clone.y1 += offset;
+    clone.y2 += offset;
+  } else if (typeof clone.x === 'number') {
+    clone.x += offset;
+    clone.y += offset;
+  }
+  return clone;
 }
 
 // ---------------------------------------------------------------------------

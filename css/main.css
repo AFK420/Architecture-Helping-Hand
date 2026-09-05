@@ -827,6 +827,268 @@ body.sidebar-hidden .app-sidebar {
   background: var(--btn-run-hover, #e04343);
 }
 
+/* ==========================================================================
+   Drafting Workstation: Tool Palette, Contextual Toolbar & Status Bar
+   ========================================================================== */
+.plan-tool-palette {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.tool-palette-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--bg-surface-elevated, #222327);
+  border: 1px solid var(--border-subtle, #33353a);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-primary, #EAEAEC);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  user-select: none;
+}
+
+.tool-palette-btn:hover {
+  background: var(--bg-chip-hover, #2c2d33);
+  border-color: var(--border-medium, #44474f);
+}
+
+.tool-palette-btn.active {
+  background: rgba(73, 137, 217, 0.14);
+  border-color: var(--accent-primary, #4989D9);
+  color: #ffffff;
+  box-shadow: 0 0 0 1px rgba(73, 137, 217, 0.35);
+}
+
+.tool-palette-btn .tool-icon {
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+}
+
+.tool-palette-btn .tool-name {
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tool-palette-btn .tool-kbd {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.62rem;
+  padding: 1px 4px;
+  background: var(--bg-surface, #18191c);
+  border: 1px solid var(--border-subtle, #33353a);
+  border-radius: 3px;
+  color: var(--note-number, #4989D9);
+}
+
+.tool-palette-btn.active .tool-kbd {
+  background: var(--accent-primary, #4989D9);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+/* Dynamic Contextual Toolbar above canvas */
+.plan-contextual-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
+  background: var(--bg-surface-elevated, #222327);
+  border: 1px solid var(--border-subtle, #33353a);
+  border-radius: var(--radius-sm, 4px);
+  margin-top: 0.4rem;
+  flex-wrap: wrap;
+  min-height: 36px;
+}
+
+.context-tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 2px 7px;
+  background: var(--bg-chip, #29292D);
+  border: 1px solid var(--border-subtle, #33353a);
+  border-radius: 3px;
+  font-size: 0.68rem;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  color: var(--note-number, #4989D9);
+  text-transform: uppercase;
+}
+
+.context-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--bg-surface, #18191c);
+  border: 1px solid var(--border-medium, #44474f);
+  border-radius: 3px;
+  color: var(--text-primary, #EAEAEC);
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.context-action-btn:hover {
+  background: var(--bg-chip-hover, #2c2d33);
+  border-color: var(--accent-primary, #4989D9);
+  color: #fff;
+}
+
+.context-action-btn.danger {
+  color: var(--color-error, #D32F2F);
+}
+
+.context-action-btn.danger:hover {
+  background: rgba(211, 47, 47, 0.15);
+  border-color: var(--color-error, #D32F2F);
+}
+
+.context-action-btn.primary {
+  background: var(--btn-run-accent, #D32F2F);
+  color: #fff;
+  border-color: transparent;
+}
+
+.context-action-btn.primary:hover {
+  background: var(--btn-run-hover, #e04343);
+}
+
+/* CAD Bottom Status Bar */
+.plan-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.65rem;
+  background: #151619;
+  border: 1px solid var(--border-subtle, #2e3036);
+  border-radius: var(--radius-sm, 4px);
+  margin-top: 0.5rem;
+  font-size: 0.70rem;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-secondary, #76767C);
+  flex-wrap: wrap;
+}
+
+.status-left, .status-right {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 2px 6px;
+  background: #1c1d22;
+  border: 1px solid #2e3036;
+  border-radius: 3px;
+  color: #EAEAEC;
+  font-size: 0.68rem;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.status-chip:hover:not(.static) {
+  background: #25272e;
+  border-color: var(--accent-primary, #4989D9);
+}
+
+.status-chip.static {
+  cursor: default;
+}
+
+.status-chip.active {
+  border-color: rgba(73, 137, 217, 0.6);
+  color: #fff;
+}
+
+.status-chip-label {
+  color: var(--text-muted, #76767C);
+  font-weight: 600;
+}
+
+.status-chip strong {
+  color: var(--note-number, #4989D9);
+  font-weight: 700;
+}
+
+.status-chip.coords-chip strong {
+  color: #00e5ff;
+}
+
+.status-chip.selection-chip strong {
+  color: #ffd166;
+}
+
+.status-divider {
+  width: 1px;
+  height: 14px;
+  background: #2e3036;
+}
+
+.status-tag {
+  font-size: 0.64rem;
+  padding: 1px 5px;
+  background: #222327;
+  border-radius: 2px;
+  color: var(--text-muted, #76767C);
+}
+
+.status-ai-badge {
+  font-size: 0.64rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(73, 137, 217, 0.15);
+  color: var(--note-number, #4989D9);
+  border: 1px solid rgba(73, 137, 217, 0.3);
+}
+
+/* Smart Guides & Live Dimensions in SVG */
+.smart-guide-line {
+  stroke: #00e5ff;
+  stroke-width: 1;
+  stroke-dasharray: 4, 3;
+  pointer-events: none;
+}
+
+.smart-snap-point {
+  fill: #00e5ff;
+  stroke: #121214;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.measure-line {
+  stroke: #ff9100;
+  stroke-width: 1.5;
+  stroke-dasharray: 5, 3;
+  pointer-events: none;
+}
+
+.measure-tag {
+  fill: #1a1b1f;
+  stroke: #ff9100;
+  stroke-width: 1;
+  rx: 3;
+}
+
 @media (max-width: 1279px) {
   .tool-layout-plan,
   .tool-layout-plan-3col {
