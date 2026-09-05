@@ -23492,21 +23492,22 @@ function createPlanView(context) {
         else dom.aiJobSelect.value = 'projectAnalysis';
       }
       if (dom.aiContextScopeSelect) {
-        if (targetType === 'room') dom.aiContextScopeSelect.value = 'Current Room';
-        else if (targetType === 'furniture' || targetType === 'stair' || targetType === 'ramp') dom.aiContextScopeSelect.value = 'Selected Entity';
-        else dom.aiContextScopeSelect.value = 'Current Plan';
+        if (targetType === 'room') dom.aiContextScopeSelect.value = 'room_current';
+        else if (targetType === 'furniture' || targetType === 'stair' || targetType === 'ramp') dom.aiContextScopeSelect.value = 'room_current';
+        else dom.aiContextScopeSelect.value = 'plan_only';
       }
-      if (dom.aiUserPrompt) {
+      const targetInput = dom.aiQuestionInput || dom.aiUserPrompt;
+      if (targetInput) {
         if (targetType === 'room') {
-          dom.aiUserPrompt.value = `Review spatial proportion, circulation clearance, and daylighting for ${payload.roomName || 'this room'} (${payload.area || ''} m², ${payload.aspect || ''} aspect ratio).`;
+          targetInput.value = `Review spatial proportion, circulation clearance, and daylighting for ${payload.roomName || 'this room'} (${payload.area || ''} m², ${payload.aspect || ''} aspect ratio).`;
         } else if (targetType === 'furniture') {
-          dom.aiUserPrompt.value = `Review ergonomic fit, clearance envelopes, and accessibility for ${payload.furnName || 'this furniture item'} (${payload.dimensions || ''}) in ${payload.hostRoom || 'room'}.`;
+          targetInput.value = `Review ergonomic fit, clearance envelopes, and accessibility for ${payload.furnName || 'this furniture item'} (${payload.dimensions || ''}) in ${payload.hostRoom || 'room'}.`;
         } else if (targetType === 'stair') {
-          dom.aiUserPrompt.value = `Evaluate stair proportion comfort (Blondel 2R+T: ${payload.blondel || ''} mm, pitch: ${payload.pitch || ''}°) and recommend egress/headroom considerations.`;
+          targetInput.value = `Evaluate stair proportion comfort (Blondel 2R+T: ${payload.blondel || ''} mm, pitch: ${payload.pitch || ''}°) and recommend egress/headroom considerations.`;
         } else if (targetType === 'ramp') {
-          dom.aiUserPrompt.value = `Evaluate ramp accessibility slope (1:${payload.ratio || ''} / ${payload.percent || ''}%) and explain landing/handrail guidance for university presentation.`;
+          targetInput.value = `Evaluate ramp accessibility slope (1:${payload.ratio || ''} / ${payload.percent || ''}%) and explain landing/handrail guidance for university presentation.`;
         } else {
-          dom.aiUserPrompt.value = `Provide an architectural critique of this plan layout, circulation flow, and spatial zoning.`;
+          targetInput.value = `Provide an architectural critique of this plan layout, circulation flow, and spatial zoning.`;
         }
       }
       views.callController('ai', 'refreshImageGroup');
@@ -23798,7 +23799,8 @@ function createPlanView(context) {
     getController() {
       return {
         render, undo, redo, deleteSelected, clearPlan, saveToProject, exportPlan,
-        syncToolVisibility, fitToContent, setZoomPercent, zoomStep, syncSvgSize
+        syncToolVisibility, fitToContent, setZoomPercent, zoomStep, syncSvgSize,
+        triggerAiCritique
       };
     }
   };
