@@ -626,7 +626,8 @@ export function inspectSlopeCompliance(slopeResult, codeId = 'jnbc') {
     };
   }
 
-  const percent = slopeResult.geometry.percent;
+  const rawPercent = slopeResult.geometry.slopePercent ?? slopeResult.geometry.percent ?? 0;
+  const percent = Math.abs(rawPercent);
   const checks = [];
 
   // Pedestrian Walkway Check

@@ -67,10 +67,8 @@ export function createStairsView(context) {
     if (!raw) return null;
     // Architectural math expressions support (e.g. 2.8m - 15cm, 3m / 2)
     const exprRes = evaluateExpressionSafe(raw, fallbackUnit || 'm');
-    if (exprRes && exprRes.isValid && exprRes.result > 0) {
-      const unitKey = exprRes.detectedUnit || fallbackUnit || 'm';
-      const toM = UNITS[unitKey]?.toMeters ?? 1;
-      return exprRes.result * toM;
+    if (exprRes && exprRes.isValid && typeof exprRes.canonicalMeters === 'number' && exprRes.canonicalMeters > 0) {
+      return exprRes.canonicalMeters;
     }
     const res = parseInput(raw, { allowNegative: false });
     if (!res.isValid || res.value <= 0) return null;

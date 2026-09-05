@@ -9107,7 +9107,8 @@ function inspectSlopeCompliance(slopeResult, codeId = 'jnbc') {
     };
   }
 
-  const percent = slopeResult.geometry.percent;
+  const rawPercent = slopeResult.geometry.slopePercent ?? slopeResult.geometry.percent ?? 0;
+  const percent = Math.abs(rawPercent);
   const checks = [];
 
   // Pedestrian Walkway Check
@@ -21666,10 +21667,8 @@ function createStairsView(context) {
     if (!raw) return null;
     // Architectural math expressions support (e.g. 2.8m - 15cm, 3m / 2)
     const exprRes = evaluateExpressionSafe(raw, fallbackUnit || 'm');
-    if (exprRes && exprRes.isValid && exprRes.result > 0) {
-      const unitKey = exprRes.detectedUnit || fallbackUnit || 'm';
-      const toM = UNITS[unitKey]?.toMeters ?? 1;
-      return exprRes.result * toM;
+    if (exprRes && exprRes.isValid && typeof exprRes.canonicalMeters === 'number' && exprRes.canonicalMeters > 0) {
+      return exprRes.canonicalMeters;
     }
     const res = parseInput(raw, { allowNegative: false });
     if (!res.isValid || res.value <= 0) return null;
@@ -22238,10 +22237,8 @@ function createRampsView(context) {
     if (!raw) return null;
     // Architectural math expressions support (e.g. 3m - 20cm, 14.4m / 2)
     const exprRes = evaluateExpressionSafe(raw, fallbackUnit || 'm');
-    if (exprRes && exprRes.isValid && exprRes.result > 0) {
-      const unitKey = exprRes.detectedUnit || fallbackUnit || 'm';
-      const toM = UNITS[unitKey]?.toMeters ?? 1;
-      return exprRes.result * toM;
+    if (exprRes && exprRes.isValid && typeof exprRes.canonicalMeters === 'number' && exprRes.canonicalMeters > 0) {
+      return exprRes.canonicalMeters;
     }
     const res = parseInput(raw, { allowNegative: false });
     if (!res.isValid || res.value <= 0) return null;
@@ -22445,7 +22442,7 @@ function createRampsView(context) {
 
       const multi = calculateMultiSegmentRamp(
         result.geometry.riseMeters,
-        result.slope.percent,
+        result.geometry.slopePercent,
         {
           maxRisePerRunMeters: maxRisePerFlight,
           rampWidthMeters: minWidth,
@@ -22864,10 +22861,8 @@ function createSlopesView(context) {
     const raw = (el.value || '').trim();
     if (!raw) return null;
     const exprRes = evaluateExpressionSafe(raw, fallbackUnit || 'm');
-    if (exprRes && exprRes.isValid && exprRes.result !== 0) {
-      const unitKey = exprRes.detectedUnit || fallbackUnit || 'm';
-      const toM = UNITS[unitKey]?.toMeters ?? 1;
-      return exprRes.result * toM;
+    if (exprRes && exprRes.isValid && typeof exprRes.canonicalMeters === 'number' && exprRes.canonicalMeters !== 0) {
+      return exprRes.canonicalMeters;
     }
     const negative = raw.startsWith('-');
     const res = parseInput(negative ? raw.slice(1) : raw, { allowNegative: false });
@@ -23076,7 +23071,8 @@ function createSlopesView(context) {
       return;
     }
     const targets = buildSlopeTargetComparison(riseMag);
-    const currentSlopePercent = state.slopes.lastResult?.geometry?.percent;
+    const rawCurrentPercent = state.slopes.lastResult?.geometry?.slopePercent ?? state.slopes.lastResult?.geometry?.percent;
+    const currentSlopePercent = typeof rawCurrentPercent === 'number' ? Math.abs(rawCurrentPercent) : undefined;
     dom.slopesTargetsBody.innerHTML = targets.map(t => {
       const isSelected = currentSlopePercent !== undefined && Math.abs(t.percent - currentSlopePercent) < 0.05;
       return `

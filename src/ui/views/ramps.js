@@ -59,10 +59,8 @@ export function createRampsView(context) {
     if (!raw) return null;
     // Architectural math expressions support (e.g. 3m - 20cm, 14.4m / 2)
     const exprRes = evaluateExpressionSafe(raw, fallbackUnit || 'm');
-    if (exprRes && exprRes.isValid && exprRes.result > 0) {
-      const unitKey = exprRes.detectedUnit || fallbackUnit || 'm';
-      const toM = UNITS[unitKey]?.toMeters ?? 1;
-      return exprRes.result * toM;
+    if (exprRes && exprRes.isValid && typeof exprRes.canonicalMeters === 'number' && exprRes.canonicalMeters > 0) {
+      return exprRes.canonicalMeters;
     }
     const res = parseInput(raw, { allowNegative: false });
     if (!res.isValid || res.value <= 0) return null;
@@ -266,7 +264,7 @@ export function createRampsView(context) {
 
       const multi = calculateMultiSegmentRamp(
         result.geometry.riseMeters,
-        result.slope.percent,
+        result.geometry.slopePercent,
         {
           maxRisePerRunMeters: maxRisePerFlight,
           rampWidthMeters: minWidth,

@@ -53,10 +53,8 @@ export function createSlopesView(context) {
     const raw = (el.value || '').trim();
     if (!raw) return null;
     const exprRes = evaluateExpressionSafe(raw, fallbackUnit || 'm');
-    if (exprRes && exprRes.isValid && exprRes.result !== 0) {
-      const unitKey = exprRes.detectedUnit || fallbackUnit || 'm';
-      const toM = UNITS[unitKey]?.toMeters ?? 1;
-      return exprRes.result * toM;
+    if (exprRes && exprRes.isValid && typeof exprRes.canonicalMeters === 'number' && exprRes.canonicalMeters !== 0) {
+      return exprRes.canonicalMeters;
     }
     const negative = raw.startsWith('-');
     const res = parseInput(negative ? raw.slice(1) : raw, { allowNegative: false });
@@ -265,7 +263,8 @@ export function createSlopesView(context) {
       return;
     }
     const targets = buildSlopeTargetComparison(riseMag);
-    const currentSlopePercent = state.slopes.lastResult?.geometry?.percent;
+    const rawCurrentPercent = state.slopes.lastResult?.geometry?.slopePercent ?? state.slopes.lastResult?.geometry?.percent;
+    const currentSlopePercent = typeof rawCurrentPercent === 'number' ? Math.abs(rawCurrentPercent) : undefined;
     dom.slopesTargetsBody.innerHTML = targets.map(t => {
       const isSelected = currentSlopePercent !== undefined && Math.abs(t.percent - currentSlopePercent) < 0.05;
       return `
