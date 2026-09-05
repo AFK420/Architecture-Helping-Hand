@@ -402,10 +402,10 @@ export function generateRampSVG(result, options = {}) {
 
   const width = typeof options.width === 'number' && options.width > 0 ? options.width : 560;
   const height = typeof options.height === 'number' && options.height > 0 ? options.height : 240;
-  const padLeft = 60;
-  const padRight = 54;
-  const padTop = 45;
-  const padBottom = 48;
+  const padLeft = 72;
+  const padRight = 68;
+  const padTop = 46;
+  const padBottom = 46;
   const drawW = width - padLeft - padRight;
   const drawH = height - padTop - padBottom;
 
@@ -418,12 +418,15 @@ export function generateRampSVG(result, options = {}) {
   const topX = originX + run * scale;
   const topY = originY - rise * scale;
 
-  const landingExt = 36;
-  const handrailH = Math.max(14, Math.min(26, scale * 0.9));
-  const dimRunY = originY + 24;
-  const dimRiseX = topX + 24;
+  const landingExt = 26;
+  const handrailH = Math.max(14, Math.min(24, scale * 0.85));
+  const dimRunY = originY + 22;
+  const dimRiseX = topX + landingExt + 18;
   const midX = (originX + topX) / 2;
   const midY = (originY + topY) / 2;
+  const hrLabelX = originX + (topX - originX) * 0.35;
+  const hrLabelY = originY + (topY - originY) * 0.35 - handrailH - 4;
+  const rampAngleDeg = (-result.geometry.angleDegrees).toFixed(2);
 
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Proportional ramp side elevation: rise ${result.formatted.rise}, run ${result.formatted.run}, slope ${result.formatted.slopePercent}, ratio ${result.formatted.ratio}, angle ${result.formatted.angle}">
@@ -456,21 +459,21 @@ export function generateRampSVG(result, options = {}) {
   </g>
 
   <!-- 900mm Handrail guideline & posts -->
-  <g class="ramp-handrail" stroke="var(--accent-secondary, #38bdf8)" opacity="0.8">
+  <g class="ramp-handrail" stroke="var(--accent-secondary, #38bdf8)" opacity="0.85">
     <line x1="${originX.toFixed(2)}" y1="${(originY - handrailH).toFixed(2)}" x2="${topX.toFixed(2)}" y2="${(topY - handrailH).toFixed(2)}" stroke-width="1.4" stroke-dasharray="4 3"/>
     <!-- Guard posts -->
     <line x1="${originX.toFixed(2)}" y1="${originY.toFixed(2)}" x2="${originX.toFixed(2)}" y2="${(originY - handrailH).toFixed(2)}" stroke-width="1"/>
     <line x1="${midX.toFixed(2)}" y1="${midY.toFixed(2)}" x2="${midX.toFixed(2)}" y2="${(midY - handrailH).toFixed(2)}" stroke-width="1"/>
     <line x1="${topX.toFixed(2)}" y1="${topY.toFixed(2)}" x2="${topX.toFixed(2)}" y2="${(topY - handrailH).toFixed(2)}" stroke-width="1"/>
-    <text x="${(midX).toFixed(2)}" y="${(midY - handrailH - 4).toFixed(2)}" font-size="8.5" fill="var(--accent-secondary, #38bdf8)" font-family="var(--font-family-mono, monospace)" text-anchor="middle">HANDRAIL (900mm)</text>
+    <text x="${hrLabelX.toFixed(2)}" y="${hrLabelY.toFixed(2)}" font-size="8.5" font-weight="600" fill="var(--accent-secondary, #38bdf8)" font-family="var(--font-family-mono, monospace)" text-anchor="middle" transform="rotate(${rampAngleDeg} ${hrLabelX.toFixed(2)} ${hrLabelY.toFixed(2)})">HANDRAIL (900mm)</text>
   </g>
 
   <!-- Level Datum Benchmarks (FFL) -->
   <g class="ramp-benchmarks" font-family="var(--font-family-mono, monospace)" font-size="9">
-    <polygon points="${(originX - landingExt).toFixed(2)},${originY.toFixed(2)} ${(originX - landingExt + 6).toFixed(2)},${(originY - 8).toFixed(2)} ${(originX - landingExt - 6).toFixed(2)},${(originY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
-    <text x="${(originX - landingExt).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="middle" fill="var(--text-secondary, #9aa)">▼ LOWER FFL ±0.00</text>
-    <polygon points="${(topX + landingExt).toFixed(2)},${topY.toFixed(2)} ${(topX + landingExt + 6).toFixed(2)},${(topY - 8).toFixed(2)} ${(topX + landingExt - 6).toFixed(2)},${(topY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
-    <text x="${(topX + landingExt).toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="middle" fill="var(--text-secondary, #9aa)">▲ UPPER FFL +${result.formatted.rise}</text>
+    <polygon points="${(originX - landingExt).toFixed(2)},${originY.toFixed(2)} ${(originX - landingExt + 5).toFixed(2)},${(originY - 8).toFixed(2)} ${(originX - landingExt - 5).toFixed(2)},${(originY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
+    <text x="${(originX - landingExt).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="start" fill="var(--text-secondary, #9aa)">▼ LOWER FFL ±0.00</text>
+    <polygon points="${(topX + landingExt).toFixed(2)},${topY.toFixed(2)} ${(topX + landingExt + 5).toFixed(2)},${(topY - 8).toFixed(2)} ${(topX + landingExt - 5).toFixed(2)},${(topY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
+    <text x="${(topX + landingExt).toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="end" fill="var(--text-secondary, #9aa)">▲ UPPER FFL +${result.formatted.rise}</text>
   </g>
 
   <!-- CAD 45° Slashed Horizontal Dimension: RUN -->
@@ -486,8 +489,8 @@ export function generateRampSVG(result, options = {}) {
 
   <!-- CAD 45° Slashed Vertical Dimension: RISE -->
   <g class="ramp-dim-rise">
-    <line x1="${(topX + 4).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${originY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
-    <line x1="${(topX + 4).toFixed(2)}" y1="${topY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${(topX + landingExt + 4).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${originY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${(topX + landingExt + 4).toFixed(2)}" y1="${topY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
     <line x1="${dimRiseX.toFixed(2)}" y1="${originY.toFixed(2)}" x2="${dimRiseX.toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.1"/>
     <!-- 45° CAD slashes -->
     <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(originY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(originY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
@@ -497,7 +500,7 @@ export function generateRampSVG(result, options = {}) {
 
   <!-- Hero Slope Badging & Title -->
   <g class="ramp-badges">
-    <text x="${midX.toFixed(2)}" y="${(topY - 14).toFixed(2)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${result.formatted.slopePercent} · ${result.formatted.ratio} · ${result.formatted.angle}</text>
+    <text x="${(width / 2).toFixed(2)}" y="36" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${result.formatted.slopePercent} · ${result.formatted.ratio} · ${result.formatted.angle}</text>
   </g>
   <text x="${padLeft}" y="18" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">SECTION ELEVATION — proportional to calculated geometry</text>
 </svg>`.trim();

@@ -568,10 +568,10 @@ export function generateStairSVG(result, options = {}) {
 
   const width = typeof options.width === 'number' && options.width > 0 ? options.width : 560;
   const height = typeof options.height === 'number' && options.height > 0 ? options.height : 260;
-  const padLeft = 60;
-  const padRight = 50;
-  const padTop = 45;
-  const padBottom = 48;
+  const padLeft = 72;
+  const padRight = 68;
+  const padTop = 46;
+  const padBottom = 46;
   const drawW = width - padLeft - padRight;
   const drawH = height - padTop - padBottom;
 
@@ -607,14 +607,16 @@ export function generateStairSVG(result, options = {}) {
   const angleLabel = `${formatNumber(result.geometry.angleDegrees, 1)}°`;
   const topX = xAt(goingCount);
   const topY = yAt(riserCount);
-  const diagX = originX + px(totalRun) * 0.48;
-  const diagY = originY - px(totalRise) * 0.58;
-
-  // Structural concrete waist and landing geometry
+  const landingExt = 26;
   const waistThick = Math.max(12, scale * 0.12);
-  const landingExt = 36;
-  const dimRunY = originY + 24;
-  const dimRiseX = topX + 24;
+  const dimRunY = originY + 22;
+  const dimRiseX = topX + landingExt + 18;
+  const stairAngleDeg = (-result.geometry.angleDegrees).toFixed(2);
+  const walkLabelX = originX + px(totalRun * 0.62);
+  const walkLabelY = originY - px(totalRise * 0.62) - 6;
+
+  const riserDetail = result.formatted?.riser ? ` @ ${result.formatted.riser}` : '';
+  const goingDetail = result.formatted?.tread ? ` @ ${result.formatted.tread}` : '';
 
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Proportional stair side elevation: ${riserCount} risers, ${goingCount} goings, angle ${angleLabel}">
@@ -658,17 +660,17 @@ export function generateStairSVG(result, options = {}) {
     <line x1="${(originX + px(treadMeters * 0.5)).toFixed(2)}" y1="${(originY - px(riserMeters * 0.5)).toFixed(2)}" x2="${(topX - px(treadMeters * 0.3)).toFixed(2)}" y2="${(topY + px(riserMeters * 0.5)).toFixed(2)}" stroke="var(--accent-secondary, #38bdf8)" stroke-width="1.2" stroke-dasharray="5 3"/>
     <!-- Arrowhead at top step -->
     <polygon points="${(topX - px(treadMeters * 0.3)).toFixed(2)},${(topY + px(riserMeters * 0.5) - 3).toFixed(2)} ${(topX - px(treadMeters * 0.3) + 5).toFixed(2)},${(topY + px(riserMeters * 0.5)).toFixed(2)} ${(topX - px(treadMeters * 0.3)).toFixed(2)},${(topY + px(riserMeters * 0.5) + 3).toFixed(2)}" fill="var(--accent-secondary, #38bdf8)"/>
-    <text x="${(originX + px(totalRun * 0.22)).toFixed(2)}" y="${(originY - px(totalRise * 0.32)).toFixed(2)}" font-size="9" font-weight="600" fill="var(--accent-secondary, #38bdf8)" font-family="var(--font-family-mono, monospace)">UP (${riserCount}R / ${goingCount}G)</text>
+    <text x="${walkLabelX.toFixed(2)}" y="${walkLabelY.toFixed(2)}" font-size="8.5" font-weight="600" fill="var(--accent-secondary, #38bdf8)" font-family="var(--font-family-mono, monospace)" text-anchor="middle" transform="rotate(${stairAngleDeg} ${walkLabelX.toFixed(2)} ${walkLabelY.toFixed(2)})">UP (${riserCount}R / ${goingCount}G)</text>
   </g>
 
   <!-- Level Datum Benchmarks (FFL) -->
   <g class="stair-benchmarks" font-family="var(--font-family-mono, monospace)" font-size="9">
     <!-- Lower Level Benchmark -->
-    <polygon points="${(originX - landingExt).toFixed(2)},${originY.toFixed(2)} ${(originX - landingExt + 6).toFixed(2)},${(originY - 8).toFixed(2)} ${(originX - landingExt - 6).toFixed(2)},${(originY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
-    <text x="${(originX - landingExt).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="middle" fill="var(--text-secondary, #9aa)">▼ FFL ±0.00</text>
+    <polygon points="${(originX - landingExt).toFixed(2)},${originY.toFixed(2)} ${(originX - landingExt + 5).toFixed(2)},${(originY - 8).toFixed(2)} ${(originX - landingExt - 5).toFixed(2)},${(originY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
+    <text x="${(originX - landingExt).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="start" fill="var(--text-secondary, #9aa)">▼ FFL ±0.00</text>
     <!-- Upper Level Benchmark -->
-    <polygon points="${(topX + landingExt).toFixed(2)},${topY.toFixed(2)} ${(topX + landingExt + 6).toFixed(2)},${(topY - 8).toFixed(2)} ${(topX + landingExt - 6).toFixed(2)},${(topY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
-    <text x="${(topX + landingExt).toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="middle" fill="var(--text-secondary, #9aa)">▲ FFL +${result.formatted.totalRise}</text>
+    <polygon points="${(topX + landingExt).toFixed(2)},${topY.toFixed(2)} ${(topX + landingExt + 5).toFixed(2)},${(topY - 8).toFixed(2)} ${(topX + landingExt - 5).toFixed(2)},${(topY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
+    <text x="${(topX + landingExt).toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="end" fill="var(--text-secondary, #9aa)">▲ FFL +${result.formatted.totalRise}</text>
   </g>
 
   <!-- CAD 45° Slashed Horizontal Dimension: RUN -->
@@ -684,8 +686,8 @@ export function generateStairSVG(result, options = {}) {
 
   <!-- CAD 45° Slashed Vertical Dimension: RISE -->
   <g class="stair-dim-rise">
-    <line x1="${(topX + 4).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${originY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
-    <line x1="${(topX + 4).toFixed(2)}" y1="${topY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${(topX + landingExt + 4).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${originY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${(topX + landingExt + 4).toFixed(2)}" y1="${topY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
     <line x1="${dimRiseX.toFixed(2)}" y1="${originY.toFixed(2)}" x2="${dimRiseX.toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.1"/>
     <!-- 45° CAD slashes -->
     <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(originY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(originY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
@@ -693,8 +695,11 @@ export function generateStairSVG(result, options = {}) {
     <text x="${(dimRiseX + 10).toFixed(2)}" y="${((originY + topY) / 2).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${((originY + topY) / 2).toFixed(2)})">RISE ${result.formatted.totalRise}</text>
   </g>
 
-  <!-- Pitch angle & step proportions badge -->
-  <text x="${diagX.toFixed(2)}" y="${diagY.toFixed(2)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${angleLabel}</text>
+  <!-- Hero Pitch Badging & Base Pitch -->
+  <g class="stair-badges">
+    <text x="${(width / 2).toFixed(2)}" y="36" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${angleLabel} PITCH · ${riserCount} RISERS${riserDetail} · ${goingCount} GOINGS${goingDetail}</text>
+  </g>
+  <text x="${(originX + 30).toFixed(2)}" y="${(originY - 8).toFixed(2)}" font-size="9.5" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${angleLabel}</text>
   <text x="${padLeft}" y="18" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">SECTION ELEVATION — 1:${riserCount} risers / ${goingCount} goings — proportional</text>
 </svg>`.trim();
 

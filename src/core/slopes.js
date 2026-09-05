@@ -417,10 +417,10 @@ export function generateSlopeSVG(result, options = {}) {
 
   const width = typeof options.width === 'number' && options.width > 0 ? options.width : 560;
   const height = typeof options.height === 'number' && options.height > 0 ? options.height : 240;
-  const padLeft = 60;
-  const padRight = 54;
-  const padTop = 45;
-  const padBottom = 48;
+  const padLeft = 72;
+  const padRight = 68;
+  const padTop = 46;
+  const padBottom = 46;
   const drawW = width - padLeft - padRight;
   const drawH = height - padTop - padBottom;
 
@@ -454,9 +454,14 @@ export function generateSlopeSVG(result, options = {}) {
 
   const midX = (originX + topX) / 2;
   const midY = (originY + topY) / 2;
-  const dimRunY = (rise < 0 ? Math.max(originY, topY) : originY) + 24;
-  const dimRiseX = topX + 24;
+  const dimRunY = (rise < 0 ? Math.max(originY, topY) : originY) + 22;
+  const dimRiseX = topX + 28;
   const noteY = visuallyNormalized ? 32 : 18;
+
+  const slopeAngleDeg = (-result.geometry.angleDegrees).toFixed(2);
+  const isAscending = rise > 0;
+  const flowLabelX = originX + (topX - originX) * 0.28;
+  const flowLabelY = originY + (topY - originY) * 0.28;
 
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Proportional slope diagram: rise ${result.formatted.rise}, run ${result.formatted.run}, ${result.formatted.direction}, angle ${result.formatted.angle}">
@@ -470,7 +475,7 @@ export function generateSlopeSVG(result, options = {}) {
     <pattern id="slope-earth-hatch" width="10" height="10" patternTransform="rotate(-45 0 0)" patternUnits="userSpaceOnUse">
       <line x1="0" y1="0" x2="0" y2="10" stroke="var(--accent-primary, #6366f1)" stroke-width="0.6" opacity="0.18"/>
     </pattern>
-    <linearGradient id="slope-earth-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+    <linearGradient id="slope-earth-grad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="var(--accent-primary, #6366f1)" stop-opacity="0.16"/>
       <stop offset="100%" stop-color="var(--accent-secondary, #38bdf8)" stop-opacity="0.03"/>
     </linearGradient>
@@ -481,17 +486,17 @@ export function generateSlopeSVG(result, options = {}) {
   <polygon points="${originX.toFixed(2)},${originY.toFixed(2)} ${topX.toFixed(2)},${originY.toFixed(2)} ${topX.toFixed(2)},${topY.toFixed(2)}" fill="url(#slope-earth-hatch)" opacity="0.75"/>
 
   <!-- Drainage / surface flow indicator -->
-  <g class="slope-flow" opacity="0.8">
-    <circle cx="${midX.toFixed(2)}" cy="${midY.toFixed(2)}" r="2.5" fill="var(--accent-secondary, #38bdf8)"/>
-    <text x="${midX.toFixed(2)}" y="${(midY - 8).toFixed(2)}" text-anchor="middle" font-size="8.5" font-weight="600" fill="var(--accent-secondary, #38bdf8)" font-family="var(--font-family-mono, monospace)">FLOW DRAINAGE ➔</text>
+  <g class="slope-flow" opacity="0.85">
+    <circle cx="${flowLabelX.toFixed(2)}" cy="${flowLabelY.toFixed(2)}" r="2.5" fill="var(--accent-secondary, #38bdf8)"/>
+    <text x="${flowLabelX.toFixed(2)}" y="${(flowLabelY - 7).toFixed(2)}" text-anchor="middle" font-size="8.5" font-weight="600" fill="var(--accent-secondary, #38bdf8)" font-family="var(--font-family-mono, monospace)" transform="rotate(${slopeAngleDeg} ${flowLabelX.toFixed(2)} ${(flowLabelY - 7).toFixed(2)})">${isAscending ? '◂ FLOW DRAINAGE' : 'FLOW DRAINAGE ▸'}</text>
   </g>
 
   <!-- Level Datum Benchmarks -->
   <g class="slope-benchmarks" font-family="var(--font-family-mono, monospace)" font-size="9">
-    <polygon points="${(originX - 16).toFixed(2)},${originY.toFixed(2)} ${(originX - 10).toFixed(2)},${(originY - 8).toFixed(2)} ${(originX - 22).toFixed(2)},${(originY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
-    <text x="${(originX - 16).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="middle" fill="var(--text-secondary, #9aa)">▼ START EL. ±0.00</text>
-    <polygon points="${(topX + 16).toFixed(2)},${topY.toFixed(2)} ${(topX + 22).toFixed(2)},${(topY - 8).toFixed(2)} ${(topX + 10).toFixed(2)},${(topY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
-    <text x="${(topX + 16).toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="middle" fill="var(--text-secondary, #9aa)">${rise >= 0 ? '▲' : '▼'} END EL. ${result.formatted.rise}</text>
+    <polygon points="${(originX - 16).toFixed(2)},${originY.toFixed(2)} ${(originX - 11).toFixed(2)},${(originY - 8).toFixed(2)} ${(originX - 21).toFixed(2)},${(originY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
+    <text x="${(originX - 16).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="start" fill="var(--text-secondary, #9aa)">▼ START EL. ±0.00</text>
+    <polygon points="${topX.toFixed(2)},${topY.toFixed(2)} ${(topX + 5).toFixed(2)},${(topY - 8).toFixed(2)} ${(topX - 5).toFixed(2)},${(topY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
+    <text x="${topX.toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="end" fill="var(--text-secondary, #9aa)">${rise >= 0 ? '▲' : '▼'} END EL. ${result.formatted.rise}</text>
   </g>
 
   <!-- CAD 45° Slashed Horizontal Dimension: RUN -->
@@ -516,8 +521,10 @@ export function generateSlopeSVG(result, options = {}) {
     <text x="${(dimRiseX + 10).toFixed(2)}" y="${midY.toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${midY.toFixed(2)})">RISE ${result.formatted.rise}</text>
   </g>
 
-  <!-- Slope percentage, angle, and direction badges -->
-  <text x="${midX.toFixed(2)}" y="${midY.toFixed(2)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)" transform="rotate(${(-result.geometry.angleDegrees).toFixed(2)} ${midX.toFixed(2)} ${midY.toFixed(2)})" dy="-8">${result.formatted.slopePercent} · ${result.formatted.angle}</text>
+  <!-- Hero Slope Badging & Title -->
+  <g class="slope-badges">
+    <text x="${(width / 2).toFixed(2)}" y="36" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${result.formatted.slopePercent} · ${result.formatted.ratio} · ${result.formatted.angle}</text>
+  </g>
   <text x="${padLeft}" y="${noteY}" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">${result.formatted.direction}</text>
   ${visuallyNormalized ? `<text x="${padLeft}" y="18" font-size="9" fill="var(--text-muted, #777)" font-style="italic" font-family="var(--font-family-mono, monospace)">Diagram visually normalized for readability. Numeric values shown are exact.</text>` : ''}
 </svg>`.trim();
