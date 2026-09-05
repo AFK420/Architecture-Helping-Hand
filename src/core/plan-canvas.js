@@ -261,6 +261,24 @@ export function planToExportGeometry(entities, options = {}) {
       if (includeLabels) {
         out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: e.name || 'Furniture' });
       }
+    } else if (e.kind === 'stair' && typeof e.x === 'number' && typeof e.width === 'number') {
+      out.polygons.push({
+        closed: true,
+        points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
+        label: e.name || 'Stair'
+      });
+      if (includeLabels) {
+        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: `${e.name || 'Stair'} (${e.risers || 0}R)` });
+      }
+    } else if (e.kind === 'ramp' && typeof e.x === 'number' && typeof e.width === 'number') {
+      out.polygons.push({
+        closed: true,
+        points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
+        label: e.name || 'Ramp'
+      });
+      if (includeLabels) {
+        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: `${e.name || 'Ramp'} (1:${(e.slopeRatio || 12).toFixed(1)})` });
+      }
     }
   }
   return out;

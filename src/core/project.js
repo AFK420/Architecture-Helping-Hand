@@ -75,7 +75,8 @@ export function createProject(options = {}) {
     notes: [],
     snapshots: [],
     decisions: [],
-    exports: []
+    exports: [],
+    scratchpad: []
   };
 }
 
@@ -135,7 +136,7 @@ export function validateProject(doc) {
     errors.push('site must be an object when present');
   }
 
-  for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports']) {
+  for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad']) {
     if (doc[key] !== undefined && !Array.isArray(doc[key])) {
       errors.push(`${key} must be an array when present`);
     }
@@ -176,7 +177,7 @@ export function normalizeProject(doc) {
 
   normalized.site = normalizeSite(src.site);
 
-  for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports']) {
+  for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad']) {
     if (!Array.isArray(normalized[key])) normalized[key] = [];
   }
 

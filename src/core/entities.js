@@ -203,9 +203,100 @@ export function furnitureRect(f) {
 }
 
 // ---------------------------------------------------------------------------
+// Stairs (straight-flight rectilinear plan footprint)
+// ---------------------------------------------------------------------------
+
+export function createStairEntity({
+  id,
+  name,
+  x,
+  y,
+  width = 1.0,
+  run = 2.8,
+  rise = 2.7,
+  risers = 16,
+  tread = 0.28,
+  floorId = 'floor-1'
+}) {
+  requireFiniteNumber(x, 'stair.x');
+  requireFiniteNumber(y, 'stair.y');
+  requireFiniteNumber(width, 'stair.width');
+  if (width <= 0) throw new Error('Stair width must be greater than zero');
+  requireFiniteNumber(run, 'stair.run');
+  if (run <= 0) throw new Error('Stair run must be greater than zero');
+  requireFiniteNumber(rise, 'stair.rise');
+  if (rise <= 0) throw new Error('Stair rise must be greater than zero');
+
+  const riserCount = Math.max(1, Math.round(risers));
+  const riserHeight = rise / riserCount;
+  const going = tread > 0 ? tread : (riserCount > 1 ? run / (riserCount - 1) : run);
+  const blondel = (2 * riserHeight) + going;
+
+  return {
+    kind: 'stair',
+    id: id || generateEntityId('stair'),
+    name: typeof name === 'string' && name ? name : 'Straight Stair',
+    x,
+    y,
+    width,
+    depth: run,
+    run,
+    rise,
+    risers: riserCount,
+    riserHeight,
+    tread: going,
+    blondel,
+    floorId
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Ramps (straight-run rectilinear plan footprint)
+// ---------------------------------------------------------------------------
+
+export function createRampEntity({
+  id,
+  name,
+  x,
+  y,
+  width = 1.2,
+  run = 6.0,
+  rise = 0.5,
+  floorId = 'floor-1'
+}) {
+  requireFiniteNumber(x, 'ramp.x');
+  requireFiniteNumber(y, 'ramp.y');
+  requireFiniteNumber(width, 'ramp.width');
+  if (width <= 0) throw new Error('Ramp width must be greater than zero');
+  requireFiniteNumber(run, 'ramp.run');
+  if (run <= 0) throw new Error('Ramp run must be greater than zero');
+  requireFiniteNumber(rise, 'ramp.rise');
+  if (rise <= 0) throw new Error('Ramp rise must be greater than zero');
+
+  const slopePercent = (rise / run) * 100;
+  const slopeRatio = run / rise;
+
+  return {
+    kind: 'ramp',
+    id: id || generateEntityId('ramp'),
+    name: typeof name === 'string' && name ? name : 'Straight Ramp',
+    x,
+    y,
+    width,
+    depth: run,
+    run,
+    rise,
+    slopePercent,
+    slopeRatio,
+    floorId
+  };
+}
+
+// ---------------------------------------------------------------------------
 // ID helper
 // ---------------------------------------------------------------------------
 
 export function generateEntityId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
+

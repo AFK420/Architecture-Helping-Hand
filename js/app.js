@@ -8164,7 +8164,8 @@ function createProject(options = {}) {
     notes: [],
     snapshots: [],
     decisions: [],
-    exports: []
+    exports: [],
+    scratchpad: []
   };
 }
 
@@ -8224,7 +8225,7 @@ function validateProject(doc) {
     errors.push('site must be an object when present');
   }
 
-  for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports']) {
+  for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad']) {
     if (doc[key] !== undefined && !Array.isArray(doc[key])) {
       errors.push(`${key} must be an array when present`);
     }
@@ -8265,7 +8266,7 @@ function normalizeProject(doc) {
 
   normalized.site = normalizeSite(src.site);
 
-  for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports']) {
+  for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad']) {
     if (!Array.isArray(normalized[key])) normalized[key] = [];
   }
 
@@ -8552,12 +8553,103 @@ function furnitureRect(f) {
 }
 
 // ---------------------------------------------------------------------------
+// Stairs (straight-flight rectilinear plan footprint)
+// ---------------------------------------------------------------------------
+
+function createStairEntity({
+  id,
+  name,
+  x,
+  y,
+  width = 1.0,
+  run = 2.8,
+  rise = 2.7,
+  risers = 16,
+  tread = 0.28,
+  floorId = 'floor-1'
+}) {
+  requireFiniteNumber(x, 'stair.x');
+  requireFiniteNumber(y, 'stair.y');
+  requireFiniteNumber(width, 'stair.width');
+  if (width <= 0) throw new Error('Stair width must be greater than zero');
+  requireFiniteNumber(run, 'stair.run');
+  if (run <= 0) throw new Error('Stair run must be greater than zero');
+  requireFiniteNumber(rise, 'stair.rise');
+  if (rise <= 0) throw new Error('Stair rise must be greater than zero');
+
+  const riserCount = Math.max(1, Math.round(risers));
+  const riserHeight = rise / riserCount;
+  const going = tread > 0 ? tread : (riserCount > 1 ? run / (riserCount - 1) : run);
+  const blondel = (2 * riserHeight) + going;
+
+  return {
+    kind: 'stair',
+    id: id || generateEntityId('stair'),
+    name: typeof name === 'string' && name ? name : 'Straight Stair',
+    x,
+    y,
+    width,
+    depth: run,
+    run,
+    rise,
+    risers: riserCount,
+    riserHeight,
+    tread: going,
+    blondel,
+    floorId
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Ramps (straight-run rectilinear plan footprint)
+// ---------------------------------------------------------------------------
+
+function createRampEntity({
+  id,
+  name,
+  x,
+  y,
+  width = 1.2,
+  run = 6.0,
+  rise = 0.5,
+  floorId = 'floor-1'
+}) {
+  requireFiniteNumber(x, 'ramp.x');
+  requireFiniteNumber(y, 'ramp.y');
+  requireFiniteNumber(width, 'ramp.width');
+  if (width <= 0) throw new Error('Ramp width must be greater than zero');
+  requireFiniteNumber(run, 'ramp.run');
+  if (run <= 0) throw new Error('Ramp run must be greater than zero');
+  requireFiniteNumber(rise, 'ramp.rise');
+  if (rise <= 0) throw new Error('Ramp rise must be greater than zero');
+
+  const slopePercent = (rise / run) * 100;
+  const slopeRatio = run / rise;
+
+  return {
+    kind: 'ramp',
+    id: id || generateEntityId('ramp'),
+    name: typeof name === 'string' && name ? name : 'Straight Ramp',
+    x,
+    y,
+    width,
+    depth: run,
+    run,
+    rise,
+    slopePercent,
+    slopeRatio,
+    floorId
+  };
+}
+
+// ---------------------------------------------------------------------------
 // ID helper
 // ---------------------------------------------------------------------------
 
 function generateEntityId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
+
 
 
   // =========================================================================
@@ -8826,6 +8918,24 @@ function planToExportGeometry(entities, options = {}) {
       });
       if (includeLabels) {
         out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: e.name || 'Furniture' });
+      }
+    } else if (e.kind === 'stair' && typeof e.x === 'number' && typeof e.width === 'number') {
+      out.polygons.push({
+        closed: true,
+        points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
+        label: e.name || 'Stair'
+      });
+      if (includeLabels) {
+        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: `${e.name || 'Stair'} (${e.risers || 0}R)` });
+      }
+    } else if (e.kind === 'ramp' && typeof e.x === 'number' && typeof e.width === 'number') {
+      out.polygons.push({
+        closed: true,
+        points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
+        label: e.name || 'Ramp'
+      });
+      if (includeLabels) {
+        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: `${e.name || 'Ramp'} (1:${(e.slopeRatio || 12).toFixed(1)})` });
       }
     }
   }
@@ -21246,6 +21356,66 @@ function createPlanView(context) {
           <text x="${mid.x.toFixed(1)}" y="${(mid.y - 3).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="var(--note-number, #4989D9)" font-weight="700">${dist.toFixed(2)}m</text>
         </g>`;
       }
+      if (e.kind === 'stair' && hasRect) {
+        const p1 = worldToSvg(transform, e.x, e.y + e.depth);
+        const p2 = worldToSvg(transform, e.x + e.width, e.y);
+        const wPx = Math.max(Math.abs(p2.x - p1.x), 6);
+        const hPx = Math.max(Math.abs(p1.y - p2.y), 6);
+        const risers = Math.max(2, e.risers || 16);
+        const isVertical = (e.depth || 0) >= (e.width || 0);
+        let treadLines = '';
+        for (let i = 1; i < risers; i++) {
+          if (isVertical) {
+            const stepY = p2.y + (i / risers) * hPx;
+            treadLines += `<line x1="${p1.x.toFixed(1)}" y1="${stepY.toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${stepY.toFixed(1)}" stroke="${stroke}" stroke-width="0.8" opacity="0.65"/>`;
+          } else {
+            const stepX = p1.x + (i / risers) * wPx;
+            treadLines += `<line x1="${stepX.toFixed(1)}" y1="${p2.y.toFixed(1)}" x2="${stepX.toFixed(1)}" y2="${p1.y.toFixed(1)}" stroke="${stroke}" stroke-width="0.8" opacity="0.65"/>`;
+          }
+        }
+        const midX = (p1.x + p2.x) / 2;
+        const midY = (p1.y + p2.y) / 2;
+        const arrow = isVertical
+          ? `<line x1="${midX.toFixed(1)}" y1="${(p1.y - 4).toFixed(1)}" x2="${midX.toFixed(1)}" y2="${(p2.y + 12).toFixed(1)}" stroke="var(--note-number, #4989D9)" stroke-width="1.8"/>
+             <polygon points="${midX.toFixed(1)},${(p2.y + 3).toFixed(1)} ${(midX - 4).toFixed(1)},${(p2.y + 12).toFixed(1)} ${(midX + 4).toFixed(1)},${(p2.y + 12).toFixed(1)}" fill="var(--note-number, #4989D9)"/>
+             <circle cx="${midX.toFixed(1)}" cy="${(p1.y - 4).toFixed(1)}" r="2.5" fill="var(--note-number, #4989D9)"/>
+             <text x="${(midX + 8).toFixed(1)}" y="${midY.toFixed(1)}" font-size="9" font-family="var(--font-mono)" fill="var(--note-number, #4989D9)" font-weight="700">UP</text>`
+          : `<line x1="${(p1.x + 4).toFixed(1)}" y1="${midY.toFixed(1)}" x2="${(p2.x - 12).toFixed(1)}" y2="${midY.toFixed(1)}" stroke="var(--note-number, #4989D9)" stroke-width="1.8"/>
+             <polygon points="${(p2.x - 3).toFixed(1)},${midY.toFixed(1)} ${(p2.x - 12).toFixed(1)},${(midY - 4).toFixed(1)} ${(p2.x - 12).toFixed(1)},${(midY + 4).toFixed(1)}" fill="var(--note-number, #4989D9)"/>
+             <circle cx="${(p1.x + 4).toFixed(1)}" cy="${midY.toFixed(1)}" r="2.5" fill="var(--note-number, #4989D9)"/>
+             <text x="${midX.toFixed(1)}" y="${(midY - 6).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="var(--note-number, #4989D9)" font-weight="700">UP</text>`;
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}"
+            fill="rgba(73, 137, 217, 0.10)" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.5}"/>
+          ${treadLines}
+          ${arrow}
+          <text x="${midX.toFixed(1)}" y="${(p1.y + 12).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-secondary,#9aa)" font-family="var(--font-mono)">${escapeHtml(e.name)} · ${risers}R</text>
+        </g>`;
+      }
+      if (e.kind === 'ramp' && hasRect) {
+        const p1 = worldToSvg(transform, e.x, e.y + e.depth);
+        const p2 = worldToSvg(transform, e.x + e.width, e.y);
+        const wPx = Math.max(Math.abs(p2.x - p1.x), 6);
+        const hPx = Math.max(Math.abs(p1.y - p2.y), 6);
+        const isVertical = (e.depth || 0) >= (e.width || 0);
+        const midX = (p1.x + p2.x) / 2;
+        const midY = (p1.y + p2.y) / 2;
+        const arrow = isVertical
+          ? `<line x1="${midX.toFixed(1)}" y1="${(p1.y - 6).toFixed(1)}" x2="${midX.toFixed(1)}" y2="${(p2.y + 14).toFixed(1)}" stroke="var(--accent-action, #D32F2F)" stroke-width="2"/>
+             <polygon points="${midX.toFixed(1)},${(p2.y + 5).toFixed(1)} ${(midX - 5).toFixed(1)},${(p2.y + 15).toFixed(1)} ${(midX + 5).toFixed(1)},${(p2.y + 15).toFixed(1)}" fill="var(--accent-action, #D32F2F)"/>
+             <circle cx="${midX.toFixed(1)}" cy="${(p1.y - 6).toFixed(1)}" r="3" fill="var(--accent-action, #D32F2F)"/>
+             <text x="${(midX + 8).toFixed(1)}" y="${midY.toFixed(1)}" font-size="9" font-family="var(--font-mono)" fill="var(--accent-action, #D32F2F)" font-weight="700">1:${(e.slopeRatio || 12).toFixed(1)}</text>`
+          : `<line x1="${(p1.x + 6).toFixed(1)}" y1="${midY.toFixed(1)}" x2="${(p2.x - 14).toFixed(1)}" y2="${midY.toFixed(1)}" stroke="var(--accent-action, #D32F2F)" stroke-width="2"/>
+             <polygon points="${(p2.x - 5).toFixed(1)},${midY.toFixed(1)} ${(p2.x - 15).toFixed(1)},${(midY - 5).toFixed(1)} ${(p2.x - 15).toFixed(1)},${(midY + 5).toFixed(1)}" fill="var(--accent-action, #D32F2F)"/>
+             <circle cx="${(p1.x + 6).toFixed(1)}" cy="${midY.toFixed(1)}" r="3" fill="var(--accent-action, #D32F2F)"/>
+             <text x="${midX.toFixed(1)}" y="${(midY - 6).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="var(--accent-action, #D32F2F)" font-weight="700">1:${(e.slopeRatio || 12).toFixed(1)}</text>`;
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}"
+            fill="rgba(211, 47, 47, 0.08)" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.5}" stroke-dasharray="4 2"/>
+          ${arrow}
+          <text x="${midX.toFixed(1)}" y="${(p1.y + 12).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-secondary,#9aa)" font-family="var(--font-mono)">${escapeHtml(e.name)} · ${(e.slopePercent || 8.33).toFixed(1)}%</text>
+        </g>`;
+      }
       if (e.kind === 'text' && typeof e.x === 'number' && typeof e.y === 'number') {
         const p = worldToSvg(transform, e.x, e.y);
         const textStr = String(e.text || e.name || 'Text');
@@ -21273,6 +21443,12 @@ function createPlanView(context) {
           <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="3.5" fill="${col}"/>
           <rect x="${(mid.x - 30).toFixed(1)}" y="${(mid.y - 18).toFixed(1)}" width="60" height="18" rx="3" fill="var(--bg-surface-raised, #29292e)" stroke="${col}" stroke-width="1"/>
           <text x="${mid.x.toFixed(1)}" y="${(mid.y - 5).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" fill="#ffffff" font-weight="700">${dM.toFixed(2)}m</text>`;
+      } else if (dragState.tool === 'stair' || dragState.tool === 'ramp') {
+        const a = worldToSvg(transform, Math.min(dragState.start.x, dragState.current.x), Math.max(dragState.start.y, dragState.current.y));
+        const b = worldToSvg(transform, Math.max(dragState.start.x, dragState.current.x), Math.min(dragState.start.y, dragState.current.y));
+        const col = dragState.tool === 'stair' ? 'var(--note-number, #4989D9)' : 'var(--accent-action, #D32F2F)';
+        dragMarkup = `<rect x="${a.x.toFixed(1)}" y="${a.y.toFixed(1)}" width="${(b.x - a.x).toFixed(1)}" height="${(a.y - b.y).toFixed(1)}"
+          fill="none" stroke="${col}" stroke-width="1.8" stroke-dasharray="5 3"/>`;
       } else {
         const a = worldToSvg(transform, Math.min(dragState.start.x, dragState.current.x), Math.max(dragState.start.y, dragState.current.y));
         const b = worldToSvg(transform, Math.max(dragState.start.x, dragState.current.x), Math.min(dragState.start.y, dragState.current.y));
@@ -21313,6 +21489,8 @@ function createPlanView(context) {
       else if (e.kind === 'furniture') desc = `${num(e.width)} × ${num(e.depth)} m`;
       else if (e.kind === 'door') desc = `Door · ${num(e.width)} m width`;
       else if (e.kind === 'window') desc = `Window · ${num(e.width)} m width`;
+      else if (e.kind === 'stair') desc = `${num(e.width)} × ${num(e.depth)} m · ${e.risers || 16} risers · Blondel ${Math.round((e.blondel || 0.63) * 1000)} mm`;
+      else if (e.kind === 'ramp') desc = `${num(e.width)} × ${num(e.depth)} m · 1:${(e.slopeRatio || 12).toFixed(1)} (${(e.slopePercent || 8.33).toFixed(1)}%)`;
       else if (e.kind === 'dimension') desc = `Dim · ${typeof e.x1 === 'number' ? Math.hypot(e.x2 - e.x1, e.y2 - e.y1).toFixed(2) : '?'} m`;
       else if (e.kind === 'text') desc = `"${escapeHtml(e.text || e.name)}"`;
       else desc = e.kind;
@@ -21352,6 +21530,9 @@ function createPlanView(context) {
       const rooms = es.filter(e => e.kind === 'room');
       const walls = es.filter(e => e.kind === 'wall');
       const furniture = es.filter(e => e.kind === 'furniture');
+      const stairs = es.filter(e => e.kind === 'stair');
+      const ramps = es.filter(e => e.kind === 'ramp');
+      const dims = es.filter(e => e.kind === 'dimension');
       const totalArea = rooms.reduce((sum, r) => sum + (typeof r.width === 'number' && typeof r.depth === 'number' ? roomArea(r) : 0), 0);
       const totalWallLen = walls.reduce((sum, w) => sum + (typeof w.x1 === 'number' ? wallLength(w) : 0), 0);
 
@@ -21362,17 +21543,29 @@ function createPlanView(context) {
           <div class="plan-prop-row"><span class="plan-prop-label">Gross Room Area</span><span class="plan-prop-value note-number">${totalArea.toFixed(2)} m²</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Total Wall Length</span><span class="plan-prop-value">${totalWallLen.toFixed(2)} m</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Furniture Items</span><span class="plan-prop-value">${furniture.length}</span></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Stair Flights</span><span class="plan-prop-value">${stairs.length}</span></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Ramp Runs</span><span class="plan-prop-value">${ramps.length}</span></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Dimensions</span><span class="plan-prop-value">${dims.length}</span></div>
         </div>
         <div class="plan-prop-section">
           <div class="plan-prop-title">Workstation Shortcuts</div>
           <div class="plan-prop-row"><span class="plan-prop-label">Pan Viewport</span><span class="plan-prop-value">Space + Drag</span></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Zoom In / Out</span><span class="plan-prop-value">Mouse Wheel</span></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Zoom In / Out</span><span class="plan-prop-value">Wheel / + -</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Delete Item</span><span class="plan-prop-value">Del / Backspace</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Undo / Redo</span><span class="plan-prop-value">Ctrl+Z / Ctrl+Y</span></div>
         </div>
-        <div style="font-size: 0.72rem; color: var(--text-muted); line-height: 1.45; font-style: italic;">
-          Select any entity to inspect dimensional metrics, rotate catalog pieces, and test spatial clearances.
+        <div style="font-size: 0.72rem; color: var(--text-muted); line-height: 1.45; font-style: italic; margin-bottom: 0.5rem;">
+          Select any entity to inspect dimensional metrics, rotate pieces, or test spatial clearances.
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-ai-plan" class="plan-prop-btn" style="border-color: var(--accent-primary);"><span>🤖 AI Critique Plan</span></button>
         </div>`;
+
+      dom.planPropContent.querySelector('#btn-prop-ai-plan')?.addEventListener('click', () => {
+        triggerAiCritique('plan', {
+          summary: `Plan has ${rooms.length} rooms (${totalArea.toFixed(2)} m² gross), ${walls.length} walls (${totalWallLen.toFixed(2)}m), ${furniture.length} furniture items, ${stairs.length} stairs, ${ramps.length} ramps.`
+        });
+      });
       return;
     }
 
@@ -21398,7 +21591,9 @@ function createPlanView(context) {
         </div>
         <div id="prop-verification-box" style="margin-top: 0.3rem;"></div>
         <div class="plan-prop-actions">
-          <button type="button" id="btn-prop-check-room" class="plan-prop-btn"><span>✓ Check Room Overlaps</span></button>
+          <button type="button" id="btn-prop-check-room" class="plan-prop-btn"><span>✓ Check Overlaps</span></button>
+          <button type="button" id="btn-prop-scratch-room" class="plan-prop-btn"><span>📋 Send to Scratchpad</span></button>
+          <button type="button" id="btn-prop-ai-room" class="plan-prop-btn" style="border-color: var(--accent-primary);"><span>🤖 AI Review Room</span></button>
           <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Room</span></button>
         </div>`;
 
@@ -21421,6 +21616,24 @@ function createPlanView(context) {
               ${conflicts.map(c => `<li>${escapeHtml(c.evidence)}</li>`).join('')}
             </ul>`;
         }
+      });
+
+      dom.planPropContent.querySelector('#btn-prop-scratch-room')?.addEventListener('click', () => {
+        sendToScratchpad({
+          value: a,
+          formatted: `${a.toFixed(2)} m² (${w.toFixed(2)} × ${d.toFixed(2)} m)`,
+          label: `${selected.name} Area`,
+          unit: 'm²',
+          source: 'Plan Room'
+        });
+      });
+
+      dom.planPropContent.querySelector('#btn-prop-ai-room')?.addEventListener('click', () => {
+        triggerAiCritique('room', {
+          roomName: selected.name,
+          area: a.toFixed(2),
+          aspect: isFinite(ratio) ? ratio.toFixed(2) : '1.0'
+        });
       });
 
     } else if (selected.kind === 'furniture') {
@@ -21449,8 +21662,10 @@ function createPlanView(context) {
         <div id="prop-verification-box" style="margin-top: 0.3rem;"></div>
         <div class="plan-prop-actions">
           <button type="button" id="btn-prop-rotate" class="plan-prop-btn"><span>🔄 Rotate 90°</span></button>
-          <button type="button" id="btn-prop-check-fit" class="plan-prop-btn"><span>✓ Check Room Fit</span></button>
+          <button type="button" id="btn-prop-check-fit" class="plan-prop-btn"><span>✓ Check Fit</span></button>
           <button type="button" id="btn-prop-check-clearance" class="plan-prop-btn"><span>📏 Check Clearance</span></button>
+          <button type="button" id="btn-prop-scratch-furn" class="plan-prop-btn"><span>📋 Send to Scratchpad</span></button>
+          <button type="button" id="btn-prop-ai-furniture" class="plan-prop-btn" style="border-color: var(--accent-primary);"><span>🤖 AI Review Fit</span></button>
           <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Furniture</span></button>
         </div>`;
 
@@ -21526,6 +21741,129 @@ function createPlanView(context) {
         `;
       });
 
+      dom.planPropContent.querySelector('#btn-prop-scratch-furn')?.addEventListener('click', () => {
+        sendToScratchpad({
+          value: Math.max(w, d),
+          formatted: `${w.toFixed(2)} × ${d.toFixed(2)} m`,
+          label: `${selected.name} Footprint`,
+          unit: 'm',
+          source: 'Plan Furniture'
+        });
+      });
+
+      dom.planPropContent.querySelector('#btn-prop-ai-furniture')?.addEventListener('click', () => {
+        triggerAiCritique('furniture', {
+          furnName: selected.name,
+          dimensions: `${w.toFixed(2)} × ${d.toFixed(2)} m`,
+          hostRoom: hostRoom?.name || 'Open Area'
+        });
+      });
+
+    } else if (selected.kind === 'stair') {
+      const blondelMm = Math.round((selected.blondel || 0.63) * 1000);
+      const isBlondelOptimal = blondelMm >= 600 && blondelMm <= 650;
+      const pitchDeg = (Math.atan2(selected.rise, selected.run) * 180 / Math.PI).toFixed(1);
+
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Stair Specifications</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name)}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Width (Flight)</span><span class="plan-prop-value">${selected.width.toFixed(2)} m</span></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Total Run</span><span class="plan-prop-value note-number">${selected.run.toFixed(2)} m</span></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Total Rise</span><span class="plan-prop-value">${selected.rise.toFixed(2)} m</span></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Risers</span><span class="plan-prop-value">${selected.risers} @ ${(selected.riserHeight * 1000).toFixed(1)} mm</span></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Tread (Going)</span><span class="plan-prop-value">${(selected.tread * 1000).toFixed(1)} mm</span></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Pitch Angle</span><span class="plan-prop-value">${pitchDeg}°</span></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Blondel (2R+T)</span><span class="plan-prop-value" style="font-weight: 700; color: ${isBlondelOptimal ? 'var(--color-success, #4ade80)' : 'var(--color-warning, #fbbf24)'};">${blondelMm} mm</span></div>
+        </div>
+        <div class="plan-prop-section" style="background: rgba(0,0,0,0.2); padding: 0.45rem; border-radius: 4px; margin-top: 0.4rem;">
+          <div style="font-size: 0.68rem; color: var(--text-secondary); line-height: 1.4;">
+            ${isBlondelOptimal ? '✓ Comfort target: within 600–650 mm benchmark.' : '⚠️ Blondel check outside standard 600–650 mm comfort range.'}
+          </div>
+          <div style="font-size: 0.63rem; color: var(--text-muted); margin-top: 2px;">
+            ℹ️ Straight-flight stair geometry calculator: rise, riser count, tread/going, run, Blondel 2R+T, and pitch. Headroom clearance must be verified separately against the project geometry and applicable requirements.
+          </div>
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-scratch-stair" class="plan-prop-btn"><span>📋 Send to Scratchpad</span></button>
+          <button type="button" id="btn-prop-ai-stair" class="plan-prop-btn" style="border-color: var(--accent-primary);"><span>🤖 AI Review Stair</span></button>
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Stair</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-entity-name')?.addEventListener('change', (e) => {
+        selected.name = e.target.value.trim() || 'Stair';
+        render();
+      });
+
+      dom.planPropContent.querySelector('#btn-prop-scratch-stair')?.addEventListener('click', () => {
+        sendToScratchpad({
+          value: selected.run,
+          formatted: `${selected.run.toFixed(2)}m run (${selected.risers}R @ ${(selected.riserHeight * 1000).toFixed(0)}mm)`,
+          label: `${selected.name} Geometry`,
+          unit: 'm',
+          source: 'Plan Stair'
+        });
+      });
+
+      dom.planPropContent.querySelector('#btn-prop-ai-stair')?.addEventListener('click', () => {
+        triggerAiCritique('stair', {
+          blondel: blondelMm,
+          pitch: pitchDeg
+        });
+      });
+
+    } else if (selected.kind === 'ramp') {
+      const slopePct = (selected.slopePercent || 8.33).toFixed(2);
+      const ratio = (selected.slopeRatio || 12).toFixed(1);
+      const isCompliant = (selected.slopeRatio || 12) >= 12;
+      const angleDeg = (Math.atan2(selected.rise, selected.run) * 180 / Math.PI).toFixed(2);
+
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Ramp Specifications</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name)}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Clear Width</span><span class="plan-prop-value">${selected.width.toFixed(2)} m</span></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Horizontal Run</span><span class="plan-prop-value note-number">${selected.run.toFixed(2)} m</span></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Total Rise</span><span class="plan-prop-value">${selected.rise.toFixed(2)} m</span></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Slope Ratio</span><span class="plan-prop-value" style="font-weight: 700;">1 : ${ratio}</span></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Slope Gradient</span><span class="plan-prop-value">${slopePct}% (${angleDeg}°)</span></div>
+        </div>
+        <div class="plan-prop-section" style="background: rgba(0,0,0,0.2); padding: 0.45rem; border-radius: 4px; margin-top: 0.4rem;">
+          <div style="font-size: 0.68rem; color: ${isCompliant ? 'var(--color-success, #4ade80)' : 'var(--color-warning, #fbbf24)'}; font-weight: 600;">
+            ${isCompliant ? '✓ 1:12 Target Compliant (Straight Single Run)' : '⚠️ Steeper than 1:12 standard'}
+          </div>
+          <div style="font-size: 0.63rem; color: var(--text-muted); margin-top: 2px;">
+            ℹ️ Straight Ramp / Single Run — Landings Not Included. Educational reference — verify local jurisdiction accessibility code.
+          </div>
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-scratch-ramp" class="plan-prop-btn"><span>📋 Send to Scratchpad</span></button>
+          <button type="button" id="btn-prop-ai-ramp" class="plan-prop-btn" style="border-color: var(--accent-primary);"><span>🤖 AI Review Ramp</span></button>
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Ramp</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-entity-name')?.addEventListener('change', (e) => {
+        selected.name = e.target.value.trim() || 'Ramp';
+        render();
+      });
+
+      dom.planPropContent.querySelector('#btn-prop-scratch-ramp')?.addEventListener('click', () => {
+        sendToScratchpad({
+          value: selected.run,
+          formatted: `${selected.run.toFixed(2)}m run (1:${ratio} slope)`,
+          label: `${selected.name} Run`,
+          unit: 'm',
+          source: 'Plan Ramp'
+        });
+      });
+
+      dom.planPropContent.querySelector('#btn-prop-ai-ramp')?.addEventListener('click', () => {
+        triggerAiCritique('ramp', {
+          ratio,
+          percent: slopePct
+        });
+      });
+
     } else if (selected.kind === 'wall') {
       const len = typeof selected.x1 === 'number' ? wallLength(selected) : 0;
       const dir = typeof selected.x1 === 'number' ? wallDirection(selected) : '—';
@@ -21543,12 +21881,23 @@ function createPlanView(context) {
           <div class="plan-prop-row"><span class="plan-prop-label">Openings</span><span class="plan-prop-value">${openings.length}</span></div>
         </div>
         <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-scratch-wall" class="plan-prop-btn"><span>📋 Send Length to Scratchpad</span></button>
           <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Wall</span></button>
         </div>`;
 
       dom.planPropContent.querySelector('#prop-entity-name')?.addEventListener('change', (e) => {
         selected.name = e.target.value.trim() || 'Wall';
         render();
+      });
+
+      dom.planPropContent.querySelector('#btn-prop-scratch-wall')?.addEventListener('click', () => {
+        sendToScratchpad({
+          value: len,
+          formatted: `${len.toFixed(2)} m`,
+          label: `${selected.name} Length`,
+          unit: 'm',
+          source: 'Plan Wall'
+        });
       });
 
     } else if (selected.kind === 'door' || selected.kind === 'window') {
@@ -21580,8 +21929,19 @@ function createPlanView(context) {
           <div class="plan-prop-row"><span class="plan-prop-label">Distance (mm)</span><span class="plan-prop-value">${(dist * 1000).toFixed(0)} mm</span></div>
         </div>
         <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-scratch-dim" class="plan-prop-btn"><span>📋 Send to Scratchpad</span></button>
           <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Dimension</span></button>
         </div>`;
+
+      dom.planPropContent.querySelector('#btn-prop-scratch-dim')?.addEventListener('click', () => {
+        sendToScratchpad({
+          value: dist,
+          formatted: `${dist.toFixed(3)} m (${(dist * 1000).toFixed(0)} mm)`,
+          label: `${selected.name || 'Dimension'}`,
+          unit: 'm',
+          source: 'Plan Dimension'
+        });
+      });
 
     } else if (selected.kind === 'text') {
       dom.planPropContent.innerHTML = `
@@ -21765,7 +22125,7 @@ function createPlanView(context) {
         dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
       }
       render();
-    } else if (tool === 'room' || tool === 'wall' || tool === 'dimension' || tool === 'measure') {
+    } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'measure') {
       dragState = { mode: 'create', tool, start: snapped, current: snapped };
     } else if (tool === 'furniture') {
       dropFurniture(snapped);
@@ -21822,6 +22182,10 @@ function createPlanView(context) {
         createRoomEntity(start, end);
       } else if (dragState.tool === 'wall') {
         createWallEntity(start, end);
+      } else if (dragState.tool === 'stair') {
+        createStairEntityFromDrag(start, end);
+      } else if (dragState.tool === 'ramp') {
+        createRampEntityFromDrag(start, end);
       } else if (dragState.tool === 'dimension') {
         createDimensionEntity(start, end);
       } else if (dragState.tool === 'measure') {
@@ -21888,6 +22252,120 @@ function createPlanView(context) {
     state.plan.selectedIds = new Set([wall.id]);
     showToast(`Wall added: ${wallLength(wall).toFixed(2)} m`);
     AudioService.playTick();
+  }
+
+  function createStairEntityFromDrag(start, end) {
+    const width = Math.max(state.plan.grid, Math.abs(end.x - start.x));
+    const run = Math.max(state.plan.grid, Math.abs(end.y - start.y));
+    const rise = 2.7;
+    const risers = Math.max(4, Math.round(rise / 0.17));
+    let stair;
+    try {
+      stair = createStairEntity({
+        name: `Flight ${entities().filter(e => e.kind === 'stair').length + 1}`,
+        x: Math.min(start.x, end.x),
+        y: Math.min(start.y, end.y),
+        width,
+        run,
+        rise,
+        risers
+      });
+    } catch (e) {
+      showToast(e.message, 'warning');
+      return;
+    }
+    const cmd = entityAddRemoveCommand(entities(), stair, `add stair ${stair.name}`);
+    cmd.redo();
+    history.push(cmd);
+    state.plan.selectedIds = new Set([stair.id]);
+    showToast(`Stair added: ${width.toFixed(2)}m width × ${run.toFixed(2)}m run (${stair.risers}R @ ${(stair.riserHeight * 1000).toFixed(0)}mm)`);
+    AudioService.playTick();
+  }
+
+  function createRampEntityFromDrag(start, end) {
+    const width = Math.max(state.plan.grid, Math.abs(end.x - start.x));
+    const run = Math.max(state.plan.grid, Math.abs(end.y - start.y));
+    const rise = 0.5;
+    let ramp;
+    try {
+      ramp = createRampEntity({
+        name: `Ramp ${entities().filter(e => e.kind === 'ramp').length + 1}`,
+        x: Math.min(start.x, end.x),
+        y: Math.min(start.y, end.y),
+        width,
+        run,
+        rise
+      });
+    } catch (e) {
+      showToast(e.message, 'warning');
+      return;
+    }
+    const cmd = entityAddRemoveCommand(entities(), ramp, `add ramp ${ramp.name}`);
+    cmd.redo();
+    history.push(cmd);
+    state.plan.selectedIds = new Set([ramp.id]);
+    showToast(`Ramp added: ${width.toFixed(2)}m width × ${run.toFixed(2)}m run (1:${ramp.slopeRatio.toFixed(1)} / ${ramp.slopePercent.toFixed(1)}%)`);
+    AudioService.playTick();
+  }
+
+  function sendToScratchpad(item) {
+    if (typeof context.addScratchpadItem === 'function') {
+      return context.addScratchpadItem(item);
+    }
+    if (!Array.isArray(state.scratchpad)) state.scratchpad = [];
+    const cleanItem = {
+      id: `scratch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      value: typeof item.value === 'number' ? item.value : parseFloat(item.value) || 0,
+      formatted: item.formatted || (typeof item.value === 'number' ? `${item.value} ${item.unit || 'm'}` : String(item.value)),
+      label: item.label || 'Measurement',
+      unit: item.unit || 'm',
+      source: item.source || 'Plan Canvas',
+      timestamp: new Date().toISOString()
+    };
+    state.scratchpad.unshift(cleanItem);
+    try {
+      const proj = projectStore?.getProject();
+      if (proj) {
+        if (!Array.isArray(proj.scratchpad)) proj.scratchpad = [];
+        proj.scratchpad.unshift(cleanItem);
+        projectStore.updateProject(proj.id, { scratchpad: proj.scratchpad });
+      }
+    } catch (e) {}
+    showToast(`📋 Saved to Scratchpad: "${cleanItem.label}" (${cleanItem.formatted})`);
+    AudioService.playTick();
+    return cleanItem;
+  }
+
+  function triggerAiCritique(targetType, payload = {}) {
+    switchMode('ai');
+    setTimeout(() => {
+      if (dom.aiJobSelect) {
+        if (targetType === 'furniture') dom.aiJobSelect.value = 'bestPractice';
+        else if (targetType === 'room') dom.aiJobSelect.value = 'studioCritic';
+        else if (targetType === 'stair' || targetType === 'ramp') dom.aiJobSelect.value = 'bestPractice';
+        else dom.aiJobSelect.value = 'projectAnalysis';
+      }
+      if (dom.aiContextScopeSelect) {
+        if (targetType === 'room') dom.aiContextScopeSelect.value = 'Current Room';
+        else if (targetType === 'furniture' || targetType === 'stair' || targetType === 'ramp') dom.aiContextScopeSelect.value = 'Selected Entity';
+        else dom.aiContextScopeSelect.value = 'Current Plan';
+      }
+      if (dom.aiUserPrompt) {
+        if (targetType === 'room') {
+          dom.aiUserPrompt.value = `Review spatial proportion, circulation clearance, and daylighting for ${payload.roomName || 'this room'} (${payload.area || ''} m², ${payload.aspect || ''} aspect ratio).`;
+        } else if (targetType === 'furniture') {
+          dom.aiUserPrompt.value = `Review ergonomic fit, clearance envelopes, and accessibility for ${payload.furnName || 'this furniture item'} (${payload.dimensions || ''}) in ${payload.hostRoom || 'room'}.`;
+        } else if (targetType === 'stair') {
+          dom.aiUserPrompt.value = `Evaluate stair proportion comfort (Blondel 2R+T: ${payload.blondel || ''} mm, pitch: ${payload.pitch || ''}°) and recommend egress/headroom considerations.`;
+        } else if (targetType === 'ramp') {
+          dom.aiUserPrompt.value = `Evaluate ramp accessibility slope (1:${payload.ratio || ''} / ${payload.percent || ''}%) and explain landing/handrail guidance for university presentation.`;
+        } else {
+          dom.aiUserPrompt.value = `Provide an architectural critique of this plan layout, circulation flow, and spatial zoning.`;
+        }
+      }
+      views.callController('ai', 'refreshImageGroup');
+      showToast(`AI Studio loaded with contextual ${targetType} scope`);
+    }, 50);
   }
 
   function dropFurniture(snapped) {
