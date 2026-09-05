@@ -202,22 +202,38 @@ export function furnitureRect(f) {
   return { x: f.x, y: f.y, width: f.width, depth: f.depth };
 }
 
+export function createFurnitureEntity(options) {
+  const wCm = options.wCm !== undefined ? options.wCm : (options.width ? options.width * 100 : 100);
+  const dCm = options.dCm !== undefined ? options.dCm : (options.depth ? options.depth * 100 : 100);
+  const item = placeFurniture({
+    ...options,
+    wCm,
+    dCm
+  });
+  if (options.clearance !== undefined) item.clearance = options.clearance;
+  if (options.category !== undefined) item.category = options.category;
+  return item;
+}
+
 // ---------------------------------------------------------------------------
 // Stairs (straight-flight rectilinear plan footprint)
 // ---------------------------------------------------------------------------
 
-export function createStairEntity({
-  id,
-  name,
-  x,
-  y,
-  width = 1.0,
-  run = 2.8,
-  rise = 2.7,
-  risers = 16,
-  tread = 0.28,
-  floorId = 'floor-1'
-}) {
+export function createStairEntity(options = {}) {
+  const {
+    id,
+    name,
+    x,
+    y,
+    width = 1.0,
+    run = 2.8,
+    floorId = 'floor-1'
+  } = options;
+  const rise = options.rise !== undefined ? options.rise : (options.totalRise !== undefined ? options.totalRise : 2.7);
+  const risers = options.risers !== undefined ? options.risers : (options.riserCount !== undefined ? options.riserCount : 16);
+  const tread = options.tread !== undefined ? options.tread : (options.going !== undefined ? options.going : 0.28);
+  const riser = options.riser !== undefined ? options.riser : null;
+
   requireFiniteNumber(x, 'stair.x');
   requireFiniteNumber(y, 'stair.y');
   requireFiniteNumber(width, 'stair.width');
@@ -228,7 +244,7 @@ export function createStairEntity({
   if (rise <= 0) throw new Error('Stair rise must be greater than zero');
 
   const riserCount = Math.max(1, Math.round(risers));
-  const riserHeight = rise / riserCount;
+  const riserHeight = riser !== null ? riser : (rise / riserCount);
   const going = tread > 0 ? tread : (riserCount > 1 ? run / (riserCount - 1) : run);
   const blondel = (2 * riserHeight) + going;
 
@@ -242,9 +258,13 @@ export function createStairEntity({
     depth: run,
     run,
     rise,
+    totalRise: rise,
     risers: riserCount,
+    riserCount,
     riserHeight,
+    riser: riserHeight,
     tread: going,
+    going,
     blondel,
     floorId
   };

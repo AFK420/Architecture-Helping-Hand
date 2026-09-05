@@ -8552,22 +8552,38 @@ function furnitureRect(f) {
   return { x: f.x, y: f.y, width: f.width, depth: f.depth };
 }
 
+function createFurnitureEntity(options) {
+  const wCm = options.wCm !== undefined ? options.wCm : (options.width ? options.width * 100 : 100);
+  const dCm = options.dCm !== undefined ? options.dCm : (options.depth ? options.depth * 100 : 100);
+  const item = placeFurniture({
+    ...options,
+    wCm,
+    dCm
+  });
+  if (options.clearance !== undefined) item.clearance = options.clearance;
+  if (options.category !== undefined) item.category = options.category;
+  return item;
+}
+
 // ---------------------------------------------------------------------------
 // Stairs (straight-flight rectilinear plan footprint)
 // ---------------------------------------------------------------------------
 
-function createStairEntity({
-  id,
-  name,
-  x,
-  y,
-  width = 1.0,
-  run = 2.8,
-  rise = 2.7,
-  risers = 16,
-  tread = 0.28,
-  floorId = 'floor-1'
-}) {
+function createStairEntity(options = {}) {
+  const {
+    id,
+    name,
+    x,
+    y,
+    width = 1.0,
+    run = 2.8,
+    floorId = 'floor-1'
+  } = options;
+  const rise = options.rise !== undefined ? options.rise : (options.totalRise !== undefined ? options.totalRise : 2.7);
+  const risers = options.risers !== undefined ? options.risers : (options.riserCount !== undefined ? options.riserCount : 16);
+  const tread = options.tread !== undefined ? options.tread : (options.going !== undefined ? options.going : 0.28);
+  const riser = options.riser !== undefined ? options.riser : null;
+
   requireFiniteNumber(x, 'stair.x');
   requireFiniteNumber(y, 'stair.y');
   requireFiniteNumber(width, 'stair.width');
@@ -8578,7 +8594,7 @@ function createStairEntity({
   if (rise <= 0) throw new Error('Stair rise must be greater than zero');
 
   const riserCount = Math.max(1, Math.round(risers));
-  const riserHeight = rise / riserCount;
+  const riserHeight = riser !== null ? riser : (rise / riserCount);
   const going = tread > 0 ? tread : (riserCount > 1 ? run / (riserCount - 1) : run);
   const blondel = (2 * riserHeight) + going;
 
@@ -8592,9 +8608,13 @@ function createStairEntity({
     depth: run,
     run,
     rise,
+    totalRise: rise,
     risers: riserCount,
+    riserCount,
     riserHeight,
+    riser: riserHeight,
     tread: going,
+    going,
     blondel,
     floorId
   };
@@ -13581,6 +13601,15 @@ function parseNaturalLanguageCommand(query) {
   if (!query || typeof query !== 'string') return null;
   const q = query.trim();
 
+  function getCanonicalMeters(parsed) {
+    if (!parsed || !parsed.isValid) return 0;
+    const unit = parsed.detectedUnit;
+    if (unit && UNITS[unit]) {
+      return parsed.value * UNITS[unit].toMeters;
+    }
+    return parsed.value;
+  }
+
   // 1. Scale calculation: "scale 4.2m at 1:50" or "scale 2400mm 1:20"
   const scaleMatch = q.match(/^scale\s+([0-9.]+\s*[a-z]*)\s+(?:at\s+|@\s+)?(?:1\s*:\s*)?([0-9.]+)/i);
   if (scaleMatch) {
@@ -13589,37 +13618,40 @@ function parseNaturalLanguageCommand(query) {
     if (ratio > 0) {
       const parsed = parseInput(dimStr);
       if (parsed && parsed.isValid) {
-        const canonicalM = parsed.canonicalMeters;
-        const drawM = canonicalM / ratio;
-        const drawMm = drawM * 1000;
-        const drawFormatted = drawMm >= 1000
-          ? `${drawM.toFixed(3)} m`
-          : (drawMm % 1 === 0 ? `${drawMm.toFixed(0)} mm` : `${drawMm.toFixed(1)} mm`);
-        return {
-          type: 'scale',
-          query: q,
-          inputStr: dimStr,
-          ratio,
-          canonicalMeters: canonicalM,
-          drawingMeters: drawM,
-          drawingFormatted: drawFormatted,
-          formattedResult: drawFormatted,
-          title: `Scale ${dimStr} at 1:${ratio} = ${drawFormatted}`,
-          description: `Real: ${parsed.formattedCanonical} | Drawing: ${drawFormatted} @ 1:${ratio}`
-        };
+        const canonicalM = getCanonicalMeters(parsed);
+        if (canonicalM > 0) {
+          const drawM = canonicalM / ratio;
+          const drawMm = drawM * 1000;
+          const drawFormatted = drawMm >= 1000
+            ? `${drawM.toFixed(3)} m`
+            : (drawMm % 1 === 0 ? `${drawMm.toFixed(0)} mm` : `${drawMm.toFixed(1)} mm`);
+          return {
+            type: 'scale',
+            query: q,
+            inputStr: dimStr,
+            ratio,
+            canonicalMeters: canonicalM,
+            drawingMeters: drawM,
+            drawingFormatted: drawFormatted,
+            formattedResult: drawFormatted,
+            title: `Scale ${dimStr} at 1:${ratio} = ${drawFormatted}`,
+            description: `Real: ${parsed.value}${parsed.detectedUnit || 'm'} | Drawing: ${drawFormatted} @ 1:${ratio}`
+          };
+        }
       }
     }
   }
 
   // 2. Stair geometry: "stair rise 2.7m" or "stair 2700mm"
-  const stairMatch = q.match(/^stair(?:s)?(?:\s+rise)?\s+([0-9.]+\s*[a-z]+)/i);
+  const stairMatch = q.match(/^stair(?:s)?(?:\s+rise)?\s+([0-9.]+\s*[a-z]*)/i);
   if (stairMatch) {
     const riseStr = stairMatch[1].trim();
     const parsed = parseInput(riseStr);
-    if (parsed && parsed.isValid && parsed.canonicalMeters > 0) {
+    const totalRiseM = getCanonicalMeters(parsed);
+    if (totalRiseM > 0) {
       const stairRes = calculateStair({
-        mode: 'rise_target_riser',
-        totalRise: parsed.canonicalMeters,
+        mode: 'rise_desired_riser',
+        totalRise: totalRiseM,
         desiredRiser: 0.175,
         desiredTread: 0.28,
         references: STAIR_REFERENCE_DEFAULTS
@@ -13630,7 +13662,7 @@ function parseNaturalLanguageCommand(query) {
           type: 'stair',
           query: q,
           inputStr: riseStr,
-          totalRiseMeters: parsed.canonicalMeters,
+          totalRiseMeters: totalRiseM,
           riserCount: stairRes.risers.count,
           riserHeightMeters: stairRes.risers.heightMeters,
           treadDepthMeters: stairRes.treads.depthMeters,
@@ -13645,16 +13677,17 @@ function parseNaturalLanguageCommand(query) {
   }
 
   // 3. Ramp geometry: "ramp rise 1.2m at 1:12" or "ramp 1.2m 1:12"
-  const rampMatch = q.match(/^ramp(?:s)?(?:\s+rise)?\s+([0-9.]+\s*[a-z]+)(?:\s+(?:(?:at|slope)\s+)?1\s*:\s*([0-9.]+))?/i);
+  const rampMatch = q.match(/^ramp(?:s)?(?:\s+rise)?\s+([0-9.]+\s*[a-z]*)(?:\s+(?:(?:at|slope)\s+)?1\s*:\s*([0-9.]+))?/i);
   if (rampMatch) {
     const riseStr = rampMatch[1].trim();
     const ratio = rampMatch[2] ? parseFloat(rampMatch[2]) : 12;
     const parsed = parseInput(riseStr);
-    if (parsed && parsed.isValid && parsed.canonicalMeters > 0 && ratio > 0) {
+    const riseM = getCanonicalMeters(parsed);
+    if (riseM > 0 && ratio > 0) {
       const desiredSlope = (1 / ratio) * 100;
       const rampRes = calculateRamp({
         mode: 'rise_desired_slope',
-        rise: parsed.canonicalMeters,
+        rise: riseM,
         slopePercent: desiredSlope,
         references: RAMP_REFERENCE_DEFAULTS
       });
@@ -13664,7 +13697,7 @@ function parseNaturalLanguageCommand(query) {
           type: 'ramp',
           query: q,
           inputStr: riseStr,
-          riseMeters: parsed.canonicalMeters,
+          riseMeters: riseM,
           ratio,
           runMeters: rampRes.geometry.runMeters,
           slopePercent: desiredSlope,
