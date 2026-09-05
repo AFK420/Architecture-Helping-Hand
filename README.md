@@ -3,7 +3,7 @@
 > **Professional Architectural Scale, Furniture Sizing & Multi-Unit Calculation Studio**  
 > *A high-precision, zero-dependency, tactile architectural conversion studio built for architects, interior designers, urban planners, physical model makers, and design students.*
 
-[![Tests](https://img.shields.io/badge/Tests-2895%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-3742%20Passed%20(100%25)-38bdf8?style=flat-square&logo=node.js)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-3--Tier%20Core%20%7C%20Frozen-10b981?style=flat-square)](ENGINEERING_RULES.md)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Vanilla)-f59e0b?style=flat-square)](package.json)
 [![License](https://img.shields.io/badge/License-MIT-6366f1?style=flat-square)](package.json)
@@ -20,7 +20,7 @@
    - [2. Rescaler (Sheet Scale A ➔ Sheet Scale B)](#2-rescaler-sheet-scale-a--sheet-scale-b)
    - [3. Scale Finder & Detector](#3-scale-finder--detector)
    - [4. Area (S²) & Volume (S³) Scaler](#4-area-s²--volume-s³-scaler)
-   - [5. Furniture Scales & Fixtures Catalog (179 Items Across 9 Domains)](#5-furniture-scales--fixtures-catalog-with-live-search)
+   - [5. Furniture Scales & Fixtures Catalog (215 Items Across 9 Categories)](#5-furniture-scales--fixtures-catalog-with-live-search)
    - [6. Multi-Length Architectural Reference Sheet](#6-multi-length-architectural-reference-sheet)
    - [7. Architectural Geometry Engine (Core Math)](#7-architectural-geometry-engine-core-math)
    - [8. Dimension Workspace & Dynamic Schedule (v1.1)](#8-dimension-workspace--dynamic-schedule-v11)
@@ -36,7 +36,7 @@
    - [18. Slope Analyzer (Mode 16) — Architectural Tools](#18-slope-analyzer-mode-16--architectural-tools)
    - [19. Survey Notebook (Mode 23) — Measurements & Calibration](#19-survey-notebook-mode-23--measurements--calibration)
 5. [📐 Architectural Scale Presets (All 28 Presets)](#-architectural-scale-presets-all-28-presets)
-6. [🛋️ Architectural Furniture & Fixtures Database (179 Items Across 9 Domains)](#️-architectural-furniture--fixtures-database-179-items-across-9-domains)
+6. [🛋️ Architectural Furniture & Fixtures Database (215 Items Across 9 Categories)](#️-architectural-furniture--fixtures-database-215-items-across-9-categories)
 7. [📏 Supported Measurement Units](#-supported-measurement-units)
 8. [🧮 Mathematical Formulas & Contracts](#-mathematical-formulas--contracts)
 9. [🎨 Visual Proportions, 2D Blueprint SVGs & Tactile Audio](#-visual-proportions-2d-blueprint-svgs--tactile-audio)
@@ -59,7 +59,7 @@ Manual scale calculations often cause:
 * **Furniture Clearance Uncertainties**: Hand-drafting and CAD block sizing require looking up standard clearances and real-world dimensions across multiple reference manuals.
 
 ### The Solution: Architecture Helping Hand
-**Architecture Helping Hand** eliminates manual calculation errors by providing a unified, tactile, mathematically verified studio that runs 100% client-side with **zero external dependencies**. It parses fractions (`3 1/2`), feet-inches (`12'-6 1/2"`), scales areas ($S^2$) and volumes ($S^3$), detects unknown scales, and provides an instant searchable database of **179 architectural furniture and fixture standards** across 9 domains with accurate 2D top-down blueprint drawings.
+**Architecture Helping Hand** eliminates manual calculation errors by providing a unified, tactile, mathematically verified studio that runs 100% client-side with **zero external dependencies**. It parses fractions (`3 1/2`), feet-inches (`12'-6 1/2"`), scales areas ($S^2$) and volumes ($S^3$), detects unknown scales, and provides an instant searchable database of **215 architectural furniture and fixture standards** across 9 categories with accurate 2D top-down blueprint drawings.
 
 ---
 
@@ -116,10 +116,10 @@ The codebase has evolved through rigorous engineering, auditing, hardening, and 
                • Configured local development server port to 3500 (npm start)
                • Reached 295 automated test assertions across 9 test suites
                ────────────────────────────────────────────────────────────────────────────────────
-  Phase UI-2   • Architectural Standards & Furniture Database Enlargement (179 Items)
-               • Expanded database from 61 to 179 verified pieces across 9 specialized domains:
-                 Living (23), Bedroom (20), Dining (18), Kitchen (22), Bathroom (20), Office (22),
-                 Doors & Circulation (22), Outdoor & Patio (16), Commercial & Gym (16)
+  Phase UI-2   • Architectural Standards & Furniture Database Enlargement (215 Items Across 9 Categories)
+               • Expanded database from 61 to 215 verified pieces across 9 specialized categories:
+                 Living (31), Bedroom (18), Dining (18), Kitchen (27), Bathroom (28), Office (24),
+                 Doors & Circulation (23), Outdoor & Patio (24), Commercial & Gym (22)
                • Added dynamic category tab count badges in real-time
                • Reached 299 automated test assertions with 100% pass rate
                ────────────────────────────────────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ The codebase has evolved through rigorous engineering, auditing, hardening, and 
 This repository serves as:
 1. **An Open-Source Reference Studio**: A tactile, zero-friction architectural scaling studio for architects, interior designers, landscape architects, students, and educators.
 2. **Zero-Dependency Architecture**: No React, no Vue, no webpack, no runtime `node_modules`. Anyone can clone the repository, double-click `index.html`, and use it immediately offline via `file:///`.
-3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **2,895 automated test assertions across 36 test suites** (authoritative count emitted by `npm test`).
+3. **A Reliable Mathematical Core**: High-integrity domain calculations in `src/core/` verified by **3,742 automated test assertions across 37 test suites** (authoritative count emitted by `npm test`).
 4. **An Extensible Platform**: Prepared for future architectural geometry engines, CAD vector exports (SVG/DXF), and stair/ramp calculations.
 
 ---
@@ -171,8 +171,8 @@ This repository serves as:
 * **Quadratic Area Scaling**: Accurate $S^2$ area scaling for floor plates, room boundaries, site areas ($m^2$, $ft^2$, hectares, acres).
 * **Cubic Volume Scaling**: Accurate $S^3$ volume scaling for physical massing models, HVAC airflow volumes, and water features ($m^3$, $ft^3$, liters).
 
-### 5. Furniture Scales & Fixtures Catalog (179 Items Across 9 Domains)
-* **179 Verified Standard Pieces**: Real-world dimensions ($W \times D \times H\text{ cm}$) and imperial equivalents.
+### 5. Furniture Scales & Fixtures Catalog (215 Items Across 9 Categories)
+* **215 Verified Standard Pieces**: Real-world dimensions ($W \times D \times H\text{ cm}$) and imperial equivalents.
 * **Tailored 2D Architectural Blueprint SVGs**: Top-down CAD/drafting drawings for each individual piece (cushions, pillows, basins, burners, door swings, stair treads).
 * **Spacious 3-Column Grid Layout**: Large, comfortable drafting cards with `135px` blueprint preview viewports.
 * **Real-Time Search & Category Filters**: Search by keyword or filter across 9 domains with dynamic item count badges.
@@ -252,6 +252,7 @@ This repository serves as:
 * **Scope Note — Workflow Profiles, Not Integrations**: These are clipboard formatting conventions for fast manual pasting. Part 9 does **not** provide direct AutoCAD, Rhino, or SketchUp API/plugin integration, generates no proprietary command syntax, and never executes copied content.
 
 ### 16. Stair Calculator (Mode 14) — Architectural Tools
+* **Straight-Flight Geometry Calculator**: Straight-flight stair geometry calculator: rise, riser count, tread/going, run, Blondel 2R+T, and pitch. Headroom clearance must be verified separately against the project geometry and applicable requirements. This tool is an educational/design calculator and not a jurisdiction-specific code-certification engine.
 * **Four Deterministic Input Modes**: Rise + Desired Riser · Rise + Number of Risers · Rise + Available Run · Rise + Run (direct geometry). Lengths accept the full application parser (`2.8m`, `2800mm`, `12'-6"`).
 * **Riser/Going Convention Made Explicit**: N risers → N − 1 goings (the upper slab is the final tread). The result header and SVG diagram show `16 risers / 15 goings` verbatim — the off-by-one is never hidden.
 * **Blondel Proportion Check**: shows Riser, Going, and 2R+T against a configurable 600–660 mm teaching band, labelled *Educational Heuristic (configurable)*. Status language is "Within/Below/Above configured reference range" — never "code compliant". Riser/going/angle ranges are equally configurable Typical References.
@@ -260,12 +261,12 @@ This repository serves as:
 * **Project Persistence**: *Save to Project* stores the stair as a decision in the versioned Project Document (`src/services/store.js`) — no stair-specific localStorage silo. Journal / Workspace / CAD Handoff handoffs reuse the existing systems. See **STAIRS.md** for the full contract.
 
 ### 17. Ramp Calculator (Mode 15) — Architectural Tools
-* **One Canonical Geometry Source**: percentage (`rise/run × 100`), ratio (`1 : run/rise`), and angle (`atan2(rise, run)`) all derive from the same rise/run pair — they can never disagree. Angle is computed at full precision, then formatted.
+* **Straight Ramp / Single Run — Landings Not Included**: Calculates single-flight straight ramp slope geometry: rise, run, percentage, ratio (1:X), and angle from one canonical calculation source. Reference values are educational guidelines only — this tool does not provide ADA or Part M compliance certification. Intermediate landings, resting platforms, and switchback configurations are not calculated; always verify local regulatory requirements.
 * **Four Input Modes**: Rise + Desired Slope (hero: *required run*) · Rise + Available Run · Run + Desired Slope (hero: *required rise*) · Rise + Run (direct geometry, nothing invented). Lengths accept the full application parser.
 * **Ratio Stability**: `1 : 12` renders exactly; float noise (`12.00000000002`) is normalized; non-integer ratios show controlled decimals (`1 : 8.5`) — never fabricated exactness.
 * **Available-Run Analysis**: for a given rise and available run the tool reports required run for the reference target, the surplus/shortfall in meters, and an explicit *Sufficient / Insufficient* result.
 * **Target Comparison**: fixed study values (5% / 8.33% / 10% / 12.5% / 16.67% / 20%) mapped to the run each demands — deterministic order, monotonic, labelled *Common Study Values (design targets, not legal requirements)*. One click switches the calculator to that target.
-* **Configurable Educational Reference**: 1:12 target inside a 1:8–1:20 study band, labelled *Educational Reference (configurable)* with an explicit "verify applicable local requirements" note. Negative slope is rejected (`NEGATIVE_SLOPE`) — this models ascent ramps only.
+* **Configurable Educational Reference**: 1:12 target inside a 1:8–1:20 study band, labelled *Educational Reference (configurable)* with an explicit educational disclaimer. Negative slope is rejected (`NEGATIVE_SLOPE`) — this models ascent ramps only.
 * **Proportional SVG Diagram**: side elevation derived from the actual calculated geometry (rendered run:rise ratio pinned to the numeric result by tests).
 * **Persistence & Handoffs**: *Save to Project* writes a decision to the versioned Project Document via the project store (no ramp-specific silo); Journal / Workspace / CAD Handoff reuse the existing systems. See **RAMPS.md** for the full contract.
 
@@ -325,21 +326,21 @@ This repository serves as:
 
 ---
 
-## 🛋️ Architectural Furniture & Fixtures Database (179 Items Across 9 Domains)
+## 🛋️ Architectural Furniture & Fixtures Database (215 Items Across 9 Categories)
 
-The studio contains **179 standard architectural pieces** across 9 domains with exact metric dimensions, imperial equivalents, and proportional paper dimensions computed across any scale ratio ($1:10$, $1:20$, $1:25$, $1:50$, $1:100$, $1:200$, $1/4"=1'$):
+The studio contains **215 standard architectural pieces** across 9 categories with exact metric dimensions, imperial equivalents, and proportional paper dimensions computed across any scale ratio ($1:10$, $1:20$, $1:25$, $1:50$, $1:100$, $1:200$, $1/4"=1'$):
 
 | Category | Typical Standard Pieces Included | Real-World Dimensions (Metric) | Imperial Equiv | Paper @ 1:50 |
 | :--- | :--- | :---: | :---: | :---: |
-| **Living & Lounge** (23) | 3-Seater Sofa, 2-Seater Loveseat, 4-Seater Large Sofa, L-Sectional, U-Sectional, Chesterfield, Chaise Lounge, Recliner, Wingback, Coffee Tables, Console, Bookshelf, Fireplace Hearth, Grand Piano | $220 \times 90 \times 85\text{ cm}$ | $7\text{'-}3" \times 2\text{'-}11"$ | $4.40 \times 1.80\text{ cm}$ |
-| **Bedroom & Wardrobe** (20) | Super King ($200 \times 200$), King ($180 \times 200$), Queen ($150 \times 200$), Double ($135 \times 190$), Twin XL, Single/Twin, Bunk Bed, Trundle, Baby Crib, Toddler Bed, Nightstands, 2/3/4-Door Wardrobes, Sliding Wardrobes, Closet Island, Dressers, Vanity | $180 \times 200 \times 110\text{ cm}$ | $5\text{'-}11" \times 6\text{'-}7"$ | $3.60 \times 4.00\text{ cm}$ |
+| **Living & Lounge** (31) | 3-Seater Sofa, 2-Seater Loveseat, 4-Seater Large Sofa, L-Sectional, U-Sectional, Chesterfield, Chaise Lounge, Recliner, Wingback, Coffee Tables, Console, Bookshelf, Fireplace Hearth, Grand Piano, Waiting Chairs | $220 \times 90 \times 85\text{ cm}$ | $7\text{'-}3" \times 2\text{'-}11"$ | $4.40 \times 1.80\text{ cm}$ |
+| **Bedroom & Wardrobe** (18) | Super King ($200 \times 200$), King ($180 \times 200$), Queen ($150 \times 200$), Double ($135 \times 190$), Twin XL, Single/Twin, Bunk Bed, Trundle, Baby Crib, Toddler Bed, Nightstands, Wardrobes, Dressers | $180 \times 200 \times 110\text{ cm}$ | $5\text{'-}11" \times 6\text{'-}7"$ | $3.60 \times 4.00\text{ cm}$ |
 | **Dining & Bar** (18) | Bistro Tables (2P Square/Round), 4P/6P/8P/10P/12P Dining Tables (Square, Rectangular, Round, Oval), Dining Chairs, Carver Armchair, Bar Stools, Breakfast Nook Banquette, Sideboards, Credenza, Bar Cart | $160 \times 90 \times 75\text{ cm}$ | $5\text{'-}3" \times 2\text{'-}11"$ | $3.20 \times 1.80\text{ cm}$ |
-| **Kitchen & Utility** (22) | Base Cabinets ($60/90\text{cm}$), Corner Lazy Susan, Kitchen Islands ($1.8\text{m}/2.4\text{m}$ with Prep Sink), Peninsula Bar, Tall Pantry, Oven/Microwave Tower, Single/Double/Apron Sinks, 4/5-Burner Cooktops, Range Cookers, French-Door Fridge, Dishwasher, Laundry Washer/Dryer | $180 \times 90 \times 90\text{ cm}$ | $5\text{'-}11" \times 2\text{'-}11"$ | $3.60 \times 1.80\text{ cm}$ |
-| **Bathroom & Spa** (20) | Close-Coupled WC, Wall-Hung WC, Accessible ADA Toilet, Bidet, Wall Urinal with Partition, Cloakroom Basin, Pedestal Basin, Single/Double/Luxury Vanities ($60-160\text{cm}$), Inset/Oval/Corner Jacuzzi Tubs, Corner/Neo/Walk-In/ADA Roll-In Showers | $170 \times 70 \times 55\text{ cm}$ | $5\text{'-}7" \times 2\text{'-}4"$ | $3.40 \times 1.40\text{ cm}$ |
-| **Office & Studio** (22) | Compact Desk, Standard Workstation ($1.4\text{m}$), Studio Desk ($1.6\text{m}$), Sit-Stand Electric Desk, Executive Desk, L/U-Shaped Executive Suites, Drafting Table, 2P/4P/6P Benching Pods, Reception Counter, Phone Booth, 8P/12P Conference Tables, Task/Exec Chairs, Filing, Server Rack | $140 \times 70 \times 75\text{ cm}$ | $4\text{'-}7" \times 2\text{'-}4"$ | $2.80 \times 1.40\text{ cm}$ |
-| **Doors & Circulation** (22) | Interior Doors ($700/800\text{mm}$), Entrance Door ($900\text{mm}$), ADA Accessible Door ($1000\text{mm}$), French Doors ($1.6/1.8\text{m}$), Pocket Door, Sliding Patio Doors ($1.8/2.7\text{m}$), Bi-fold Glass Wall ($3.0\text{m}$), Casement/Picture/Sliding Windows, Straight/L/U/Spiral Stairs, Corridors, ADA Turning Circle ($1.5\text{m}$), Access Ramp, Elevator Shaft | $90 \times 10 \times 210\text{ cm}$ | $2\text{'-}11" \times 6\text{'-}11"$ | $1.80 \times 0.20\text{ cm}$ |
-| **Outdoor & Patio** (16) | Patio Dining Sets, Terrace Chairs, Sun Loungers, Outdoor L-Sectional, Fire Pit Table, Cantilever Parasol ($\text{Ø}300\text{cm}$), BBQ Kitchen Station, Planter Boxes, Bicycle Racks, Motorcycle Bays, Compact/Standard/ADA Car Parking Bays, EV Charging Bay, Single Garage | $250 \times 500\text{ cm}$ | $8\text{'-}2" \times 16\text{'-}5"$ | $5.00 \times 10.00\text{ cm}$ |
-| **Commercial & Gym** (16) | Restaurant 2P/4P Booths, Bar Service Counter with Taps, Retail Apparel Racks, POS Cashier Counter, Supermarket Conveyor, Gym Treadmills, Spin Bikes, Ellipticals, Olympic Bench Press, Multi-Gym Cable Stack, Hospital Patient Beds, Medical Clinic Exam Tables, Dental Operatory Chairs | $120 \times 180 \times 100\text{ cm}$ | $3\text{'-}11" \times 5\text{'-}11"$ | $2.40 \times 3.60\text{ cm}$ |
+| **Kitchen & Utility** (27) | Base Cabinets ($60/90\text{cm}$), Corner Lazy Susan, Kitchen Islands ($1.8\text{m}/2.4\text{m}$ with Prep Sink), Peninsula Bar, Tall Pantry, Oven Tower, Single/Double Sinks, Cooktops, Range Cookers, Fridge, Dishwasher, Laundry Washer/Dryer, Walk-in Cold Room | $180 \times 90 \times 90\text{ cm}$ | $5\text{'-}11" \times 2\text{'-}11"$ | $3.60 \times 1.80\text{ cm}$ |
+| **Bathroom & Spa** (28) | Close-Coupled WC, Wall-Hung WC, Accessible ADA Toilet, Bidet, Wall Urinal with Partition, Cloakroom Basin, Pedestal Basin, Single/Double/Luxury Vanities ($60-160\text{cm}$), Inset/Oval/Corner Jacuzzi Tubs, Showers | $170 \times 70 \times 55\text{ cm}$ | $5\text{'-}7" \times 2\text{'-}4"$ | $3.40 \times 1.40\text{ cm}$ |
+| **Office & Studio** (24) | Compact Desk, Standard Workstation ($1.4\text{m}$), Studio Desk ($1.6\text{m}$), Sit-Stand Electric Desk, Executive Desk, L/U-Shaped Suites, Drafting Table, Benching Pods, Reception Counter, Phone Booth, Conference Tables, Classroom Desks | $140 \times 70 \times 75\text{ cm}$ | $4\text{'-}7" \times 2\text{'-}4"$ | $2.80 \times 1.40\text{ cm}$ |
+| **Doors & Openings** (23) | Interior Doors ($700/800\text{mm}$), Entrance Door ($900\text{mm}$), ADA Accessible Door ($1000\text{mm}$), French Doors ($1.6/1.8\text{m}$), Pocket Door, Sliding Patio Doors ($1.8/2.7\text{m}$), Bi-fold Glass Wall ($3.0\text{m}$), Casement/Picture/Sliding Windows | $90 \times 10 \times 210\text{ cm}$ | $2\text{'-}11" \times 6\text{'-}11"$ | $1.80 \times 0.20\text{ cm}$ |
+| **Outdoor & Patio** (24) | Patio Dining Sets, Terrace Chairs, Sun Loungers, Outdoor L-Sectional, Fire Pit Table, Cantilever Parasol ($\text{Ø}300\text{cm}$), BBQ Kitchen Station, Planter Boxes, Bicycle Racks, Motorcycle Bays, Parking Bays, Single Garage | $250 \times 500\text{ cm}$ | $8\text{'-}2" \times 16\text{'-}5"$ | $5.00 \times 10.00\text{ cm}$ |
+| **Commercial & Industrial** (22) | Restaurant Booths, Bar Service Counter, Retail Apparel Racks, Cashier Counter, Supermarket Conveyor, Gym Equipment, Hospital Beds, ICU Bed, Medical Exam Tables, Dental Chairs, Pallet Racks, Forklift Aisles, Goods Lift | $120 \times 180 \times 100\text{ cm}$ | $3\text{'-}11" \times 5\text{'-}11"$ | $2.40 \times 3.60\text{ cm}$ |
 
 ---
 
@@ -485,7 +486,7 @@ python -m http.server 3500
 ### 3. Run Automated Test Suite
 ```bash
 npm test
-# Executes all 36 test suites (2,895 assertions, 100% passing).
+# Executes all 37 test suites (3,742 assertions, 100% passing).
 # The runner emits the authoritative total assertion count on completion.
 ```
 
@@ -525,24 +526,21 @@ node scripts/build.js --check
 * **Phase 16 (September 2026): Surface the Tested Cores — in progress**:
   - ✅ **Survey Notebook (Mode 23)** — measurement provenance UI over `src/core/survey.js`: record/verify/delete with status transitions, room proposals from verified records only, two-point image calibration feeding the notebook; see [SURVEY.md](SURVEY.md).
 * **Phase 15 (September 2026): Real AI Integration — implemented**:
-  - ✅ **AI Providers** — real Gemini (generateContent/ListModels), GLM (OpenAI-compatible v4), and DeepSeek transports with user-supplied keys; see [AI_PROVIDERS.md](AI_PROVIDERS.md).
+  - ✅ **AI Providers** — real Gemini (generateContent/ListModels), GLM (OpenAI-compatible v4), and DeepSeek transports with user-supplied keys; see [AI_PROVIDERS.md](AI_PROVIDERS.md). Real Text and Vision provider integration is fully operational.
   - ✅ **Model catalog** — provider discovery + manual model entry ("I know this model exists"), capability profiles per model, retirement states; no model list is hard-coded as permanent truth.
-  - ✅ **AI jobs** — 11 named jobs (Tutor, Studio/Brutal Critic, Jury, Ideation, Project Analysis, Image Analysis, Concept Image, …) with capability-validated model assignment; see [AI_JOBS.md](AI_JOBS.md).
+  - ✅ **AI jobs** — 11 named jobs (Tutor, Studio/Brutal Critic, Jury, Ideation, Project Analysis, Image Analysis, Concept Image, …) with capability-validated model assignment; see [AI_JOBS.md](AI_JOBS.md). Note: Concept Image is **Coming Soon / Not Currently Available** (no default model supports generative raster rendering).
   - ✅ **AI Studio (Mode 20)** — task-focused assistant consuming the deterministic facts pack; structured critiques rendered with evidence, trust labels, and numeric fact-check strips; see [AI_CONTROL_CENTER.md](AI_CONTROL_CENTER.md).
   - ✅ **AI Control Center (Mode 21)** — provider keys (session-only default / labelled persistent), connection tests, model catalog browser, job assignment table, local metadata-only activity log.
-  - ✅ **Import foundation** — CSV/TSV schedules, 2D ASCII DXF, flat SVG with normalized reports and NEEDS VERIFICATION semantics; see [IMPORTS.md](IMPORTS.md).
+  - ✅ **Import foundation** — exact supported formats: **2D DXF, SVG, CSV, TSV, and native Project JSON** (via Project Workspace). Native DWG, IFC, RVT, OBJ, SKP, 3DM, and PSD formats are not supported; see [IMPORTS.md](IMPORTS.md).
   - ✅ **Free-cost safety** — fallback policy defaults to NEVER, no retry loops, no telemetry; automated tests never call real APIs (mocked HTTP at the single `services/ai/http.js` boundary).
-* **AI proposal UI**: the store's apply/undo/notify flow exists and is tested; a visible panel for AI *layout* proposals remains future work (Save-to-Journal is implemented).
-* **Survey/Calibration/Annotations UI not yet surfaced**: the **Survey Notebook (Mode 23)** now covers measurement provenance and two-point calibration ([SURVEY.md](SURVEY.md)); the annotations core (`src/core/annotations.js`) remains a tested pure module without a dedicated mode — future work.
-* **Phase 3 (legacy numbering): Extended Architectural Geometry**:
-  - Wall thickness offset and clearance envelope calculator — partially covered by the space-planning core (`checkClearance`, wall footprints in `wallRect`); advanced envelope tools remain future work.
-* **Phase 4 (legacy numbering): Stair & Ramp Compliance Suite**:
-  - ✅ **Stair Calculator** (Mode 14) — implemented; see STAIRS.md.
-  - ✅ **Ramp Calculator** (Mode 15) — implemented; see RAMPS.md.
-  - ✅ **Slope Analyzer** (Mode 16) — implemented; see SLOPES.md.
-  - Landing/switchback configurations remain future work.
-* **Phase 5 (legacy numbering): CAD Vector Exports**:
-  - ✅ **SVG & DXF vector export** — implemented in the Universal Export Center (Mode 17): SVG (chains, stairs, ramps, slopes, plan canvas) and DXF R12 subset (chain segments, room outlines, plan geometry) through `src/core/export/export-model.js`.
+* **Space Planning Integration**:
+  - ✅ **Space Planning Core & Inspector** — deterministic fit checks (`checkFurnitureFit`), clearance checks (`checkClearance`), and overlap checks (`checkOverlap`), surfaced directly in the Plan Canvas Inspector when entities are selected. Does **not** provide automated layout or generative furniture packing.
+* **Phase 4 (legacy numbering): Stair & Ramp Tools**:
+  - ✅ **Stair Calculator** (Mode 14) — Straight-flight stair geometry calculator: rise, riser count, tread/going, run, Blondel 2R+T, and pitch. Headroom clearance must be verified separately against the project geometry and applicable requirements. Not a code-certification engine; see [STAIRS.md](STAIRS.md).
+  - ✅ **Ramp Calculator** (Mode 15) — Straight Ramp / Single Run — Landings Not Included. Educational reference values only — does not provide ADA or Part M compliance certification. Intermediate landings, resting platforms, and switchbacks are not calculated; see [RAMPS.md](RAMPS.md).
+  - ✅ **Slope Analyzer** (Mode 16) — implemented; see [SLOPES.md](SLOPES.md).
+* **Phase 5 (legacy numbering): Universal Export Center (Mode 17)**:
+  - ✅ **File Exports & Print** — direct blob downloads of JSON, TXT, CSV, TSV, SVG, and 2D ASCII DXF files. PDF generation is provided via **Print / Save as PDF** which opens the native browser print dialog with print-ready stylesheets (`@media print`); see `src/core/export/export-model.js`.
 * **Note on Part 9 (CAD Handoff)**: Completed as clipboard workflow profiles (Mode 13). Direct AutoCAD / Rhino / SketchUp API or plugin integration remains out of scope by design.
 
 ---

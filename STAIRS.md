@@ -8,7 +8,9 @@
 
 ## 1. Scope & Positioning
 
-The Stair Calculator is an **educational/design calculation tool** for a straight flight of stairs. It is **NOT a jurisdiction-specific code-compliance engine**. All reference ranges are configurable heuristics carrying explicit semantic labels:
+Straight-flight stair geometry calculator: rise, riser count, tread/going, run, Blondel 2R+T, and pitch. Headroom clearance must be verified separately against the project geometry and applicable requirements.
+
+The tool is an educational and design calculation tool, NOT a jurisdiction-specific code-certification engine. All reference ranges are configurable heuristics carrying explicit semantic labels:
 
 | Range | Label | Default | Meaning |
 |---|---|---|---|

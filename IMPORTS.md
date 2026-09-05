@@ -20,11 +20,16 @@ Every importer returns the same report shape (rule 37):
 sourceType · entities[] · warnings[] · stats { found, imported, units, scale, confidence }
 ```
 
-Native proprietary formats (`.dwg`, `.3dm`, `.skp`, `.psd`) are **not**
-parsed. Documented workflows: AutoCAD/Rhino/SketchUp → export DXF or SVG →
-Importer; Photoshop → export PNG/JPG/SVG.
+Native CAD, BIM, and 3D formats (DWG, IFC, RVT, OBJ, SKP, 3DM, PSD) are **not** supported. Workflows: export 2D DXF or SVG from your source software first.
 
 ## 2. Supported Formats
+
+Exactly supported:
+- **2D DXF** (ASCII R12+ 2D subset: LINE, LWPOLYLINE, TEXT, CIRCLE)
+- **SVG** (flat 2D vector geometry)
+- **CSV** (dimension schedules)
+- **TSV** (dimension schedules)
+- **JSON** (native project exchange where supported via Project Workspace and Export Center)
 
 | Format | Scope | Units | Confidence |
 |---|---|---|---|

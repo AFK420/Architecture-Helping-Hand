@@ -1,6 +1,6 @@
 /**
  * Architecture Helping Hand - Comprehensive Furniture, Fixtures & Standards Library
- * Over 175+ verified architectural standard dimensions spanning residential, commercial,
+ * 215 verified architectural standard dimensions across 9 categories spanning residential, commercial,
  * sanitary, circulation, clearances, outdoor, fitness, and accessibility domains.
  */
 

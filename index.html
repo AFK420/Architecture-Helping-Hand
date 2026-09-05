@@ -2985,7 +2985,7 @@
           </div>
 
           <p class="tool-description">
-            Straight-flight stair proportions and geometry. Reference ranges are configurable educational heuristics — this tool is not a jurisdiction-specific code-compliance engine.
+            Straight-flight stair geometry calculator: rise, riser count, tread/going, run, Blondel 2R+T, and pitch. Headroom clearance must be verified separately against the project geometry and applicable requirements. Reference ranges are configurable educational heuristics — this tool is not a jurisdiction-specific code-certification engine.
           </p>
 
           <div class="input-row-group" style="margin-bottom: 1.1rem;">
@@ -3147,7 +3147,7 @@
           <div class="card-header">
             <div>
               <span class="card-tag">MODE 15 • ARCHITECTURAL TOOLS</span>
-              <h2 id="heading-ramps" class="card-title">Ramp Calculator</h2>
+              <h2 id="heading-ramps" class="card-title">Ramp Calculator — Straight Ramp / Single Run (Landings Not Included)</h2>
             </div>
             <div class="status-indicator">
               <span id="ramps-state-badge" class="badge-status-ready">READY</span>
@@ -3155,7 +3155,7 @@
           </div>
 
           <p class="tool-description">
-            Straight-ramp slope geometry: rise, run, percentage, ratio (1:X), and angle from one canonical calculation source. Educational reference values are configurable heuristics — not a jurisdiction-specific compliance engine.
+            <strong>Straight Ramp / Single Run — Landings Not Included.</strong> Straight-ramp slope geometry: rise, run, percentage, ratio (1:X), and angle from one canonical calculation source. Reference values are educational guidelines only — not an ADA or Part M compliance certification. Intermediate landings, resting platforms, and switchbacks are not calculated by this tool; always verify landing intervals and maximum slope limits against applicable local requirements.
           </p>
 
           <div class="input-row-group" style="margin-bottom: 1.1rem;">
@@ -3543,12 +3543,12 @@
               <button type="button" id="btn-export-copy" class="result-action-btn" title="Copy the export content">
                 <span>📋 Copy</span>
               </button>
-              <button type="button" id="btn-export-print" class="result-action-btn" title="Print (browser print-to-PDF)">
-                <span>🖨 Print / PDF</span>
+              <button type="button" id="btn-export-print" class="result-action-btn" title="Print / Save as PDF (opens browser print dialog)">
+                <span>🖨 Print / Save as PDF</span>
               </button>
             </div>
             <p class="field-hint" style="font-size: 0.72rem; color: var(--text-muted); margin: 0.25rem 0 0;">
-              DXF scope: ASCII R12 subset (LINE / POLYLINE / TEXT / CIRCLE, 2D, mm) — conservative interoperability, not full CAD exchange.
+              DXF scope: ASCII R12 subset (LINE / POLYLINE / TEXT / CIRCLE, 2D, mm) — conservative interoperability, not full CAD exchange. "Print / Save as PDF" opens the browser print dialog with print-ready stylesheets (@media print).
             </p>
           </div>
         </div>
@@ -3830,7 +3830,7 @@
           </div>
 
           <p class="tool-description">
-            Bring external material in: CSV/TSV dimension schedules, 2D DXF geometry (LINE/LWPOLYLINE/TEXT/CIRCLE), and flat SVG geometry. Imports produce a report — entities, units, confidence, warnings — before anything touches your project. Native CAD files (DWG, 3DM, SKP): export DXF/SVG from the source app first.
+            Bring external material in. Supported formats: 2D DXF, SVG, CSV, TSV, and native Project JSON (via Project Workspace). Native DWG, IFC, RVT, OBJ, SKP, 3DM, and PSD formats are not supported; export 2D DXF or SVG from your source software first. Imports produce a structured report before anything touches your project.
           </p>
 
           <div class="input-row-group" style="margin-bottom: 1rem;">
@@ -4256,7 +4256,7 @@
             <div style="display: flex; gap: 0.9rem; flex-wrap: wrap; font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
               <label style="display: flex; gap: 0.3rem; align-items: center; cursor: pointer;"><input type="checkbox" id="ai-filter-vision" style="width: auto;" /> Vision</label>
               <label style="display: flex; gap: 0.3rem; align-items: center; cursor: pointer;"><input type="checkbox" id="ai-filter-structured" style="width: auto;" /> Structured</label>
-              <label style="display: flex; gap: 0.3rem; align-items: center; cursor: pointer;"><input type="checkbox" id="ai-filter-imagegen" style="width: auto;" /> Image Gen</label>
+              <label style="display: flex; gap: 0.3rem; align-items: center; cursor: pointer;"><input type="checkbox" id="ai-filter-imagegen" style="width: auto;" /> Image Gen (Coming Soon / Not Currently Available)</label>
             </div>
             <div id="ai-catalog-list" style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 320px; overflow-y: auto;" role="list" aria-label="Model catalog"></div>
 
@@ -4274,7 +4274,7 @@
                 <label style="display: flex; gap: 0.3rem; align-items: center; cursor: pointer;"><input type="checkbox" id="ai-manual-cap-reasoning" style="width: auto;" /> Reasoning</label>
                 <label style="display: flex; gap: 0.3rem; align-items: center; cursor: pointer;"><input type="checkbox" id="ai-manual-cap-structured" style="width: auto;" /> Structured</label>
                 <label style="display: flex; gap: 0.3rem; align-items: center; cursor: pointer;"><input type="checkbox" id="ai-manual-cap-vision" style="width: auto;" /> Vision</label>
-                <label style="display: flex; gap: 0.3rem; align-items: center; cursor: pointer;"><input type="checkbox" id="ai-manual-cap-imagegen" style="width: auto;" /> Image Gen</label>
+                <label style="display: flex; gap: 0.3rem; align-items: center; cursor: pointer;"><input type="checkbox" id="ai-manual-cap-imagegen" style="width: auto;" /> Image Gen (Coming Soon / Not Currently Available)</label>
               </div>
               <p class="field-hint" style="font-size: 0.68rem; color: var(--text-muted); margin: 0.5rem 0 0;">Manual capabilities are USER DECLARED — provider discovery will verify or correct them when run.</p>
               <button type="button" id="btn-ai-add-manual-model" class="result-action-btn" style="margin-top: 0.5rem;">

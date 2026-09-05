@@ -224,7 +224,7 @@ export function createExportCenterView(context) {
       return;
     }
     const ok = printExport(r.fileName, r.content);
-    if (ok) showToast('Print window opened');
+    if (ok) showToast('Print dialog opened — select "Save as PDF" to export');
     else showToast('Print blocked — allow popups for this page', 'warning');
   }
 

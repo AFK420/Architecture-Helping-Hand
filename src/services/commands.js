@@ -62,7 +62,7 @@ const DEFAULT_COMMANDS = [
   {
     id: 'nav-furniture',
     title: 'Furniture & Space Planning',
-    description: 'Browse 179 standard architectural furniture pieces, clearances, and top-down blueprints',
+    description: 'Browse 215 standard architectural furniture pieces across 9 categories, clearances, and top-down blueprints',
     category: 'Navigation',
     icon: '🛋️',
     keywords: ['furniture', 'fixture', 'desk', 'bed', 'door', 'chair', 'table', 'ada', 'clearance', 'catalog', 'planner', 'mode 5'],

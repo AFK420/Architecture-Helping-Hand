@@ -1,5 +1,7 @@
 # RAMPS — Ramp Calculator (Mode 15)
 
+**Straight Ramp / Single Run — Landings Not Included.**
+
 **Status**: Implemented (Architectural Tools Phase)  
 **Module**: `src/core/ramps.js` (pure engine) · `src/ui/views/ramps.js` (view)  
 **Date**: September 2, 2026
@@ -8,7 +10,7 @@
 
 ## 1. Scope & Positioning
 
-The Ramp Calculator is an **educational/design calculation tool** for a straight ramp. It is **NOT a jurisdiction-specific compliance engine**. The single configurable reference carries the label *Educational Reference (configurable)*, its note explicitly tells the student to verify applicable local requirements, and the UI never claims "code compliant".
+The Ramp Calculator is an **educational/design calculation tool** for a straight ramp (single run). It is **NOT a jurisdiction-specific code-compliance engine** and does **NOT provide ADA or Part M compliance certification**. Landings, intermediate resting platforms, and switchbacks are not calculated. The single configurable reference carries the label *Educational Reference (configurable)*, its note explicitly requires local verification against applicable local regulations, and the UI never claims "code compliant".
 
 **Negative slope is rejected** (`NEGATIVE_SLOPE`): the tool models ascent ramps; no downhill/terrain mode exists yet. This is a documented design decision, not an oversight.
 

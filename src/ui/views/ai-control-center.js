@@ -289,7 +289,7 @@ export function createAiControlCenterView(context) {
         : `${st.providerId || '?'} · ${st.modelId || '?'}`;
       const detail = st.lastError ? ` — ${escape(st.lastError.errorCode)}` : '';
       const caps = def
-        ? Object.entries(def.requiredCapabilities).filter(([, needed]) => needed).map(([cap]) => cap === 'structuredOutput' ? 'structured' : (cap === 'imageGen' ? 'image gen' : cap))
+        ? Object.entries(def.requiredCapabilities).filter(([, needed]) => needed).map(([cap]) => cap === 'structuredOutput' ? 'structured' : (cap === 'imageGen' ? 'image gen (Coming Soon / Not Currently Available)' : cap))
         : [];
       const capsText = caps.length > 0 ? caps.join(' · ') : '';
       return `
@@ -395,7 +395,7 @@ export function createAiControlCenterView(context) {
         m.capabilities.reasoning ? 'Reasoning' : null,
         m.capabilities.structuredOutput ? 'Structured' : null,
         m.capabilities.toolCalling ? 'Tools' : null,
-        m.capabilities.imageGen ? 'ImageGen' : null
+        m.capabilities.imageGen ? 'ImageGen (Coming Soon / Not Currently Available)' : null
       ].filter(Boolean).map(c => `<span style="border: 1px solid var(--border-color-light); border-radius: 3px; padding: 0 0.3rem; font-size: 0.62rem; margin-right: 0.25rem;">${escape(c)}</span>`).join('');
       const ctx = m.capabilities.contextLimit ? `${(m.capabilities.contextLimit / 1000).toFixed(0)}k ctx` : 'ctx ?';
       const statusColor = m.status === 'READY' ? 'var(--color-success)' : m.status === 'RETIRED' || m.status === 'UNAVAILABLE' ? 'var(--color-error)' : 'var(--text-muted)';

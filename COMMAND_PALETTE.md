@@ -40,7 +40,7 @@ The **Global Command Palette** is a keyboard-first command center designed speci
 | 🔄 | **Rescaler** | `2` | Convert drawing measurements between different scales | `switchMode('rescale')` |
 | 🔍 | **Scale Detector** | `3` | Detect unknown scale ratio from paper & real measurements | `switchMode('detector')` |
 | 📦 | **Area & Volume Scaler** | `4` | Scale 2D surface areas ($m^2$, $sq\text{ }ft$) and 3D volumes | `switchMode('area_volume')` |
-| 🛋️ | **Furniture & Space Planning** | `5` | Browse 179 standard architectural fixtures and blueprints | `switchMode('furniture')` |
+| 🛋️ | **Furniture & Space Planning** | `5` | Browse 215 standard architectural fixtures across 9 categories and blueprints | `switchMode('furniture')` |
 | 📚 | **Drafting Reference Sheet** | `6` | Scale ruler, benchmark lengths, and 100mm print calibration | `switchMode('reference')` |
 | 📜 | **Calculation Journal** | `H` | Open calculation history drawer and restore past records | `toggleHistoryDrawer()` |
 | ⌨️ | **Keyboard Shortcuts & Guide** | `?` | View all workstation hotkeys and drafting tips | Open shortcuts modal |

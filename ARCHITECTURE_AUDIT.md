@@ -69,7 +69,7 @@ Architecture-Helping-Hand/
 │   │   ├── geometry.js            # Pure geometry math engine (Rectangles, Circles, Triangles, Shoelace Polygons)
 │   │   ├── formatter.js           # Epsilon-stabilized decimal rounding & architectural notation formatting
 │   │   ├── presets.js             # 28 architectural scale presets & contiguous real-world reference objects
-│   │   ├── furniture.js           # 179 furniture & fixture database records across 9 architectural domains
+│   │   ├── furniture.js           # 215 furniture & fixture database records across 9 architectural categories
 │   │   ├── dimension-workspace.js # Dimension Workspace schedule engine (entries, groups, serialization)
 │   │   ├── dimension-expression.js# Deterministic dimension expression parser & evaluator (Part 3)
 │   │   ├── cad-clipboard.js       # CAD-friendly clipboard formatting engine (Part 6)
@@ -151,7 +151,7 @@ Architecture-Helping-Hand/
     ├── cad-clipboard.test.js      # CAD format presets, escaping, payload summary (47 tests)
     ├── batch-cad.test.js          # Delimiters, rows, bulk conversion, exports (76 tests)
     ├── quick-dimension.test.js    # Quick evaluation, context heuristics, handoff payloads (67 tests)
-    ├── furniture.test.js          # Catalog integrity, 179 items validation & search filtering tests (21 tests)
+    ├── furniture.test.js          # Catalog integrity, 215 items validation across 9 categories & search filtering tests (21 tests)
     ├── data-integrity.test.js     # Presets uniqueness, range continuity & positive dimensions tests (9 tests)
     ├── responsive.test.js         # Breakpoint, touch-target & responsive layout stylesheet contracts (23 tests)
     ├── converter.test.js          # Backward-compatible test entrypoint (delegates to run-all.js)
@@ -226,7 +226,7 @@ The test suite consists of **36 automated test suites** containing **2,863 exact
 | `tests/build-integrity.test.js` | Manifest coverage, dependency ordering, bundle content probes, runtime smoke test | 31 | ✅ PASS |
 | `tests/parser.test.js` | Decimals, fractions (`3 1/2`, `5/8`, `15 3/16`), feet-inches (`12'`, `12' 6"`, `12'-6 1/2"`), attached units (`12in`, `6ft`), garbage, NaN, Infinity, negative rejection | 38 | ✅ PASS |
 | `tests/responsive.test.js` | Breakpoint, touch-target & responsive layout stylesheet contracts | 23 | ✅ PASS |
-| `tests/furniture.test.js` | Catalog integrity, 179 items validation, scaled drawing dimensions, search and category filtering | 21 | ✅ PASS |
+| `tests/furniture.test.js` | Catalog integrity, 215 items validation across 9 categories, scaled drawing dimensions, search and category filtering | 21 | ✅ PASS |
 | `tests/services.test.js` | StorageService (read, write, remove, clear), HistoryService (add, remove, clear, CSV/Markdown export, corrupt/poisoned-storage recovery, service-owned identity), AudioService safety | 22 | ✅ PASS |
 | `tests/units.test.js` | Metric (mm, cm, dm, m, km), imperial (in, ft, yd, mi), area & volume factors, round-trips, strict invalid unit rejection | 26 | ✅ PASS |
 | `tests/formatter.test.js` | Decimal precision rounding, epsilon stabilization, trailing zero elimination, scientific notation, feet-inches notation | 12 | ✅ PASS |
@@ -235,7 +235,7 @@ The test suite consists of **36 automated test suites** containing **2,863 exact
 | `tests/plan-canvas.test.js` | Entities, transforms, grid/selection/undo, plan export geometry (SVG/DXF through real exporters) | 84 | ✅ PASS |
 | `tests/space-planning.test.js` | Fit/clearance/overlap/adjacency/efficiency, survey notebook (verified-only proposal contract), calibration math, annotations | 79 | ✅ PASS |
 | `tests/survey.test.js` | Survey Notebook integration (Phase 16): measurement lifecycle through the real store, imported-record interop, verified-only room proposal → plan → export, calibration → records, image limits | 55 | ✅ PASS |
-| `tests/data-integrity.test.js`| 28 scale presets uniqueness & ratio validity, 179 furniture records positive dimensions & unique IDs, reference ranges continuity | 9 | ✅ PASS |
+| `tests/data-integrity.test.js`| 28 scale presets uniqueness & ratio validity, 215 furniture records positive dimensions across 9 categories & unique IDs, reference ranges continuity | 9 | ✅ PASS |
 | **Total (incl. Phase 15/16 suites)** | **36 Comprehensive Test Suites** | **2,863 Assertions** | **100% Passing (0 Failures)** |
 
 ---

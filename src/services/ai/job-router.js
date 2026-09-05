@@ -47,7 +47,7 @@ export const AI_JOB_DEFINITIONS = Object.freeze([
   { jobId: 'bestPractice', label: 'Best Practice', description: 'Reference guidance with deterministic calculations.', mode: AI_MODES.BEST_PRACTICE, requiredCapabilities: { text: true } },
   { jobId: 'projectAnalysis', label: 'Project Analysis', description: 'Whole-project structured review.', mode: AI_MODES.CRITIC, requiredCapabilities: { text: true, structuredOutput: true } },
   { jobId: 'imageAnalysis', label: 'Image Analysis', description: 'Interpret sketches, plans, and site photos.', mode: null, requiredCapabilities: { text: true, vision: true } },
-  { jobId: 'conceptImage', label: 'Concept Image', description: 'Conceptual (never technical) image generation.', mode: null, requiredCapabilities: { text: true, imageGen: true } }
+  { jobId: 'conceptImage', label: 'Concept Image (Coming Soon / Not Currently Available)', description: 'Conceptual (never technical) image generation — Coming Soon / Not Currently Available.', mode: null, requiredCapabilities: { text: true, imageGen: true } }
 ]);
 
 /** Fallback policies. Default is NEVER — free-cost safety. */

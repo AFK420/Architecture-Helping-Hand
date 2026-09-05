@@ -920,7 +920,7 @@ function calcPolygon({ vertices, unitKey = 'm' } = {}) {
 
 /**
  * Architecture Helping Hand - Comprehensive Furniture, Fixtures & Standards Library
- * Over 175+ verified architectural standard dimensions spanning residential, commercial,
+ * 215 verified architectural standard dimensions across 9 categories spanning residential, commercial,
  * sanitary, circulation, clearances, outdoor, fitness, and accessibility domains.
  */
 
@@ -12895,7 +12895,7 @@ const DEFAULT_COMMANDS = [
   {
     id: 'nav-furniture',
     title: 'Furniture & Space Planning',
-    description: 'Browse 179 standard architectural furniture pieces, clearances, and top-down blueprints',
+    description: 'Browse 215 standard architectural furniture pieces across 9 categories, clearances, and top-down blueprints',
     category: 'Navigation',
     icon: '🛋️',
     keywords: ['furniture', 'fixture', 'desk', 'bed', 'door', 'chair', 'table', 'ada', 'clearance', 'catalog', 'planner', 'mode 5'],
@@ -14837,7 +14837,7 @@ const AI_JOB_DEFINITIONS = Object.freeze([
   { jobId: 'bestPractice', label: 'Best Practice', description: 'Reference guidance with deterministic calculations.', mode: AI_MODES.BEST_PRACTICE, requiredCapabilities: { text: true } },
   { jobId: 'projectAnalysis', label: 'Project Analysis', description: 'Whole-project structured review.', mode: AI_MODES.CRITIC, requiredCapabilities: { text: true, structuredOutput: true } },
   { jobId: 'imageAnalysis', label: 'Image Analysis', description: 'Interpret sketches, plans, and site photos.', mode: null, requiredCapabilities: { text: true, vision: true } },
-  { jobId: 'conceptImage', label: 'Concept Image', description: 'Conceptual (never technical) image generation.', mode: null, requiredCapabilities: { text: true, imageGen: true } }
+  { jobId: 'conceptImage', label: 'Concept Image (Coming Soon / Not Currently Available)', description: 'Conceptual (never technical) image generation — Coming Soon / Not Currently Available.', mode: null, requiredCapabilities: { text: true, imageGen: true } }
 ]);
 
 /** Fallback policies. Default is NEVER — free-cost safety. */
@@ -20680,7 +20680,7 @@ function createExportCenterView(context) {
       return;
     }
     const ok = printExport(r.fileName, r.content);
-    if (ok) showToast('Print window opened');
+    if (ok) showToast('Print dialog opened — select "Save as PDF" to export');
     else showToast('Print blocked — allow popups for this page', 'warning');
   }
 
@@ -22941,7 +22941,7 @@ function createAiControlCenterView(context) {
         : `${st.providerId || '?'} · ${st.modelId || '?'}`;
       const detail = st.lastError ? ` — ${escape(st.lastError.errorCode)}` : '';
       const caps = def
-        ? Object.entries(def.requiredCapabilities).filter(([, needed]) => needed).map(([cap]) => cap === 'structuredOutput' ? 'structured' : (cap === 'imageGen' ? 'image gen' : cap))
+        ? Object.entries(def.requiredCapabilities).filter(([, needed]) => needed).map(([cap]) => cap === 'structuredOutput' ? 'structured' : (cap === 'imageGen' ? 'image gen (Coming Soon / Not Currently Available)' : cap))
         : [];
       const capsText = caps.length > 0 ? caps.join(' · ') : '';
       return `
@@ -23047,7 +23047,7 @@ function createAiControlCenterView(context) {
         m.capabilities.reasoning ? 'Reasoning' : null,
         m.capabilities.structuredOutput ? 'Structured' : null,
         m.capabilities.toolCalling ? 'Tools' : null,
-        m.capabilities.imageGen ? 'ImageGen' : null
+        m.capabilities.imageGen ? 'ImageGen (Coming Soon / Not Currently Available)' : null
       ].filter(Boolean).map(c => `<span style="border: 1px solid var(--border-color-light); border-radius: 3px; padding: 0 0.3rem; font-size: 0.62rem; margin-right: 0.25rem;">${escape(c)}</span>`).join('');
       const ctx = m.capabilities.contextLimit ? `${(m.capabilities.contextLimit / 1000).toFixed(0)}k ctx` : 'ctx ?';
       const statusColor = m.status === 'READY' ? 'var(--color-success)' : m.status === 'RETIRED' || m.status === 'UNAVAILABLE' ? 'var(--color-error)' : 'var(--text-muted)';
