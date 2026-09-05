@@ -30032,46 +30032,96 @@ function initializeApp() {
 
     // 3. Render Printable Architectural Scale Ruler Graphic (150 mm on paper)
     if (dom.refRulerContainer) {
-      const rulerMm = 150; // 15 cm printable ruler
-      const siteMetersTotal = (rulerMm / 1000) * state.refScaleRatio;
-      
-      let siteStep = 1;
-      if (state.refScaleRatio <= 20) siteStep = 0.2;
-      else if (state.refScaleRatio <= 50) siteStep = 0.5;
-      else if (state.refScaleRatio <= 100) siteStep = 1;
-      else if (state.refScaleRatio <= 250) siteStep = 2;
-      else siteStep = 5;
+      const rulerWidthMm = 150; // 15 cm printable drafting scale
+      const leadInMm = 5; // 5mm lead-in margin on each side (standard on physical drafting rules)
+      const xOffset = leadInMm * 10; // 50 SVG units
+      const svgW = (rulerWidthMm + (leadInMm * 2)) * 10; // 1600 units
+      const svgH = 240;
 
-      let siteTicksSvg = '';
-      for (let s = 0; s <= siteMetersTotal + 0.001; s += siteStep) {
-        const xPosMm = (s / state.refScaleRatio) * 1000;
-        if (xPosMm > rulerMm + 0.5) break;
-        const isMajor = Math.abs(s % (siteStep * 2)) < 0.001 || s === 0;
-        const tickH = isMajor ? 14 : 9;
-        const xPct = (xPosMm / rulerMm) * 100;
-        siteTicksSvg += `
-          <line x1="${xPct}%" y1="0" x2="${xPct}%" y2="${tickH}" stroke="currentColor" stroke-width="${isMajor ? 1.5 : 1}"/>
-          ${isMajor ? `<text x="${xPct}%" y="24" font-size="8" font-family="monospace" text-anchor="middle" fill="currentColor">${formatNumber(s, s < 1 ? 1 : 0)}m</text>` : ''}
-        `;
+      // Calculate optimal site meter step so labels never collide (maintaining 10-16mm paper spacing)
+      const target = state.refScaleRatio * 0.012;
+      const exponent = Math.floor(Math.log10(target));
+      const fraction = target / Math.pow(10, exponent);
+      let siteStepMajor, siteStepMinor;
+      if (fraction < 1.5) {
+        siteStepMajor = 1 * Math.pow(10, exponent);
+        siteStepMinor = siteStepMajor / 5;
+      } else if (fraction < 3.5) {
+        siteStepMajor = 2 * Math.pow(10, exponent);
+        siteStepMinor = siteStepMajor / 4;
+      } else if (fraction < 7.5) {
+        siteStepMajor = 5 * Math.pow(10, exponent);
+        siteStepMinor = siteStepMajor / 5;
+      } else {
+        siteStepMajor = 10 * Math.pow(10, exponent);
+        siteStepMinor = siteStepMajor / 5;
       }
 
-      // Bottom edge: Paper cm ticks (every 10mm and 1mm)
+      const siteTotalMeters = (rulerWidthMm / 1000) * state.refScaleRatio;
+      const decimals = siteStepMajor < 0.1 ? 2 : (siteStepMajor < 1 ? 1 : 0);
+
+      let siteTicksSvg = '';
+      for (let s = 0; s <= siteTotalMeters + (siteStepMinor * 0.05); s += siteStepMinor) {
+        const xMm = (s / state.refScaleRatio) * 1000;
+        if (xMm > rulerWidthMm + 0.05) break;
+        const x = Math.round((xOffset + (xMm * 10)) * 10) / 10;
+        
+        const stepsFromZero = Math.round(s / siteStepMinor);
+        const stepsPerMajor = Math.round(siteStepMajor / siteStepMinor);
+        const isMajor = stepsFromZero % stepsPerMajor === 0 || s === 0;
+        const isMedium = !isMajor && (stepsPerMajor % 2 === 0) && (stepsFromZero % (stepsPerMajor / 2) === 0);
+
+        const tickH = isMajor ? 32 : (isMedium ? 22 : 14);
+        const strokeW = isMajor ? 1.8 : (isMedium ? 1.2 : 0.8);
+        const opacity = isMajor ? 1 : (isMedium ? 0.85 : 0.6);
+
+        siteTicksSvg += `
+          <line x1="${x}" y1="0" x2="${x}" y2="${tickH}" stroke="currentColor" stroke-width="${strokeW}" stroke-opacity="${opacity}"/>`;
+        if (isMajor) {
+          const label = s === 0 ? '0' : formatNumber(s, decimals) + 'm';
+          siteTicksSvg += `
+          <text x="${x}" y="54" font-size="18" font-weight="700" font-family="var(--font-mono, monospace)" text-anchor="middle" fill="currentColor" stroke="none">${label}</text>`;
+        }
+      }
+
+      // Bottom edge: Paper Centimeters & Millimeters (0 to 150mm / 15cm)
       let paperTicksSvg = '';
-      for (let cm = 0; cm <= rulerMm / 10; cm++) {
-        const xPct = ((cm * 10) / rulerMm) * 100;
-        paperTicksSvg += `
-          <line x1="${xPct}%" y1="52" x2="${xPct}%" y2="40" stroke="currentColor" stroke-width="1.5"/>
-          <text x="${xPct}%" y="37" font-size="7" font-family="monospace" text-anchor="middle" fill="currentColor">${cm}</text>
-        `;
-        if (cm < rulerMm / 10) {
-          const midPct = (((cm * 10) + 5) / rulerMm) * 100;
-          paperTicksSvg += `<line x1="${midPct}%" y1="52" x2="${midPct}%" y2="44" stroke="currentColor" stroke-width="1"/>`;
+      for (let mm = 0; mm <= rulerWidthMm; mm++) {
+        const x = xOffset + (mm * 10);
+        const isCm = mm % 10 === 0;
+        const isHalfCm = mm % 5 === 0 && !isCm;
+
+        if (isCm) {
+          const cm = mm / 10;
+          paperTicksSvg += `
+          <line x1="${x}" y1="${svgH}" x2="${x}" y2="${svgH - 34}" stroke="currentColor" stroke-width="${cm === 0 || cm === 15 ? 2.2 : 1.8}"/>`;
+          const label = cm === 15 ? '15 cm' : cm;
+          paperTicksSvg += `
+          <text x="${x}" y="${svgH - 46}" font-size="18" font-weight="700" font-family="var(--font-mono, monospace)" text-anchor="middle" fill="currentColor" stroke="none">${label}</text>`;
+        } else if (isHalfCm) {
+          paperTicksSvg += `
+          <line x1="${x}" y1="${svgH}" x2="${x}" y2="${svgH - 24}" stroke="currentColor" stroke-width="1.2" stroke-opacity="0.85"/>`;
+        } else {
+          paperTicksSvg += `
+          <line x1="${x}" y1="${svgH}" x2="${x}" y2="${svgH - 14}" stroke="currentColor" stroke-width="0.75" stroke-opacity="0.55"/>`;
         }
       }
 
       dom.refRulerContainer.innerHTML = `
-        <svg class="ruler-svg" viewBox="0 0 100 52" preserveAspectRatio="none" style="width: 150mm; max-width: 100%; height: 52px; color: var(--accent-primary);">
-          <rect x="0" y="0" width="100%" height="52" fill="none" stroke="currentColor" stroke-width="1"/>
+        <svg class="ruler-svg" viewBox="0 0 ${svgW} ${svgH}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Printable Architectural Scale Ruler 1:${state.refScaleRatio}">
+          <defs>
+            <linearGradient id="rulerBgGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="rgba(255,255,255,0.03)"/>
+              <stop offset="50%" stop-color="rgba(0,0,0,0.2)"/>
+              <stop offset="100%" stop-color="rgba(255,255,255,0.03)"/>
+            </linearGradient>
+          </defs>
+          <rect x="1" y="1" width="${svgW - 2}" height="${svgH - 2}" rx="6" ry="6" fill="url(#rulerBgGrad)" stroke="currentColor" stroke-width="2"/>
+          <line x1="20" y1="115" x2="${svgW - 20}" y2="115" stroke="currentColor" stroke-opacity="0.25" stroke-dasharray="8 5" stroke-width="1.2"/>
+          <text x="${xOffset}" y="110" font-size="14" font-weight="800" font-family="var(--font-mono, monospace)" fill="currentColor" stroke="none" letter-spacing="1">▲ SCALE 1:${state.refScaleRatio} (REAL SITE METERS)</text>
+          <text x="${svgW - xOffset}" y="110" font-size="14" font-weight="800" font-family="var(--font-mono, monospace)" text-anchor="end" fill="currentColor" stroke="none" letter-spacing="1">PAPER (1:1 TRUE METRIC cm/mm) ▼</text>
+          <line x1="${xOffset}" y1="36" x2="${xOffset}" y2="${svgH - 38}" stroke="currentColor" stroke-opacity="0.25" stroke-width="1" stroke-dasharray="2 3"/>
+          <line x1="${svgW - xOffset}" y1="36" x2="${svgW - xOffset}" y2="${svgH - 38}" stroke="currentColor" stroke-opacity="0.25" stroke-width="1" stroke-dasharray="2 3"/>
           ${siteTicksSvg}
           ${paperTicksSvg}
         </svg>

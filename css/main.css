@@ -4373,12 +4373,21 @@ body.sidebar-hidden .app-sidebar {
   width: 100%;
   overflow-x: auto;
   padding: 0.5rem 0;
+  display: flex;
+  justify-content: center;
 }
 
 .ruler-svg {
-  width: 150mm;
-  height: 52px;
+  width: 100%;
+  max-width: 960px;
+  height: auto;
   display: block;
+  margin: 0 auto;
+  color: var(--accent-primary, #38bdf8);
+}
+
+.ruler-svg text {
+  stroke: none !important;
 }
 
 .ruler-instructions {
@@ -7260,8 +7269,25 @@ body.sidebar-hidden .app-sidebar {
   }
 
   .ruler-svg {
-    stroke: #000000 !important;
+    width: 160mm !important;
+    height: 24mm !important;
+    display: block !important;
+    margin: 0 auto !important;
+    color: #000000 !important;
+  }
+
+  .ruler-svg text {
     fill: #000000 !important;
+    stroke: none !important;
+  }
+
+  .ruler-svg rect {
+    fill: #ffffff !important;
+    stroke: #000000 !important;
+  }
+
+  .ruler-svg line {
+    stroke: #000000 !important;
   }
 
   .ruler-instructions {
