@@ -432,6 +432,220 @@ body.sidebar-hidden .app-sidebar {
   border-color: var(--accent-primary);
 }
 
+/* ==========================================================================
+   Architectural Menu Bar (Persistent Top Tool Ribbon & Dropdowns)
+   ========================================================================== */
+.app-menubar {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem var(--space-lg, 1.25rem);
+  background: var(--bg-surface-elevated, #16171a);
+  border-bottom: 1.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  position: sticky;
+  top: 52px;
+  z-index: 25;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-menubar::-webkit-scrollbar {
+  display: none;
+}
+
+.menubar-item,
+.menubar-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  user-select: none;
+  font-family: var(--font-sans, inherit);
+}
+
+.menubar-item:hover,
+.menubar-trigger-btn:hover {
+  background: var(--bg-chip-hover, rgba(255, 255, 255, 0.06));
+  color: var(--text-primary, #ffffff);
+}
+
+.menubar-item.active,
+.menubar-trigger-btn.active,
+.menubar-dropdown-wrap.is-active-section .menubar-trigger-btn {
+  background: var(--accent-primary-subtle, rgba(56, 189, 248, 0.14));
+  color: var(--accent-primary, #38bdf8);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.menubar-chevron {
+  font-size: 0.65rem;
+  color: var(--text-muted, rgba(255, 255, 255, 0.5));
+  transition: transform 0.15s ease;
+}
+
+.menubar-dropdown-wrap.open .menubar-chevron {
+  transform: rotate(180deg);
+  color: var(--accent-primary, #38bdf8);
+}
+
+.menubar-dropdown-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.menubar-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 270px;
+  background: var(--bg-surface, #1b1c20);
+  border: 1.5px solid var(--border-medium, rgba(255, 255, 255, 0.16));
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), 0 4px 12px rgba(0, 0, 0, 0.4);
+  padding: 0.4rem;
+  display: none;
+  flex-direction: column;
+  gap: 0.2rem;
+  z-index: 200;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.menubar-dropdown-menu.align-right {
+  left: auto;
+  right: 0;
+}
+
+.menubar-dropdown-wrap.open .menubar-dropdown-menu {
+  display: flex;
+  animation: menubarDropdownSlide 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes menubarDropdownSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.menubar-menu-header {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, rgba(255, 255, 255, 0.5));
+  padding: 0.25rem 0.65rem 0.35rem;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  margin-bottom: 0.2rem;
+  font-family: var(--font-mono, monospace);
+}
+
+.menubar-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--radius-sm, 5px);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-primary, #ffffff);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  width: 100%;
+  font-family: var(--font-sans, inherit);
+}
+
+.menubar-dropdown-item:hover {
+  background: var(--accent-primary-subtle, rgba(56, 189, 248, 0.12));
+  border-color: rgba(56, 189, 248, 0.25);
+}
+
+.menubar-dropdown-item.active {
+  background: var(--accent-primary-subtle, rgba(56, 189, 248, 0.2));
+  border-color: var(--accent-primary, #38bdf8);
+  color: var(--accent-primary, #38bdf8);
+}
+
+.menubar-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.menubar-item-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.menubar-item-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-primary, #ffffff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menubar-dropdown-item.active .menubar-item-label {
+  color: var(--accent-primary, #38bdf8);
+}
+
+.menubar-item-desc {
+  font-size: 0.68rem;
+  color: var(--text-muted, rgba(255, 255, 255, 0.55));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menubar-item-kbd {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  background: var(--bg-chip, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.15));
+  color: var(--accent-primary, #38bdf8);
+  flex-shrink: 0;
+}
+
+/* Sidebar Toggle Button with visible label */
+.sidebar-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 700;
+  padding: 0 var(--space-sm);
+}
+
+.sidebar-toggle-text {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+
 .brand-logo-icon {
   width: var(--control-height-md);
   height: var(--control-height-md);
@@ -4582,11 +4796,16 @@ body.sidebar-hidden .app-sidebar {
   background: var(--bg-surface);
   border: 1.5px solid var(--border-strong);
   border-radius: var(--radius-lg);
-  padding: var(--space-xl);
-  max-width: 520px;
-  width: 90%;
+  padding: var(--space-lg);
+  max-width: 580px;
+  width: 92%;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
   box-shadow: var(--shadow-lg);
   transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .modal-overlay.open .modal-card {
@@ -4597,15 +4816,33 @@ body.sidebar-hidden .app-sidebar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-md);
-  padding-bottom: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-xs);
   border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
 .modal-body {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
+  padding-right: 0.35rem;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
 }
 
 .shortcut-row {
@@ -6849,6 +7086,7 @@ body.sidebar-hidden .app-sidebar {
   /* Hide application shell, interactive controls & decoration */
   .grid-overlay,
   .app-topbar,
+  .app-menubar,
   .app-sidebar,
   .sidebar-backdrop,
   .ref-controls-row,

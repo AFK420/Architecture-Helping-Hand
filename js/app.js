@@ -28341,6 +28341,7 @@ function initializeApp() {
     closeCommandPaletteBtn: document.getElementById('close-command-palette-btn'),
     historyToggleBtn: document.getElementById('history-toggle-btn'),
     shortcutsHelpBtn: document.getElementById('shortcuts-help-btn'),
+    appMenubar: document.getElementById('app-menubar'),
     shortcutsModal: document.getElementById('shortcuts-modal'),
     shortcutsListContainer: document.getElementById('shortcuts-list-container'),
     resetAllShortcutsBtn: document.getElementById('btn-reset-all-shortcuts'),
@@ -29240,6 +29241,17 @@ function initializeApp() {
 
   const NAV_SECTIONS = ['Home', 'Scale', 'Dimensions', 'CAD', 'Architecture', 'Space', 'Project', 'AI'];
 
+  const SECTION_ICONS = {
+    Home: '⌂',
+    Scale: '📐',
+    Dimensions: '📋',
+    CAD: '📌',
+    Architecture: '🪜',
+    Space: '🛋️',
+    Project: '🗂',
+    AI: '🤖'
+  };
+
   /** Renders the sidebar nav from NAV_CATALOG, optionally filtered by query. */
   function renderSidebar(query = '') {
     const nav = document.getElementById('sidebar-nav');
@@ -29306,17 +29318,136 @@ function initializeApp() {
     });
   }
 
-  /** Highlights the active sidebar entry + top bar breadcrumb. */
-  function syncSidebarActive() {
+  /** Closes all open architectural menu bar dropdowns. */
+  function closeAllMenuBarDropdowns() {
+    if (!dom.appMenubar) return;
+    dom.appMenubar.querySelectorAll('.menubar-dropdown-wrap.open').forEach(wrap => {
+      wrap.classList.remove('open');
+      const trigger = wrap.querySelector('.menubar-trigger-btn');
+      if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  /** Renders the horizontal Architectural Menu Bar ribbon across all sections. */
+  function renderMenuBar() {
+    const container = dom.appMenubar;
+    if (!container) return;
+
+    let html = '';
+    // Home button (direct link)
+    const isHomeActive = state.currentMode === 'home';
+    html += `
+      <button type="button" class="menubar-item ${isHomeActive ? 'active' : ''}" data-mode="home" title="Studio overview and snapshot">
+        <span class="menubar-icon" aria-hidden="true">${SECTION_ICONS.Home || '⌂'}</span>
+        <span class="menubar-label">Home</span>
+      </button>
+    `;
+
+    // Dropdown groups for each architectural section
+    for (const section of NAV_SECTIONS) {
+      if (section === 'Home') continue;
+      const items = NAV_CATALOG.filter(i => i.section === section);
+      if (items.length === 0) continue;
+
+      const isActiveSection = items.some(i => i.id === state.currentMode);
+      const isRightAlign = section === 'Project' || section === 'AI';
+
+      html += `
+        <div class="menubar-dropdown-wrap ${isActiveSection ? 'is-active-section' : ''}" data-section="${section}">
+          <button type="button" class="menubar-trigger-btn ${isActiveSection ? 'active' : ''}" aria-haspopup="true" aria-expanded="false" data-section="${section}" title="${section} Studio Tools">
+            <span class="menubar-icon" aria-hidden="true">${SECTION_ICONS[section] || '📐'}</span>
+            <span class="menubar-label">${section}</span>
+            <span class="menubar-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="menubar-dropdown-menu ${isRightAlign ? 'align-right' : ''}" role="menu" aria-label="${section} Tools">
+            <div class="menubar-menu-header">${section} Tools</div>
+            ${items.map(item => `
+              <button type="button" class="menubar-dropdown-item ${state.currentMode === item.id ? 'active' : ''}" data-mode="${item.id}" role="menuitem" title="${item.desc}">
+                <span class="menubar-item-icon" aria-hidden="true">${item.icon}</span>
+                <span class="menubar-item-text">
+                  <span class="menubar-item-title-row">
+                    <span class="menubar-item-label">${item.label}</span>
+                    ${item.shortcut ? `<span class="menubar-item-kbd">${item.shortcut}</span>` : ''}
+                  </span>
+                  <span class="menubar-item-desc">${item.desc}</span>
+                </span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    container.innerHTML = html;
+
+    // Direct mode buttons
+    container.querySelectorAll('.menubar-item[data-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        closeAllMenuBarDropdowns();
+        switchMode(btn.dataset.mode);
+      });
+    });
+
+    // Dropdown toggles
+    container.querySelectorAll('.menubar-dropdown-wrap').forEach(wrap => {
+      const trigger = wrap.querySelector('.menubar-trigger-btn');
+      if (!trigger) return;
+
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const wasOpen = wrap.classList.contains('open');
+        closeAllMenuBarDropdowns();
+        if (!wasOpen) {
+          wrap.classList.add('open');
+          trigger.setAttribute('aria-expanded', 'true');
+        }
+      });
+    });
+
+    // Dropdown items
+    container.querySelectorAll('.menubar-dropdown-item[data-mode]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeAllMenuBarDropdowns();
+        switchMode(btn.dataset.mode);
+      });
+    });
+  }
+
+  /** Highlights active entry in sidebar, menu bar, and top bar breadcrumb. */
+  function syncNavigationActive() {
+    // 1. Sidebar entries
     document.querySelectorAll('.sidebar-item').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.mode === state.currentMode);
     });
+
+    // 2. Menu bar ribbon entries & section active states
+    if (dom.appMenubar) {
+      dom.appMenubar.querySelectorAll('.menubar-item[data-mode]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === state.currentMode);
+      });
+      dom.appMenubar.querySelectorAll('.menubar-dropdown-wrap').forEach(wrap => {
+        const sec = wrap.dataset.section;
+        const items = NAV_CATALOG.filter(i => i.section === sec);
+        const isActive = items.some(i => i.id === state.currentMode);
+        wrap.classList.toggle('is-active-section', isActive);
+        const trigger = wrap.querySelector('.menubar-trigger-btn');
+        if (trigger) trigger.classList.toggle('active', isActive);
+      });
+      dom.appMenubar.querySelectorAll('.menubar-dropdown-item[data-mode]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === state.currentMode);
+      });
+    }
+
+    // 3. Top bar breadcrumb
     const labelEl = document.getElementById('topbar-current-tool');
     if (labelEl) {
       const item = NAV_CATALOG.find(i => i.id === state.currentMode);
       labelEl.textContent = item ? item.label : 'Home';
     }
   }
+
+  const syncSidebarActive = syncNavigationActive;
 
   /** Sidebar drawer state for tablet/mobile; desktop uses body class. */
   function openSidebarDrawer() {
@@ -29405,8 +29536,9 @@ function initializeApp() {
     }
     state.currentMode = targetMode;
 
-    // Sidebar + breadcrumb sync (mode tabs no longer exist; ids kept for tests)
-    syncSidebarActive();
+    // Sidebar + MenuBar + breadcrumb sync
+    syncNavigationActive();
+    closeAllMenuBarDropdowns();
     document.getElementById('app-shell')?.classList.toggle('mode-home', targetMode === 'home');
 
     // Update Tool Views
@@ -31222,6 +31354,13 @@ function initializeApp() {
     if (sidebarBackdrop) sidebarBackdrop.addEventListener('click', closeSidebarDrawer);
     const topbarHome = document.getElementById('topbar-home-btn');
     if (topbarHome) topbarHome.addEventListener('click', () => switchMode('home'));
+
+    // Close architectural menu bar dropdowns when clicking outside the ribbon
+    document.addEventListener('click', (e) => {
+      if (dom.appMenubar && !dom.appMenubar.contains(e.target)) {
+        closeAllMenuBarDropdowns();
+      }
+    });
 
     const sidebarSearch = document.getElementById('sidebar-search');
     const sidebarSearchClear = document.getElementById('sidebar-search-clear');
@@ -33645,6 +33784,13 @@ function initializeApp() {
       const activeEl = document.activeElement;
       const isInputFocused = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT' || activeEl.tagName === 'TEXTAREA');
 
+      // Global Sidebar Toggle Shortcut: Ctrl+B or Cmd+B
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        toggleSidebar();
+        return;
+      }
+
       // Global CAD Clipboard Shortcut: Ctrl+Shift+C or Cmd+Shift+C (Works everywhere)
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
         e.preventDefault();
@@ -33706,6 +33852,7 @@ function initializeApp() {
 
       // Esc closes Command Palette first, then drawers/modals/selection/quick-strip
       if (e.key === 'Escape') {
+        closeAllMenuBarDropdowns();
         if (dom.commandPaletteModal?.classList.contains('open')) {
           e.preventDefault();
           e.stopPropagation();
@@ -33957,6 +34104,7 @@ function initializeApp() {
   attachEventListeners();
   views.mountAll();
   renderSidebar('');
+  renderMenuBar();
   registerCatalogCommands();
   if (state.quickDimension.isOpen || state.quickDimension.pinned) {
     views.callController('quick_dimension', 'toggleQuickDimension', true);

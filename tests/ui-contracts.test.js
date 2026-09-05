@@ -63,7 +63,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 {
   const shellIds = [
     'app-shell', 'app-sidebar', 'app-workbench', 'app-topbar',
-    'tool-surface', 'sidebar-toggle-btn', 'sidebar-backdrop',
+    'app-menubar', 'tool-surface', 'sidebar-toggle-btn', 'sidebar-backdrop',
     'sidebar-search', 'sidebar-search-clear', 'sidebar-nav',
     'topbar-current-tool', 'topbar-home-btn',
     // Home screen
@@ -76,6 +76,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     assert(htmlContent.includes(`id="${id}"`), `index.html contains shell element: #${id}`);
   }
   assert(appJsContent.includes('renderSidebar'), 'app.js renders the sidebar (renderSidebar)');
+  assert(appJsContent.includes('renderMenuBar'), 'app.js renders the architectural menu bar (renderMenuBar)');
   assert(appJsContent.includes('NAV_CATALOG'), 'app.js declares NAV_CATALOG');
 }
 
@@ -773,6 +774,27 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
   const firstUseIdx = appJsContent.indexOf('escapeHtml(', defIdx + 1);
   assert(initIdx !== -1 && defIdx > initIdx, 'escapeHtml is defined inside initializeApp (all usage sites are within its scope)');
   assert(firstUseIdx !== -1, 'escapeHtml is actually used to guard user-controllable strings');
+}
+
+// 6. Verify Architectural Menu Bar & Shortcuts Guide Modal Contracts
+{
+  const cssPath = path.join(rootDir, 'css', 'main.css');
+  const cssContent = fs.readFileSync(cssPath, 'utf-8');
+
+  // Menubar contracts
+  assert(htmlContent.includes('id="app-menubar"'), 'index.html contains #app-menubar ribbon');
+  assert(cssContent.includes('.app-menubar'), 'css/main.css defines .app-menubar styles');
+  assert(cssContent.includes('.menubar-dropdown-menu'), 'css/main.css defines .menubar-dropdown-menu styles');
+  assert(appJsContent.includes('function renderMenuBar'), 'src/ui/app.js defines renderMenuBar');
+  assert(appJsContent.includes('function closeAllMenuBarDropdowns'), 'src/ui/app.js defines closeAllMenuBarDropdowns');
+  assert(appJsContent.includes('SECTION_ICONS'), 'src/ui/app.js defines SECTION_ICONS mapping');
+
+  // Guide Modal scrollability & reference content contracts
+  assert(cssContent.includes('max-height: 88vh') || cssContent.includes('max-height:88vh'), 'css/main.css bounds .modal-card with max-height: 88vh');
+  assert(cssContent.includes('overflow-y: auto') || cssContent.includes('overflow-y:auto'), 'css/main.css enables overflow-y: auto on .modal-body for vertical scrolling');
+  assert(htmlContent.includes('Architectural Studio Quick Reference &amp; Formulas') || htmlContent.includes('Architectural Studio Quick Reference & Formulas'), 'index.html includes Architectural Studio Quick Reference in guide modal');
+  assert(htmlContent.includes('Ctrl + B'), 'index.html includes Ctrl + B shortcut documentation for sidebar toggle');
+  assert(htmlContent.includes('sidebar-toggle-text'), 'index.html includes visible text for sidebar toggle button');
 }
 
 console.log(`Summary: ${passed} passed, ${failed} failed.\n`);
