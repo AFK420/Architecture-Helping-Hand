@@ -2323,33 +2323,57 @@ body.sidebar-hidden .app-sidebar {
 }
 
 /* Architecture Candidates, Proportions & Analysis Blocks */
-.stairs-candidate-row {
+.stairs-candidate-row,
+.ramps-target-row,
+.slopes-target-row {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.5rem;
   text-align: left;
   padding: 0.5rem 0.75rem;
   border: 1.5px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
-  color: var(--text-primary);
+  color: var(--text-primary, #ffffff);
   cursor: pointer;
   font-family: var(--font-mono);
   font-size: 0.8rem;
   transition: all 0.15s ease;
 }
 
-.stairs-candidate-row:hover {
+.stairs-candidate-row {
+  grid-template-columns: 72px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.ramps-target-row {
+  grid-template-columns: 75px 85px minmax(0, 1fr);
+}
+
+.slopes-target-row {
+  grid-template-columns: 85px 95px minmax(0, 1fr);
+}
+
+.stairs-candidate-row:hover,
+.ramps-target-row:hover,
+.slopes-target-row:hover {
   border-color: var(--accent-primary);
   background: var(--bg-surface-elevated);
+  color: #ffffff;
   transform: translateY(-1px);
 }
 
-.stairs-candidate-row.is-selected {
+.stairs-candidate-row.is-selected,
+.ramps-target-row.is-selected,
+.slopes-target-row.is-selected {
   border-color: var(--accent-primary);
   background: var(--accent-primary-subtle);
-  color: var(--text-primary);
+  color: var(--text-primary, #ffffff);
   box-shadow: 0 0 0 1px var(--accent-primary);
+}
+
+.stairs-candidate-row span,
+.ramps-target-row span,
+.slopes-target-row span {
+  color: var(--text-primary, #ffffff);
 }
 
 #ramps-run-analysis {

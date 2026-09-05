@@ -234,11 +234,11 @@ export function createStairsView(context) {
       if (Array.isArray(f.candidates) && f.candidates.length > 0) {
         dom.stairsCandidatesBody.innerHTML = f.candidates.map((c, idx) => `
           <button type="button" class="stairs-candidate-row ${c.riserCount === result.risers.count ? 'is-selected' : ''}" data-count="${c.riserCount}" data-index="${idx}"
-            style="display: grid; grid-template-columns: 70px 1fr 1fr 1fr; gap: 0.5rem; text-align: left; padding: 0.45rem 0.6rem; border: 1px solid var(--border-color-light); border-radius: 5px; background: ${c.riserCount === result.risers.count ? 'var(--bg-chip)' : 'transparent'}; cursor: pointer; font-family: var(--font-family-mono); font-size: 0.78rem;">
-            <strong style="color: var(--accent-primary);">${c.riserCount} R</strong>
-            <span>R ${c.riser}</span>
-            <span>T ${c.tread}</span>
-            <span>run ${c.totalRun}</span>
+            style="display: grid; grid-template-columns: 72px 1fr 1fr 1fr; gap: 0.5rem; text-align: left; padding: 0.5rem 0.75rem; border: 1.5px solid ${c.riserCount === result.risers.count ? 'var(--accent-primary)' : 'var(--border-subtle, rgba(255,255,255,0.12))'}; border-radius: 6px; background: ${c.riserCount === result.risers.count ? 'var(--accent-primary-subtle, rgba(73,137,217,0.16))' : 'var(--bg-surface, #1e1f24)'}; color: var(--text-primary, #ffffff); cursor: pointer; font-family: var(--font-family-mono, monospace); font-size: 0.8rem;">
+            <strong style="color: var(--accent-primary, #4989D9);">${c.riserCount} R</strong>
+            <span style="color: var(--text-primary, #ffffff); font-weight: 500;">R ${c.riser}</span>
+            <span style="color: var(--text-primary, #ffffff); font-weight: 500;">T ${c.tread}</span>
+            <span style="color: rgba(255, 255, 255, 0.9);">run ${c.totalRun}</span>
           </button>
         `).join('');
 

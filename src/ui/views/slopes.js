@@ -212,14 +212,18 @@ export function createSlopesView(context) {
       return;
     }
     const targets = buildSlopeTargetComparison(riseMag);
-    dom.slopesTargetsBody.innerHTML = targets.map(t => `
-      <button type="button" class="slopes-target-row" data-percent="${t.percent}"
-        style="display: grid; grid-template-columns: 80px 90px 1fr; gap: 0.5rem; text-align: left; padding: 0.4rem 0.6rem; border: 1px solid var(--border-color-light); border-radius: 5px; background: transparent; cursor: pointer; font-family: var(--font-family-mono); font-size: 0.78rem;">
-        <strong style="color: var(--accent-primary);">${t.percent}%</strong>
-        <span>1 : ${(100 / t.percent) % 1 === 0 ? (100 / t.percent) : (100 / t.percent).toFixed(2)}</span>
-        <span>run ${(t.runMeters).toFixed(2)} m</span>
-      </button>
-    `).join('');
+    const currentSlopePercent = state.slopes.lastResult?.geometry?.percent;
+    dom.slopesTargetsBody.innerHTML = targets.map(t => {
+      const isSelected = currentSlopePercent !== undefined && Math.abs(t.percent - currentSlopePercent) < 0.05;
+      return `
+        <button type="button" class="slopes-target-row ${isSelected ? 'is-selected' : ''}" data-percent="${t.percent}"
+          style="display: grid; grid-template-columns: 85px 95px 1fr; gap: 0.5rem; text-align: left; padding: 0.5rem 0.75rem; border: 1.5px solid ${isSelected ? 'var(--accent-primary)' : 'var(--border-subtle, rgba(255,255,255,0.12))'}; border-radius: 6px; background: ${isSelected ? 'var(--accent-primary-subtle, rgba(73,137,217,0.16))' : 'var(--bg-surface, #1e1f24)'}; color: var(--text-primary, #ffffff); cursor: pointer; font-family: var(--font-family-mono, monospace); font-size: 0.8rem;">
+          <strong style="color: var(--accent-primary, #4989D9);">${t.percent}%</strong>
+          <span style="color: var(--text-primary, #ffffff); font-weight: 500;">1 : ${(100 / t.percent) % 1 === 0 ? (100 / t.percent) : (100 / t.percent).toFixed(2)}</span>
+          <span style="color: rgba(255, 255, 255, 0.9);">run ${(t.runMeters).toFixed(2)} m</span>
+        </button>
+      `;
+    }).join('');
 
     dom.slopesTargetsBody.querySelectorAll('.slopes-target-row').forEach(row => {
       row.addEventListener('click', () => {
