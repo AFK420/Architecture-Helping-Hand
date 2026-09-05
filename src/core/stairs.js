@@ -570,8 +570,8 @@ export function generateStairSVG(result, options = {}) {
   const height = typeof options.height === 'number' && options.height > 0 ? options.height : 260;
   const padLeft = 72;
   const padRight = 68;
-  const padTop = 46;
-  const padBottom = 46;
+  const padTop = 56;
+  const padBottom = 44;
   const drawW = width - padLeft - padRight;
   const drawH = height - padTop - padBottom;
 
@@ -612,8 +612,8 @@ export function generateStairSVG(result, options = {}) {
   const dimRunY = originY + 22;
   const dimRiseX = topX + landingExt + 18;
   const stairAngleDeg = (-result.geometry.angleDegrees).toFixed(2);
-  const walkLabelX = originX + px(totalRun * 0.62);
-  const walkLabelY = originY - px(totalRise * 0.62) - 6;
+  const walkLabelX = originX + px(totalRun * 0.45);
+  const walkLabelY = originY - px(totalRise * 0.45) - 12;
 
   const riserDetail = result.formatted?.riser ? ` @ ${result.formatted.riser}` : '';
   const goingDetail = result.formatted?.tread ? ` @ ${result.formatted.tread}` : '';
@@ -667,10 +667,10 @@ export function generateStairSVG(result, options = {}) {
   <g class="stair-benchmarks" font-family="var(--font-family-mono, monospace)" font-size="9">
     <!-- Lower Level Benchmark -->
     <polygon points="${(originX - landingExt).toFixed(2)},${originY.toFixed(2)} ${(originX - landingExt + 5).toFixed(2)},${(originY - 8).toFixed(2)} ${(originX - landingExt - 5).toFixed(2)},${(originY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
-    <text x="${(originX - landingExt).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="start" fill="var(--text-secondary, #9aa)">▼ FFL ±0.00</text>
+    <text x="${(originX - landingExt).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="start" fill="var(--text-primary, #ffffff)" font-weight="600">▼ FFL ±0.00</text>
     <!-- Upper Level Benchmark -->
     <polygon points="${(topX + landingExt).toFixed(2)},${topY.toFixed(2)} ${(topX + landingExt + 5).toFixed(2)},${(topY - 8).toFixed(2)} ${(topX + landingExt - 5).toFixed(2)},${(topY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
-    <text x="${(topX + landingExt).toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="end" fill="var(--text-secondary, #9aa)">▲ FFL +${result.formatted.totalRise}</text>
+    <text x="${(topX + landingExt).toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="end" fill="var(--text-primary, #ffffff)" font-weight="600">▲ FFL +${result.formatted.totalRise}</text>
   </g>
 
   <!-- CAD 45° Slashed Horizontal Dimension: RUN -->
@@ -681,7 +681,7 @@ export function generateStairSVG(result, options = {}) {
     <!-- 45° CAD slashes -->
     <line x1="${(originX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(originX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
     <line x1="${(topX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(topX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
-    <text x="${(originX + px(totalRun) / 2).toFixed(2)}" y="${(dimRunY + 14).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.totalRun} (${goingCount} goings)</text>
+    <text x="${(originX + px(totalRun) / 2).toFixed(2)}" y="${(dimRunY + 14).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary, #ffffff)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.totalRun} (${goingCount} goings)</text>
   </g>
 
   <!-- CAD 45° Slashed Vertical Dimension: RISE -->
@@ -692,15 +692,14 @@ export function generateStairSVG(result, options = {}) {
     <!-- 45° CAD slashes -->
     <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(originY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(originY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
     <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(topY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(topY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
-    <text x="${(dimRiseX + 10).toFixed(2)}" y="${((originY + topY) / 2).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${((originY + topY) / 2).toFixed(2)})">RISE ${result.formatted.totalRise}</text>
+    <text x="${(dimRiseX + 10).toFixed(2)}" y="${((originY + topY) / 2).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary, #ffffff)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${((originY + topY) / 2).toFixed(2)})">RISE ${result.formatted.totalRise}</text>
   </g>
 
-  <!-- Hero Pitch Badging & Base Pitch -->
+  <!-- Hero Pitch & Step Specification (Top-Left Sky Zone) -->
   <g class="stair-badges">
-    <text x="${(width / 2).toFixed(2)}" y="36" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${angleLabel} PITCH · ${riserCount} RISERS${riserDetail} · ${goingCount} GOINGS${goingDetail}</text>
+    <text x="${padLeft}" y="18" font-size="9.5" fill="rgba(255, 255, 255, 0.75)" font-family="var(--font-family-mono, monospace)">SECTION ELEVATION — 1:${riserCount} risers / ${goingCount} goings — proportional</text>
+    <text x="${padLeft}" y="36" font-size="13" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${angleLabel} PITCH · ${riserCount}R${riserDetail} · ${goingCount}G${goingDetail}</text>
   </g>
-  <text x="${(originX + 30).toFixed(2)}" y="${(originY - 8).toFixed(2)}" font-size="9.5" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${angleLabel}</text>
-  <text x="${padLeft}" y="18" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">SECTION ELEVATION — 1:${riserCount} risers / ${goingCount} goings — proportional</text>
 </svg>`.trim();
 
   return svg;

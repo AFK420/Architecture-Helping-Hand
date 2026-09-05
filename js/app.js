@@ -7128,8 +7128,8 @@ function generateStairSVG(result, options = {}) {
   const height = typeof options.height === 'number' && options.height > 0 ? options.height : 260;
   const padLeft = 72;
   const padRight = 68;
-  const padTop = 46;
-  const padBottom = 46;
+  const padTop = 56;
+  const padBottom = 44;
   const drawW = width - padLeft - padRight;
   const drawH = height - padTop - padBottom;
 
@@ -7170,8 +7170,8 @@ function generateStairSVG(result, options = {}) {
   const dimRunY = originY + 22;
   const dimRiseX = topX + landingExt + 18;
   const stairAngleDeg = (-result.geometry.angleDegrees).toFixed(2);
-  const walkLabelX = originX + px(totalRun * 0.62);
-  const walkLabelY = originY - px(totalRise * 0.62) - 6;
+  const walkLabelX = originX + px(totalRun * 0.45);
+  const walkLabelY = originY - px(totalRise * 0.45) - 12;
 
   const riserDetail = result.formatted?.riser ? ` @ ${result.formatted.riser}` : '';
   const goingDetail = result.formatted?.tread ? ` @ ${result.formatted.tread}` : '';
@@ -7225,10 +7225,10 @@ function generateStairSVG(result, options = {}) {
   <g class="stair-benchmarks" font-family="var(--font-family-mono, monospace)" font-size="9">
     <!-- Lower Level Benchmark -->
     <polygon points="${(originX - landingExt).toFixed(2)},${originY.toFixed(2)} ${(originX - landingExt + 5).toFixed(2)},${(originY - 8).toFixed(2)} ${(originX - landingExt - 5).toFixed(2)},${(originY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
-    <text x="${(originX - landingExt).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="start" fill="var(--text-secondary, #9aa)">▼ FFL ±0.00</text>
+    <text x="${(originX - landingExt).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="start" fill="var(--text-primary, #ffffff)" font-weight="600">▼ FFL ±0.00</text>
     <!-- Upper Level Benchmark -->
     <polygon points="${(topX + landingExt).toFixed(2)},${topY.toFixed(2)} ${(topX + landingExt + 5).toFixed(2)},${(topY - 8).toFixed(2)} ${(topX + landingExt - 5).toFixed(2)},${(topY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
-    <text x="${(topX + landingExt).toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="end" fill="var(--text-secondary, #9aa)">▲ FFL +${result.formatted.totalRise}</text>
+    <text x="${(topX + landingExt).toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="end" fill="var(--text-primary, #ffffff)" font-weight="600">▲ FFL +${result.formatted.totalRise}</text>
   </g>
 
   <!-- CAD 45° Slashed Horizontal Dimension: RUN -->
@@ -7239,7 +7239,7 @@ function generateStairSVG(result, options = {}) {
     <!-- 45° CAD slashes -->
     <line x1="${(originX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(originX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
     <line x1="${(topX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(topX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
-    <text x="${(originX + px(totalRun) / 2).toFixed(2)}" y="${(dimRunY + 14).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.totalRun} (${goingCount} goings)</text>
+    <text x="${(originX + px(totalRun) / 2).toFixed(2)}" y="${(dimRunY + 14).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary, #ffffff)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.totalRun} (${goingCount} goings)</text>
   </g>
 
   <!-- CAD 45° Slashed Vertical Dimension: RISE -->
@@ -7250,15 +7250,14 @@ function generateStairSVG(result, options = {}) {
     <!-- 45° CAD slashes -->
     <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(originY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(originY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
     <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(topY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(topY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
-    <text x="${(dimRiseX + 10).toFixed(2)}" y="${((originY + topY) / 2).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${((originY + topY) / 2).toFixed(2)})">RISE ${result.formatted.totalRise}</text>
+    <text x="${(dimRiseX + 10).toFixed(2)}" y="${((originY + topY) / 2).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary, #ffffff)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${((originY + topY) / 2).toFixed(2)})">RISE ${result.formatted.totalRise}</text>
   </g>
 
-  <!-- Hero Pitch Badging & Base Pitch -->
+  <!-- Hero Pitch & Step Specification (Top-Left Sky Zone) -->
   <g class="stair-badges">
-    <text x="${(width / 2).toFixed(2)}" y="36" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${angleLabel} PITCH · ${riserCount} RISERS${riserDetail} · ${goingCount} GOINGS${goingDetail}</text>
+    <text x="${padLeft}" y="18" font-size="9.5" fill="rgba(255, 255, 255, 0.75)" font-family="var(--font-family-mono, monospace)">SECTION ELEVATION — 1:${riserCount} risers / ${goingCount} goings — proportional</text>
+    <text x="${padLeft}" y="36" font-size="13" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${angleLabel} PITCH · ${riserCount}R${riserDetail} · ${goingCount}G${goingDetail}</text>
   </g>
-  <text x="${(originX + 30).toFixed(2)}" y="${(originY - 8).toFixed(2)}" font-size="9.5" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${angleLabel}</text>
-  <text x="${padLeft}" y="18" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">SECTION ELEVATION — 1:${riserCount} risers / ${goingCount} goings — proportional</text>
 </svg>`.trim();
 
   return svg;
@@ -7695,8 +7694,8 @@ function generateRampSVG(result, options = {}) {
   const dimRiseX = topX + landingExt + 18;
   const midX = (originX + topX) / 2;
   const midY = (originY + topY) / 2;
-  const hrLabelX = originX + (topX - originX) * 0.35;
-  const hrLabelY = originY + (topY - originY) * 0.35 - handrailH - 4;
+  const hrLabelX = midX;
+  const hrLabelY = midY - handrailH - 5;
   const rampAngleDeg = (-result.geometry.angleDegrees).toFixed(2);
 
   const svg = `
@@ -7742,9 +7741,9 @@ function generateRampSVG(result, options = {}) {
   <!-- Level Datum Benchmarks (FFL) -->
   <g class="ramp-benchmarks" font-family="var(--font-family-mono, monospace)" font-size="9">
     <polygon points="${(originX - landingExt).toFixed(2)},${originY.toFixed(2)} ${(originX - landingExt + 5).toFixed(2)},${(originY - 8).toFixed(2)} ${(originX - landingExt - 5).toFixed(2)},${(originY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
-    <text x="${(originX - landingExt).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="start" fill="var(--text-secondary, #9aa)">▼ LOWER FFL ±0.00</text>
+    <text x="${(originX - landingExt).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="start" fill="var(--text-primary, #ffffff)" font-weight="600">▼ LOWER FFL ±0.00</text>
     <polygon points="${(topX + landingExt).toFixed(2)},${topY.toFixed(2)} ${(topX + landingExt + 5).toFixed(2)},${(topY - 8).toFixed(2)} ${(topX + landingExt - 5).toFixed(2)},${(topY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
-    <text x="${(topX + landingExt).toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="end" fill="var(--text-secondary, #9aa)">▲ UPPER FFL +${result.formatted.rise}</text>
+    <text x="${(topX + landingExt).toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="end" fill="var(--text-primary, #ffffff)" font-weight="600">▲ UPPER FFL +${result.formatted.rise}</text>
   </g>
 
   <!-- CAD 45° Slashed Horizontal Dimension: RUN -->
@@ -7755,7 +7754,7 @@ function generateRampSVG(result, options = {}) {
     <!-- 45° CAD slashes -->
     <line x1="${(originX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(originX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
     <line x1="${(topX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(topX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
-    <text x="${midX.toFixed(2)}" y="${(dimRunY + 14).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.run}</text>
+    <text x="${midX.toFixed(2)}" y="${(dimRunY + 14).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary, #ffffff)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.run}</text>
   </g>
 
   <!-- CAD 45° Slashed Vertical Dimension: RISE -->
@@ -7766,14 +7765,14 @@ function generateRampSVG(result, options = {}) {
     <!-- 45° CAD slashes -->
     <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(originY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(originY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
     <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(topY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(topY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
-    <text x="${(dimRiseX + 10).toFixed(2)}" y="${midY.toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${midY.toFixed(2)})">RISE ${result.formatted.rise}</text>
+    <text x="${(dimRiseX + 10).toFixed(2)}" y="${midY.toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary, #ffffff)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${midY.toFixed(2)})">RISE ${result.formatted.rise}</text>
   </g>
 
-  <!-- Hero Slope Badging & Title -->
+  <!-- Hero Slope Badging & Title (Top-Left Sky Zone) -->
   <g class="ramp-badges">
-    <text x="${(width / 2).toFixed(2)}" y="36" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${result.formatted.slopePercent} · ${result.formatted.ratio} · ${result.formatted.angle}</text>
+    <text x="${padLeft}" y="18" font-size="9.5" fill="rgba(255, 255, 255, 0.75)" font-family="var(--font-family-mono, monospace)">SECTION ELEVATION — proportional to calculated geometry</text>
+    <text x="${padLeft}" y="36" font-size="13" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${result.formatted.slopePercent} · ${result.formatted.ratio} · ${result.formatted.angle}</text>
   </g>
-  <text x="${padLeft}" y="18" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">SECTION ELEVATION — proportional to calculated geometry</text>
 </svg>`.trim();
 
   return svg;
@@ -8237,8 +8236,8 @@ function generateSlopeSVG(result, options = {}) {
 
   const slopeAngleDeg = (-result.geometry.angleDegrees).toFixed(2);
   const isAscending = rise > 0;
-  const flowLabelX = originX + (topX - originX) * 0.28;
-  const flowLabelY = originY + (topY - originY) * 0.28;
+  const flowLabelX = midX;
+  const flowLabelY = midY;
 
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Proportional slope diagram: rise ${result.formatted.rise}, run ${result.formatted.run}, ${result.formatted.direction}, angle ${result.formatted.angle}">
@@ -8263,7 +8262,7 @@ function generateSlopeSVG(result, options = {}) {
   <polygon points="${originX.toFixed(2)},${originY.toFixed(2)} ${topX.toFixed(2)},${originY.toFixed(2)} ${topX.toFixed(2)},${topY.toFixed(2)}" fill="url(#slope-earth-hatch)" opacity="0.75"/>
 
   <!-- Drainage / surface flow indicator -->
-  <g class="slope-flow" opacity="0.85">
+  <g class="slope-flow" opacity="0.9">
     <circle cx="${flowLabelX.toFixed(2)}" cy="${flowLabelY.toFixed(2)}" r="2.5" fill="var(--accent-secondary, #38bdf8)"/>
     <text x="${flowLabelX.toFixed(2)}" y="${(flowLabelY - 7).toFixed(2)}" text-anchor="middle" font-size="8.5" font-weight="600" fill="var(--accent-secondary, #38bdf8)" font-family="var(--font-family-mono, monospace)" transform="rotate(${slopeAngleDeg} ${flowLabelX.toFixed(2)} ${(flowLabelY - 7).toFixed(2)})">${isAscending ? '◂ FLOW DRAINAGE' : 'FLOW DRAINAGE ▸'}</text>
   </g>
@@ -8271,9 +8270,9 @@ function generateSlopeSVG(result, options = {}) {
   <!-- Level Datum Benchmarks -->
   <g class="slope-benchmarks" font-family="var(--font-family-mono, monospace)" font-size="9">
     <polygon points="${(originX - 16).toFixed(2)},${originY.toFixed(2)} ${(originX - 11).toFixed(2)},${(originY - 8).toFixed(2)} ${(originX - 21).toFixed(2)},${(originY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
-    <text x="${(originX - 16).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="start" fill="var(--text-secondary, #9aa)">▼ START EL. ±0.00</text>
+    <text x="${(originX - 16).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="start" fill="var(--text-primary, #ffffff)" font-weight="600">▼ START EL. ±0.00</text>
     <polygon points="${topX.toFixed(2)},${topY.toFixed(2)} ${(topX + 5).toFixed(2)},${(topY - 8).toFixed(2)} ${(topX - 5).toFixed(2)},${(topY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
-    <text x="${topX.toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="end" fill="var(--text-secondary, #9aa)">${rise >= 0 ? '▲' : '▼'} END EL. ${result.formatted.rise}</text>
+    <text x="${topX.toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="end" fill="var(--text-primary, #ffffff)" font-weight="600">${rise >= 0 ? '▲' : '▼'} END EL. ${result.formatted.rise}</text>
   </g>
 
   <!-- CAD 45° Slashed Horizontal Dimension: RUN -->
@@ -8284,7 +8283,7 @@ function generateSlopeSVG(result, options = {}) {
     <!-- 45° CAD slashes -->
     <line x1="${(originX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(originX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
     <line x1="${(topX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(topX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
-    <text x="${midX.toFixed(2)}" y="${(dimRunY + 14).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.run}</text>
+    <text x="${midX.toFixed(2)}" y="${(dimRunY + 14).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary, #ffffff)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.run}</text>
   </g>
 
   <!-- CAD 45° Slashed Vertical Dimension: RISE -->
@@ -8295,15 +8294,14 @@ function generateSlopeSVG(result, options = {}) {
     <!-- 45° CAD slashes -->
     <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(originY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(originY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
     <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(topY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(topY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
-    <text x="${(dimRiseX + 10).toFixed(2)}" y="${midY.toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${midY.toFixed(2)})">RISE ${result.formatted.rise}</text>
+    <text x="${(dimRiseX + 10).toFixed(2)}" y="${midY.toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary, #ffffff)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${midY.toFixed(2)})">RISE ${result.formatted.rise}</text>
   </g>
 
-  <!-- Hero Slope Badging & Title -->
+  <!-- Hero Slope Badging & Direction (Top-Left Sky Zone) -->
   <g class="slope-badges">
-    <text x="${(width / 2).toFixed(2)}" y="36" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${result.formatted.slopePercent} · ${result.formatted.ratio} · ${result.formatted.angle}</text>
+    <text x="${padLeft}" y="18" font-size="9.5" fill="rgba(255, 255, 255, 0.75)" font-family="var(--font-family-mono, monospace)">${result.formatted.direction}${visuallyNormalized ? ' · visually normalized (exact numeric values)' : ' — proportional slope'}</text>
+    <text x="${padLeft}" y="36" font-size="13" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${result.formatted.slopePercent} · ${result.formatted.ratio} · ${result.formatted.angle}</text>
   </g>
-  <text x="${padLeft}" y="${noteY}" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">${result.formatted.direction}</text>
-  ${visuallyNormalized ? `<text x="${padLeft}" y="18" font-size="9" fill="var(--text-muted, #777)" font-style="italic" font-family="var(--font-family-mono, monospace)">Diagram visually normalized for readability. Numeric values shown are exact.</text>` : ''}
 </svg>`.trim();
 
   return svg;
