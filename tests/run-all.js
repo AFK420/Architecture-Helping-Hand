@@ -47,6 +47,7 @@ const testFiles = [
   'data-integrity.test.js',
   'build-integrity.test.js',
   'ui-contracts.test.js',
+  'custom-shortcuts.test.js',
   'contextual-studio.test.js',
   'responsive.test.js'
 ];

@@ -566,30 +566,34 @@ export function generateStairSVG(result, options = {}) {
     return '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80"></svg>';
   }
 
-  const width = typeof options.width === 'number' && options.width > 0 ? options.width : 520;
-  const height = typeof options.height === 'number' && options.height > 0 ? options.height : 240;
-  const pad = 44;
-  const drawW = width - pad * 2;
-  const drawH = height - pad * 2;
+  const width = typeof options.width === 'number' && options.width > 0 ? options.width : 560;
+  const height = typeof options.height === 'number' && options.height > 0 ? options.height : 260;
+  const padLeft = 60;
+  const padRight = 50;
+  const padTop = 45;
+  const padBottom = 48;
+  const drawW = width - padLeft - padRight;
+  const drawH = height - padTop - padBottom;
 
   const totalRise = result.input.totalRiseMeters;
   const totalRun = result.geometry.totalRunMeters;
   const scale = Math.min(drawW / totalRun, drawH / totalRise);
 
   const riserCount = result.risers.count;
-  const treadMeters = result.treads.depthMeters;
+  const treadMeters = result.treads ? result.treads.depthMeters : (totalRun / (riserCount - 1 || 1));
   const riserMeters = result.risers.heightMeters;
   const goingCount = riserCount - 1;
 
   // Origin: bottom-left of the flight
-  const originX = pad;
-  const originY = height - pad;
+  const originX = padLeft;
+  const originY = height - padBottom;
 
   const px = meters => meters * scale;
   const xAt = i => originX + px(i * treadMeters);
   const yAt = i => originY - px(i * riserMeters);
 
   // Build the step outline path: riser up, tread forward, repeat (N risers, N-1 treads)
+  // CRITICAL: This MUST be the first `d="..."` in the SVG for unit tests
   let d = `M ${originX.toFixed(2)} ${originY.toFixed(2)}`;
   for (let i = 0; i < riserCount; i++) {
     d += ` L ${xAt(i).toFixed(2)} ${yAt(i + 1).toFixed(2)}`;      // riser up
@@ -601,21 +605,97 @@ export function generateStairSVG(result, options = {}) {
 
   // Dimension labels use the actual result geometry
   const angleLabel = `${formatNumber(result.geometry.angleDegrees, 1)}°`;
-  const diagX = originX + px(totalRun) * 0.55;
-  const diagY = originY - px(totalRise) * 0.55;
+  const topX = xAt(goingCount);
+  const topY = yAt(riserCount);
+  const diagX = originX + px(totalRun) * 0.48;
+  const diagY = originY - px(totalRise) * 0.58;
+
+  // Structural concrete waist and landing geometry
+  const waistThick = Math.max(12, scale * 0.12);
+  const landingExt = 36;
+  const dimRunY = originY + 24;
+  const dimRiseX = topX + 24;
 
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Proportional stair side elevation: ${riserCount} risers, ${goingCount} goings, angle ${angleLabel}">
+  <!-- Stepped flight profile (primary geometric path) -->
+  <path d="${d}" fill="url(#stair-slab-grad)" stroke="var(--accent-primary, #7aa2ff)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <defs>
+    <pattern id="stair-concrete-hatch" width="8" height="8" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="var(--accent-primary, #6366f1)" stroke-width="0.6" opacity="0.2"/>
+    </pattern>
+    <linearGradient id="stair-slab-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="var(--accent-primary, #6366f1)" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="var(--accent-secondary, #38bdf8)" stop-opacity="0.04"/>
+    </linearGradient>
+  </defs>
+
+  <path d="${d}" fill="url(#stair-concrete-hatch)" opacity="0.75"/>
+
+  <!-- Landing slabs & structural continuity -->
+  <g class="stair-structural" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.6" fill="none">
+    <!-- Bottom landing floor slab -->
+    <line x1="${(originX - landingExt).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${originX.toFixed(2)}" y2="${originY.toFixed(2)}"/>
+    <line x1="${(originX - landingExt).toFixed(2)}" y1="${(originY + waistThick).toFixed(2)}" x2="${originX.toFixed(2)}" y2="${(originY + waistThick).toFixed(2)}" stroke-dasharray="3 2" opacity="0.6"/>
+    <!-- Top landing slab -->
+    <line x1="${topX.toFixed(2)}" y1="${topY.toFixed(2)}" x2="${(topX + landingExt).toFixed(2)}" y2="${topY.toFixed(2)}"/>
+    <line x1="${topX.toFixed(2)}" y1="${(topY + waistThick).toFixed(2)}" x2="${(topX + landingExt).toFixed(2)}" y2="${(topY + waistThick).toFixed(2)}" stroke-dasharray="3 2" opacity="0.6"/>
+    <!-- Structural waist soffit under steps -->
+    <line x1="${originX.toFixed(2)}" y1="${(originY + waistThick).toFixed(2)}" x2="${topX.toFixed(2)}" y2="${(topY + waistThick).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.4" opacity="0.7"/>
+  </g>
+
+  <!-- Pitch and boundary reference guidelines -->
   <g class="stair-grid">
     <line x1="${originX}" y1="${originY}" x2="${originX + px(totalRun)}" y2="${originY}" stroke="var(--border-color, #444)" stroke-width="1" stroke-dasharray="4 3"/>
     <line x1="${originX}" y1="${originY}" x2="${originX}" y2="${originY - px(totalRise)}" stroke="var(--border-color, #444)" stroke-width="1" stroke-dasharray="4 3"/>
-    <line x1="${originX}" y1="${originY}" x2="${originX + px(totalRun)}" y2="${originY - px(totalRise)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1" stroke-dasharray="6 3" opacity="0.7"/>
+    <line x1="${originX}" y1="${originY}" x2="${originX + px(totalRun)}" y2="${originY - px(totalRise)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.2" stroke-dasharray="6 3" opacity="0.75"/>
   </g>
-  <path d="${d}" fill="var(--bg-chip, rgba(122,162,255,0.08))" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.6" stroke-linejoin="round"/>
-  <text x="${originX + px(totalRun) / 2}" y="${originY + 16}" text-anchor="middle" font-size="11" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.totalRun} (${goingCount} goings)</text>
-  <text x="${originX - 8}" y="${originY - px(totalRise) / 2}" text-anchor="end" font-size="11" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${originX - 8} ${originY - px(totalRise) / 2})">RISE ${result.formatted.totalRise}</text>
-  <text x="${diagX}" y="${diagY}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${angleLabel}</text>
-  <text x="${pad}" y="18" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">SIDE ELEVATION — 1:${riserCount} risers / ${goingCount} goings — proportional</text>
+
+  <!-- Architectural Walkline & Direction Arrow -->
+  <g class="stair-walkline">
+    <circle cx="${(originX + px(treadMeters * 0.5)).toFixed(2)}" cy="${(originY - px(riserMeters * 0.5)).toFixed(2)}" r="2.5" fill="var(--accent-secondary, #38bdf8)"/>
+    <line x1="${(originX + px(treadMeters * 0.5)).toFixed(2)}" y1="${(originY - px(riserMeters * 0.5)).toFixed(2)}" x2="${(topX - px(treadMeters * 0.3)).toFixed(2)}" y2="${(topY + px(riserMeters * 0.5)).toFixed(2)}" stroke="var(--accent-secondary, #38bdf8)" stroke-width="1.2" stroke-dasharray="5 3"/>
+    <!-- Arrowhead at top step -->
+    <polygon points="${(topX - px(treadMeters * 0.3)).toFixed(2)},${(topY + px(riserMeters * 0.5) - 3).toFixed(2)} ${(topX - px(treadMeters * 0.3) + 5).toFixed(2)},${(topY + px(riserMeters * 0.5)).toFixed(2)} ${(topX - px(treadMeters * 0.3)).toFixed(2)},${(topY + px(riserMeters * 0.5) + 3).toFixed(2)}" fill="var(--accent-secondary, #38bdf8)"/>
+    <text x="${(originX + px(totalRun * 0.22)).toFixed(2)}" y="${(originY - px(totalRise * 0.32)).toFixed(2)}" font-size="9" font-weight="600" fill="var(--accent-secondary, #38bdf8)" font-family="var(--font-family-mono, monospace)">UP (${riserCount}R / ${goingCount}G)</text>
+  </g>
+
+  <!-- Level Datum Benchmarks (FFL) -->
+  <g class="stair-benchmarks" font-family="var(--font-family-mono, monospace)" font-size="9">
+    <!-- Lower Level Benchmark -->
+    <polygon points="${(originX - landingExt).toFixed(2)},${originY.toFixed(2)} ${(originX - landingExt + 6).toFixed(2)},${(originY - 8).toFixed(2)} ${(originX - landingExt - 6).toFixed(2)},${(originY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
+    <text x="${(originX - landingExt).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="middle" fill="var(--text-secondary, #9aa)">▼ FFL ±0.00</text>
+    <!-- Upper Level Benchmark -->
+    <polygon points="${(topX + landingExt).toFixed(2)},${topY.toFixed(2)} ${(topX + landingExt + 6).toFixed(2)},${(topY - 8).toFixed(2)} ${(topX + landingExt - 6).toFixed(2)},${(topY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
+    <text x="${(topX + landingExt).toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="middle" fill="var(--text-secondary, #9aa)">▲ FFL +${result.formatted.totalRise}</text>
+  </g>
+
+  <!-- CAD 45° Slashed Horizontal Dimension: RUN -->
+  <g class="stair-dim-run">
+    <line x1="${originX.toFixed(2)}" y1="${(originY + 4).toFixed(2)}" x2="${originX.toFixed(2)}" y2="${(dimRunY + 6).toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${topX.toFixed(2)}" y1="${(originY + 4).toFixed(2)}" x2="${topX.toFixed(2)}" y2="${(dimRunY + 6).toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${originX.toFixed(2)}" y1="${dimRunY.toFixed(2)}" x2="${topX.toFixed(2)}" y2="${dimRunY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.1"/>
+    <!-- 45° CAD slashes -->
+    <line x1="${(originX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(originX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <line x1="${(topX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(topX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <text x="${(originX + px(totalRun) / 2).toFixed(2)}" y="${(dimRunY + 14).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.totalRun} (${goingCount} goings)</text>
+  </g>
+
+  <!-- CAD 45° Slashed Vertical Dimension: RISE -->
+  <g class="stair-dim-rise">
+    <line x1="${(topX + 4).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${originY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${(topX + 4).toFixed(2)}" y1="${topY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${dimRiseX.toFixed(2)}" y1="${originY.toFixed(2)}" x2="${dimRiseX.toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.1"/>
+    <!-- 45° CAD slashes -->
+    <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(originY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(originY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(topY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(topY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <text x="${(dimRiseX + 10).toFixed(2)}" y="${((originY + topY) / 2).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${((originY + topY) / 2).toFixed(2)})">RISE ${result.formatted.totalRise}</text>
+  </g>
+
+  <!-- Pitch angle & step proportions badge -->
+  <text x="${diagX.toFixed(2)}" y="${diagY.toFixed(2)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${angleLabel}</text>
+  <text x="${padLeft}" y="18" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">SECTION ELEVATION — 1:${riserCount} risers / ${goingCount} goings — proportional</text>
 </svg>`.trim();
 
   return svg;

@@ -31,6 +31,7 @@ import { parseInput } from '../../core/parser.js';
 import { UNITS } from '../../core/units.js';
 import { wrapSVGDocument, createExportProvenance, EXPORT_FORMATS } from '../../core/export/export-model.js';
 import { attachNumericScrubber } from '../scrubber.js';
+import { ShortcutsManager } from '../../core/shortcuts-manager.js';
 
 const PLAN_STATE_KEY = 'archiscale_plan_prefs'; // user preferences only
 
@@ -2280,6 +2281,59 @@ export function createPlanView(context) {
       return;
     }
 
+    // Rebindable shortcuts via ShortcutsManager
+    if (typeof ShortcutsManager !== 'undefined') {
+      if (ShortcutsManager.matchesEvent('plan_undo', event)) {
+        event.preventDefault();
+        undo();
+        return;
+      }
+      if (ShortcutsManager.matchesEvent('plan_redo', event)) {
+        event.preventDefault();
+        redo();
+        return;
+      }
+      if (ShortcutsManager.matchesEvent('plan_duplicate', event)) {
+        event.preventDefault();
+        duplicateSelected();
+        return;
+      }
+      if (ShortcutsManager.matchesEvent('plan_delete', event)) {
+        if (state.plan.selectedIds.size > 0) {
+          event.preventDefault();
+          deleteSelected();
+        }
+        return;
+      }
+      if (ShortcutsManager.matchesEvent('plan_cancel', event)) {
+        state.plan.selectedIds = new Set();
+        setTool('select');
+        render();
+        return;
+      }
+      if (ShortcutsManager.matchesEvent('plan_zoom_fit', event)) {
+        event.preventDefault();
+        fitToContent();
+        return;
+      }
+      if (ShortcutsManager.matchesEvent('tool_select', event)) { event.preventDefault(); setTool('select'); return; }
+      if (ShortcutsManager.matchesEvent('tool_wall', event)) { event.preventDefault(); setTool('wall'); return; }
+      if (ShortcutsManager.matchesEvent('tool_room', event)) { event.preventDefault(); setTool('room'); return; }
+      if (ShortcutsManager.matchesEvent('tool_furniture', event)) { event.preventDefault(); setTool('furniture'); return; }
+      if (ShortcutsManager.matchesEvent('tool_measure', event)) { event.preventDefault(); setTool('measure'); return; }
+      if (ShortcutsManager.matchesEvent('tool_dimension', event)) { event.preventDefault(); setTool('dimension'); return; }
+      if (ShortcutsManager.matchesEvent('tool_stair', event)) { event.preventDefault(); setTool('stair'); return; }
+      if (ShortcutsManager.matchesEvent('tool_ramp', event)) { event.preventDefault(); setTool('ramp'); return; }
+      if (ShortcutsManager.matchesEvent('plan_grid', event)) { event.preventDefault(); cycleGrid(); return; }
+      if (ShortcutsManager.matchesEvent('plan_snap', event)) { event.preventDefault(); toggleSnap(); return; }
+      if (ShortcutsManager.matchesEvent('shortcuts_modal', event)) {
+        event.preventDefault();
+        dom.shortcutsModal?.classList.add('open');
+        dom.modalBackdrop?.classList.add('open');
+        return;
+      }
+    }
+
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
       event.preventDefault();
       undo();
@@ -2331,6 +2385,9 @@ export function createPlanView(context) {
     else if (k === 'f') { event.preventDefault(); setTool('furniture'); }
     else if (k === 'm') { event.preventDefault(); setTool('measure'); }
     else if (k === 'd') { event.preventDefault(); setTool('dimension'); }
+    else if (k === 't') { event.preventDefault(); setTool('stair'); }
+    else if (k === 'p') { event.preventDefault(); setTool('ramp'); }
+    else if (k === 'z') { event.preventDefault(); fitToContent(); }
     else if (k === 'g') { event.preventDefault(); cycleGrid(); }
     else if (k === 's') { event.preventDefault(); toggleSnap(); }
     else if (event.key === '?') {

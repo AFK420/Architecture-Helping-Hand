@@ -56,6 +56,7 @@ export const BUNDLE_MODULES = [
   { name: 'SpacePlanning', file: path.join(srcDir, 'core', 'space-planning.js') },
   { name: 'Survey', file: path.join(srcDir, 'core', 'survey.js') },
   { name: 'Annotations', file: path.join(srcDir, 'core', 'annotations.js') },
+  { name: 'ShortcutsManager', file: path.join(srcDir, 'core', 'shortcuts-manager.js') },
   { name: 'ExportModel', file: path.join(srcDir, 'core', 'export', 'export-model.js') },
 
   // --- AI layer (orchestrator last: consumes providers/modes/schemas/tools) ---

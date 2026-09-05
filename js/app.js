@@ -7124,30 +7124,34 @@ function generateStairSVG(result, options = {}) {
     return '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80"></svg>';
   }
 
-  const width = typeof options.width === 'number' && options.width > 0 ? options.width : 520;
-  const height = typeof options.height === 'number' && options.height > 0 ? options.height : 240;
-  const pad = 44;
-  const drawW = width - pad * 2;
-  const drawH = height - pad * 2;
+  const width = typeof options.width === 'number' && options.width > 0 ? options.width : 560;
+  const height = typeof options.height === 'number' && options.height > 0 ? options.height : 260;
+  const padLeft = 60;
+  const padRight = 50;
+  const padTop = 45;
+  const padBottom = 48;
+  const drawW = width - padLeft - padRight;
+  const drawH = height - padTop - padBottom;
 
   const totalRise = result.input.totalRiseMeters;
   const totalRun = result.geometry.totalRunMeters;
   const scale = Math.min(drawW / totalRun, drawH / totalRise);
 
   const riserCount = result.risers.count;
-  const treadMeters = result.treads.depthMeters;
+  const treadMeters = result.treads ? result.treads.depthMeters : (totalRun / (riserCount - 1 || 1));
   const riserMeters = result.risers.heightMeters;
   const goingCount = riserCount - 1;
 
   // Origin: bottom-left of the flight
-  const originX = pad;
-  const originY = height - pad;
+  const originX = padLeft;
+  const originY = height - padBottom;
 
   const px = meters => meters * scale;
   const xAt = i => originX + px(i * treadMeters);
   const yAt = i => originY - px(i * riserMeters);
 
   // Build the step outline path: riser up, tread forward, repeat (N risers, N-1 treads)
+  // CRITICAL: This MUST be the first `d="..."` in the SVG for unit tests
   let d = `M ${originX.toFixed(2)} ${originY.toFixed(2)}`;
   for (let i = 0; i < riserCount; i++) {
     d += ` L ${xAt(i).toFixed(2)} ${yAt(i + 1).toFixed(2)}`;      // riser up
@@ -7159,21 +7163,97 @@ function generateStairSVG(result, options = {}) {
 
   // Dimension labels use the actual result geometry
   const angleLabel = `${formatNumber(result.geometry.angleDegrees, 1)}°`;
-  const diagX = originX + px(totalRun) * 0.55;
-  const diagY = originY - px(totalRise) * 0.55;
+  const topX = xAt(goingCount);
+  const topY = yAt(riserCount);
+  const diagX = originX + px(totalRun) * 0.48;
+  const diagY = originY - px(totalRise) * 0.58;
+
+  // Structural concrete waist and landing geometry
+  const waistThick = Math.max(12, scale * 0.12);
+  const landingExt = 36;
+  const dimRunY = originY + 24;
+  const dimRiseX = topX + 24;
 
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Proportional stair side elevation: ${riserCount} risers, ${goingCount} goings, angle ${angleLabel}">
+  <!-- Stepped flight profile (primary geometric path) -->
+  <path d="${d}" fill="url(#stair-slab-grad)" stroke="var(--accent-primary, #7aa2ff)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <defs>
+    <pattern id="stair-concrete-hatch" width="8" height="8" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="var(--accent-primary, #6366f1)" stroke-width="0.6" opacity="0.2"/>
+    </pattern>
+    <linearGradient id="stair-slab-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="var(--accent-primary, #6366f1)" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="var(--accent-secondary, #38bdf8)" stop-opacity="0.04"/>
+    </linearGradient>
+  </defs>
+
+  <path d="${d}" fill="url(#stair-concrete-hatch)" opacity="0.75"/>
+
+  <!-- Landing slabs & structural continuity -->
+  <g class="stair-structural" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.6" fill="none">
+    <!-- Bottom landing floor slab -->
+    <line x1="${(originX - landingExt).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${originX.toFixed(2)}" y2="${originY.toFixed(2)}"/>
+    <line x1="${(originX - landingExt).toFixed(2)}" y1="${(originY + waistThick).toFixed(2)}" x2="${originX.toFixed(2)}" y2="${(originY + waistThick).toFixed(2)}" stroke-dasharray="3 2" opacity="0.6"/>
+    <!-- Top landing slab -->
+    <line x1="${topX.toFixed(2)}" y1="${topY.toFixed(2)}" x2="${(topX + landingExt).toFixed(2)}" y2="${topY.toFixed(2)}"/>
+    <line x1="${topX.toFixed(2)}" y1="${(topY + waistThick).toFixed(2)}" x2="${(topX + landingExt).toFixed(2)}" y2="${(topY + waistThick).toFixed(2)}" stroke-dasharray="3 2" opacity="0.6"/>
+    <!-- Structural waist soffit under steps -->
+    <line x1="${originX.toFixed(2)}" y1="${(originY + waistThick).toFixed(2)}" x2="${topX.toFixed(2)}" y2="${(topY + waistThick).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.4" opacity="0.7"/>
+  </g>
+
+  <!-- Pitch and boundary reference guidelines -->
   <g class="stair-grid">
     <line x1="${originX}" y1="${originY}" x2="${originX + px(totalRun)}" y2="${originY}" stroke="var(--border-color, #444)" stroke-width="1" stroke-dasharray="4 3"/>
     <line x1="${originX}" y1="${originY}" x2="${originX}" y2="${originY - px(totalRise)}" stroke="var(--border-color, #444)" stroke-width="1" stroke-dasharray="4 3"/>
-    <line x1="${originX}" y1="${originY}" x2="${originX + px(totalRun)}" y2="${originY - px(totalRise)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1" stroke-dasharray="6 3" opacity="0.7"/>
+    <line x1="${originX}" y1="${originY}" x2="${originX + px(totalRun)}" y2="${originY - px(totalRise)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.2" stroke-dasharray="6 3" opacity="0.75"/>
   </g>
-  <path d="${d}" fill="var(--bg-chip, rgba(122,162,255,0.08))" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.6" stroke-linejoin="round"/>
-  <text x="${originX + px(totalRun) / 2}" y="${originY + 16}" text-anchor="middle" font-size="11" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.totalRun} (${goingCount} goings)</text>
-  <text x="${originX - 8}" y="${originY - px(totalRise) / 2}" text-anchor="end" font-size="11" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${originX - 8} ${originY - px(totalRise) / 2})">RISE ${result.formatted.totalRise}</text>
-  <text x="${diagX}" y="${diagY}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${angleLabel}</text>
-  <text x="${pad}" y="18" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">SIDE ELEVATION — 1:${riserCount} risers / ${goingCount} goings — proportional</text>
+
+  <!-- Architectural Walkline & Direction Arrow -->
+  <g class="stair-walkline">
+    <circle cx="${(originX + px(treadMeters * 0.5)).toFixed(2)}" cy="${(originY - px(riserMeters * 0.5)).toFixed(2)}" r="2.5" fill="var(--accent-secondary, #38bdf8)"/>
+    <line x1="${(originX + px(treadMeters * 0.5)).toFixed(2)}" y1="${(originY - px(riserMeters * 0.5)).toFixed(2)}" x2="${(topX - px(treadMeters * 0.3)).toFixed(2)}" y2="${(topY + px(riserMeters * 0.5)).toFixed(2)}" stroke="var(--accent-secondary, #38bdf8)" stroke-width="1.2" stroke-dasharray="5 3"/>
+    <!-- Arrowhead at top step -->
+    <polygon points="${(topX - px(treadMeters * 0.3)).toFixed(2)},${(topY + px(riserMeters * 0.5) - 3).toFixed(2)} ${(topX - px(treadMeters * 0.3) + 5).toFixed(2)},${(topY + px(riserMeters * 0.5)).toFixed(2)} ${(topX - px(treadMeters * 0.3)).toFixed(2)},${(topY + px(riserMeters * 0.5) + 3).toFixed(2)}" fill="var(--accent-secondary, #38bdf8)"/>
+    <text x="${(originX + px(totalRun * 0.22)).toFixed(2)}" y="${(originY - px(totalRise * 0.32)).toFixed(2)}" font-size="9" font-weight="600" fill="var(--accent-secondary, #38bdf8)" font-family="var(--font-family-mono, monospace)">UP (${riserCount}R / ${goingCount}G)</text>
+  </g>
+
+  <!-- Level Datum Benchmarks (FFL) -->
+  <g class="stair-benchmarks" font-family="var(--font-family-mono, monospace)" font-size="9">
+    <!-- Lower Level Benchmark -->
+    <polygon points="${(originX - landingExt).toFixed(2)},${originY.toFixed(2)} ${(originX - landingExt + 6).toFixed(2)},${(originY - 8).toFixed(2)} ${(originX - landingExt - 6).toFixed(2)},${(originY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
+    <text x="${(originX - landingExt).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="middle" fill="var(--text-secondary, #9aa)">▼ FFL ±0.00</text>
+    <!-- Upper Level Benchmark -->
+    <polygon points="${(topX + landingExt).toFixed(2)},${topY.toFixed(2)} ${(topX + landingExt + 6).toFixed(2)},${(topY - 8).toFixed(2)} ${(topX + landingExt - 6).toFixed(2)},${(topY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
+    <text x="${(topX + landingExt).toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="middle" fill="var(--text-secondary, #9aa)">▲ FFL +${result.formatted.totalRise}</text>
+  </g>
+
+  <!-- CAD 45° Slashed Horizontal Dimension: RUN -->
+  <g class="stair-dim-run">
+    <line x1="${originX.toFixed(2)}" y1="${(originY + 4).toFixed(2)}" x2="${originX.toFixed(2)}" y2="${(dimRunY + 6).toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${topX.toFixed(2)}" y1="${(originY + 4).toFixed(2)}" x2="${topX.toFixed(2)}" y2="${(dimRunY + 6).toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${originX.toFixed(2)}" y1="${dimRunY.toFixed(2)}" x2="${topX.toFixed(2)}" y2="${dimRunY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.1"/>
+    <!-- 45° CAD slashes -->
+    <line x1="${(originX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(originX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <line x1="${(topX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(topX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <text x="${(originX + px(totalRun) / 2).toFixed(2)}" y="${(dimRunY + 14).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.totalRun} (${goingCount} goings)</text>
+  </g>
+
+  <!-- CAD 45° Slashed Vertical Dimension: RISE -->
+  <g class="stair-dim-rise">
+    <line x1="${(topX + 4).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${originY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${(topX + 4).toFixed(2)}" y1="${topY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${dimRiseX.toFixed(2)}" y1="${originY.toFixed(2)}" x2="${dimRiseX.toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.1"/>
+    <!-- 45° CAD slashes -->
+    <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(originY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(originY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(topY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(topY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <text x="${(dimRiseX + 10).toFixed(2)}" y="${((originY + topY) / 2).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${((originY + topY) / 2).toFixed(2)})">RISE ${result.formatted.totalRise}</text>
+  </g>
+
+  <!-- Pitch angle & step proportions badge -->
+  <text x="${diagX.toFixed(2)}" y="${diagY.toFixed(2)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${angleLabel}</text>
+  <text x="${padLeft}" y="18" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">SECTION ELEVATION — 1:${riserCount} risers / ${goingCount} goings — proportional</text>
 </svg>`.trim();
 
   return svg;
@@ -7586,34 +7666,106 @@ function generateRampSVG(result, options = {}) {
     return '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80"></svg>';
   }
 
-  const width = typeof options.width === 'number' && options.width > 0 ? options.width : 520;
-  const height = typeof options.height === 'number' && options.height > 0 ? options.height : 220;
-  const pad = 46;
-  const drawW = width - pad * 2;
-  const drawH = height - pad * 2;
+  const width = typeof options.width === 'number' && options.width > 0 ? options.width : 560;
+  const height = typeof options.height === 'number' && options.height > 0 ? options.height : 240;
+  const padLeft = 60;
+  const padRight = 54;
+  const padTop = 45;
+  const padBottom = 48;
+  const drawW = width - padLeft - padRight;
+  const drawH = height - padTop - padBottom;
 
   const rise = result.geometry.riseMeters;
   const run = result.geometry.runMeters;
   const scale = Math.min(drawW / run, drawH / rise);
 
-  const originX = pad;
-  const originY = height - pad;
+  const originX = padLeft;
+  const originY = height - padBottom;
   const topX = originX + run * scale;
   const topY = originY - rise * scale;
 
+  const landingExt = 36;
+  const handrailH = Math.max(14, Math.min(26, scale * 0.9));
+  const dimRunY = originY + 24;
+  const dimRiseX = topX + 24;
+  const midX = (originX + topX) / 2;
+  const midY = (originY + topY) / 2;
+
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Proportional ramp side elevation: rise ${result.formatted.rise}, run ${result.formatted.run}, slope ${result.formatted.slopePercent}, ratio ${result.formatted.ratio}, angle ${result.formatted.angle}">
+  <!-- TEST CONTRACT: Line 1 MUST be the baseline -->
   <g class="ramp-baseline">
     <line x1="${(originX - 14).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${(topX + 14).toFixed(2)}" y2="${originY.toFixed(2)}" stroke="var(--border-color, #444)" stroke-width="1.4"/>
   </g>
+
+  <!-- TEST CONTRACT: Line 2 MUST be the ramp slope line -->
   <line x1="${originX.toFixed(2)}" y1="${originY.toFixed(2)}" x2="${topX.toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="2.4"/>
-  <g class="ramp-dims">
-    <line x1="${(topX + 18).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${(topX + 18).toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="1" stroke-dasharray="3 3"/>
-    <text x="${(topX + 24).toFixed(2)}" y="${((originY + topY) / 2).toFixed(2)}" font-size="11" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)" transform="rotate(90 ${(topX + 24).toFixed(2)} ${((originY + topY) / 2).toFixed(2)})" text-anchor="middle">RISE ${result.formatted.rise}</text>
-    <text x="${((originX + topX) / 2).toFixed(2)}" y="${(originY + 18).toFixed(2)}" text-anchor="middle" font-size="11" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.run}</text>
-    <text x="${((originX + topX) / 2).toFixed(2)}" y="${(topY - 10).toFixed(2)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${result.formatted.slopePercent} · ${result.formatted.ratio} · ${result.formatted.angle}</text>
+
+  <defs>
+    <pattern id="ramp-concrete-hatch" width="8" height="8" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="var(--accent-primary, #6366f1)" stroke-width="0.6" opacity="0.2"/>
+    </pattern>
+    <linearGradient id="ramp-wedge-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="var(--accent-primary, #6366f1)" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="var(--accent-secondary, #38bdf8)" stop-opacity="0.04"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Structural ramp solid wedge & hatching -->
+  <polygon points="${originX.toFixed(2)},${originY.toFixed(2)} ${topX.toFixed(2)},${originY.toFixed(2)} ${topX.toFixed(2)},${topY.toFixed(2)}" fill="url(#ramp-wedge-grad)"/>
+  <polygon points="${originX.toFixed(2)},${originY.toFixed(2)} ${topX.toFixed(2)},${originY.toFixed(2)} ${topX.toFixed(2)},${topY.toFixed(2)}" fill="url(#ramp-concrete-hatch)" opacity="0.75"/>
+
+  <!-- Landing extensions (bottom & top) -->
+  <g class="ramp-landings" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.6" fill="none">
+    <line x1="${(originX - landingExt).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${originX.toFixed(2)}" y2="${originY.toFixed(2)}"/>
+    <line x1="${topX.toFixed(2)}" y1="${topY.toFixed(2)}" x2="${(topX + landingExt).toFixed(2)}" y2="${topY.toFixed(2)}"/>
   </g>
-  <text x="${pad}" y="18" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">SIDE ELEVATION — proportional to calculated geometry</text>
+
+  <!-- 900mm Handrail guideline & posts -->
+  <g class="ramp-handrail" stroke="var(--accent-secondary, #38bdf8)" opacity="0.8">
+    <line x1="${originX.toFixed(2)}" y1="${(originY - handrailH).toFixed(2)}" x2="${topX.toFixed(2)}" y2="${(topY - handrailH).toFixed(2)}" stroke-width="1.4" stroke-dasharray="4 3"/>
+    <!-- Guard posts -->
+    <line x1="${originX.toFixed(2)}" y1="${originY.toFixed(2)}" x2="${originX.toFixed(2)}" y2="${(originY - handrailH).toFixed(2)}" stroke-width="1"/>
+    <line x1="${midX.toFixed(2)}" y1="${midY.toFixed(2)}" x2="${midX.toFixed(2)}" y2="${(midY - handrailH).toFixed(2)}" stroke-width="1"/>
+    <line x1="${topX.toFixed(2)}" y1="${topY.toFixed(2)}" x2="${topX.toFixed(2)}" y2="${(topY - handrailH).toFixed(2)}" stroke-width="1"/>
+    <text x="${(midX).toFixed(2)}" y="${(midY - handrailH - 4).toFixed(2)}" font-size="8.5" fill="var(--accent-secondary, #38bdf8)" font-family="var(--font-family-mono, monospace)" text-anchor="middle">HANDRAIL (900mm)</text>
+  </g>
+
+  <!-- Level Datum Benchmarks (FFL) -->
+  <g class="ramp-benchmarks" font-family="var(--font-family-mono, monospace)" font-size="9">
+    <polygon points="${(originX - landingExt).toFixed(2)},${originY.toFixed(2)} ${(originX - landingExt + 6).toFixed(2)},${(originY - 8).toFixed(2)} ${(originX - landingExt - 6).toFixed(2)},${(originY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
+    <text x="${(originX - landingExt).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="middle" fill="var(--text-secondary, #9aa)">▼ LOWER FFL ±0.00</text>
+    <polygon points="${(topX + landingExt).toFixed(2)},${topY.toFixed(2)} ${(topX + landingExt + 6).toFixed(2)},${(topY - 8).toFixed(2)} ${(topX + landingExt - 6).toFixed(2)},${(topY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
+    <text x="${(topX + landingExt).toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="middle" fill="var(--text-secondary, #9aa)">▲ UPPER FFL +${result.formatted.rise}</text>
+  </g>
+
+  <!-- CAD 45° Slashed Horizontal Dimension: RUN -->
+  <g class="ramp-dim-run">
+    <line x1="${originX.toFixed(2)}" y1="${(originY + 4).toFixed(2)}" x2="${originX.toFixed(2)}" y2="${(dimRunY + 6).toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${topX.toFixed(2)}" y1="${(originY + 4).toFixed(2)}" x2="${topX.toFixed(2)}" y2="${(dimRunY + 6).toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${originX.toFixed(2)}" y1="${dimRunY.toFixed(2)}" x2="${topX.toFixed(2)}" y2="${dimRunY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.1"/>
+    <!-- 45° CAD slashes -->
+    <line x1="${(originX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(originX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <line x1="${(topX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(topX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <text x="${midX.toFixed(2)}" y="${(dimRunY + 14).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.run}</text>
+  </g>
+
+  <!-- CAD 45° Slashed Vertical Dimension: RISE -->
+  <g class="ramp-dim-rise">
+    <line x1="${(topX + 4).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${originY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${(topX + 4).toFixed(2)}" y1="${topY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${dimRiseX.toFixed(2)}" y1="${originY.toFixed(2)}" x2="${dimRiseX.toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.1"/>
+    <!-- 45° CAD slashes -->
+    <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(originY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(originY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(topY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(topY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <text x="${(dimRiseX + 10).toFixed(2)}" y="${midY.toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${midY.toFixed(2)})">RISE ${result.formatted.rise}</text>
+  </g>
+
+  <!-- Hero Slope Badging & Title -->
+  <g class="ramp-badges">
+    <text x="${midX.toFixed(2)}" y="${(topY - 14).toFixed(2)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)">${result.formatted.slopePercent} · ${result.formatted.ratio} · ${result.formatted.angle}</text>
+  </g>
+  <text x="${padLeft}" y="18" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">SECTION ELEVATION — proportional to calculated geometry</text>
 </svg>`.trim();
 
   return svg;
@@ -8032,11 +8184,14 @@ function generateSlopeSVG(result, options = {}) {
     return '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80"></svg>';
   }
 
-  const width = typeof options.width === 'number' && options.width > 0 ? options.width : 520;
-  const height = typeof options.height === 'number' && options.height > 0 ? options.height : 220;
-  const pad = 46;
-  const drawW = width - pad * 2;
-  const drawH = height - pad * 2;
+  const width = typeof options.width === 'number' && options.width > 0 ? options.width : 560;
+  const height = typeof options.height === 'number' && options.height > 0 ? options.height : 240;
+  const padLeft = 60;
+  const padRight = 54;
+  const padTop = 45;
+  const padBottom = 48;
+  const drawW = width - padLeft - padRight;
+  const drawH = height - padTop - padBottom;
 
   const rise = result.geometry.riseMeters;
   const run = result.geometry.runMeters;
@@ -8061,22 +8216,79 @@ function generateSlopeSVG(result, options = {}) {
   }
 
   const scale = Math.min(drawW / drawRun, drawH / drawRise);
-  const originX = pad;
-  const originY = height - pad;
+  const originX = padLeft;
+  const originY = rise < 0 ? padTop + drawRise * scale : height - padBottom;
   const topX = originX + drawRun * scale;
-  const topY = originY - drawRise * scale * (rise < 0 ? -1 : 1);
+  const topY = rise < 0 ? originY + drawRise * scale : originY - drawRise * scale;
 
+  const midX = (originX + topX) / 2;
+  const midY = (originY + topY) / 2;
+  const dimRunY = (rise < 0 ? Math.max(originY, topY) : originY) + 24;
+  const dimRiseX = topX + 24;
   const noteY = visuallyNormalized ? 32 : 18;
 
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Proportional slope diagram: rise ${result.formatted.rise}, run ${result.formatted.run}, ${result.formatted.direction}, angle ${result.formatted.angle}">
+  <!-- TEST CONTRACT: Line 1 MUST be the baseline -->
   <line x1="${(originX - 14).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${(topX + 14).toFixed(2)}" y2="${originY.toFixed(2)}" stroke="var(--border-color, #444)" stroke-width="1.4"/>
+
+  <!-- TEST CONTRACT: Line 2 MUST be the slope line -->
   <line x1="${originX.toFixed(2)}" y1="${originY.toFixed(2)}" x2="${topX.toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="2.4"/>
-  <text x="${((originX + topX) / 2).toFixed(2)}" y="${(originY + 18).toFixed(2)}" text-anchor="middle" font-size="11" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.run}</text>
-  <text x="${(topX + 10).toFixed(2)}" y="${((originY + topY) / 2).toFixed(2)}" font-size="11" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RISE ${result.formatted.rise}</text>
-  <text x="${((originX + topX) / 2).toFixed(2)}" y="${((originY + topY) / 2).toFixed(2)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)" transform="rotate(${(-result.geometry.angleDegrees).toFixed(2)} ${((originX + topX) / 2).toFixed(2)} ${((originY + topY) / 2).toFixed(2)})" dy="-6">${result.formatted.slopePercent} · ${result.formatted.angle}</text>
-  <text x="${pad}" y="${noteY}" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">${result.formatted.direction}</text>
-  ${visuallyNormalized ? `<text x="${pad}" y="18" font-size="9" fill="var(--text-muted, #777)" font-style="italic" font-family="var(--font-family-mono, monospace)">Diagram visually normalized for readability. Numeric values shown are exact.</text>` : ''}
+
+  <defs>
+    <pattern id="slope-earth-hatch" width="10" height="10" patternTransform="rotate(-45 0 0)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="10" stroke="var(--accent-primary, #6366f1)" stroke-width="0.6" opacity="0.18"/>
+    </pattern>
+    <linearGradient id="slope-earth-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="var(--accent-primary, #6366f1)" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="var(--accent-secondary, #38bdf8)" stop-opacity="0.03"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Ground stratum / terrain cut fill -->
+  <polygon points="${originX.toFixed(2)},${originY.toFixed(2)} ${topX.toFixed(2)},${originY.toFixed(2)} ${topX.toFixed(2)},${topY.toFixed(2)}" fill="url(#slope-earth-grad)"/>
+  <polygon points="${originX.toFixed(2)},${originY.toFixed(2)} ${topX.toFixed(2)},${originY.toFixed(2)} ${topX.toFixed(2)},${topY.toFixed(2)}" fill="url(#slope-earth-hatch)" opacity="0.75"/>
+
+  <!-- Drainage / surface flow indicator -->
+  <g class="slope-flow" opacity="0.8">
+    <circle cx="${midX.toFixed(2)}" cy="${midY.toFixed(2)}" r="2.5" fill="var(--accent-secondary, #38bdf8)"/>
+    <text x="${midX.toFixed(2)}" y="${(midY - 8).toFixed(2)}" text-anchor="middle" font-size="8.5" font-weight="600" fill="var(--accent-secondary, #38bdf8)" font-family="var(--font-family-mono, monospace)">FLOW DRAINAGE ➔</text>
+  </g>
+
+  <!-- Level Datum Benchmarks -->
+  <g class="slope-benchmarks" font-family="var(--font-family-mono, monospace)" font-size="9">
+    <polygon points="${(originX - 16).toFixed(2)},${originY.toFixed(2)} ${(originX - 10).toFixed(2)},${(originY - 8).toFixed(2)} ${(originX - 22).toFixed(2)},${(originY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
+    <text x="${(originX - 16).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="middle" fill="var(--text-secondary, #9aa)">▼ START EL. ±0.00</text>
+    <polygon points="${(topX + 16).toFixed(2)},${topY.toFixed(2)} ${(topX + 22).toFixed(2)},${(topY - 8).toFixed(2)} ${(topX + 10).toFixed(2)},${(topY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
+    <text x="${(topX + 16).toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="middle" fill="var(--text-secondary, #9aa)">${rise >= 0 ? '▲' : '▼'} END EL. ${result.formatted.rise}</text>
+  </g>
+
+  <!-- CAD 45° Slashed Horizontal Dimension: RUN -->
+  <g class="slope-dim-run">
+    <line x1="${originX.toFixed(2)}" y1="${(Math.max(originY, topY) + 4).toFixed(2)}" x2="${originX.toFixed(2)}" y2="${(dimRunY + 6).toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${topX.toFixed(2)}" y1="${(Math.max(originY, topY) + 4).toFixed(2)}" x2="${topX.toFixed(2)}" y2="${(dimRunY + 6).toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${originX.toFixed(2)}" y1="${dimRunY.toFixed(2)}" x2="${topX.toFixed(2)}" y2="${dimRunY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.1"/>
+    <!-- 45° CAD slashes -->
+    <line x1="${(originX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(originX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <line x1="${(topX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(topX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <text x="${midX.toFixed(2)}" y="${(dimRunY + 14).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.run}</text>
+  </g>
+
+  <!-- CAD 45° Slashed Vertical Dimension: RISE -->
+  <g class="slope-dim-rise">
+    <line x1="${(topX + 4).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${originY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${(topX + 4).toFixed(2)}" y1="${topY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${dimRiseX.toFixed(2)}" y1="${originY.toFixed(2)}" x2="${dimRiseX.toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.1"/>
+    <!-- 45° CAD slashes -->
+    <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(originY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(originY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(topY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(topY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <text x="${(dimRiseX + 10).toFixed(2)}" y="${midY.toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${midY.toFixed(2)})">RISE ${result.formatted.rise}</text>
+  </g>
+
+  <!-- Slope percentage, angle, and direction badges -->
+  <text x="${midX.toFixed(2)}" y="${midY.toFixed(2)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)" transform="rotate(${(-result.geometry.angleDegrees).toFixed(2)} ${midX.toFixed(2)} ${midY.toFixed(2)})" dy="-8">${result.formatted.slopePercent} · ${result.formatted.angle}</text>
+  <text x="${padLeft}" y="${noteY}" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">${result.formatted.direction}</text>
+  ${visuallyNormalized ? `<text x="${padLeft}" y="18" font-size="9" fill="var(--text-muted, #777)" font-style="italic" font-family="var(--font-family-mono, monospace)">Diagram visually normalized for readability. Numeric values shown are exact.</text>` : ''}
 </svg>`.trim();
 
   return svg;
@@ -9818,6 +10030,323 @@ function validateAnnotations(annotations) {
   }
   return { valid: errors.length === 0, errors };
 }
+
+
+  // =========================================================================
+  // MODULE: ShortcutsManager
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Customizable Keyboard Shortcuts Manager
+ * Implements architectural CAD conventions (AutoCAD, Revit, Rhino, SketchUp)
+ * with dynamic rebinding, conflict detection, and local storage persistence.
+ */
+
+const DEFAULT_SHORTCUTS = [
+  // Plan Canvas & Drafting (Architectural CAD Standard)
+  { id: 'tool_select', label: 'Select & Transform', category: 'canvas', defaultKey: 'v', key: 'v', description: 'Switch to selection and transform tool' },
+  { id: 'tool_wall', label: 'Draw Wall Segment', category: 'canvas', defaultKey: 'w', key: 'w', description: 'Switch to continuous wall placement' },
+  { id: 'tool_room', label: 'Draw Room Rectangle', category: 'canvas', defaultKey: 'r', key: 'r', description: 'Draw rectangular room footprint' },
+  { id: 'tool_furniture', label: 'Place Furniture', category: 'canvas', defaultKey: 'f', key: 'f', description: 'Place selected furniture block' },
+  { id: 'tool_measure', label: 'Tape Measure', category: 'canvas', defaultKey: 'm', key: 'm', description: 'Measure distance between points' },
+  { id: 'tool_dimension', label: 'Dimension String', category: 'canvas', defaultKey: 'd', key: 'd', description: 'Place aligned architectural dimension string' },
+  { id: 'tool_stair', label: 'Place Stair Flight', category: 'canvas', defaultKey: 't', key: 't', description: 'Place parametric stair flight' },
+  { id: 'tool_ramp', label: 'Place Ramp Wedge', category: 'canvas', defaultKey: 'p', key: 'p', description: 'Place accessible ramp entity' },
+  { id: 'plan_grid', label: 'Cycle Grid Snap', category: 'canvas', defaultKey: 'g', key: 'g', description: 'Cycle grid snap increment' },
+  { id: 'plan_snap', label: 'Toggle Snapping', category: 'canvas', defaultKey: 's', key: 's', description: 'Toggle smart snapping on/off' },
+  { id: 'plan_zoom_fit', label: 'Zoom to Extents', category: 'canvas', defaultKey: 'z', key: 'z', description: 'Frame entire plan on canvas' },
+  { id: 'plan_duplicate', label: 'Duplicate Entity', category: 'canvas', defaultKey: 'ctrl+d', key: 'ctrl+d', description: 'Duplicate selected entity with offset' },
+  { id: 'plan_delete', label: 'Delete Selected', category: 'canvas', defaultKey: 'delete', key: 'delete', description: 'Remove selected entity from plan' },
+  { id: 'plan_cancel', label: 'Cancel / Deselect', category: 'canvas', defaultKey: 'escape', key: 'escape', description: 'Clear selection or cancel active tool' },
+  { id: 'plan_undo', label: 'Undo Plan Action', category: 'canvas', defaultKey: 'ctrl+z', key: 'ctrl+z', description: 'Undo last drafting step' },
+  { id: 'plan_redo', label: 'Redo Plan Action', category: 'canvas', defaultKey: 'ctrl+y', key: 'ctrl+y', description: 'Redo undone drafting step' },
+
+  // Studio Navigation & Tools
+  { id: 'cmd_palette', label: 'Studio Command Bar', category: 'studio', defaultKey: 'ctrl+k', key: 'ctrl+k', description: 'Open natural language command palette' },
+  { id: 'quick_dim', label: 'Quick Dimension Strip', category: 'studio', defaultKey: 'q', key: 'q', description: 'Toggle quick dimension flyout' },
+  { id: 'cad_clipboard', label: 'Open CAD Clipboard', category: 'studio', defaultKey: 'c', key: 'c', description: 'Direct CAD clipboard formatter' },
+  { id: 'batch_cad', label: 'Batch CAD Converter', category: 'studio', defaultKey: 'b', key: 'b', description: 'Multi-line CAD batch converter' },
+  { id: 'history_drawer', label: 'Calculation Journal', category: 'studio', defaultKey: 'h', key: 'h', description: 'Toggle history journal drawer' },
+  { id: 'shortcuts_modal', label: 'Shortcuts Reference', category: 'studio', defaultKey: '?', key: '?', description: 'View and customize keybindings' }
+];
+
+const SHORTCUTS_STORAGE_KEY = 'archiscale_custom_shortcuts';
+
+/**
+ * Normalizes a keyboard event or string into a canonical lowercase combo string.
+ * Examples: 'Ctrl + D' -> 'ctrl+d', KeyboardEvent(ctrlKey=true, key='D') -> 'ctrl+d'
+ */
+function normalizeKeyCombo(input) {
+  if (!input) return '';
+  if (typeof input === 'string') {
+    return input
+      .toLowerCase()
+      .replace(/\s+/g, '')
+      .replace(/[⌘]/g, 'ctrl+')
+      .replace(/cmd|command|meta/g, 'ctrl')
+      .replace(/del/g, 'delete')
+      .replace(/esc/g, 'escape');
+  }
+
+  // Handle KeyboardEvent
+  if (typeof input === 'object' && input.key) {
+    const rawKey = input.key;
+    if (['Control', 'Shift', 'Alt', 'Meta'].includes(rawKey)) {
+      return ''; // Modifiers alone are not a full combo
+    }
+
+    const parts = [];
+    if (input.ctrlKey || input.metaKey) parts.push('ctrl');
+    if (input.altKey) parts.push('alt');
+    if (input.shiftKey && rawKey.length > 1) parts.push('shift');
+
+    let keyName = rawKey.toLowerCase();
+    if (keyName === 'escape' || keyName === 'esc') keyName = 'escape';
+    else if (keyName === 'delete' || keyName === 'backspace') keyName = 'delete';
+
+    parts.push(keyName);
+    return parts.join('+');
+  }
+
+  return '';
+}
+
+/**
+ * Formats a canonical combo string for elegant UI display.
+ * Example: 'ctrl+d' -> 'Ctrl + D', 'escape' -> 'Esc'
+ */
+function formatDisplayKey(combo) {
+  if (!combo) return '';
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform || '');
+  return combo
+    .split('+')
+    .map(part => {
+      const p = part.trim().toLowerCase();
+      if (p === 'ctrl') return isMac ? '⌘' : 'Ctrl';
+      if (p === 'alt') return isMac ? '⌥' : 'Alt';
+      if (p === 'shift') return isMac ? '⇧' : 'Shift';
+      if (p === 'escape') return 'Esc';
+      if (p === 'delete') return 'Del';
+      if (p === 'enter') return '↵ Enter';
+      if (p === 'space') return 'Space';
+      return p.toUpperCase();
+    })
+    .join(isMac ? '' : ' + ');
+}
+
+/**
+ * ShortcutsManager Class: handles loading, saving, rebinding, conflict detection,
+ * and keydown event matching.
+ */
+class ShortcutsManagerClass {
+  constructor() {
+    this.shortcuts = DEFAULT_SHORTCUTS.map(s => ({ ...s }));
+    this.listeners = new Set();
+    this.storage = null;
+    this.initStorage();
+    this.loadFromStorage();
+  }
+
+  initStorage() {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        this.storage = window.localStorage;
+      }
+    } catch {
+      this.storage = null;
+    }
+  }
+
+  /**
+   * Set custom storage adapter (e.g. for testing)
+   */
+  setStorage(storageAdapter) {
+    this.storage = storageAdapter;
+    this.loadFromStorage();
+  }
+
+  loadFromStorage() {
+    if (!this.storage) return;
+    try {
+      const raw = this.storage.getItem(SHORTCUTS_STORAGE_KEY);
+      if (!raw) return;
+      const customBindings = JSON.parse(raw);
+      if (customBindings && typeof customBindings === 'object') {
+        for (const item of this.shortcuts) {
+          if (typeof customBindings[item.id] === 'string' && customBindings[item.id].trim().length > 0) {
+            item.key = normalizeKeyCombo(customBindings[item.id]);
+          }
+        }
+      }
+    } catch {
+      // Corrupt storage handled safely
+    }
+  }
+
+  saveToStorage() {
+    if (!this.storage) return;
+    try {
+      const bindings = {};
+      for (const item of this.shortcuts) {
+        if (item.key !== item.defaultKey) {
+          bindings[item.id] = item.key;
+        }
+      }
+      if (Object.keys(bindings).length === 0) {
+        this.storage.removeItem(SHORTCUTS_STORAGE_KEY);
+      } else {
+        this.storage.setItem(SHORTCUTS_STORAGE_KEY, JSON.stringify(bindings));
+      }
+    } catch {
+      // Ignore storage quota errors
+    }
+  }
+
+  /**
+   * Returns all registered shortcuts with their current bindings.
+   */
+  getAllShortcuts() {
+    return this.shortcuts.map(s => ({
+      ...s,
+      displayKey: formatDisplayKey(s.key),
+      isCustom: s.key !== s.defaultKey
+    }));
+  }
+
+  /**
+   * Get a shortcut by its action ID.
+   */
+  getShortcut(id) {
+    const s = this.shortcuts.find(x => x.id === id);
+    if (!s) return null;
+    return {
+      ...s,
+      displayKey: formatDisplayKey(s.key),
+      isCustom: s.key !== s.defaultKey
+    };
+  }
+
+  /**
+   * Get the current key combo for an action ID.
+   */
+  getKeyForAction(id) {
+    const s = this.shortcuts.find(x => x.id === id);
+    return s ? s.key : '';
+  }
+
+  /**
+   * Rebinds a shortcut to a new key combination with conflict detection.
+   * @param {string} id - The action ID to rebind
+   * @param {string|KeyboardEvent} newKeyCombo - The new shortcut
+   * @returns {{ success: boolean, conflict?: Object, error?: string }}
+   */
+  bindShortcut(id, newKeyCombo) {
+    const target = this.shortcuts.find(x => x.id === id);
+    if (!target) {
+      return { success: false, error: `Shortcut ID "${id}" not found.` };
+    }
+
+    const normalized = normalizeKeyCombo(newKeyCombo);
+    if (!normalized) {
+      return { success: false, error: 'Invalid key combination.' };
+    }
+
+    // Check for conflict in the same category or overall
+    const conflict = this.shortcuts.find(x => x.id !== id && x.key === normalized && (x.category === target.category || ['escape', 'delete', 'ctrl+k'].includes(normalized)));
+    if (conflict) {
+      return {
+        success: false,
+        conflict: {
+          id: conflict.id,
+          label: conflict.label,
+          category: conflict.category
+        },
+        error: `Key "${formatDisplayKey(normalized)}" is already assigned to "${conflict.label}".`
+      };
+    }
+
+    target.key = normalized;
+    this.saveToStorage();
+    this.notifyListeners();
+    return { success: true };
+  }
+
+  /**
+   * Force rebinds a shortcut, taking over any conflicting shortcut by resetting the conflicting one.
+   */
+  forceBindShortcut(id, newKeyCombo) {
+    const normalized = normalizeKeyCombo(newKeyCombo);
+    if (!normalized) return { success: false, error: 'Invalid key combination.' };
+
+    const target = this.shortcuts.find(x => x.id === id);
+    if (!target) return { success: false, error: 'Shortcut not found.' };
+
+    // Clear conflict
+    const conflict = this.shortcuts.find(x => x.id !== id && x.key === normalized);
+    if (conflict) {
+      conflict.key = conflict.defaultKey === normalized ? '' : conflict.defaultKey;
+    }
+
+    target.key = normalized;
+    this.saveToStorage();
+    this.notifyListeners();
+    return { success: true };
+  }
+
+  /**
+   * Resets a single shortcut to its architectural default.
+   */
+  resetShortcut(id) {
+    const target = this.shortcuts.find(x => x.id === id);
+    if (!target) return false;
+    target.key = target.defaultKey;
+    this.saveToStorage();
+    this.notifyListeners();
+    return true;
+  }
+
+  /**
+   * Resets all shortcuts to default architectural CAD keybindings.
+   */
+  resetAllShortcuts() {
+    for (const item of this.shortcuts) {
+      item.key = item.defaultKey;
+    }
+    if (this.storage) {
+      try { this.storage.removeItem(SHORTCUTS_STORAGE_KEY); } catch {}
+    }
+    this.notifyListeners();
+    return true;
+  }
+
+  /**
+   * Tests if a native KeyboardEvent matches the bound shortcut for an action ID.
+   * @param {string} id - Action ID
+   * @param {KeyboardEvent} event - Native keyboard event
+   * @returns {boolean}
+   */
+  matchesEvent(id, event) {
+    if (!event || !id) return false;
+    const target = this.shortcuts.find(x => x.id === id);
+    if (!target || !target.key) return false;
+
+    const eventCombo = normalizeKeyCombo(event);
+    return eventCombo === target.key;
+  }
+
+  subscribe(fn) {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  notifyListeners() {
+    for (const fn of this.listeners) {
+      try { fn(this.getAllShortcuts()); } catch {}
+    }
+  }
+}
+
+const ShortcutsManager = new ShortcutsManagerClass();
 
 
   // =========================================================================
@@ -22094,6 +22623,7 @@ function createProjectsView(context) {
 
 
 
+
 const PLAN_STATE_KEY = 'archiscale_plan_prefs'; // user preferences only
 
 function createPlanView(context) {
@@ -24342,6 +24872,59 @@ function createPlanView(context) {
       return;
     }
 
+    // Rebindable shortcuts via ShortcutsManager
+    if (typeof ShortcutsManager !== 'undefined') {
+      if (ShortcutsManager.matchesEvent('plan_undo', event)) {
+        event.preventDefault();
+        undo();
+        return;
+      }
+      if (ShortcutsManager.matchesEvent('plan_redo', event)) {
+        event.preventDefault();
+        redo();
+        return;
+      }
+      if (ShortcutsManager.matchesEvent('plan_duplicate', event)) {
+        event.preventDefault();
+        duplicateSelected();
+        return;
+      }
+      if (ShortcutsManager.matchesEvent('plan_delete', event)) {
+        if (state.plan.selectedIds.size > 0) {
+          event.preventDefault();
+          deleteSelected();
+        }
+        return;
+      }
+      if (ShortcutsManager.matchesEvent('plan_cancel', event)) {
+        state.plan.selectedIds = new Set();
+        setTool('select');
+        render();
+        return;
+      }
+      if (ShortcutsManager.matchesEvent('plan_zoom_fit', event)) {
+        event.preventDefault();
+        fitToContent();
+        return;
+      }
+      if (ShortcutsManager.matchesEvent('tool_select', event)) { event.preventDefault(); setTool('select'); return; }
+      if (ShortcutsManager.matchesEvent('tool_wall', event)) { event.preventDefault(); setTool('wall'); return; }
+      if (ShortcutsManager.matchesEvent('tool_room', event)) { event.preventDefault(); setTool('room'); return; }
+      if (ShortcutsManager.matchesEvent('tool_furniture', event)) { event.preventDefault(); setTool('furniture'); return; }
+      if (ShortcutsManager.matchesEvent('tool_measure', event)) { event.preventDefault(); setTool('measure'); return; }
+      if (ShortcutsManager.matchesEvent('tool_dimension', event)) { event.preventDefault(); setTool('dimension'); return; }
+      if (ShortcutsManager.matchesEvent('tool_stair', event)) { event.preventDefault(); setTool('stair'); return; }
+      if (ShortcutsManager.matchesEvent('tool_ramp', event)) { event.preventDefault(); setTool('ramp'); return; }
+      if (ShortcutsManager.matchesEvent('plan_grid', event)) { event.preventDefault(); cycleGrid(); return; }
+      if (ShortcutsManager.matchesEvent('plan_snap', event)) { event.preventDefault(); toggleSnap(); return; }
+      if (ShortcutsManager.matchesEvent('shortcuts_modal', event)) {
+        event.preventDefault();
+        dom.shortcutsModal?.classList.add('open');
+        dom.modalBackdrop?.classList.add('open');
+        return;
+      }
+    }
+
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
       event.preventDefault();
       undo();
@@ -24393,6 +24976,9 @@ function createPlanView(context) {
     else if (k === 'f') { event.preventDefault(); setTool('furniture'); }
     else if (k === 'm') { event.preventDefault(); setTool('measure'); }
     else if (k === 'd') { event.preventDefault(); setTool('dimension'); }
+    else if (k === 't') { event.preventDefault(); setTool('stair'); }
+    else if (k === 'p') { event.preventDefault(); setTool('ramp'); }
+    else if (k === 'z') { event.preventDefault(); fitToContent(); }
     else if (k === 'g') { event.preventDefault(); cycleGrid(); }
     else if (k === 's') { event.preventDefault(); toggleSnap(); }
     else if (event.key === '?') {
@@ -26240,6 +26826,7 @@ function createSurveyView(context) {
 
 
 
+
 function initializeApp() {
   /** Escapes user-controllable strings before innerHTML rendering (app-wide). */
   function escapeHtml(str) {
@@ -26537,6 +27124,8 @@ function initializeApp() {
     historyToggleBtn: document.getElementById('history-toggle-btn'),
     shortcutsHelpBtn: document.getElementById('shortcuts-help-btn'),
     shortcutsModal: document.getElementById('shortcuts-modal'),
+    shortcutsListContainer: document.getElementById('shortcuts-list-container'),
+    resetAllShortcutsBtn: document.getElementById('btn-reset-all-shortcuts'),
     modalBackdrop: document.getElementById('modal-backdrop'),
     closeShortcutsBtn: document.getElementById('close-shortcuts-btn'),
     historyDrawer: document.getElementById('history-drawer'),
@@ -29524,34 +30113,106 @@ function initializeApp() {
       });
     }
 
-    // Shortcuts Modal
+    // Shortcuts Modal (Customizable Architectural CAD Shortcuts)
+    let listeningActionId = null;
+
+    function renderShortcutsModal(filterText = '') {
+      if (!dom.shortcutsListContainer) return;
+      const shortcuts = ShortcutsManager.getAllShortcuts();
+      const q = (filterText || '').toLowerCase().trim();
+
+      const canvasShortcuts = shortcuts.filter(s => s.category === 'canvas');
+      const studioShortcuts = shortcuts.filter(s => s.category === 'studio');
+
+      const matchesQuery = s => !q || s.label.toLowerCase().includes(q) || s.description.toLowerCase().includes(q) || s.displayKey.toLowerCase().includes(q);
+
+      const renderSection = (title, items) => {
+        const filtered = items.filter(matchesQuery);
+        if (filtered.length === 0) return '';
+        return `
+          <div class="shortcuts-section-title">${title}</div>
+          ${filtered.map(s => `
+            <div class="shortcut-row ${s.isCustom ? 'shortcut-custom' : ''}" data-action="${s.id}">
+              <div class="shortcut-meta">
+                <span class="shortcut-label">${escapeHtml(s.label)}</span>
+                <span class="shortcut-desc">${escapeHtml(s.description)}</span>
+              </div>
+              <div class="shortcut-controls">
+                <button type="button" class="btn-shortcut-key ${listeningActionId === s.id ? 'listening' : ''}" data-action="${s.id}" title="Click to reassign hotkey">
+                  <kbd class="kbd-badge">${listeningActionId === s.id ? 'Press key...' : escapeHtml(s.displayKey)}</kbd>
+                </button>
+                ${s.isCustom ? `
+                  <button type="button" class="btn-shortcut-reset" data-action="${s.id}" title="Reset to default (${formatDisplayKey(s.defaultKey)})">↺</button>
+                ` : ''}
+              </div>
+            </div>
+          `).join('')}
+        `;
+      };
+
+      const html = renderSection('Plan Canvas & Drafting (Architectural CAD Standard)', canvasShortcuts) +
+                   renderSection('Studio Navigation & Productivity', studioShortcuts);
+
+      dom.shortcutsListContainer.innerHTML = html || '<div class="empty-state-text" style="padding: 1.5rem; text-align: center; color: var(--text-muted);">No shortcuts found matching your search.</div>';
+    }
+
     if (dom.shortcutsHelpBtn) {
       dom.shortcutsHelpBtn.addEventListener('click', () => {
         dom.shortcutsModal?.classList.add('open');
         dom.modalBackdrop?.classList.add('open');
+        listeningActionId = null;
         if (dom.shortcutsSearchInput) {
           dom.shortcutsSearchInput.value = '';
-          dom.shortcutsModal?.querySelectorAll('.shortcut-row').forEach(r => r.style.display = 'flex');
           setTimeout(() => dom.shortcutsSearchInput.focus(), 60);
         }
+        renderShortcutsModal('');
         AudioService.playTick();
       });
     }
 
     if (dom.shortcutsSearchInput) {
       dom.shortcutsSearchInput.addEventListener('input', (e) => {
-        const q = (e.target.value || '').toLowerCase().trim();
-        const rows = dom.shortcutsModal?.querySelectorAll('.shortcut-row');
-        if (!rows) return;
-        rows.forEach(row => {
-          const text = row.textContent.toLowerCase();
-          row.style.display = (!q || text.includes(q)) ? 'flex' : 'none';
-        });
+        renderShortcutsModal(e.target.value);
+      });
+    }
+
+    if (dom.shortcutsListContainer) {
+      dom.shortcutsListContainer.addEventListener('click', (e) => {
+        const keyBtn = e.target.closest('.btn-shortcut-key');
+        if (keyBtn) {
+          const actionId = keyBtn.dataset.action;
+          listeningActionId = listeningActionId === actionId ? null : actionId;
+          AudioService.playTick();
+          renderShortcutsModal(dom.shortcutsSearchInput?.value || '');
+          return;
+        }
+
+        const resetBtn = e.target.closest('.btn-shortcut-reset');
+        if (resetBtn) {
+          const actionId = resetBtn.dataset.action;
+          ShortcutsManager.resetShortcut(actionId);
+          AudioService.playTick();
+          const target = ShortcutsManager.getShortcut(actionId);
+          showToast(`Reset shortcut for "${target.label}" to default [${target.displayKey}]`);
+          renderShortcutsModal(dom.shortcutsSearchInput?.value || '');
+          return;
+        }
+      });
+    }
+
+    if (dom.resetAllShortcutsBtn) {
+      dom.resetAllShortcutsBtn.addEventListener('click', () => {
+        ShortcutsManager.resetAllShortcuts();
+        listeningActionId = null;
+        AudioService.playTick();
+        showToast('All keyboard shortcuts reset to architectural CAD defaults', 'success');
+        renderShortcutsModal(dom.shortcutsSearchInput?.value || '');
       });
     }
 
     if (dom.closeShortcutsBtn) {
       dom.closeShortcutsBtn.addEventListener('click', () => {
+        listeningActionId = null;
         dom.shortcutsModal?.classList.remove('open');
         dom.modalBackdrop?.classList.remove('open');
       });
@@ -29559,6 +30220,7 @@ function initializeApp() {
 
     if (dom.modalBackdrop) {
       dom.modalBackdrop.addEventListener('click', () => {
+        listeningActionId = null;
         dom.shortcutsModal?.classList.remove('open');
         dom.modalBackdrop?.classList.remove('open');
       });
@@ -31708,6 +32370,34 @@ function initializeApp() {
 
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
+      // Key Recording Mode (when user clicks a shortcut badge in the modal)
+      if (listeningActionId) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          listeningActionId = null;
+          renderShortcutsModal(dom.shortcutsSearchInput?.value || '');
+          return;
+        }
+        if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
+          return; // Wait for the primary key
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        const res = ShortcutsManager.bindShortcut(listeningActionId, e);
+        if (!res.success) {
+          if (AudioService.playError) AudioService.playError();
+          showToast(res.error || 'Key combination conflict', 'warning');
+        } else {
+          AudioService.playTick();
+          const target = ShortcutsManager.getShortcut(listeningActionId);
+          showToast(`Rebound "${target.label}" to [${target.displayKey}]`, 'success');
+        }
+        listeningActionId = null;
+        renderShortcutsModal(dom.shortcutsSearchInput?.value || '');
+        return;
+      }
+
       const activeEl = document.activeElement;
       const isInputFocused = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT' || activeEl.tagName === 'TEXTAREA');
 
@@ -31718,17 +32408,53 @@ function initializeApp() {
         return;
       }
 
-      // Global Command Palette Shortcut: Ctrl+K or Cmd+K, or '/' when not typing
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        if (dom.commandPaletteModal?.classList.contains('open')) {
-          closeCommandPalette();
-        } else {
-          openCommandPalette();
+      // Rebindable Studio Shortcuts (prioritized via ShortcutsManager)
+      if (typeof ShortcutsManager !== 'undefined') {
+        if (ShortcutsManager.matchesEvent('cmd_palette', e)) {
+          e.preventDefault();
+          if (dom.commandPaletteModal?.classList.contains('open')) {
+            closeCommandPalette();
+          } else {
+            openCommandPalette();
+          }
+          return;
         }
-        return;
+        if (!isInputFocused && ShortcutsManager.matchesEvent('shortcuts_modal', e)) {
+          e.preventDefault();
+          dom.shortcutsModal?.classList.add('open');
+          dom.modalBackdrop?.classList.add('open');
+          listeningActionId = null;
+          if (dom.shortcutsSearchInput) {
+            dom.shortcutsSearchInput.value = '';
+            setTimeout(() => dom.shortcutsSearchInput.focus(), 60);
+          }
+          renderShortcutsModal('');
+          return;
+        }
+        if (!isInputFocused && ShortcutsManager.matchesEvent('quick_dim', e)) {
+          e.preventDefault();
+          views.callController('quick_dimension', 'toggleQuickDimension');
+          return;
+        }
+        if (!isInputFocused && ShortcutsManager.matchesEvent('cad_clipboard', e)) {
+          e.preventDefault();
+          switchMode('cad_clipboard');
+          return;
+        }
+        if (!isInputFocused && ShortcutsManager.matchesEvent('batch_cad', e)) {
+          e.preventDefault();
+          switchMode('batch_cad');
+          return;
+        }
+        if (!isInputFocused && ShortcutsManager.matchesEvent('history_drawer', e)) {
+          e.preventDefault();
+          views.callController('history', 'toggleHistoryDrawer');
+          return;
+        }
       }
-      if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName) && !e.target?.isContentEditable) {
+
+      // Fallback Command Palette Shortcut: '/' when not typing
+      if (e.key === '/' && !isInputFocused && !e.target?.isContentEditable) {
         e.preventDefault();
         openCommandPalette();
         return;
@@ -31748,6 +32474,7 @@ function initializeApp() {
         }
         if (dom.historyDrawer?.classList.contains('open')) views.callController('history', 'toggleHistoryDrawer');
         if (dom.shortcutsModal?.classList.contains('open')) {
+          listeningActionId = null;
           dom.shortcutsModal.classList.remove('open');
           dom.modalBackdrop?.classList.remove('open');
         }
@@ -31776,9 +32503,7 @@ function initializeApp() {
       // If user is focused inside an input field, do not hijack letter/number shortcuts
       if (isInputFocused) return;
 
-      // Workspace-specific Ctrl+C: copy selected rows to clipboard (the one
-      // modified shortcut this tool explicitly owns). With no selection,
-      // Ctrl+C falls through to native browser copy.
+      // Workspace-specific Ctrl+C: copy selected rows to clipboard
       if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')
           && state.currentMode === 'workspace' && state.workspaceSelectedIds.size > 0) {
         e.preventDefault();
@@ -31791,13 +32516,10 @@ function initializeApp() {
         return;
       }
 
-      // Keyboard safety gate (regression pin: Ctrl+C must stay native copy).
-      // Every shortcut below is a PLAIN key press — any ctrl/meta/alt
-      // combination reaching this point is native browser/OS behavior
-      // (copy, paste, select-all, undo, dev tools) and is NEVER intercepted.
+      // Keyboard safety gate: Every shortcut below is a PLAIN key press
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-      // Mode 7 Workspace-specific shortcuts (when not focused in inputs)
+      // Mode 7 Workspace-specific shortcuts
       if (state.currentMode === 'workspace') {
         if (e.key === 'n' || e.key === 'N') {
           e.preventDefault();
@@ -31854,6 +32576,7 @@ function initializeApp() {
         }
       }
 
+      // Standalone Tool Number Keys (1-9, 0)
       if (e.key === '1') { e.preventDefault(); switchMode('converter'); }
       else if (e.key === '2') { e.preventDefault(); switchMode('rescale'); }
       else if (e.key === '3') { e.preventDefault(); switchMode('detector'); }
@@ -31877,11 +32600,12 @@ function initializeApp() {
         e.preventDefault();
         dom.shortcutsModal?.classList.add('open');
         dom.modalBackdrop?.classList.add('open');
+        listeningActionId = null;
         if (dom.shortcutsSearchInput) {
           dom.shortcutsSearchInput.value = '';
-          dom.shortcutsModal?.querySelectorAll('.shortcut-row').forEach(r => r.style.display = 'flex');
           setTimeout(() => dom.shortcutsSearchInput.focus(), 60);
         }
+        renderShortcutsModal('');
       }
     });
   }

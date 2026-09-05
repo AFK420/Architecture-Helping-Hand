@@ -3115,7 +3115,7 @@
           </div>
 
           <!-- Proportional diagram drawn from actual result geometry -->
-          <div id="stairs-svg-wrap" style="margin: 0.5rem 0 0.9rem; border: 1px solid var(--border-color-light); border-radius: 6px; background: var(--bg-card-header); padding: 0.5rem;" aria-live="polite"></div>
+          <div id="stairs-svg-wrap" aria-live="polite"></div>
 
           <div class="stairs-proportion-row" style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.9rem;">
             <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary);">2R + T:</span>
@@ -3272,7 +3272,7 @@
           </div>
 
           <!-- Proportional diagram from actual result geometry -->
-          <div id="ramps-svg-wrap" style="margin: 0.5rem 0 0.9rem; border: 1px solid var(--border-color-light); border-radius: 6px; background: var(--bg-card-header); padding: 0.5rem;" aria-live="polite"></div>
+          <div id="ramps-svg-wrap" aria-live="polite"></div>
 
           <!-- Available-run analysis (Mode B focus) -->
           <div id="ramps-run-analysis" style="display: none; border: 1px solid var(--border-color-light); border-radius: 6px; padding: 0.6rem 0.75rem; background: var(--bg-card-header); margin-bottom: 0.9rem;">
@@ -3428,7 +3428,7 @@
           </div>
 
           <!-- Proportional diagram from actual geometry -->
-          <div id="slopes-svg-wrap" style="margin: 0.5rem 0 0.9rem; border: 1px solid var(--border-color-light); border-radius: 6px; background: var(--bg-card-header); padding: 0.5rem;" aria-live="polite"></div>
+          <div id="slopes-svg-wrap" aria-live="polite"></div>
 
           <!-- Educational explanation -->
           <div class="slopes-explanation-block" style="border-left: 3px solid var(--accent-primary); padding: 0.4rem 0.75rem; margin-bottom: 0.9rem; background: var(--bg-card-header); border-radius: 0 5px 5px 0;">
@@ -4546,31 +4546,38 @@
         <button id="close-shortcuts-btn" class="hist-btn" title="Close modal">✕</button>
       </div>
       <div class="modal-body">
-        <input type="text" id="shortcuts-search-input" class="text-input" placeholder="Search shortcuts (e.g. wall, measure, duplicate, zoom)..." style="margin-bottom: 0.75rem; width: 100%; font-size: 0.8rem; padding: 0.35rem 0.6rem;" aria-label="Search shortcuts" />
+        <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem;">
+          <input type="text" id="shortcuts-search-input" class="text-input" placeholder="Search shortcuts (e.g. wall, measure, duplicate, zoom)..." style="flex: 1; font-size: 0.8rem; padding: 0.35rem 0.6rem;" aria-label="Search shortcuts" />
+          <button type="button" id="btn-reset-all-shortcuts" class="btn btn-secondary btn-sm" title="Reset all shortcuts to architectural CAD defaults" style="font-size: 0.72rem; white-space: nowrap; padding: 0.35rem 0.6rem;">↺ Reset Defaults</button>
+        </div>
+        <p style="font-size: 0.73rem; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.4;">
+          Click any key badge to record a new hotkey. Press <kbd class="kbd-badge" style="padding: 0.1rem 0.3rem;">Esc</kbd> to cancel. Shortcuts persist automatically.
+        </p>
+        <div id="shortcuts-list-container" class="shortcuts-list">
+          <div style="font-size: 0.72rem; font-weight: 700; color: var(--note-number, #4989D9); text-transform: uppercase; margin: 0.5rem 0 0.35rem; font-family: var(--font-mono);">Plan Canvas &amp; Drafting</div>
+          <div class="shortcut-row"><span>Select &amp; Transform</span><span class="kbd-badge">V</span></div>
+          <div class="shortcut-row"><span>Draw Room Rectangle</span><span class="kbd-badge">R</span></div>
+          <div class="shortcut-row"><span>Draw Wall Segment</span><span class="kbd-badge">W</span></div>
+          <div class="shortcut-row"><span>Place Furniture Footprint</span><span class="kbd-badge">F</span></div>
+          <div class="shortcut-row"><span>Tape Measure Tool</span><span class="kbd-badge">M</span></div>
+          <div class="shortcut-row"><span>Dimension String Tool</span><span class="kbd-badge">D</span></div>
+          <div class="shortcut-row"><span>Duplicate Selected Entity</span><span class="kbd-badge">Ctrl + D / ⌘D</span></div>
+          <div class="shortcut-row"><span>Cycle Grid Snap Increment</span><span class="kbd-badge">G</span></div>
+          <div class="shortcut-row"><span>Toggle Snap Mode</span><span class="kbd-badge">S</span></div>
+          <div class="shortcut-row"><span>Delete Selected Entity</span><span class="kbd-badge">Delete / Backspace</span></div>
+          <div class="shortcut-row"><span>Pan Viewport</span><span class="kbd-badge">Space + Drag / Arrows</span></div>
+          <div class="shortcut-row"><span>Zoom Viewport</span><span class="kbd-badge">Wheel / + / −</span></div>
 
-        <div style="font-size: 0.72rem; font-weight: 700; color: var(--note-number, #4989D9); text-transform: uppercase; margin: 0.5rem 0 0.35rem; font-family: var(--font-mono);">Plan Canvas &amp; Drafting</div>
-        <div class="shortcut-row"><span>Select &amp; Transform</span><span class="kbd-badge">V</span></div>
-        <div class="shortcut-row"><span>Draw Room Rectangle</span><span class="kbd-badge">R</span></div>
-        <div class="shortcut-row"><span>Draw Wall Segment</span><span class="kbd-badge">W</span></div>
-        <div class="shortcut-row"><span>Place Furniture Footprint</span><span class="kbd-badge">F</span></div>
-        <div class="shortcut-row"><span>Tape Measure Tool</span><span class="kbd-badge">M</span></div>
-        <div class="shortcut-row"><span>Dimension String Tool</span><span class="kbd-badge">D</span></div>
-        <div class="shortcut-row"><span>Duplicate Selected Entity</span><span class="kbd-badge">Ctrl + D / ⌘D</span></div>
-        <div class="shortcut-row"><span>Cycle Grid Snap Increment</span><span class="kbd-badge">G</span></div>
-        <div class="shortcut-row"><span>Toggle Snap Mode</span><span class="kbd-badge">S</span></div>
-        <div class="shortcut-row"><span>Delete Selected Entity</span><span class="kbd-badge">Delete / Backspace</span></div>
-        <div class="shortcut-row"><span>Pan Viewport</span><span class="kbd-badge">Space + Drag / Arrows</span></div>
-        <div class="shortcut-row"><span>Zoom Viewport</span><span class="kbd-badge">Wheel / + / −</span></div>
-
-        <div style="font-size: 0.72rem; font-weight: 700; color: var(--note-number, #4989D9); text-transform: uppercase; margin: 0.8rem 0 0.35rem; font-family: var(--font-mono);">Studio Navigation &amp; Tools</div>
-        <div class="shortcut-row"><span>Command Bar &amp; Natural Language</span><span class="kbd-badge">Ctrl + K / ⌘K / /</span></div>
-        <div class="shortcut-row"><span>Quick Dimension Strip</span><span class="kbd-badge">Q</span></div>
-        <div class="shortcut-row"><span>Switch Standalone Tools</span><span class="kbd-badge">1 — 9, 0, C, B</span></div>
-        <div class="shortcut-row"><span>Open CAD Clipboard</span><span class="kbd-badge">C</span></div>
-        <div class="shortcut-row"><span>Open Batch CAD Converter</span><span class="kbd-badge">B</span></div>
-        <div class="shortcut-row"><span>Toggle History Drawer</span><span class="kbd-badge">H</span></div>
-        <div class="shortcut-row"><span>Cancel / Close Modals</span><span class="kbd-badge">Esc</span></div>
-        <div class="shortcut-row"><span>Open Shortcuts Reference</span><span class="kbd-badge">?</span></div>
+          <div style="font-size: 0.72rem; font-weight: 700; color: var(--note-number, #4989D9); text-transform: uppercase; margin: 0.8rem 0 0.35rem; font-family: var(--font-mono);">Studio Navigation &amp; Tools</div>
+          <div class="shortcut-row"><span>Command Bar &amp; Natural Language</span><span class="kbd-badge">Ctrl + K / ⌘K / /</span></div>
+          <div class="shortcut-row"><span>Quick Dimension Strip</span><span class="kbd-badge">Q</span></div>
+          <div class="shortcut-row"><span>Switch Standalone Tools</span><span class="kbd-badge">1 — 9, 0, C, B</span></div>
+          <div class="shortcut-row"><span>Open CAD Clipboard</span><span class="kbd-badge">C</span></div>
+          <div class="shortcut-row"><span>Open Batch CAD Converter</span><span class="kbd-badge">B</span></div>
+          <div class="shortcut-row"><span>Toggle History Drawer</span><span class="kbd-badge">H</span></div>
+          <div class="shortcut-row"><span>Cancel / Close Modals</span><span class="kbd-badge">Esc</span></div>
+          <div class="shortcut-row"><span>Open Shortcuts Reference</span><span class="kbd-badge">?</span></div>
+        </div>
       </div>
     </div>
   </div>

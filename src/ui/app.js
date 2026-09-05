@@ -128,6 +128,7 @@ import { AudioService } from '../services/audio.js';
 import { HistoryService } from '../services/history.js';
 import { CommandRegistry, parseNaturalLanguageCommand } from '../services/commands.js';
 import { updateVisualization, getFurniturePlanSVG } from './visualizer.js';
+import { ShortcutsManager, formatDisplayKey, normalizeKeyCombo } from '../core/shortcuts-manager.js';
 
 export function initializeApp() {
   /** Escapes user-controllable strings before innerHTML rendering (app-wide). */
@@ -426,6 +427,8 @@ export function initializeApp() {
     historyToggleBtn: document.getElementById('history-toggle-btn'),
     shortcutsHelpBtn: document.getElementById('shortcuts-help-btn'),
     shortcutsModal: document.getElementById('shortcuts-modal'),
+    shortcutsListContainer: document.getElementById('shortcuts-list-container'),
+    resetAllShortcutsBtn: document.getElementById('btn-reset-all-shortcuts'),
     modalBackdrop: document.getElementById('modal-backdrop'),
     closeShortcutsBtn: document.getElementById('close-shortcuts-btn'),
     historyDrawer: document.getElementById('history-drawer'),
@@ -3413,34 +3416,106 @@ export function initializeApp() {
       });
     }
 
-    // Shortcuts Modal
+    // Shortcuts Modal (Customizable Architectural CAD Shortcuts)
+    let listeningActionId = null;
+
+    function renderShortcutsModal(filterText = '') {
+      if (!dom.shortcutsListContainer) return;
+      const shortcuts = ShortcutsManager.getAllShortcuts();
+      const q = (filterText || '').toLowerCase().trim();
+
+      const canvasShortcuts = shortcuts.filter(s => s.category === 'canvas');
+      const studioShortcuts = shortcuts.filter(s => s.category === 'studio');
+
+      const matchesQuery = s => !q || s.label.toLowerCase().includes(q) || s.description.toLowerCase().includes(q) || s.displayKey.toLowerCase().includes(q);
+
+      const renderSection = (title, items) => {
+        const filtered = items.filter(matchesQuery);
+        if (filtered.length === 0) return '';
+        return `
+          <div class="shortcuts-section-title">${title}</div>
+          ${filtered.map(s => `
+            <div class="shortcut-row ${s.isCustom ? 'shortcut-custom' : ''}" data-action="${s.id}">
+              <div class="shortcut-meta">
+                <span class="shortcut-label">${escapeHtml(s.label)}</span>
+                <span class="shortcut-desc">${escapeHtml(s.description)}</span>
+              </div>
+              <div class="shortcut-controls">
+                <button type="button" class="btn-shortcut-key ${listeningActionId === s.id ? 'listening' : ''}" data-action="${s.id}" title="Click to reassign hotkey">
+                  <kbd class="kbd-badge">${listeningActionId === s.id ? 'Press key...' : escapeHtml(s.displayKey)}</kbd>
+                </button>
+                ${s.isCustom ? `
+                  <button type="button" class="btn-shortcut-reset" data-action="${s.id}" title="Reset to default (${formatDisplayKey(s.defaultKey)})">↺</button>
+                ` : ''}
+              </div>
+            </div>
+          `).join('')}
+        `;
+      };
+
+      const html = renderSection('Plan Canvas & Drafting (Architectural CAD Standard)', canvasShortcuts) +
+                   renderSection('Studio Navigation & Productivity', studioShortcuts);
+
+      dom.shortcutsListContainer.innerHTML = html || '<div class="empty-state-text" style="padding: 1.5rem; text-align: center; color: var(--text-muted);">No shortcuts found matching your search.</div>';
+    }
+
     if (dom.shortcutsHelpBtn) {
       dom.shortcutsHelpBtn.addEventListener('click', () => {
         dom.shortcutsModal?.classList.add('open');
         dom.modalBackdrop?.classList.add('open');
+        listeningActionId = null;
         if (dom.shortcutsSearchInput) {
           dom.shortcutsSearchInput.value = '';
-          dom.shortcutsModal?.querySelectorAll('.shortcut-row').forEach(r => r.style.display = 'flex');
           setTimeout(() => dom.shortcutsSearchInput.focus(), 60);
         }
+        renderShortcutsModal('');
         AudioService.playTick();
       });
     }
 
     if (dom.shortcutsSearchInput) {
       dom.shortcutsSearchInput.addEventListener('input', (e) => {
-        const q = (e.target.value || '').toLowerCase().trim();
-        const rows = dom.shortcutsModal?.querySelectorAll('.shortcut-row');
-        if (!rows) return;
-        rows.forEach(row => {
-          const text = row.textContent.toLowerCase();
-          row.style.display = (!q || text.includes(q)) ? 'flex' : 'none';
-        });
+        renderShortcutsModal(e.target.value);
+      });
+    }
+
+    if (dom.shortcutsListContainer) {
+      dom.shortcutsListContainer.addEventListener('click', (e) => {
+        const keyBtn = e.target.closest('.btn-shortcut-key');
+        if (keyBtn) {
+          const actionId = keyBtn.dataset.action;
+          listeningActionId = listeningActionId === actionId ? null : actionId;
+          AudioService.playTick();
+          renderShortcutsModal(dom.shortcutsSearchInput?.value || '');
+          return;
+        }
+
+        const resetBtn = e.target.closest('.btn-shortcut-reset');
+        if (resetBtn) {
+          const actionId = resetBtn.dataset.action;
+          ShortcutsManager.resetShortcut(actionId);
+          AudioService.playTick();
+          const target = ShortcutsManager.getShortcut(actionId);
+          showToast(`Reset shortcut for "${target.label}" to default [${target.displayKey}]`);
+          renderShortcutsModal(dom.shortcutsSearchInput?.value || '');
+          return;
+        }
+      });
+    }
+
+    if (dom.resetAllShortcutsBtn) {
+      dom.resetAllShortcutsBtn.addEventListener('click', () => {
+        ShortcutsManager.resetAllShortcuts();
+        listeningActionId = null;
+        AudioService.playTick();
+        showToast('All keyboard shortcuts reset to architectural CAD defaults', 'success');
+        renderShortcutsModal(dom.shortcutsSearchInput?.value || '');
       });
     }
 
     if (dom.closeShortcutsBtn) {
       dom.closeShortcutsBtn.addEventListener('click', () => {
+        listeningActionId = null;
         dom.shortcutsModal?.classList.remove('open');
         dom.modalBackdrop?.classList.remove('open');
       });
@@ -3448,6 +3523,7 @@ export function initializeApp() {
 
     if (dom.modalBackdrop) {
       dom.modalBackdrop.addEventListener('click', () => {
+        listeningActionId = null;
         dom.shortcutsModal?.classList.remove('open');
         dom.modalBackdrop?.classList.remove('open');
       });
@@ -5597,6 +5673,34 @@ export function initializeApp() {
 
     // Keyboard Global Shortcuts
     document.addEventListener('keydown', (e) => {
+      // Key Recording Mode (when user clicks a shortcut badge in the modal)
+      if (listeningActionId) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          listeningActionId = null;
+          renderShortcutsModal(dom.shortcutsSearchInput?.value || '');
+          return;
+        }
+        if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
+          return; // Wait for the primary key
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        const res = ShortcutsManager.bindShortcut(listeningActionId, e);
+        if (!res.success) {
+          if (AudioService.playError) AudioService.playError();
+          showToast(res.error || 'Key combination conflict', 'warning');
+        } else {
+          AudioService.playTick();
+          const target = ShortcutsManager.getShortcut(listeningActionId);
+          showToast(`Rebound "${target.label}" to [${target.displayKey}]`, 'success');
+        }
+        listeningActionId = null;
+        renderShortcutsModal(dom.shortcutsSearchInput?.value || '');
+        return;
+      }
+
       const activeEl = document.activeElement;
       const isInputFocused = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT' || activeEl.tagName === 'TEXTAREA');
 
@@ -5607,17 +5711,53 @@ export function initializeApp() {
         return;
       }
 
-      // Global Command Palette Shortcut: Ctrl+K or Cmd+K, or '/' when not typing
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        if (dom.commandPaletteModal?.classList.contains('open')) {
-          closeCommandPalette();
-        } else {
-          openCommandPalette();
+      // Rebindable Studio Shortcuts (prioritized via ShortcutsManager)
+      if (typeof ShortcutsManager !== 'undefined') {
+        if (ShortcutsManager.matchesEvent('cmd_palette', e)) {
+          e.preventDefault();
+          if (dom.commandPaletteModal?.classList.contains('open')) {
+            closeCommandPalette();
+          } else {
+            openCommandPalette();
+          }
+          return;
         }
-        return;
+        if (!isInputFocused && ShortcutsManager.matchesEvent('shortcuts_modal', e)) {
+          e.preventDefault();
+          dom.shortcutsModal?.classList.add('open');
+          dom.modalBackdrop?.classList.add('open');
+          listeningActionId = null;
+          if (dom.shortcutsSearchInput) {
+            dom.shortcutsSearchInput.value = '';
+            setTimeout(() => dom.shortcutsSearchInput.focus(), 60);
+          }
+          renderShortcutsModal('');
+          return;
+        }
+        if (!isInputFocused && ShortcutsManager.matchesEvent('quick_dim', e)) {
+          e.preventDefault();
+          views.callController('quick_dimension', 'toggleQuickDimension');
+          return;
+        }
+        if (!isInputFocused && ShortcutsManager.matchesEvent('cad_clipboard', e)) {
+          e.preventDefault();
+          switchMode('cad_clipboard');
+          return;
+        }
+        if (!isInputFocused && ShortcutsManager.matchesEvent('batch_cad', e)) {
+          e.preventDefault();
+          switchMode('batch_cad');
+          return;
+        }
+        if (!isInputFocused && ShortcutsManager.matchesEvent('history_drawer', e)) {
+          e.preventDefault();
+          views.callController('history', 'toggleHistoryDrawer');
+          return;
+        }
       }
-      if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName) && !e.target?.isContentEditable) {
+
+      // Fallback Command Palette Shortcut: '/' when not typing
+      if (e.key === '/' && !isInputFocused && !e.target?.isContentEditable) {
         e.preventDefault();
         openCommandPalette();
         return;
@@ -5637,6 +5777,7 @@ export function initializeApp() {
         }
         if (dom.historyDrawer?.classList.contains('open')) views.callController('history', 'toggleHistoryDrawer');
         if (dom.shortcutsModal?.classList.contains('open')) {
+          listeningActionId = null;
           dom.shortcutsModal.classList.remove('open');
           dom.modalBackdrop?.classList.remove('open');
         }
@@ -5665,9 +5806,7 @@ export function initializeApp() {
       // If user is focused inside an input field, do not hijack letter/number shortcuts
       if (isInputFocused) return;
 
-      // Workspace-specific Ctrl+C: copy selected rows to clipboard (the one
-      // modified shortcut this tool explicitly owns). With no selection,
-      // Ctrl+C falls through to native browser copy.
+      // Workspace-specific Ctrl+C: copy selected rows to clipboard
       if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')
           && state.currentMode === 'workspace' && state.workspaceSelectedIds.size > 0) {
         e.preventDefault();
@@ -5680,13 +5819,10 @@ export function initializeApp() {
         return;
       }
 
-      // Keyboard safety gate (regression pin: Ctrl+C must stay native copy).
-      // Every shortcut below is a PLAIN key press — any ctrl/meta/alt
-      // combination reaching this point is native browser/OS behavior
-      // (copy, paste, select-all, undo, dev tools) and is NEVER intercepted.
+      // Keyboard safety gate: Every shortcut below is a PLAIN key press
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-      // Mode 7 Workspace-specific shortcuts (when not focused in inputs)
+      // Mode 7 Workspace-specific shortcuts
       if (state.currentMode === 'workspace') {
         if (e.key === 'n' || e.key === 'N') {
           e.preventDefault();
@@ -5743,6 +5879,7 @@ export function initializeApp() {
         }
       }
 
+      // Standalone Tool Number Keys (1-9, 0)
       if (e.key === '1') { e.preventDefault(); switchMode('converter'); }
       else if (e.key === '2') { e.preventDefault(); switchMode('rescale'); }
       else if (e.key === '3') { e.preventDefault(); switchMode('detector'); }
@@ -5766,11 +5903,12 @@ export function initializeApp() {
         e.preventDefault();
         dom.shortcutsModal?.classList.add('open');
         dom.modalBackdrop?.classList.add('open');
+        listeningActionId = null;
         if (dom.shortcutsSearchInput) {
           dom.shortcutsSearchInput.value = '';
-          dom.shortcutsModal?.querySelectorAll('.shortcut-row').forEach(r => r.style.display = 'flex');
           setTimeout(() => dom.shortcutsSearchInput.focus(), 60);
         }
+        renderShortcutsModal('');
       }
     });
   }

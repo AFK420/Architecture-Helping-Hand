@@ -415,11 +415,14 @@ export function generateSlopeSVG(result, options = {}) {
     return '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80"></svg>';
   }
 
-  const width = typeof options.width === 'number' && options.width > 0 ? options.width : 520;
-  const height = typeof options.height === 'number' && options.height > 0 ? options.height : 220;
-  const pad = 46;
-  const drawW = width - pad * 2;
-  const drawH = height - pad * 2;
+  const width = typeof options.width === 'number' && options.width > 0 ? options.width : 560;
+  const height = typeof options.height === 'number' && options.height > 0 ? options.height : 240;
+  const padLeft = 60;
+  const padRight = 54;
+  const padTop = 45;
+  const padBottom = 48;
+  const drawW = width - padLeft - padRight;
+  const drawH = height - padTop - padBottom;
 
   const rise = result.geometry.riseMeters;
   const run = result.geometry.runMeters;
@@ -444,22 +447,79 @@ export function generateSlopeSVG(result, options = {}) {
   }
 
   const scale = Math.min(drawW / drawRun, drawH / drawRise);
-  const originX = pad;
-  const originY = height - pad;
+  const originX = padLeft;
+  const originY = rise < 0 ? padTop + drawRise * scale : height - padBottom;
   const topX = originX + drawRun * scale;
-  const topY = originY - drawRise * scale * (rise < 0 ? -1 : 1);
+  const topY = rise < 0 ? originY + drawRise * scale : originY - drawRise * scale;
 
+  const midX = (originX + topX) / 2;
+  const midY = (originY + topY) / 2;
+  const dimRunY = (rise < 0 ? Math.max(originY, topY) : originY) + 24;
+  const dimRiseX = topX + 24;
   const noteY = visuallyNormalized ? 32 : 18;
 
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Proportional slope diagram: rise ${result.formatted.rise}, run ${result.formatted.run}, ${result.formatted.direction}, angle ${result.formatted.angle}">
+  <!-- TEST CONTRACT: Line 1 MUST be the baseline -->
   <line x1="${(originX - 14).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${(topX + 14).toFixed(2)}" y2="${originY.toFixed(2)}" stroke="var(--border-color, #444)" stroke-width="1.4"/>
+
+  <!-- TEST CONTRACT: Line 2 MUST be the slope line -->
   <line x1="${originX.toFixed(2)}" y1="${originY.toFixed(2)}" x2="${topX.toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="2.4"/>
-  <text x="${((originX + topX) / 2).toFixed(2)}" y="${(originY + 18).toFixed(2)}" text-anchor="middle" font-size="11" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.run}</text>
-  <text x="${(topX + 10).toFixed(2)}" y="${((originY + topY) / 2).toFixed(2)}" font-size="11" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RISE ${result.formatted.rise}</text>
-  <text x="${((originX + topX) / 2).toFixed(2)}" y="${((originY + topY) / 2).toFixed(2)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)" transform="rotate(${(-result.geometry.angleDegrees).toFixed(2)} ${((originX + topX) / 2).toFixed(2)} ${((originY + topY) / 2).toFixed(2)})" dy="-6">${result.formatted.slopePercent} · ${result.formatted.angle}</text>
-  <text x="${pad}" y="${noteY}" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">${result.formatted.direction}</text>
-  ${visuallyNormalized ? `<text x="${pad}" y="18" font-size="9" fill="var(--text-muted, #777)" font-style="italic" font-family="var(--font-family-mono, monospace)">Diagram visually normalized for readability. Numeric values shown are exact.</text>` : ''}
+
+  <defs>
+    <pattern id="slope-earth-hatch" width="10" height="10" patternTransform="rotate(-45 0 0)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="10" stroke="var(--accent-primary, #6366f1)" stroke-width="0.6" opacity="0.18"/>
+    </pattern>
+    <linearGradient id="slope-earth-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="var(--accent-primary, #6366f1)" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="var(--accent-secondary, #38bdf8)" stop-opacity="0.03"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Ground stratum / terrain cut fill -->
+  <polygon points="${originX.toFixed(2)},${originY.toFixed(2)} ${topX.toFixed(2)},${originY.toFixed(2)} ${topX.toFixed(2)},${topY.toFixed(2)}" fill="url(#slope-earth-grad)"/>
+  <polygon points="${originX.toFixed(2)},${originY.toFixed(2)} ${topX.toFixed(2)},${originY.toFixed(2)} ${topX.toFixed(2)},${topY.toFixed(2)}" fill="url(#slope-earth-hatch)" opacity="0.75"/>
+
+  <!-- Drainage / surface flow indicator -->
+  <g class="slope-flow" opacity="0.8">
+    <circle cx="${midX.toFixed(2)}" cy="${midY.toFixed(2)}" r="2.5" fill="var(--accent-secondary, #38bdf8)"/>
+    <text x="${midX.toFixed(2)}" y="${(midY - 8).toFixed(2)}" text-anchor="middle" font-size="8.5" font-weight="600" fill="var(--accent-secondary, #38bdf8)" font-family="var(--font-family-mono, monospace)">FLOW DRAINAGE ➔</text>
+  </g>
+
+  <!-- Level Datum Benchmarks -->
+  <g class="slope-benchmarks" font-family="var(--font-family-mono, monospace)" font-size="9">
+    <polygon points="${(originX - 16).toFixed(2)},${originY.toFixed(2)} ${(originX - 10).toFixed(2)},${(originY - 8).toFixed(2)} ${(originX - 22).toFixed(2)},${(originY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
+    <text x="${(originX - 16).toFixed(2)}" y="${(originY - 11).toFixed(2)}" text-anchor="middle" fill="var(--text-secondary, #9aa)">▼ START EL. ±0.00</text>
+    <polygon points="${(topX + 16).toFixed(2)},${topY.toFixed(2)} ${(topX + 22).toFixed(2)},${(topY - 8).toFixed(2)} ${(topX + 10).toFixed(2)},${(topY - 8).toFixed(2)}" fill="var(--accent-primary, #7aa2ff)"/>
+    <text x="${(topX + 16).toFixed(2)}" y="${(topY - 11).toFixed(2)}" text-anchor="middle" fill="var(--text-secondary, #9aa)">${rise >= 0 ? '▲' : '▼'} END EL. ${result.formatted.rise}</text>
+  </g>
+
+  <!-- CAD 45° Slashed Horizontal Dimension: RUN -->
+  <g class="slope-dim-run">
+    <line x1="${originX.toFixed(2)}" y1="${(Math.max(originY, topY) + 4).toFixed(2)}" x2="${originX.toFixed(2)}" y2="${(dimRunY + 6).toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${topX.toFixed(2)}" y1="${(Math.max(originY, topY) + 4).toFixed(2)}" x2="${topX.toFixed(2)}" y2="${(dimRunY + 6).toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${originX.toFixed(2)}" y1="${dimRunY.toFixed(2)}" x2="${topX.toFixed(2)}" y2="${dimRunY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.1"/>
+    <!-- 45° CAD slashes -->
+    <line x1="${(originX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(originX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <line x1="${(topX - 3).toFixed(2)}" y1="${(dimRunY + 3).toFixed(2)}" x2="${(topX + 3).toFixed(2)}" y2="${(dimRunY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <text x="${midX.toFixed(2)}" y="${(dimRunY + 14).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)">RUN ${result.formatted.run}</text>
+  </g>
+
+  <!-- CAD 45° Slashed Vertical Dimension: RISE -->
+  <g class="slope-dim-rise">
+    <line x1="${(topX + 4).toFixed(2)}" y1="${originY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${originY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${(topX + 4).toFixed(2)}" y1="${topY.toFixed(2)}" x2="${(dimRiseX + 6).toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--border-color, #555)" stroke-width="0.8"/>
+    <line x1="${dimRiseX.toFixed(2)}" y1="${originY.toFixed(2)}" x2="${dimRiseX.toFixed(2)}" y2="${topY.toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.1"/>
+    <!-- 45° CAD slashes -->
+    <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(originY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(originY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <line x1="${(dimRiseX - 3).toFixed(2)}" y1="${(topY + 3).toFixed(2)}" x2="${(dimRiseX + 3).toFixed(2)}" y2="${(topY - 3).toFixed(2)}" stroke="var(--accent-primary, #7aa2ff)" stroke-width="1.5"/>
+    <text x="${(dimRiseX + 10).toFixed(2)}" y="${midY.toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #9aa)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${midY.toFixed(2)})">RISE ${result.formatted.rise}</text>
+  </g>
+
+  <!-- Slope percentage, angle, and direction badges -->
+  <text x="${midX.toFixed(2)}" y="${midY.toFixed(2)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent-primary, #7aa2ff)" font-family="var(--font-family-mono, monospace)" transform="rotate(${(-result.geometry.angleDegrees).toFixed(2)} ${midX.toFixed(2)} ${midY.toFixed(2)})" dy="-8">${result.formatted.slopePercent} · ${result.formatted.angle}</text>
+  <text x="${padLeft}" y="${noteY}" font-size="10" fill="var(--text-muted, #777)" font-family="var(--font-family-mono, monospace)">${result.formatted.direction}</text>
+  ${visuallyNormalized ? `<text x="${padLeft}" y="18" font-size="9" fill="var(--text-muted, #777)" font-style="italic" font-family="var(--font-family-mono, monospace)">Diagram visually normalized for readability. Numeric values shown are exact.</text>` : ''}
 </svg>`.trim();
 
   return svg;
