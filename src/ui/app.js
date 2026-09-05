@@ -364,6 +364,7 @@ export function initializeApp() {
       mode: 'rise_desired_riser',
       objective: 'comfortable_proportion',
       displayUnit: 'mm',
+      showHumanScale: false,
       lastResult: null
     },
 
@@ -371,6 +372,7 @@ export function initializeApp() {
     ramps: {
       mode: 'rise_desired_slope',
       displayUnit: 'm',
+      showHumanScale: false,
       lastResult: null
     },
 
@@ -901,12 +903,14 @@ export function initializeApp() {
     stairsFlightVal: document.getElementById('stairs-flight-val'),
     stairsAngleVal: document.getElementById('stairs-angle-val'),
     stairsSlopeVal: document.getElementById('stairs-slope-val'),
+    stairsToggleFigureBtn: document.getElementById('stairs-toggle-figure-btn'),
     stairsSvgWrap: document.getElementById('stairs-svg-wrap'),
     stairsBlondelVal: document.getElementById('stairs-blondel-val'),
     stairsBlondelStatus: document.getElementById('stairs-blondel-status'),
     stairsCandidatesBody: document.getElementById('stairs-candidates-body'),
     stairsCopyResultBtn: document.getElementById('stairs-copy-result-btn'),
     stairsCopyScheduleBtn: document.getElementById('stairs-copy-schedule-btn'),
+    stairsCopyRevitBtn: document.getElementById('stairs-copy-revit-btn'),
     stairsSendCadBtn: document.getElementById('stairs-send-cad-btn'),
     stairsSendWorkspaceBtn: document.getElementById('stairs-send-workspace-btn'),
     stairsSaveJournalBtn: document.getElementById('stairs-save-journal-btn'),
@@ -939,7 +943,9 @@ export function initializeApp() {
     rampsRatioVal: document.getElementById('ramps-ratio-val'),
     rampsAngleVal: document.getElementById('ramps-angle-val'),
     rampsFlightVal: document.getElementById('ramps-flight-val'),
+    rampsToggleFigureBtn: document.getElementById('ramps-toggle-figure-btn'),
     rampsSvgWrap: document.getElementById('ramps-svg-wrap'),
+    rampsMultisegmentWrap: document.getElementById('ramps-multisegment-wrap'),
     rampsRunAnalysis: document.getElementById('ramps-run-analysis'),
     rampsRunAnalysisBody: document.getElementById('ramps-run-analysis-body'),
     rampsRefStatus: document.getElementById('ramps-ref-status'),
@@ -947,6 +953,7 @@ export function initializeApp() {
     rampsTargetsBody: document.getElementById('ramps-targets-body'),
     rampsCopyResultBtn: document.getElementById('ramps-copy-result-btn'),
     rampsCopyScheduleBtn: document.getElementById('ramps-copy-schedule-btn'),
+    rampsCopyRevitBtn: document.getElementById('ramps-copy-revit-btn'),
     rampsSendCadBtn: document.getElementById('ramps-send-cad-btn'),
     rampsSendWorkspaceBtn: document.getElementById('ramps-send-workspace-btn'),
     rampsSaveJournalBtn: document.getElementById('ramps-save-journal-btn'),
@@ -5351,11 +5358,17 @@ export function initializeApp() {
     if (dom.btnRunStairs) {
       dom.btnRunStairs.addEventListener('click', () => views.callController('stairs', 'calculate', true));
     }
+    if (dom.stairsToggleFigureBtn) {
+      dom.stairsToggleFigureBtn.addEventListener('click', () => views.callController('stairs', 'toggleFigure'));
+    }
     if (dom.stairsCopyResultBtn) {
       dom.stairsCopyResultBtn.addEventListener('click', () => views.callController('stairs', 'copyResult'));
     }
     if (dom.stairsCopyScheduleBtn) {
       dom.stairsCopyScheduleBtn.addEventListener('click', () => views.callController('stairs', 'copySchedule'));
+    }
+    if (dom.stairsCopyRevitBtn) {
+      dom.stairsCopyRevitBtn.addEventListener('click', () => views.callController('stairs', 'copyRevit'));
     }
     if (dom.stairsSendCadBtn) {
       dom.stairsSendCadBtn.addEventListener('click', () => views.callController('stairs', 'sendToCad'));
@@ -5377,6 +5390,9 @@ export function initializeApp() {
     }
 
     // Mode 15: Ramp Calculator Listeners
+    if (dom.rampsToggleFigureBtn) {
+      dom.rampsToggleFigureBtn.addEventListener('click', () => views.callController('ramps', 'toggleFigure'));
+    }
     if (dom.rampsModeSelect) {
       dom.rampsModeSelect.addEventListener('change', () => {
         state.ramps.mode = dom.rampsModeSelect.value;
@@ -5407,6 +5423,9 @@ export function initializeApp() {
     }
     if (dom.rampsCopyScheduleBtn) {
       dom.rampsCopyScheduleBtn.addEventListener('click', () => views.callController('ramps', 'copySchedule'));
+    }
+    if (dom.rampsCopyRevitBtn) {
+      dom.rampsCopyRevitBtn.addEventListener('click', () => views.callController('ramps', 'copyRevit'));
     }
     if (dom.rampsSendCadBtn) {
       dom.rampsSendCadBtn.addEventListener('click', () => views.callController('ramps', 'sendToCad'));

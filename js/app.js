@@ -6403,6 +6403,67 @@ function validateCadHandoffSelection(targetId, modeId, sourceId) {
 // Re-export for UI convenience so the UI never imports two CAD modules.
 
 
+/**
+ * Format a calculated stair result into standard Autodesk Revit Stair Type & Instance parameters.
+ * @param {Object} stairResult
+ * @returns {string} Text block formatted for Revit parameter entry
+ */
+function formatRevitStairParameters(stairResult) {
+  if (!stairResult || !stairResult.geometry || !stairResult.risers || !stairResult.treads) return '';
+  const g = stairResult.geometry;
+  const riserHeightM = stairResult.risers.heightMeters;
+  const treadDepthM = stairResult.treads.depthMeters;
+  const riserMm = (riserHeightM * 1000).toFixed(1);
+  const treadMm = (treadDepthM * 1000).toFixed(1);
+  const totalRiseMm = ((stairResult.input?.totalRiseMeters || (riserHeightM * stairResult.risers.count)) * 1000).toFixed(1);
+  const totalRunMm = (g.totalRunMeters * 1000).toFixed(1);
+  const riserCount = stairResult.risers.count;
+  const blondelMm = ((stairResult.proportion?.twoRPlusTMeters || (2 * riserHeightM + treadDepthM)) * 1000).toFixed(1);
+
+  return [
+    '=== REVIT STAIR TYPE PROPERTIES (Assembled / Cast-in-Place) ===',
+    `Maximum Riser Height = ${riserMm} mm`,
+    `Minimum Tread Depth = ${treadMm} mm`,
+    `Minimum Run Width = 1000.0 mm`,
+    '',
+    '=== REVIT STAIR INSTANCE DIMENSIONS ===',
+    `Desired Number of Risers = ${riserCount}`,
+    `Actual Number of Risers = ${riserCount}`,
+    `Actual Riser Height = ${riserMm} mm`,
+    `Actual Tread Depth = ${treadMm} mm`,
+    `Total Run = ${totalRunMm} mm`,
+    `Desired Stair Height (Base to Top) = ${totalRiseMm} mm`,
+    `Blondel Calculation Rule (2R + T) = ${blondelMm} mm`
+  ].join('\n');
+}
+
+/**
+ * Format a calculated ramp result into standard Autodesk Revit Ramp Type & Instance parameters.
+ * @param {Object} rampResult
+ * @returns {string} Text block formatted for Revit parameter entry
+ */
+function formatRevitRampParameters(rampResult) {
+  if (!rampResult || !rampResult.geometry) return '';
+  const g = rampResult.geometry;
+  const f = rampResult.formatted;
+  const riseMm = (g.riseMeters * 1000).toFixed(1);
+  const runMm = (g.runMeters * 1000).toFixed(1);
+  const maxIncline = Math.round(g.ratioValue * 10) / 10;
+
+  return [
+    '=== REVIT RAMP TYPE PROPERTIES ===',
+    `Ramp Max Slope (1/x) = ${maxIncline}`,
+    `Maximum Incline Ratio = 1 : ${maxIncline}`,
+    `Shape = Straight Run`,
+    '',
+    '=== REVIT RAMP INSTANCE DIMENSIONS ===',
+    `Base Offset to Top Offset (Total Rise) = ${riseMm} mm`,
+    `Actual Horizontal Length (Run) = ${runMm} mm`,
+    `Slope Percentage = ${f.slopePercent}`,
+    `Slope Angle = ${f.angle}`
+  ].join('\n');
+}
+
 void UNITS;
 
 
@@ -7253,6 +7314,14 @@ function generateStairSVG(result, options = {}) {
     <text x="${(dimRiseX + 10).toFixed(2)}" y="${((originY + topY) / 2).toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary, #ffffff)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${((originY + topY) / 2).toFixed(2)})">RISE ${result.formatted.totalRise}</text>
   </g>
 
+  ${options.showHumanScale ? `
+  <!-- Human Scale Figure (1.75m Architect Silhouette) -->
+  <g class="human-scale-figure" fill="var(--accent-secondary, #38bdf8)" opacity="0.9">
+    <circle cx="${(xAt(Math.min(3, Math.floor(goingCount / 2))) + px(treadMeters * 0.5)).toFixed(2)}" cy="${(yAt(Math.min(3, Math.floor(goingCount / 2)) + 1) - scale * 1.75 + Math.max(3.5, scale * 1.75 * 0.08)).toFixed(2)}" r="${Math.max(3.5, scale * 1.75 * 0.08).toFixed(2)}" />
+    <path d="M ${(xAt(Math.min(3, Math.floor(goingCount / 2))) + px(treadMeters * 0.5) - Math.max(3.5, scale * 1.75 * 0.08) * 0.9).toFixed(2)} ${(yAt(Math.min(3, Math.floor(goingCount / 2)) + 1) - scale * 1.75 + Math.max(3.5, scale * 1.75 * 0.08) * 2 + 1).toFixed(2)} L ${(xAt(Math.min(3, Math.floor(goingCount / 2))) + px(treadMeters * 0.5) + Math.max(3.5, scale * 1.75 * 0.08) * 0.9).toFixed(2)} ${(yAt(Math.min(3, Math.floor(goingCount / 2)) + 1) - scale * 1.75 + Math.max(3.5, scale * 1.75 * 0.08) * 2 + 1).toFixed(2)} L ${(xAt(Math.min(3, Math.floor(goingCount / 2))) + px(treadMeters * 0.5) + Math.max(3.5, scale * 1.75 * 0.08) * 0.6).toFixed(2)} ${(yAt(Math.min(3, Math.floor(goingCount / 2)) + 1) - scale * 1.75 * 0.45).toFixed(2)} L ${(xAt(Math.min(3, Math.floor(goingCount / 2))) + px(treadMeters * 0.5) + Math.max(3.5, scale * 1.75 * 0.08) * 0.8).toFixed(2)} ${(yAt(Math.min(3, Math.floor(goingCount / 2)) + 1)).toFixed(2)} L ${(xAt(Math.min(3, Math.floor(goingCount / 2))) + px(treadMeters * 0.5) + Math.max(3.5, scale * 1.75 * 0.08) * 0.2).toFixed(2)} ${(yAt(Math.min(3, Math.floor(goingCount / 2)) + 1)).toFixed(2)} L ${(xAt(Math.min(3, Math.floor(goingCount / 2))) + px(treadMeters * 0.5)).toFixed(2)} ${(yAt(Math.min(3, Math.floor(goingCount / 2)) + 1) - scale * 1.75 * 0.45 + 4).toFixed(2)} L ${(xAt(Math.min(3, Math.floor(goingCount / 2))) + px(treadMeters * 0.5) - Math.max(3.5, scale * 1.75 * 0.08) * 0.2).toFixed(2)} ${(yAt(Math.min(3, Math.floor(goingCount / 2)) + 1)).toFixed(2)} L ${(xAt(Math.min(3, Math.floor(goingCount / 2))) + px(treadMeters * 0.5) - Math.max(3.5, scale * 1.75 * 0.08) * 0.8).toFixed(2)} ${(yAt(Math.min(3, Math.floor(goingCount / 2)) + 1)).toFixed(2)} L ${(xAt(Math.min(3, Math.floor(goingCount / 2))) + px(treadMeters * 0.5) - Math.max(3.5, scale * 1.75 * 0.08) * 0.6).toFixed(2)} ${(yAt(Math.min(3, Math.floor(goingCount / 2)) + 1) - scale * 1.75 * 0.45).toFixed(2)} Z" />
+    <text x="${(xAt(Math.min(3, Math.floor(goingCount / 2))) + px(treadMeters * 0.5) + Math.max(3.5, scale * 1.75 * 0.08) + 4).toFixed(2)}" y="${(yAt(Math.min(3, Math.floor(goingCount / 2)) + 1) - scale * 1.75 + Math.max(3.5, scale * 1.75 * 0.08) + 4).toFixed(2)}" font-size="8.5" font-weight="700" fill="var(--text-primary, #ffffff)" font-family="var(--font-family-mono, monospace)">1.75m</text>
+  </g>` : ''}
+
   <!-- Hero Pitch & Step Specification (Top-Left Sky Zone) -->
   <g class="stair-badges">
     <text x="${padLeft}" y="18" font-size="9.5" fill="rgba(255, 255, 255, 0.75)" font-family="var(--font-family-mono, monospace)">SECTION ELEVATION — 1:${riserCount} risers / ${goingCount} goings — proportional</text>
@@ -7768,6 +7837,14 @@ function generateRampSVG(result, options = {}) {
     <text x="${(dimRiseX + 10).toFixed(2)}" y="${midY.toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary, #ffffff)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${midY.toFixed(2)})">RISE ${result.formatted.rise}</text>
   </g>
 
+  ${options.showHumanScale ? `
+  <!-- Human Scale Figure (1.75m Architect Silhouette) -->
+  <g class="human-scale-figure" fill="var(--accent-secondary, #38bdf8)" opacity="0.9">
+    <circle cx="${(originX + run * scale * 0.35).toFixed(2)}" cy="${(originY - rise * scale * 0.35 - scale * 1.75 + Math.max(3.5, scale * 1.75 * 0.08)).toFixed(2)}" r="${Math.max(3.5, scale * 1.75 * 0.08).toFixed(2)}" />
+    <path d="M ${(originX + run * scale * 0.35 - Math.max(3.5, scale * 1.75 * 0.08) * 0.9).toFixed(2)} ${(originY - rise * scale * 0.35 - scale * 1.75 + Math.max(3.5, scale * 1.75 * 0.08) * 2 + 1).toFixed(2)} L ${(originX + run * scale * 0.35 + Math.max(3.5, scale * 1.75 * 0.08) * 0.9).toFixed(2)} ${(originY - rise * scale * 0.35 - scale * 1.75 + Math.max(3.5, scale * 1.75 * 0.08) * 2 + 1).toFixed(2)} L ${(originX + run * scale * 0.35 + Math.max(3.5, scale * 1.75 * 0.08) * 0.6).toFixed(2)} ${(originY - rise * scale * 0.35 - scale * 1.75 * 0.45).toFixed(2)} L ${(originX + run * scale * 0.35 + Math.max(3.5, scale * 1.75 * 0.08) * 0.8).toFixed(2)} ${(originY - rise * scale * 0.35).toFixed(2)} L ${(originX + run * scale * 0.35 + Math.max(3.5, scale * 1.75 * 0.08) * 0.2).toFixed(2)} ${(originY - rise * scale * 0.35).toFixed(2)} L ${(originX + run * scale * 0.35).toFixed(2)} ${(originY - rise * scale * 0.35 - scale * 1.75 * 0.45 + 4).toFixed(2)} L ${(originX + run * scale * 0.35 - Math.max(3.5, scale * 1.75 * 0.08) * 0.2).toFixed(2)} ${(originY - rise * scale * 0.35).toFixed(2)} L ${(originX + run * scale * 0.35 - Math.max(3.5, scale * 1.75 * 0.08) * 0.8).toFixed(2)} ${(originY - rise * scale * 0.35).toFixed(2)} L ${(originX + run * scale * 0.35 - Math.max(3.5, scale * 1.75 * 0.08) * 0.6).toFixed(2)} ${(originY - rise * scale * 0.35 - scale * 1.75 * 0.45).toFixed(2)} Z" />
+    <text x="${(originX + run * scale * 0.35 + Math.max(3.5, scale * 1.75 * 0.08) + 4).toFixed(2)}" y="${(originY - rise * scale * 0.35 - scale * 1.75 + Math.max(3.5, scale * 1.75 * 0.08) + 4).toFixed(2)}" font-size="8.5" font-weight="700" fill="var(--text-primary, #ffffff)" font-family="var(--font-family-mono, monospace)">1.75m</text>
+  </g>` : ''}
+
   <!-- Hero Slope Badging & Title (Top-Left Sky Zone) -->
   <g class="ramp-badges">
     <text x="${padLeft}" y="18" font-size="9.5" fill="rgba(255, 255, 255, 0.75)" font-family="var(--font-family-mono, monospace)">SECTION ELEVATION — proportional to calculated geometry</text>
@@ -7776,6 +7853,96 @@ function generateRampSVG(result, options = {}) {
 </svg>`.trim();
 
   return svg;
+}
+
+/**
+ * Calculate practical architectural multi-flight ramp layout configurations.
+ * Solves for required intermediate landings and spatial room envelopes when
+ * total rise exceeds the building code's maximum continuous single run.
+ *
+ * @param {number} totalRiseMeters - Total elevation change
+ * @param {number} slopePercent - Gradient percentage (e.g. 8.33 for 1:12)
+ * @param {Object} [options]
+ * @param {number} [options.maxRisePerRunMeters=0.75] - Code maximum rise per single flight
+ * @param {number} [options.rampWidthMeters=1.2] - Clear ramp width between handrails
+ * @param {number} [options.landingLengthMeters=1.5] - Level intermediate landing length
+ * @returns {Object} Structured multi-segment architectural model
+ */
+function calculateMultiSegmentRamp(totalRiseMeters, slopePercent, options = {}) {
+  const maxRisePerRun = options.maxRisePerRunMeters && options.maxRisePerRunMeters > 0 ? options.maxRisePerRunMeters : 0.75;
+  const rampWidth = options.rampWidthMeters && options.rampWidthMeters > 0 ? options.rampWidthMeters : 1.2;
+  const landingLength = options.landingLengthMeters && options.landingLengthMeters > 0 ? options.landingLengthMeters : 1.5;
+
+  const totalRunMeters = totalRiseMeters / (slopePercent / 100);
+  const ratioValue = 100 / slopePercent;
+
+  // Number of flights and landings
+  const flightCount = Math.max(1, Math.ceil(totalRiseMeters / maxRisePerRun));
+  const landingCount = flightCount - 1;
+
+  const flightRiseMeters = totalRiseMeters / flightCount;
+  const flightRunMeters = flightRiseMeters * ratioValue;
+
+  // 1. Straight Run Configuration
+  const straightLengthMeters = (flightCount * flightRunMeters) + (landingCount * landingLength);
+  const straightFootprint = {
+    type: 'straight',
+    name: 'Straight Ramp with Intermediate Landings',
+    nameArabic: 'منحدر مستقيم مع استراحات وسيطة',
+    flightCount,
+    landingCount,
+    overallLengthMeters: straightLengthMeters,
+    overallWidthMeters: rampWidth,
+    footprintAreaSqMeters: straightLengthMeters * rampWidth,
+    description: `${flightCount} flight(s) of ${flightRunMeters.toFixed(2)}m + ${landingCount} landing(s) of ${landingLength.toFixed(2)}m`
+  };
+
+  // 2. Switchback Configuration (180° parallel runs)
+  const switchbackLengthMeters = flightRunMeters + landingLength;
+  const switchbackWidthMeters = (2 * rampWidth) + 0.15; // 150mm central handrail well
+  const switchbackFootprint = {
+    type: 'switchback',
+    name: 'Switchback Ramp (180° Turn)',
+    nameArabic: 'منحدر متعرج مزدوج (دوران 180°)',
+    flightCount,
+    landingCount,
+    overallLengthMeters: switchbackLengthMeters,
+    overallWidthMeters: switchbackWidthMeters,
+    footprintAreaSqMeters: switchbackLengthMeters * switchbackWidthMeters,
+    lengthSavingsMeters: Math.max(0, straightLengthMeters - switchbackLengthMeters),
+    description: `2 parallel runs of ${flightRunMeters.toFixed(2)}m with a ${landingLength.toFixed(2)}m turning landing`
+  };
+
+  // 3. L-Shaped Configuration (90° corner turn)
+  const lShapeWallAMeters = flightRunMeters + landingLength;
+  const lShapeWallBMeters = flightRunMeters + landingLength;
+  const lShapeFootprint = {
+    type: 'l_shaped',
+    name: 'L-Shaped Ramp (90° Corner)',
+    nameArabic: 'منحدر زاوية على شكل L (زاوية 90°)',
+    flightCount,
+    landingCount,
+    wallALengthMeters: lShapeWallAMeters,
+    wallBLengthMeters: lShapeWallBMeters,
+    overallWidthMeters: rampWidth,
+    description: `Two perpendicular runs conforming to corner walls with a ${landingLength.toFixed(2)}m × ${landingLength.toFixed(2)}m landing`
+  };
+
+  return {
+    totalRiseMeters,
+    totalRunMeters,
+    slopePercent,
+    ratioValue,
+    flightCount,
+    landingCount,
+    flightRiseMeters,
+    flightRunMeters,
+    landingLengthMeters: landingLength,
+    rampWidthMeters: rampWidth,
+    straight: straightFootprint,
+    switchback: switchbackFootprint,
+    lShape: lShapeFootprint
+  };
 }
 
 
@@ -21453,6 +21620,8 @@ function createScratchpadView(context) {
 
 
 
+
+
 function createStairsView(context) {
   const {
     state, dom, showToast, setUnifiedResultState, AudioService,
@@ -21490,15 +21659,22 @@ function createStairsView(context) {
     return {};
   }
 
-  /** Parses a user length field ("2.8m", "175mm", "300", "12'6\"") to meters. */
+  /** Parses a user length field ("2.8m", "175mm", "300", "12'6\"", "2.8m - 15cm") to meters. */
   function parseLengthField(el, fallbackUnit) {
     if (!el) return null;
     const raw = (el.value || '').trim();
     if (!raw) return null;
+    // Architectural math expressions support (e.g. 2.8m - 15cm, 3m / 2)
+    const exprRes = evaluateExpressionSafe(raw, fallbackUnit || 'm');
+    if (exprRes && exprRes.isValid && exprRes.result > 0) {
+      const unitKey = exprRes.detectedUnit || fallbackUnit || 'm';
+      const toM = UNITS[unitKey]?.toMeters ?? 1;
+      return exprRes.result * toM;
+    }
     const res = parseInput(raw, { allowNegative: false });
     if (!res.isValid || res.value <= 0) return null;
     const unitKey = res.detectedUnit || fallbackUnit;
-    return res.value * UNITS[unitKey].toMeters;
+    return res.value * (UNITS[unitKey]?.toMeters ?? 1);
   }
 
   function currentReferences() {
@@ -21660,7 +21836,15 @@ function createStairsView(context) {
 
     // SVG diagram drawn from the actual calculated geometry
     if (dom.stairsSvgWrap) {
-      dom.stairsSvgWrap.innerHTML = generateStairSVG(result, { width: 520, height: 240 });
+      dom.stairsSvgWrap.innerHTML = generateStairSVG(result, {
+        width: 520,
+        height: 240,
+        showHumanScale: Boolean(state.stairs?.showHumanScale)
+      });
+    }
+
+    if (dom.stairsToggleFigureBtn) {
+      dom.stairsToggleFigureBtn.classList.toggle('is-figure-active', Boolean(state.stairs?.showHumanScale));
     }
 
     // Building Code Compliance Inspection
@@ -21770,6 +21954,25 @@ function createStairsView(context) {
     const header = ['Flights', 'Risers', 'Goings', 'Riser Height', 'Going Depth', 'Total Rise', 'Total Run', 'Flight Length', 'Angle', '2R+T'].join('\t');
     const row = ['1 (straight)', f.riserCount, f.goingCount, f.riser, f.tread, f.totalRise, f.totalRun, f.slopedLength, f.angle, f.twoRPlusT].join('\t');
     context.copyToClipboard(`${header}\n${row}`, 'Stair Schedule (TSV)');
+  }
+
+  function copyRevit() {
+    const r = requireResult();
+    if (!r) return;
+    const text = formatRevitStairParameters(r);
+    if (!text) return;
+    context.copyToClipboard(text, 'Revit Stair Type Parameters');
+  }
+
+  function toggleFigure() {
+    state.stairs.showHumanScale = !state.stairs.showHumanScale;
+    if (dom.stairsToggleFigureBtn) {
+      dom.stairsToggleFigureBtn.classList.toggle('is-figure-active', state.stairs.showHumanScale);
+    }
+    if (state.stairs.lastResult) {
+      renderResult(state.stairs.lastResult);
+    }
+    showToast(state.stairs.showHumanScale ? '🧍 Human Scale Figure enabled (1.75m)' : 'Scale Figure hidden');
   }
 
   function sendToCad() {
@@ -21969,8 +22172,8 @@ function createStairsView(context) {
     },
     getController() {
       return {
-        calculate, syncCodeSelection, syncModeVisibility, copyResult, copySchedule,
-        sendToCad, sendToWorkspace, saveToJournal, saveToProject,
+        calculate, syncCodeSelection, syncModeVisibility, toggleFigure, copyRevit,
+        copyResult, copySchedule, sendToCad, sendToWorkspace, saveToJournal, saveToProject,
         sendToScratchpad, applyToPlan
       };
     }
@@ -21990,6 +22193,8 @@ function createStairsView(context) {
  * src/core/ramps.js; persistence routes through the shared context
  * (ProjectStore, Journal, Workspace, CAD views).
  */
+
+
 
 
 
@@ -22026,15 +22231,22 @@ function createRampsView(context) {
     return {};
   }
 
-  /** Parses a user length field ("1.2m", "1200mm", "4'6\"") to meters. */
+  /** Parses a user length field ("1.2m", "1200mm", "4'6\"", "3m - 20cm") to meters. */
   function parseLengthField(el, fallbackUnit) {
     if (!el) return null;
     const raw = (el.value || '').trim();
     if (!raw) return null;
+    // Architectural math expressions support (e.g. 3m - 20cm, 14.4m / 2)
+    const exprRes = evaluateExpressionSafe(raw, fallbackUnit || 'm');
+    if (exprRes && exprRes.isValid && exprRes.result > 0) {
+      const unitKey = exprRes.detectedUnit || fallbackUnit || 'm';
+      const toM = UNITS[unitKey]?.toMeters ?? 1;
+      return exprRes.result * toM;
+    }
     const res = parseInput(raw, { allowNegative: false });
     if (!res.isValid || res.value <= 0) return null;
     const unitKey = res.detectedUnit || fallbackUnit;
-    return res.value * UNITS[unitKey].toMeters;
+    return res.value * (UNITS[unitKey]?.toMeters ?? 1);
   }
 
   function currentReferences() {
@@ -22169,7 +22381,15 @@ function createRampsView(context) {
 
     // SVG diagram from actual geometry
     if (dom.rampsSvgWrap) {
-      dom.rampsSvgWrap.innerHTML = generateRampSVG(result, { width: 520, height: 220 });
+      dom.rampsSvgWrap.innerHTML = generateRampSVG(result, {
+        width: 520,
+        height: 220,
+        showHumanScale: Boolean(state.ramps?.showHumanScale)
+      });
+    }
+
+    if (dom.rampsToggleFigureBtn) {
+      dom.rampsToggleFigureBtn.classList.toggle('is-figure-active', Boolean(state.ramps?.showHumanScale));
     }
 
     // Building Code Compliance Inspection
@@ -22210,6 +22430,78 @@ function createRampsView(context) {
           <div class="code-citation-footer">
             <span><strong>Standard Citation:</strong> ${inspection.code.citation}</span>
             <span>Legal Clause: ${inspection.checks[0]?.citation || ''}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // Multi-Segment Ramp Spatial Layout Envelopes
+    if (dom.rampsMultisegmentWrap) {
+      const selectedCodeId = dom.rampsCodeSelect?.value || 'jnbc';
+      const code = getBuildingCode(selectedCodeId);
+      const maxRisePerFlight = (code?.ramp?.maxRisePerRunMm || 750) / 1000;
+      const minWidth = (code?.ramp?.minWidthMm || 1200) / 1000;
+      const minLanding = (code?.ramp?.landingLengthMinMm || 1500) / 1000;
+
+      const multi = calculateMultiSegmentRamp(
+        result.geometry.riseMeters,
+        result.slope.percent,
+        {
+          maxRisePerRunMeters: maxRisePerFlight,
+          rampWidthMeters: minWidth,
+          landingLengthMeters: minLanding
+        }
+      );
+
+      dom.rampsMultisegmentWrap.innerHTML = `
+        <div class="multisegment-card">
+          <div class="multisegment-header">
+            <div class="multisegment-title">
+              <span>📐 Multi-Flight & Switchback Layouts (${multi.flightCount} Flight${multi.flightCount > 1 ? 's' : ''})</span>
+            </div>
+            <span class="layout-tag-badge">
+              ${multi.flightCount > 1 ? `⚠️ Exceeds single run limit (${maxRisePerFlight}m) · ${multi.landingCount} landing(s) required` : 'Direct single run feasible'}
+            </span>
+          </div>
+          <div style="font-size: 0.72rem; color: var(--text-muted, rgba(255, 255, 255, 0.7)); margin-bottom: 0.4rem;">
+            Spatial footprint envelopes for <strong>${f.rise}</strong> rise @ <strong>${f.ratio}</strong> (${f.slopePercent}) with <strong>${minLanding.toFixed(2)}m</strong> landings:
+          </div>
+          <div class="multisegment-grid">
+            <!-- Straight Run with Intermediate Landings -->
+            <div class="multisegment-layout-card">
+              <div class="layout-card-title">
+                <span>Straight Run</span>
+                <span class="layout-card-arabic">${multi.straight.nameArabic}</span>
+              </div>
+              <div class="layout-card-dims">${multi.straight.overallLengthMeters.toFixed(2)}m × ${multi.straight.overallWidthMeters.toFixed(2)}m</div>
+              <div class="layout-card-desc">
+                ${multi.straight.flightCount} flight(s) of ${multi.flightRunMeters.toFixed(2)}m + ${multi.straight.landingCount} intermediate landing(s). Footprint: ${multi.straight.footprintAreaSqMeters.toFixed(1)} m².
+              </div>
+            </div>
+
+            <!-- Switchback Configuration (180° Turn) -->
+            <div class="multisegment-layout-card" style="border-left: 3px solid #38bdf8;">
+              <div class="layout-card-title">
+                <span>180° Switchback</span>
+                <span class="layout-card-arabic">${multi.switchback.nameArabic}</span>
+              </div>
+              <div class="layout-card-dims" style="color: #38bdf8;">${multi.switchback.overallLengthMeters.toFixed(2)}m × ${multi.switchback.overallWidthMeters.toFixed(2)}m</div>
+              <div class="layout-card-desc">
+                Parallel runs with 180° turn landing. Saves <strong>${multi.switchback.lengthSavingsMeters.toFixed(2)}m</strong> room length compared to linear run.
+              </div>
+            </div>
+
+            <!-- L-Shaped Configuration (90° Corner) -->
+            <div class="multisegment-layout-card">
+              <div class="layout-card-title">
+                <span>90° Corner L-Ramp</span>
+                <span class="layout-card-arabic">${multi.lShape.nameArabic}</span>
+              </div>
+              <div class="layout-card-dims">${multi.lShape.wallALengthMeters.toFixed(2)}m × ${multi.lShape.wallBLengthMeters.toFixed(2)}m</div>
+              <div class="layout-card-desc">
+                Follows perimeter walls with a square corner turning landing (${minLanding.toFixed(2)}m × ${minLanding.toFixed(2)}m).
+              </div>
+            </div>
           </div>
         </div>
       `;
@@ -22309,6 +22601,25 @@ function createRampsView(context) {
     const header = ['Rise', 'Run', 'Slope %', 'Ratio', 'Angle', 'Flight Length'].join('\t');
     const row = [f.rise, f.run, f.slopePercent, f.ratio, f.angle, f.flightLength].join('\t');
     copyToClipboard(`${header}\n${row}`, 'Ramp Schedule (TSV)');
+  }
+
+  function copyRevit() {
+    const r = requireResult();
+    if (!r) return;
+    const text = formatRevitRampParameters(r);
+    if (!text) return;
+    copyToClipboard(text, 'Revit Ramp Type Parameters');
+  }
+
+  function toggleFigure() {
+    state.ramps.showHumanScale = !state.ramps.showHumanScale;
+    if (dom.rampsToggleFigureBtn) {
+      dom.rampsToggleFigureBtn.classList.toggle('is-figure-active', state.ramps.showHumanScale);
+    }
+    if (state.ramps.lastResult) {
+      renderResult(state.ramps.lastResult);
+    }
+    showToast(state.ramps.showHumanScale ? '🧍 Human Scale Figure enabled (1.75m)' : 'Scale Figure hidden');
   }
 
   function sendToCad() {
@@ -22491,9 +22802,9 @@ function createRampsView(context) {
     },
     getController() {
       return {
-        calculate, syncCodeSelection, syncModeVisibility, renderTargets, copyResult,
-        copySchedule, sendToCad, sendToWorkspace, saveToJournal,
-        saveToProject, sendToScratchpad, applyToPlan
+        calculate, syncCodeSelection, syncModeVisibility, renderTargets,
+        toggleFigure, copyRevit, copyResult, copySchedule, sendToCad,
+        sendToWorkspace, saveToJournal, saveToProject, sendToScratchpad, applyToPlan
       };
     }
   };
@@ -22511,6 +22822,7 @@ function createRampsView(context) {
  * src/core/slopes.js + the shared slope-math.js; this view only renders
  * engine results and routes persistence through the shared context.
  */
+
 
 
 
@@ -22546,16 +22858,22 @@ function createSlopesView(context) {
     return {};
   }
 
-  /** Parses a signed user length field ("-1.2m", "1200mm") to meters. */
+  /** Parses a signed user length field ("-1.2m", "1200mm", "2.8m - 15cm") to meters. */
   function parseSignedLengthField(el, fallbackUnit) {
     if (!el) return null;
     const raw = (el.value || '').trim();
     if (!raw) return null;
+    const exprRes = evaluateExpressionSafe(raw, fallbackUnit || 'm');
+    if (exprRes && exprRes.isValid && exprRes.result !== 0) {
+      const unitKey = exprRes.detectedUnit || fallbackUnit || 'm';
+      const toM = UNITS[unitKey]?.toMeters ?? 1;
+      return exprRes.result * toM;
+    }
     const negative = raw.startsWith('-');
     const res = parseInput(negative ? raw.slice(1) : raw, { allowNegative: false });
     if (!res.isValid || res.value <= 0) return null;
     const unitKey = res.detectedUnit || fallbackUnit;
-    const meters = res.value * UNITS[unitKey].toMeters;
+    const meters = res.value * (UNITS[unitKey]?.toMeters ?? 1);
     return negative ? -meters : meters;
   }
 
@@ -27959,6 +28277,7 @@ function initializeApp() {
       mode: 'rise_desired_riser',
       objective: 'comfortable_proportion',
       displayUnit: 'mm',
+      showHumanScale: false,
       lastResult: null
     },
 
@@ -27966,6 +28285,7 @@ function initializeApp() {
     ramps: {
       mode: 'rise_desired_slope',
       displayUnit: 'm',
+      showHumanScale: false,
       lastResult: null
     },
 
@@ -28496,12 +28816,14 @@ function initializeApp() {
     stairsFlightVal: document.getElementById('stairs-flight-val'),
     stairsAngleVal: document.getElementById('stairs-angle-val'),
     stairsSlopeVal: document.getElementById('stairs-slope-val'),
+    stairsToggleFigureBtn: document.getElementById('stairs-toggle-figure-btn'),
     stairsSvgWrap: document.getElementById('stairs-svg-wrap'),
     stairsBlondelVal: document.getElementById('stairs-blondel-val'),
     stairsBlondelStatus: document.getElementById('stairs-blondel-status'),
     stairsCandidatesBody: document.getElementById('stairs-candidates-body'),
     stairsCopyResultBtn: document.getElementById('stairs-copy-result-btn'),
     stairsCopyScheduleBtn: document.getElementById('stairs-copy-schedule-btn'),
+    stairsCopyRevitBtn: document.getElementById('stairs-copy-revit-btn'),
     stairsSendCadBtn: document.getElementById('stairs-send-cad-btn'),
     stairsSendWorkspaceBtn: document.getElementById('stairs-send-workspace-btn'),
     stairsSaveJournalBtn: document.getElementById('stairs-save-journal-btn'),
@@ -28534,7 +28856,9 @@ function initializeApp() {
     rampsRatioVal: document.getElementById('ramps-ratio-val'),
     rampsAngleVal: document.getElementById('ramps-angle-val'),
     rampsFlightVal: document.getElementById('ramps-flight-val'),
+    rampsToggleFigureBtn: document.getElementById('ramps-toggle-figure-btn'),
     rampsSvgWrap: document.getElementById('ramps-svg-wrap'),
+    rampsMultisegmentWrap: document.getElementById('ramps-multisegment-wrap'),
     rampsRunAnalysis: document.getElementById('ramps-run-analysis'),
     rampsRunAnalysisBody: document.getElementById('ramps-run-analysis-body'),
     rampsRefStatus: document.getElementById('ramps-ref-status'),
@@ -28542,6 +28866,7 @@ function initializeApp() {
     rampsTargetsBody: document.getElementById('ramps-targets-body'),
     rampsCopyResultBtn: document.getElementById('ramps-copy-result-btn'),
     rampsCopyScheduleBtn: document.getElementById('ramps-copy-schedule-btn'),
+    rampsCopyRevitBtn: document.getElementById('ramps-copy-revit-btn'),
     rampsSendCadBtn: document.getElementById('ramps-send-cad-btn'),
     rampsSendWorkspaceBtn: document.getElementById('ramps-send-workspace-btn'),
     rampsSaveJournalBtn: document.getElementById('ramps-save-journal-btn'),
@@ -32946,11 +33271,17 @@ function initializeApp() {
     if (dom.btnRunStairs) {
       dom.btnRunStairs.addEventListener('click', () => views.callController('stairs', 'calculate', true));
     }
+    if (dom.stairsToggleFigureBtn) {
+      dom.stairsToggleFigureBtn.addEventListener('click', () => views.callController('stairs', 'toggleFigure'));
+    }
     if (dom.stairsCopyResultBtn) {
       dom.stairsCopyResultBtn.addEventListener('click', () => views.callController('stairs', 'copyResult'));
     }
     if (dom.stairsCopyScheduleBtn) {
       dom.stairsCopyScheduleBtn.addEventListener('click', () => views.callController('stairs', 'copySchedule'));
+    }
+    if (dom.stairsCopyRevitBtn) {
+      dom.stairsCopyRevitBtn.addEventListener('click', () => views.callController('stairs', 'copyRevit'));
     }
     if (dom.stairsSendCadBtn) {
       dom.stairsSendCadBtn.addEventListener('click', () => views.callController('stairs', 'sendToCad'));
@@ -32972,6 +33303,9 @@ function initializeApp() {
     }
 
     // Mode 15: Ramp Calculator Listeners
+    if (dom.rampsToggleFigureBtn) {
+      dom.rampsToggleFigureBtn.addEventListener('click', () => views.callController('ramps', 'toggleFigure'));
+    }
     if (dom.rampsModeSelect) {
       dom.rampsModeSelect.addEventListener('change', () => {
         state.ramps.mode = dom.rampsModeSelect.value;
@@ -33002,6 +33336,9 @@ function initializeApp() {
     }
     if (dom.rampsCopyScheduleBtn) {
       dom.rampsCopyScheduleBtn.addEventListener('click', () => views.callController('ramps', 'copySchedule'));
+    }
+    if (dom.rampsCopyRevitBtn) {
+      dom.rampsCopyRevitBtn.addEventListener('click', () => views.callController('ramps', 'copyRevit'));
     }
     if (dom.rampsSendCadBtn) {
       dom.rampsSendCadBtn.addEventListener('click', () => views.callController('ramps', 'sendToCad'));

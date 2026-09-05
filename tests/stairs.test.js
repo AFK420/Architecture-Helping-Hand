@@ -417,5 +417,23 @@ console.log('\n--- 12. Regression ---');
   assertEqual(r.proportion.status, 'within', 'Golden: 0.65 m inside 0.60-0.66 Blondel band');
 }
 
+// ---------------------------------------------------------------------------
+// 13. Revit BIM Stair Parameters
+// ---------------------------------------------------------------------------
+console.log('\n--- 13. Revit BIM Stair Parameters ---');
+
+{
+  const { formatRevitStairParameters } = await import('../src/core/cad-targets.js');
+  const r = calculateStair({ mode: MODES.RISE_RISER_COUNT, totalRise: 2.8, riserCount: 16, desiredTread: 0.3 });
+  const revitText = formatRevitStairParameters(r);
+
+  assert(revitText.includes('REVIT STAIR TYPE PROPERTIES'), 'Contains Revit Type properties header');
+  assert(revitText.includes('Maximum Riser Height = 175.0 mm'), 'Contains formatted riser height in mm');
+  assert(revitText.includes('Minimum Tread Depth = 300.0 mm'), 'Contains formatted tread depth in mm');
+  assert(revitText.includes('Desired Number of Risers = 16'), 'Contains desired riser count');
+  assert(revitText.includes('Total Run = 4500.0 mm'), 'Contains total run in mm');
+}
+
 console.log(`\nSummary: ${passed} passed, ${failed} failed.\n`);
 if (failed > 0) process.exit(1);
+

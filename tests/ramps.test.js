@@ -18,6 +18,7 @@ import {
   evaluateRatioStatus,
   formatRatio,
   calculateRamp,
+  calculateMultiSegmentRamp,
   analyzeAvailableRun,
   buildTargetComparison,
   formatRampResult,
@@ -476,5 +477,47 @@ console.log('\n--- 15. CAD handoff ---');
   assert(schedule.count >= 1, 'Schedule path processes ramp values');
 }
 
+// ---------------------------------------------------------------------------
+// 16. Multi-Segment Switchback Ramp Envelope & Revit Parameters
+// ---------------------------------------------------------------------------
+console.log('\n--- 16. Multi-Segment Switchback Ramp & Revit Parameters ---');
+
+{
+  // Total rise 1.5m at 8.33% (1:12) slope, max rise per run 0.75m, 1.2m width, 1.5m landing
+  const multi = calculateMultiSegmentRamp(1.5, 8.33, {
+    maxRisePerRunMeters: 0.75,
+    rampWidthMeters: 1.2,
+    landingLengthMeters: 1.5
+  });
+
+  assertEqual(multi.flightCount, 2, '1.5m rise with 0.75m max rise -> 2 flights');
+  assertEqual(multi.landingCount, 1, '2 flights require 1 intermediate landing');
+  assertClose(multi.flightRiseMeters, 0.75, 'Each flight rises 0.75m');
+  assertClose(multi.flightRunMeters, 0.75 * (100 / 8.33), 'Flight run = 0.75 * 12.0048m');
+
+  // Straight configuration: 2 flights + 1 landing
+  const expectedStraight = (2 * multi.flightRunMeters) + 1.5;
+  assertClose(multi.straight.overallLengthMeters, expectedStraight, 'Straight ramp length = 2 runs + 1 landing');
+  assertEqual(multi.straight.overallWidthMeters, 1.2, 'Straight ramp width matches ramp clear width');
+
+  // Switchback configuration (180° turn): 1 flight + 1 landing length, 2 × width + 0.15m well
+  const expectedSwitchbackLength = multi.flightRunMeters + 1.5;
+  const expectedSwitchbackWidth = (2 * 1.2) + 0.15;
+  assertClose(multi.switchback.overallLengthMeters, expectedSwitchbackLength, 'Switchback length = 1 run + 1 landing');
+  assertClose(multi.switchback.overallWidthMeters, expectedSwitchbackWidth, 'Switchback width = 2 × 1.2m + 0.15m well');
+  assert(multi.switchback.lengthSavingsMeters > 0, 'Switchback saves substantial linear room length');
+
+  // Revit ramp parameters
+  const { formatRevitRampParameters } = await import('../src/core/cad-targets.js');
+  const r = calculateRamp({ mode: MODES.RISE_DESIRED_SLOPE, rise: 1.2, slopePercent: 8.33 });
+  const revitText = formatRevitRampParameters(r);
+
+  assert(revitText.includes('REVIT RAMP TYPE PROPERTIES'), 'Contains Revit Ramp Type properties');
+  assert(revitText.includes('Ramp Max Slope (1/x) = 12'), 'Contains 1/x slope ratio for Revit');
+  assert(revitText.includes('Base Offset to Top Offset (Total Rise) = 1200.0 mm'), 'Contains total rise in mm');
+  assert(revitText.includes('Actual Horizontal Length (Run) = 14405.8 mm'), 'Contains total run in mm');
+}
+
 console.log(`\nSummary: ${passed} passed, ${failed} failed.\n`);
 if (failed > 0) process.exit(1);
+

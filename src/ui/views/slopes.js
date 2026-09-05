@@ -15,6 +15,7 @@ import {
 } from '../../core/slopes.js';
 import { getBuildingCode, inspectSlopeCompliance } from '../../core/building-codes.js';
 import { parseInput } from '../../core/parser.js';
+import { evaluateExpressionSafe } from '../../core/dimension-expression.js';
 import { createDimensionEntry } from '../../core/dimension-workspace.js';
 import { UNITS } from '../../core/units.js';
 
@@ -46,16 +47,22 @@ export function createSlopesView(context) {
     return {};
   }
 
-  /** Parses a signed user length field ("-1.2m", "1200mm") to meters. */
+  /** Parses a signed user length field ("-1.2m", "1200mm", "2.8m - 15cm") to meters. */
   function parseSignedLengthField(el, fallbackUnit) {
     if (!el) return null;
     const raw = (el.value || '').trim();
     if (!raw) return null;
+    const exprRes = evaluateExpressionSafe(raw, fallbackUnit || 'm');
+    if (exprRes && exprRes.isValid && exprRes.result !== 0) {
+      const unitKey = exprRes.detectedUnit || fallbackUnit || 'm';
+      const toM = UNITS[unitKey]?.toMeters ?? 1;
+      return exprRes.result * toM;
+    }
     const negative = raw.startsWith('-');
     const res = parseInput(negative ? raw.slice(1) : raw, { allowNegative: false });
     if (!res.isValid || res.value <= 0) return null;
     const unitKey = res.detectedUnit || fallbackUnit;
-    const meters = res.value * UNITS[unitKey].toMeters;
+    const meters = res.value * (UNITS[unitKey]?.toMeters ?? 1);
     return negative ? -meters : meters;
   }
 

@@ -17,9 +17,11 @@ import {
 } from '../../core/stairs.js';
 import { getBuildingCode, inspectStairCompliance } from '../../core/building-codes.js';
 import { parseInput } from '../../core/parser.js';
+import { evaluateExpressionSafe } from '../../core/dimension-expression.js';
 import { createDimensionEntry } from '../../core/dimension-workspace.js';
 import { UNITS } from '../../core/units.js';
 import { createStairEntity } from '../../core/entities.js';
+import { formatRevitStairParameters } from '../../core/cad-targets.js';
 
 export function createStairsView(context) {
   const {
@@ -58,15 +60,22 @@ export function createStairsView(context) {
     return {};
   }
 
-  /** Parses a user length field ("2.8m", "175mm", "300", "12'6\"") to meters. */
+  /** Parses a user length field ("2.8m", "175mm", "300", "12'6\"", "2.8m - 15cm") to meters. */
   function parseLengthField(el, fallbackUnit) {
     if (!el) return null;
     const raw = (el.value || '').trim();
     if (!raw) return null;
+    // Architectural math expressions support (e.g. 2.8m - 15cm, 3m / 2)
+    const exprRes = evaluateExpressionSafe(raw, fallbackUnit || 'm');
+    if (exprRes && exprRes.isValid && exprRes.result > 0) {
+      const unitKey = exprRes.detectedUnit || fallbackUnit || 'm';
+      const toM = UNITS[unitKey]?.toMeters ?? 1;
+      return exprRes.result * toM;
+    }
     const res = parseInput(raw, { allowNegative: false });
     if (!res.isValid || res.value <= 0) return null;
     const unitKey = res.detectedUnit || fallbackUnit;
-    return res.value * UNITS[unitKey].toMeters;
+    return res.value * (UNITS[unitKey]?.toMeters ?? 1);
   }
 
   function currentReferences() {
@@ -228,7 +237,15 @@ export function createStairsView(context) {
 
     // SVG diagram drawn from the actual calculated geometry
     if (dom.stairsSvgWrap) {
-      dom.stairsSvgWrap.innerHTML = generateStairSVG(result, { width: 520, height: 240 });
+      dom.stairsSvgWrap.innerHTML = generateStairSVG(result, {
+        width: 520,
+        height: 240,
+        showHumanScale: Boolean(state.stairs?.showHumanScale)
+      });
+    }
+
+    if (dom.stairsToggleFigureBtn) {
+      dom.stairsToggleFigureBtn.classList.toggle('is-figure-active', Boolean(state.stairs?.showHumanScale));
     }
 
     // Building Code Compliance Inspection
@@ -338,6 +355,25 @@ export function createStairsView(context) {
     const header = ['Flights', 'Risers', 'Goings', 'Riser Height', 'Going Depth', 'Total Rise', 'Total Run', 'Flight Length', 'Angle', '2R+T'].join('\t');
     const row = ['1 (straight)', f.riserCount, f.goingCount, f.riser, f.tread, f.totalRise, f.totalRun, f.slopedLength, f.angle, f.twoRPlusT].join('\t');
     context.copyToClipboard(`${header}\n${row}`, 'Stair Schedule (TSV)');
+  }
+
+  function copyRevit() {
+    const r = requireResult();
+    if (!r) return;
+    const text = formatRevitStairParameters(r);
+    if (!text) return;
+    context.copyToClipboard(text, 'Revit Stair Type Parameters');
+  }
+
+  function toggleFigure() {
+    state.stairs.showHumanScale = !state.stairs.showHumanScale;
+    if (dom.stairsToggleFigureBtn) {
+      dom.stairsToggleFigureBtn.classList.toggle('is-figure-active', state.stairs.showHumanScale);
+    }
+    if (state.stairs.lastResult) {
+      renderResult(state.stairs.lastResult);
+    }
+    showToast(state.stairs.showHumanScale ? '🧍 Human Scale Figure enabled (1.75m)' : 'Scale Figure hidden');
   }
 
   function sendToCad() {
@@ -537,8 +573,8 @@ export function createStairsView(context) {
     },
     getController() {
       return {
-        calculate, syncCodeSelection, syncModeVisibility, copyResult, copySchedule,
-        sendToCad, sendToWorkspace, saveToJournal, saveToProject,
+        calculate, syncCodeSelection, syncModeVisibility, toggleFigure, copyRevit,
+        copyResult, copySchedule, sendToCad, sendToWorkspace, saveToJournal, saveToProject,
         sendToScratchpad, applyToPlan
       };
     }

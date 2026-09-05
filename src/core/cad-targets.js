@@ -523,4 +523,65 @@ export function validateCadHandoffSelection(targetId, modeId, sourceId) {
 // Re-export for UI convenience so the UI never imports two CAD modules.
 export { formatCadValue, getCadFormatSummary } from './cad-clipboard.js';
 
+/**
+ * Format a calculated stair result into standard Autodesk Revit Stair Type & Instance parameters.
+ * @param {Object} stairResult
+ * @returns {string} Text block formatted for Revit parameter entry
+ */
+export function formatRevitStairParameters(stairResult) {
+  if (!stairResult || !stairResult.geometry || !stairResult.risers || !stairResult.treads) return '';
+  const g = stairResult.geometry;
+  const riserHeightM = stairResult.risers.heightMeters;
+  const treadDepthM = stairResult.treads.depthMeters;
+  const riserMm = (riserHeightM * 1000).toFixed(1);
+  const treadMm = (treadDepthM * 1000).toFixed(1);
+  const totalRiseMm = ((stairResult.input?.totalRiseMeters || (riserHeightM * stairResult.risers.count)) * 1000).toFixed(1);
+  const totalRunMm = (g.totalRunMeters * 1000).toFixed(1);
+  const riserCount = stairResult.risers.count;
+  const blondelMm = ((stairResult.proportion?.twoRPlusTMeters || (2 * riserHeightM + treadDepthM)) * 1000).toFixed(1);
+
+  return [
+    '=== REVIT STAIR TYPE PROPERTIES (Assembled / Cast-in-Place) ===',
+    `Maximum Riser Height = ${riserMm} mm`,
+    `Minimum Tread Depth = ${treadMm} mm`,
+    `Minimum Run Width = 1000.0 mm`,
+    '',
+    '=== REVIT STAIR INSTANCE DIMENSIONS ===',
+    `Desired Number of Risers = ${riserCount}`,
+    `Actual Number of Risers = ${riserCount}`,
+    `Actual Riser Height = ${riserMm} mm`,
+    `Actual Tread Depth = ${treadMm} mm`,
+    `Total Run = ${totalRunMm} mm`,
+    `Desired Stair Height (Base to Top) = ${totalRiseMm} mm`,
+    `Blondel Calculation Rule (2R + T) = ${blondelMm} mm`
+  ].join('\n');
+}
+
+/**
+ * Format a calculated ramp result into standard Autodesk Revit Ramp Type & Instance parameters.
+ * @param {Object} rampResult
+ * @returns {string} Text block formatted for Revit parameter entry
+ */
+export function formatRevitRampParameters(rampResult) {
+  if (!rampResult || !rampResult.geometry) return '';
+  const g = rampResult.geometry;
+  const f = rampResult.formatted;
+  const riseMm = (g.riseMeters * 1000).toFixed(1);
+  const runMm = (g.runMeters * 1000).toFixed(1);
+  const maxIncline = Math.round(g.ratioValue * 10) / 10;
+
+  return [
+    '=== REVIT RAMP TYPE PROPERTIES ===',
+    `Ramp Max Slope (1/x) = ${maxIncline}`,
+    `Maximum Incline Ratio = 1 : ${maxIncline}`,
+    `Shape = Straight Run`,
+    '',
+    '=== REVIT RAMP INSTANCE DIMENSIONS ===',
+    `Base Offset to Top Offset (Total Rise) = ${riseMm} mm`,
+    `Actual Horizontal Length (Run) = ${runMm} mm`,
+    `Slope Percentage = ${f.slopePercent}`,
+    `Slope Angle = ${f.angle}`
+  ].join('\n');
+}
+
 void UNITS;

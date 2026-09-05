@@ -3131,6 +3131,9 @@
           </div>
 
           <!-- Proportional diagram drawn from actual result geometry -->
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 0.35rem;">
+            <button type="button" id="stairs-toggle-figure-btn" class="archi-btn-secondary" style="font-size: 0.72rem; padding: 0.25rem 0.6rem; border-radius: 4px; border: 1px solid var(--border-subtle); background: var(--bg-surface); color: var(--text-primary); cursor: pointer;" title="Toggle 1.75m Architectural Human Scale Silhouette">🧍 Scale Figure</button>
+          </div>
           <div id="stairs-svg-wrap" aria-live="polite"></div>
 
           <div class="stairs-proportion-row" style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.9rem;">
@@ -3153,6 +3156,9 @@
             </button>
             <button type="button" id="stairs-copy-schedule-btn" class="result-action-btn" title="Copy a tab-separated stair schedule">
               <span>Copy Schedule</span>
+            </button>
+            <button type="button" id="stairs-copy-revit-btn" class="result-action-btn" title="Copy Autodesk Revit Stair Type Parameters">
+              <span>🏛️ Revit Type</span>
             </button>
             <button type="button" id="stairs-send-cad-btn" class="result-action-btn" title="Send stair values to CAD Handoff (Mode 13)">
               <span>🚀 Send to CAD</span>
@@ -3307,10 +3313,16 @@
           </div>
 
           <!-- Proportional diagram from actual result geometry -->
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 0.35rem;">
+            <button type="button" id="ramps-toggle-figure-btn" class="archi-btn-secondary" style="font-size: 0.72rem; padding: 0.25rem 0.6rem; border-radius: 4px; border: 1px solid var(--border-subtle); background: var(--bg-surface); color: var(--text-primary); cursor: pointer;" title="Toggle 1.75m Architectural Human Scale Silhouette">🧍 Scale Figure</button>
+          </div>
           <div id="ramps-svg-wrap" aria-live="polite"></div>
 
           <!-- Building Code Compliance Inspector Card -->
           <div id="ramps-code-inspector-wrap" style="margin-bottom: 0.9rem;"></div>
+
+          <!-- Multi-Segment & Switchback Ramp Spatial Envelope Card -->
+          <div id="ramps-multisegment-wrap" style="margin-bottom: 0.9rem;"></div>
 
           <!-- Available-run analysis (Mode B focus) -->
           <div id="ramps-run-analysis" style="display: none; border: 1px solid var(--border-color-light); border-radius: 6px; padding: 0.6rem 0.75rem; background: var(--bg-card-header); margin-bottom: 0.9rem;">
@@ -3331,6 +3343,9 @@
             </button>
             <button type="button" id="ramps-copy-schedule-btn" class="result-action-btn" title="Copy a tab-separated ramp schedule">
               <span>Copy Schedule</span>
+            </button>
+            <button type="button" id="ramps-copy-revit-btn" class="result-action-btn" title="Copy Autodesk Revit Ramp Type Parameters">
+              <span>🏛️ Revit Type</span>
             </button>
             <button type="button" id="ramps-send-cad-btn" class="result-action-btn" title="Send ramp values to CAD Handoff (Mode 13)">
               <span>🚀 Send to CAD</span>

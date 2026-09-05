@@ -11,15 +11,18 @@ import {
   RAMP_INPUT_MODES,
   RAMP_REFERENCE_DEFAULTS,
   calculateRamp,
+  calculateMultiSegmentRamp,
   analyzeAvailableRun,
   buildTargetComparison,
   generateRampSVG
 } from '../../core/ramps.js';
 import { getBuildingCode, inspectRampCompliance } from '../../core/building-codes.js';
 import { parseInput } from '../../core/parser.js';
+import { evaluateExpressionSafe } from '../../core/dimension-expression.js';
 import { createDimensionEntry } from '../../core/dimension-workspace.js';
 import { UNITS } from '../../core/units.js';
 import { createRampEntity } from '../../core/entities.js';
+import { formatRevitRampParameters } from '../../core/cad-targets.js';
 
 const RAMPS_PREFS_KEY = 'archiscale_ramps_prefs'; // user preferences only
 
@@ -49,15 +52,22 @@ export function createRampsView(context) {
     return {};
   }
 
-  /** Parses a user length field ("1.2m", "1200mm", "4'6\"") to meters. */
+  /** Parses a user length field ("1.2m", "1200mm", "4'6\"", "3m - 20cm") to meters. */
   function parseLengthField(el, fallbackUnit) {
     if (!el) return null;
     const raw = (el.value || '').trim();
     if (!raw) return null;
+    // Architectural math expressions support (e.g. 3m - 20cm, 14.4m / 2)
+    const exprRes = evaluateExpressionSafe(raw, fallbackUnit || 'm');
+    if (exprRes && exprRes.isValid && exprRes.result > 0) {
+      const unitKey = exprRes.detectedUnit || fallbackUnit || 'm';
+      const toM = UNITS[unitKey]?.toMeters ?? 1;
+      return exprRes.result * toM;
+    }
     const res = parseInput(raw, { allowNegative: false });
     if (!res.isValid || res.value <= 0) return null;
     const unitKey = res.detectedUnit || fallbackUnit;
-    return res.value * UNITS[unitKey].toMeters;
+    return res.value * (UNITS[unitKey]?.toMeters ?? 1);
   }
 
   function currentReferences() {
@@ -192,7 +202,15 @@ export function createRampsView(context) {
 
     // SVG diagram from actual geometry
     if (dom.rampsSvgWrap) {
-      dom.rampsSvgWrap.innerHTML = generateRampSVG(result, { width: 520, height: 220 });
+      dom.rampsSvgWrap.innerHTML = generateRampSVG(result, {
+        width: 520,
+        height: 220,
+        showHumanScale: Boolean(state.ramps?.showHumanScale)
+      });
+    }
+
+    if (dom.rampsToggleFigureBtn) {
+      dom.rampsToggleFigureBtn.classList.toggle('is-figure-active', Boolean(state.ramps?.showHumanScale));
     }
 
     // Building Code Compliance Inspection
@@ -233,6 +251,78 @@ export function createRampsView(context) {
           <div class="code-citation-footer">
             <span><strong>Standard Citation:</strong> ${inspection.code.citation}</span>
             <span>Legal Clause: ${inspection.checks[0]?.citation || ''}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // Multi-Segment Ramp Spatial Layout Envelopes
+    if (dom.rampsMultisegmentWrap) {
+      const selectedCodeId = dom.rampsCodeSelect?.value || 'jnbc';
+      const code = getBuildingCode(selectedCodeId);
+      const maxRisePerFlight = (code?.ramp?.maxRisePerRunMm || 750) / 1000;
+      const minWidth = (code?.ramp?.minWidthMm || 1200) / 1000;
+      const minLanding = (code?.ramp?.landingLengthMinMm || 1500) / 1000;
+
+      const multi = calculateMultiSegmentRamp(
+        result.geometry.riseMeters,
+        result.slope.percent,
+        {
+          maxRisePerRunMeters: maxRisePerFlight,
+          rampWidthMeters: minWidth,
+          landingLengthMeters: minLanding
+        }
+      );
+
+      dom.rampsMultisegmentWrap.innerHTML = `
+        <div class="multisegment-card">
+          <div class="multisegment-header">
+            <div class="multisegment-title">
+              <span>📐 Multi-Flight & Switchback Layouts (${multi.flightCount} Flight${multi.flightCount > 1 ? 's' : ''})</span>
+            </div>
+            <span class="layout-tag-badge">
+              ${multi.flightCount > 1 ? `⚠️ Exceeds single run limit (${maxRisePerFlight}m) · ${multi.landingCount} landing(s) required` : 'Direct single run feasible'}
+            </span>
+          </div>
+          <div style="font-size: 0.72rem; color: var(--text-muted, rgba(255, 255, 255, 0.7)); margin-bottom: 0.4rem;">
+            Spatial footprint envelopes for <strong>${f.rise}</strong> rise @ <strong>${f.ratio}</strong> (${f.slopePercent}) with <strong>${minLanding.toFixed(2)}m</strong> landings:
+          </div>
+          <div class="multisegment-grid">
+            <!-- Straight Run with Intermediate Landings -->
+            <div class="multisegment-layout-card">
+              <div class="layout-card-title">
+                <span>Straight Run</span>
+                <span class="layout-card-arabic">${multi.straight.nameArabic}</span>
+              </div>
+              <div class="layout-card-dims">${multi.straight.overallLengthMeters.toFixed(2)}m × ${multi.straight.overallWidthMeters.toFixed(2)}m</div>
+              <div class="layout-card-desc">
+                ${multi.straight.flightCount} flight(s) of ${multi.flightRunMeters.toFixed(2)}m + ${multi.straight.landingCount} intermediate landing(s). Footprint: ${multi.straight.footprintAreaSqMeters.toFixed(1)} m².
+              </div>
+            </div>
+
+            <!-- Switchback Configuration (180° Turn) -->
+            <div class="multisegment-layout-card" style="border-left: 3px solid #38bdf8;">
+              <div class="layout-card-title">
+                <span>180° Switchback</span>
+                <span class="layout-card-arabic">${multi.switchback.nameArabic}</span>
+              </div>
+              <div class="layout-card-dims" style="color: #38bdf8;">${multi.switchback.overallLengthMeters.toFixed(2)}m × ${multi.switchback.overallWidthMeters.toFixed(2)}m</div>
+              <div class="layout-card-desc">
+                Parallel runs with 180° turn landing. Saves <strong>${multi.switchback.lengthSavingsMeters.toFixed(2)}m</strong> room length compared to linear run.
+              </div>
+            </div>
+
+            <!-- L-Shaped Configuration (90° Corner) -->
+            <div class="multisegment-layout-card">
+              <div class="layout-card-title">
+                <span>90° Corner L-Ramp</span>
+                <span class="layout-card-arabic">${multi.lShape.nameArabic}</span>
+              </div>
+              <div class="layout-card-dims">${multi.lShape.wallALengthMeters.toFixed(2)}m × ${multi.lShape.wallBLengthMeters.toFixed(2)}m</div>
+              <div class="layout-card-desc">
+                Follows perimeter walls with a square corner turning landing (${minLanding.toFixed(2)}m × ${minLanding.toFixed(2)}m).
+              </div>
+            </div>
           </div>
         </div>
       `;
@@ -332,6 +422,25 @@ export function createRampsView(context) {
     const header = ['Rise', 'Run', 'Slope %', 'Ratio', 'Angle', 'Flight Length'].join('\t');
     const row = [f.rise, f.run, f.slopePercent, f.ratio, f.angle, f.flightLength].join('\t');
     copyToClipboard(`${header}\n${row}`, 'Ramp Schedule (TSV)');
+  }
+
+  function copyRevit() {
+    const r = requireResult();
+    if (!r) return;
+    const text = formatRevitRampParameters(r);
+    if (!text) return;
+    copyToClipboard(text, 'Revit Ramp Type Parameters');
+  }
+
+  function toggleFigure() {
+    state.ramps.showHumanScale = !state.ramps.showHumanScale;
+    if (dom.rampsToggleFigureBtn) {
+      dom.rampsToggleFigureBtn.classList.toggle('is-figure-active', state.ramps.showHumanScale);
+    }
+    if (state.ramps.lastResult) {
+      renderResult(state.ramps.lastResult);
+    }
+    showToast(state.ramps.showHumanScale ? '🧍 Human Scale Figure enabled (1.75m)' : 'Scale Figure hidden');
   }
 
   function sendToCad() {
@@ -514,9 +623,9 @@ export function createRampsView(context) {
     },
     getController() {
       return {
-        calculate, syncCodeSelection, syncModeVisibility, renderTargets, copyResult,
-        copySchedule, sendToCad, sendToWorkspace, saveToJournal,
-        saveToProject, sendToScratchpad, applyToPlan
+        calculate, syncCodeSelection, syncModeVisibility, renderTargets,
+        toggleFigure, copyRevit, copyResult, copySchedule, sendToCad,
+        sendToWorkspace, saveToJournal, saveToProject, sendToScratchpad, applyToPlan
       };
     }
   };

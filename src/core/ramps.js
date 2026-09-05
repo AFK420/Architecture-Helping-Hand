@@ -498,6 +498,14 @@ export function generateRampSVG(result, options = {}) {
     <text x="${(dimRiseX + 10).toFixed(2)}" y="${midY.toFixed(2)}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary, #ffffff)" font-family="var(--font-family-mono, monospace)" transform="rotate(-90 ${(dimRiseX + 10).toFixed(2)} ${midY.toFixed(2)})">RISE ${result.formatted.rise}</text>
   </g>
 
+  ${options.showHumanScale ? `
+  <!-- Human Scale Figure (1.75m Architect Silhouette) -->
+  <g class="human-scale-figure" fill="var(--accent-secondary, #38bdf8)" opacity="0.9">
+    <circle cx="${(originX + run * scale * 0.35).toFixed(2)}" cy="${(originY - rise * scale * 0.35 - scale * 1.75 + Math.max(3.5, scale * 1.75 * 0.08)).toFixed(2)}" r="${Math.max(3.5, scale * 1.75 * 0.08).toFixed(2)}" />
+    <path d="M ${(originX + run * scale * 0.35 - Math.max(3.5, scale * 1.75 * 0.08) * 0.9).toFixed(2)} ${(originY - rise * scale * 0.35 - scale * 1.75 + Math.max(3.5, scale * 1.75 * 0.08) * 2 + 1).toFixed(2)} L ${(originX + run * scale * 0.35 + Math.max(3.5, scale * 1.75 * 0.08) * 0.9).toFixed(2)} ${(originY - rise * scale * 0.35 - scale * 1.75 + Math.max(3.5, scale * 1.75 * 0.08) * 2 + 1).toFixed(2)} L ${(originX + run * scale * 0.35 + Math.max(3.5, scale * 1.75 * 0.08) * 0.6).toFixed(2)} ${(originY - rise * scale * 0.35 - scale * 1.75 * 0.45).toFixed(2)} L ${(originX + run * scale * 0.35 + Math.max(3.5, scale * 1.75 * 0.08) * 0.8).toFixed(2)} ${(originY - rise * scale * 0.35).toFixed(2)} L ${(originX + run * scale * 0.35 + Math.max(3.5, scale * 1.75 * 0.08) * 0.2).toFixed(2)} ${(originY - rise * scale * 0.35).toFixed(2)} L ${(originX + run * scale * 0.35).toFixed(2)} ${(originY - rise * scale * 0.35 - scale * 1.75 * 0.45 + 4).toFixed(2)} L ${(originX + run * scale * 0.35 - Math.max(3.5, scale * 1.75 * 0.08) * 0.2).toFixed(2)} ${(originY - rise * scale * 0.35).toFixed(2)} L ${(originX + run * scale * 0.35 - Math.max(3.5, scale * 1.75 * 0.08) * 0.8).toFixed(2)} ${(originY - rise * scale * 0.35).toFixed(2)} L ${(originX + run * scale * 0.35 - Math.max(3.5, scale * 1.75 * 0.08) * 0.6).toFixed(2)} ${(originY - rise * scale * 0.35 - scale * 1.75 * 0.45).toFixed(2)} Z" />
+    <text x="${(originX + run * scale * 0.35 + Math.max(3.5, scale * 1.75 * 0.08) + 4).toFixed(2)}" y="${(originY - rise * scale * 0.35 - scale * 1.75 + Math.max(3.5, scale * 1.75 * 0.08) + 4).toFixed(2)}" font-size="8.5" font-weight="700" fill="var(--text-primary, #ffffff)" font-family="var(--font-family-mono, monospace)">1.75m</text>
+  </g>` : ''}
+
   <!-- Hero Slope Badging & Title (Top-Left Sky Zone) -->
   <g class="ramp-badges">
     <text x="${padLeft}" y="18" font-size="9.5" fill="rgba(255, 255, 255, 0.75)" font-family="var(--font-family-mono, monospace)">SECTION ELEVATION — proportional to calculated geometry</text>
@@ -506,4 +514,94 @@ export function generateRampSVG(result, options = {}) {
 </svg>`.trim();
 
   return svg;
+}
+
+/**
+ * Calculate practical architectural multi-flight ramp layout configurations.
+ * Solves for required intermediate landings and spatial room envelopes when
+ * total rise exceeds the building code's maximum continuous single run.
+ *
+ * @param {number} totalRiseMeters - Total elevation change
+ * @param {number} slopePercent - Gradient percentage (e.g. 8.33 for 1:12)
+ * @param {Object} [options]
+ * @param {number} [options.maxRisePerRunMeters=0.75] - Code maximum rise per single flight
+ * @param {number} [options.rampWidthMeters=1.2] - Clear ramp width between handrails
+ * @param {number} [options.landingLengthMeters=1.5] - Level intermediate landing length
+ * @returns {Object} Structured multi-segment architectural model
+ */
+export function calculateMultiSegmentRamp(totalRiseMeters, slopePercent, options = {}) {
+  const maxRisePerRun = options.maxRisePerRunMeters && options.maxRisePerRunMeters > 0 ? options.maxRisePerRunMeters : 0.75;
+  const rampWidth = options.rampWidthMeters && options.rampWidthMeters > 0 ? options.rampWidthMeters : 1.2;
+  const landingLength = options.landingLengthMeters && options.landingLengthMeters > 0 ? options.landingLengthMeters : 1.5;
+
+  const totalRunMeters = totalRiseMeters / (slopePercent / 100);
+  const ratioValue = 100 / slopePercent;
+
+  // Number of flights and landings
+  const flightCount = Math.max(1, Math.ceil(totalRiseMeters / maxRisePerRun));
+  const landingCount = flightCount - 1;
+
+  const flightRiseMeters = totalRiseMeters / flightCount;
+  const flightRunMeters = flightRiseMeters * ratioValue;
+
+  // 1. Straight Run Configuration
+  const straightLengthMeters = (flightCount * flightRunMeters) + (landingCount * landingLength);
+  const straightFootprint = {
+    type: 'straight',
+    name: 'Straight Ramp with Intermediate Landings',
+    nameArabic: 'منحدر مستقيم مع استراحات وسيطة',
+    flightCount,
+    landingCount,
+    overallLengthMeters: straightLengthMeters,
+    overallWidthMeters: rampWidth,
+    footprintAreaSqMeters: straightLengthMeters * rampWidth,
+    description: `${flightCount} flight(s) of ${flightRunMeters.toFixed(2)}m + ${landingCount} landing(s) of ${landingLength.toFixed(2)}m`
+  };
+
+  // 2. Switchback Configuration (180° parallel runs)
+  const switchbackLengthMeters = flightRunMeters + landingLength;
+  const switchbackWidthMeters = (2 * rampWidth) + 0.15; // 150mm central handrail well
+  const switchbackFootprint = {
+    type: 'switchback',
+    name: 'Switchback Ramp (180° Turn)',
+    nameArabic: 'منحدر متعرج مزدوج (دوران 180°)',
+    flightCount,
+    landingCount,
+    overallLengthMeters: switchbackLengthMeters,
+    overallWidthMeters: switchbackWidthMeters,
+    footprintAreaSqMeters: switchbackLengthMeters * switchbackWidthMeters,
+    lengthSavingsMeters: Math.max(0, straightLengthMeters - switchbackLengthMeters),
+    description: `2 parallel runs of ${flightRunMeters.toFixed(2)}m with a ${landingLength.toFixed(2)}m turning landing`
+  };
+
+  // 3. L-Shaped Configuration (90° corner turn)
+  const lShapeWallAMeters = flightRunMeters + landingLength;
+  const lShapeWallBMeters = flightRunMeters + landingLength;
+  const lShapeFootprint = {
+    type: 'l_shaped',
+    name: 'L-Shaped Ramp (90° Corner)',
+    nameArabic: 'منحدر زاوية على شكل L (زاوية 90°)',
+    flightCount,
+    landingCount,
+    wallALengthMeters: lShapeWallAMeters,
+    wallBLengthMeters: lShapeWallBMeters,
+    overallWidthMeters: rampWidth,
+    description: `Two perpendicular runs conforming to corner walls with a ${landingLength.toFixed(2)}m × ${landingLength.toFixed(2)}m landing`
+  };
+
+  return {
+    totalRiseMeters,
+    totalRunMeters,
+    slopePercent,
+    ratioValue,
+    flightCount,
+    landingCount,
+    flightRiseMeters,
+    flightRunMeters,
+    landingLengthMeters: landingLength,
+    rampWidthMeters: rampWidth,
+    straight: straightFootprint,
+    switchback: switchbackFootprint,
+    lShape: lShapeFootprint
+  };
 }
