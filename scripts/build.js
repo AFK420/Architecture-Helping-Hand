@@ -87,6 +87,7 @@ export const BUNDLE_MODULES = [
   { name: 'AIJobRouter', file: path.join(srcDir, 'services', 'ai', 'job-router.js') },
 
   // --- UI (last: imports everything above) ---
+  { name: 'Scrubber', file: path.join(srcDir, 'ui', 'scrubber.js') },
   { name: 'ViewRegistry', file: path.join(srcDir, 'ui', 'view-registry.js') },
   { name: 'Visualizer', file: path.join(srcDir, 'ui', 'visualizer.js') },
   { name: 'ViewConverter', file: path.join(srcDir, 'ui', 'views', 'converter.js') },

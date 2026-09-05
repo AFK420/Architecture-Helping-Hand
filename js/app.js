@@ -15412,6 +15412,109 @@ function extractJsonObject(text) {
 
 
   // =========================================================================
+  // MODULE: Scrubber
+  // =========================================================================
+
+﻿/**
+ * Architecture Helping Hand - Numeric Scrubber & Fine Adjustment Utility
+ * Allows numeric inputs to be scrubbed horizontally with mouse/pointer drag,
+ * stepped with Arrow keys (Shift=10x, Ctrl/Cmd=0.1x), while preserving 100%
+ * native typing support when clicked or focused.
+ */
+
+function attachNumericScrubber(inputEl, options = {}) {
+  if (!inputEl) return () => {};
+
+  const step = typeof options.step === 'number' ? options.step : (parseFloat(inputEl.step) || 0.1);
+  const min = typeof options.min === 'number' ? options.min : (parseFloat(inputEl.min) ?? -Infinity);
+  const max = typeof options.max === 'number' ? options.max : (parseFloat(inputEl.max) ?? Infinity);
+  const precision = typeof options.precision === 'number' ? options.precision : 2;
+  const onChange = typeof options.onChange === 'function' ? options.onChange : null;
+  const onCommit = typeof options.onCommit === 'function' ? options.onCommit : null;
+
+  let isDragging = false;
+  let startX = 0;
+  let startVal = 0;
+
+  // Add scrub class for visual styling cues
+  inputEl.classList.add('scrubbable-input');
+  if (!inputEl.title) {
+    inputEl.title = 'Drag horizontally to scrub value, or click to type';
+  }
+
+  function clampAndRound(val) {
+    const clamped = Math.max(min, Math.min(max, val));
+    return parseFloat(clamped.toFixed(precision));
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const current = parseFloat(inputEl.value) || 0;
+      let mult = 1;
+      if (e.shiftKey) mult = 10;
+      else if (e.ctrlKey || e.metaKey) mult = 0.1;
+      const delta = (e.key === 'ArrowUp' ? 1 : -1) * step * mult;
+      const next = clampAndRound(current + delta);
+      inputEl.value = next.toFixed(precision);
+      if (onChange) onChange(next);
+      if (onCommit) onCommit(next);
+    }
+  }
+
+  function onPointerDown(e) {
+    if (e.button !== 0) return;
+    startX = e.clientX;
+    startVal = parseFloat(inputEl.value) || 0;
+    isDragging = false;
+
+    function onPointerMove(moveEvent) {
+      const dx = moveEvent.clientX - startX;
+      if (!isDragging && Math.abs(dx) > 4) {
+        isDragging = true;
+        try { inputEl.setPointerCapture(e.pointerId); } catch (err) {}
+        document.body.style.cursor = 'ew-resize';
+      }
+      if (isDragging) {
+        let mult = 1;
+        if (moveEvent.shiftKey) mult = 10;
+        else if (moveEvent.ctrlKey || moveEvent.metaKey) mult = 0.1;
+        // Sensitivity: 6 pixels of movement per base step unit
+        const delta = (dx / 6) * step * mult;
+        const next = clampAndRound(startVal + delta);
+        inputEl.value = next.toFixed(precision);
+        if (onChange) onChange(next);
+      }
+    }
+
+    function onPointerUp() {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      document.body.style.cursor = '';
+      if (isDragging) {
+        try { inputEl.releasePointerCapture(e.pointerId); } catch (err) {}
+        const finalVal = clampAndRound(parseFloat(inputEl.value) || 0);
+        inputEl.value = finalVal.toFixed(precision);
+        if (onCommit) onCommit(finalVal);
+      }
+      isDragging = false;
+    }
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  }
+
+  inputEl.addEventListener('keydown', handleKeyDown);
+  inputEl.addEventListener('pointerdown', onPointerDown);
+
+  return function detach() {
+    inputEl.removeEventListener('keydown', handleKeyDown);
+    inputEl.removeEventListener('pointerdown', onPointerDown);
+  };
+}
+
+
+  // =========================================================================
   // MODULE: ViewRegistry
   // =========================================================================
 
@@ -21147,6 +21250,7 @@ function createProjectsView(context) {
 
 
 
+
 const PLAN_STATE_KEY = 'archiscale_plan_prefs'; // user preferences only
 
 function createPlanView(context) {
@@ -21242,6 +21346,96 @@ function createPlanView(context) {
       }
     } catch (e) {}
     return {};
+  }
+
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function renderHandles() {
+    const selectedId = Array.from(state.plan.selectedIds || [])[0];
+    if (!selectedId || state.plan.selectedIds.size !== 1) return '';
+    const e = entities().find(x => x.id === selectedId);
+    if (!e) return '';
+
+    const isNum = v => typeof v === 'number' && isFinite(v);
+    const stroke = 'var(--accent-primary, #4989D9)';
+    const fill = '#ffffff';
+
+    if ((e.kind === 'room' || e.kind === 'furniture' || e.kind === 'stair' || e.kind === 'ramp') &&
+        isNum(e.x) && isNum(e.y) && isNum(e.width) && isNum(e.depth)) {
+      const sw = worldToSvg(transform, e.x, e.y);
+      const se = worldToSvg(transform, e.x + e.width, e.y);
+      const ne = worldToSvg(transform, e.x + e.width, e.y + e.depth);
+      const nw = worldToSvg(transform, e.x, e.y + e.depth);
+
+      const s = worldToSvg(transform, e.x + e.width / 2, e.y);
+      const n = worldToSvg(transform, e.x + e.width / 2, e.y + e.depth);
+      const ePt = worldToSvg(transform, e.x + e.width, e.y + e.depth / 2);
+      const wPt = worldToSvg(transform, e.x, e.y + e.depth / 2);
+
+      const size = 8;
+      const half = size / 2;
+
+      const mkSq = (pt, type, cursor) => `
+        <rect x="${(pt.x - half).toFixed(1)}" y="${(pt.y - half).toFixed(1)}" width="${size}" height="${size}"
+          fill="${fill}" stroke="${stroke}" stroke-width="1.8" class="plan-handle" data-handle="${type}" data-entity-id="${escapeHtml(e.id)}"
+          style="cursor: ${cursor}; pointer-events: all;"/>`;
+
+      let handles = `
+        ${mkSq(nw, 'nw', 'nwse-resize')}
+        ${mkSq(n,  'n',  'ns-resize')}
+        ${mkSq(ne, 'ne', 'nesw-resize')}
+        ${mkSq(ePt,'e',  'ew-resize')}
+        ${mkSq(se, 'se', 'nwse-resize')}
+        ${mkSq(s,  's',  'ns-resize')}
+        ${mkSq(sw, 'sw', 'nesw-resize')}
+        ${mkSq(wPt,'w',  'ew-resize')}`;
+
+      if (e.kind === 'furniture') {
+        const rotY = n.y - 20;
+        handles += `
+          <line x1="${n.x.toFixed(1)}" y1="${n.y.toFixed(1)}" x2="${n.x.toFixed(1)}" y2="${rotY.toFixed(1)}" stroke="${stroke}" stroke-width="1.5" stroke-dasharray="2 2"/>
+          <circle cx="${n.x.toFixed(1)}" cy="${rotY.toFixed(1)}" r="5.5" fill="var(--accent-action, #D32F2F)" stroke="#ffffff" stroke-width="1.5"
+            class="plan-handle" data-handle="rotate" data-entity-id="${escapeHtml(e.id)}" style="cursor: grab; pointer-events: all;">
+            <title>Click to rotate 90°</title>
+          </circle>`;
+      }
+      return `<g class="plan-handles">${handles}</g>`;
+    }
+
+    if (e.kind === 'wall' && isNum(e.x1) && isNum(e.y1) && isNum(e.x2) && isNum(e.y2)) {
+      const p1 = worldToSvg(transform, e.x1, e.y1);
+      const p2 = worldToSvg(transform, e.x2, e.y2);
+      return `<g class="plan-handles">
+        <circle cx="${p1.x.toFixed(1)}" cy="${p1.y.toFixed(1)}" r="6" fill="${fill}" stroke="${stroke}" stroke-width="2"
+          class="plan-handle" data-handle="p1" data-entity-id="${escapeHtml(e.id)}" style="cursor: crosshair; pointer-events: all;">
+          <title>Drag wall start point</title>
+        </circle>
+        <circle cx="${p2.x.toFixed(1)}" cy="${p2.y.toFixed(1)}" r="6" fill="${fill}" stroke="${stroke}" stroke-width="2"
+          class="plan-handle" data-handle="p2" data-entity-id="${escapeHtml(e.id)}" style="cursor: crosshair; pointer-events: all;">
+          <title>Drag wall end point</title>
+        </circle>
+      </g>`;
+    }
+
+    if (e.kind === 'dimension' && isNum(e.x1) && isNum(e.y1) && isNum(e.x2) && isNum(e.y2)) {
+      const p1 = worldToSvg(transform, e.x1, e.y1);
+      const p2 = worldToSvg(transform, e.x2, e.y2);
+      return `<g class="plan-handles">
+        <circle cx="${p1.x.toFixed(1)}" cy="${p1.y.toFixed(1)}" r="5.5" fill="${fill}" stroke="var(--note-number, #4989D9)" stroke-width="2"
+          class="plan-handle" data-handle="p1" data-entity-id="${escapeHtml(e.id)}" style="cursor: crosshair; pointer-events: all;">
+          <title>Drag dimension anchor 1</title>
+        </circle>
+        <circle cx="${p2.x.toFixed(1)}" cy="${p2.y.toFixed(1)}" r="5.5" fill="${fill}" stroke="var(--note-number, #4989D9)" stroke-width="2"
+          class="plan-handle" data-handle="p2" data-entity-id="${escapeHtml(e.id)}" style="cursor: crosshair; pointer-events: all;">
+          <title>Drag dimension anchor 2</title>
+        </circle>
+      </g>`;
+    }
+
+    return '';
   }
 
   // ------------------------------------------------------------------
@@ -21460,6 +21654,7 @@ function createPlanView(context) {
     dom.planSvg.innerHTML = `
       <g class="plan-grid">${gridLines}</g>
       <g class="plan-entities">${entityMarkup}</g>
+      ${renderHandles()}
       ${dragMarkup}`;
 
     if (dom.planStatusBadge) {
@@ -21467,11 +21662,6 @@ function createPlanView(context) {
     }
     renderEntityList();
     renderPropertiesInspector();
-  }
-
-  function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   function renderEntityList() {
@@ -21583,7 +21773,20 @@ function createPlanView(context) {
         <div class="plan-prop-section">
           <div class="plan-prop-title">Room Geometry</div>
           <div class="plan-prop-row"><span class="plan-prop-label">Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name)}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Width × Depth</span><span class="plan-prop-value">${w.toFixed(2)} × ${d.toFixed(2)} m</span></div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Width</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-room-w" class="text-input" value="${w.toFixed(2)}" step="0.1" min="0.5" max="100" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" aria-label="Room width in meters" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Depth</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-room-d" class="text-input" value="${d.toFixed(2)}" step="0.1" min="0.5" max="100" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" aria-label="Room depth in meters" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
           <div class="plan-prop-row"><span class="plan-prop-label">Floor Area</span><span class="plan-prop-value note-number">${a.toFixed(2)} m²</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Perimeter</span><span class="plan-prop-value">${p.toFixed(2)} m</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Aspect Ratio</span><span class="plan-prop-value">1 : ${isFinite(ratio) ? ratio.toFixed(2) : '—'}</span></div>
@@ -21601,6 +21804,32 @@ function createPlanView(context) {
         selected.name = e.target.value.trim() || 'Room';
         render();
       });
+
+      const rwInput = dom.planPropContent.querySelector('#prop-room-w');
+      if (rwInput) {
+        attachNumericScrubber(rwInput, {
+          step: 0.1, min: 0.5, max: 100, precision: 2,
+          onChange: (val) => { selected.width = val; render(); },
+          onCommit: (val) => { selected.width = val; render(); }
+        });
+        rwInput.addEventListener('change', (e) => {
+          selected.width = Math.max(0.5, parseFloat(e.target.value) || 0.5);
+          render();
+        });
+      }
+
+      const rdInput = dom.planPropContent.querySelector('#prop-room-d');
+      if (rdInput) {
+        attachNumericScrubber(rdInput, {
+          step: 0.1, min: 0.5, max: 100, precision: 2,
+          onChange: (val) => { selected.depth = val; render(); },
+          onCommit: (val) => { selected.depth = val; render(); }
+        });
+        rdInput.addEventListener('change', (e) => {
+          selected.depth = Math.max(0.5, parseFloat(e.target.value) || 0.5);
+          render();
+        });
+      }
 
       dom.planPropContent.querySelector('#btn-prop-check-room')?.addEventListener('click', () => {
         const walls = es.filter(e => e.kind === 'wall');
@@ -21673,6 +21902,11 @@ function createPlanView(context) {
         selected.name = e.target.value.trim() || 'Furniture';
         render();
       });
+
+      const clearInputEl = dom.planPropContent.querySelector('#prop-clearance-val');
+      if (clearInputEl) {
+        attachNumericScrubber(clearInputEl, { step: 0.05, min: 0.1, max: 5.0, precision: 2 });
+      }
 
       dom.planPropContent.querySelector('#btn-prop-rotate')?.addEventListener('click', () => {
         const oldW = selected.width;
@@ -21768,10 +22002,34 @@ function createPlanView(context) {
         <div class="plan-prop-section">
           <div class="plan-prop-title">Stair Specifications</div>
           <div class="plan-prop-row"><span class="plan-prop-label">Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name)}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Width (Flight)</span><span class="plan-prop-value">${selected.width.toFixed(2)} m</span></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Total Run</span><span class="plan-prop-value note-number">${selected.run.toFixed(2)} m</span></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Total Rise</span><span class="plan-prop-value">${selected.rise.toFixed(2)} m</span></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Risers</span><span class="plan-prop-value">${selected.risers} @ ${(selected.riserHeight * 1000).toFixed(1)} mm</span></div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Width (Flight)</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-stair-w" class="text-input" value="${selected.width.toFixed(2)}" step="0.05" min="0.6" max="10" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" aria-label="Flight width in meters" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Total Run</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-stair-run" class="text-input" value="${selected.run.toFixed(2)}" step="0.1" min="0.5" max="30" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" aria-label="Total run in meters" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Total Rise</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-stair-rise" class="text-input" value="${selected.rise.toFixed(2)}" step="0.05" min="0.2" max="10" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" aria-label="Total rise in meters" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Risers Count</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-stair-risers" class="text-input" value="${selected.risers}" step="1" min="2" max="50" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" aria-label="Risers count" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">R</span>
+            </div>
+          </div>
           <div class="plan-prop-row"><span class="plan-prop-label">Tread (Going)</span><span class="plan-prop-value">${(selected.tread * 1000).toFixed(1)} mm</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Pitch Angle</span><span class="plan-prop-value">${pitchDeg}°</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Blondel (2R+T)</span><span class="plan-prop-value" style="font-weight: 700; color: ${isBlondelOptimal ? 'var(--color-success, #4ade80)' : 'var(--color-warning, #fbbf24)'};">${blondelMm} mm</span></div>
@@ -21794,6 +22052,67 @@ function createPlanView(context) {
         selected.name = e.target.value.trim() || 'Stair';
         render();
       });
+
+      function updateStairGeometry() {
+        selected.riserHeight = selected.rise / selected.risers;
+        selected.tread = selected.run / Math.max(1, selected.risers - 1);
+        selected.blondel = 2 * selected.riserHeight + selected.tread;
+        selected.pitchAngle = Math.atan2(selected.rise, selected.run) * (180 / Math.PI);
+        render();
+      }
+
+      const stairWInput = dom.planPropContent.querySelector('#prop-stair-w');
+      if (stairWInput) {
+        attachNumericScrubber(stairWInput, {
+          step: 0.05, min: 0.6, max: 10, precision: 2,
+          onChange: (val) => { selected.width = val; render(); },
+          onCommit: (val) => { selected.width = val; render(); }
+        });
+        stairWInput.addEventListener('change', (e) => {
+          selected.width = Math.max(0.6, parseFloat(e.target.value) || 0.6);
+          render();
+        });
+      }
+
+      const stairRunInput = dom.planPropContent.querySelector('#prop-stair-run');
+      if (stairRunInput) {
+        attachNumericScrubber(stairRunInput, {
+          step: 0.1, min: 0.5, max: 30, precision: 2,
+          onChange: (val) => { selected.run = val; selected.depth = val; updateStairGeometry(); },
+          onCommit: (val) => { selected.run = val; selected.depth = val; updateStairGeometry(); }
+        });
+        stairRunInput.addEventListener('change', (e) => {
+          selected.run = Math.max(0.5, parseFloat(e.target.value) || 0.5);
+          selected.depth = selected.run;
+          updateStairGeometry();
+        });
+      }
+
+      const stairRiseInput = dom.planPropContent.querySelector('#prop-stair-rise');
+      if (stairRiseInput) {
+        attachNumericScrubber(stairRiseInput, {
+          step: 0.05, min: 0.2, max: 10, precision: 2,
+          onChange: (val) => { selected.rise = val; updateStairGeometry(); },
+          onCommit: (val) => { selected.rise = val; updateStairGeometry(); }
+        });
+        stairRiseInput.addEventListener('change', (e) => {
+          selected.rise = Math.max(0.2, parseFloat(e.target.value) || 0.2);
+          updateStairGeometry();
+        });
+      }
+
+      const stairRisersInput = dom.planPropContent.querySelector('#prop-stair-risers');
+      if (stairRisersInput) {
+        attachNumericScrubber(stairRisersInput, {
+          step: 1, min: 2, max: 50, precision: 0,
+          onChange: (val) => { selected.risers = Math.round(val); updateStairGeometry(); },
+          onCommit: (val) => { selected.risers = Math.round(val); updateStairGeometry(); }
+        });
+        stairRisersInput.addEventListener('change', (e) => {
+          selected.risers = Math.max(2, Math.round(parseFloat(e.target.value) || 2));
+          updateStairGeometry();
+        });
+      }
 
       dom.planPropContent.querySelector('#btn-prop-scratch-stair')?.addEventListener('click', () => {
         sendToScratchpad({
@@ -21822,9 +22141,27 @@ function createPlanView(context) {
         <div class="plan-prop-section">
           <div class="plan-prop-title">Ramp Specifications</div>
           <div class="plan-prop-row"><span class="plan-prop-label">Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name)}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Clear Width</span><span class="plan-prop-value">${selected.width.toFixed(2)} m</span></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Horizontal Run</span><span class="plan-prop-value note-number">${selected.run.toFixed(2)} m</span></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Total Rise</span><span class="plan-prop-value">${selected.rise.toFixed(2)} m</span></div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Clear Width</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-ramp-w" class="text-input" value="${selected.width.toFixed(2)}" step="0.05" min="0.6" max="10" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" aria-label="Clear width in meters" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Horizontal Run</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-ramp-run" class="text-input" value="${selected.run.toFixed(2)}" step="0.1" min="0.5" max="50" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" aria-label="Horizontal run in meters" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Total Rise</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-ramp-rise" class="text-input" value="${selected.rise.toFixed(2)}" step="0.05" min="0.05" max="5" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" aria-label="Total rise in meters" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
           <div class="plan-prop-row"><span class="plan-prop-label">Slope Ratio</span><span class="plan-prop-value" style="font-weight: 700;">1 : ${ratio}</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Slope Gradient</span><span class="plan-prop-value">${slopePct}% (${angleDeg}°)</span></div>
         </div>
@@ -21846,6 +22183,52 @@ function createPlanView(context) {
         selected.name = e.target.value.trim() || 'Ramp';
         render();
       });
+
+      function updateRampGeometry() {
+        selected.slopePercent = (selected.rise / selected.run) * 100;
+        selected.slopeRatio = selected.run / selected.rise;
+        render();
+      }
+
+      const rampWInput = dom.planPropContent.querySelector('#prop-ramp-w');
+      if (rampWInput) {
+        attachNumericScrubber(rampWInput, {
+          step: 0.05, min: 0.6, max: 10, precision: 2,
+          onChange: (val) => { selected.width = val; render(); },
+          onCommit: (val) => { selected.width = val; render(); }
+        });
+        rampWInput.addEventListener('change', (e) => {
+          selected.width = Math.max(0.6, parseFloat(e.target.value) || 0.6);
+          render();
+        });
+      }
+
+      const rampRunInput = dom.planPropContent.querySelector('#prop-ramp-run');
+      if (rampRunInput) {
+        attachNumericScrubber(rampRunInput, {
+          step: 0.1, min: 0.5, max: 50, precision: 2,
+          onChange: (val) => { selected.run = val; selected.depth = val; updateRampGeometry(); },
+          onCommit: (val) => { selected.run = val; selected.depth = val; updateRampGeometry(); }
+        });
+        rampRunInput.addEventListener('change', (e) => {
+          selected.run = Math.max(0.5, parseFloat(e.target.value) || 0.5);
+          selected.depth = selected.run;
+          updateRampGeometry();
+        });
+      }
+
+      const rampRiseInput = dom.planPropContent.querySelector('#prop-ramp-rise');
+      if (rampRiseInput) {
+        attachNumericScrubber(rampRiseInput, {
+          step: 0.05, min: 0.05, max: 5, precision: 2,
+          onChange: (val) => { selected.rise = val; updateRampGeometry(); },
+          onCommit: (val) => { selected.rise = val; updateRampGeometry(); }
+        });
+        rampRiseInput.addEventListener('change', (e) => {
+          selected.rise = Math.max(0.05, parseFloat(e.target.value) || 0.05);
+          updateRampGeometry();
+        });
+      }
 
       dom.planPropContent.querySelector('#btn-prop-scratch-ramp')?.addEventListener('click', () => {
         sendToScratchpad({
@@ -21876,7 +22259,13 @@ function createPlanView(context) {
           <div class="plan-prop-row"><span class="plan-prop-label">Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name)}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Length</span><span class="plan-prop-value note-number">${len.toFixed(2)} m</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Direction</span><span class="plan-prop-value" style="text-transform: capitalize;">${escapeHtml(dir)}</span></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Thickness</span><span class="plan-prop-value">${thick.toFixed(2)} m (${(thick * 1000).toFixed(0)} mm)</span></div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Thickness</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-wall-thickness" class="text-input" value="${thick.toFixed(2)}" step="0.02" min="0.05" max="1.5" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" aria-label="Wall thickness in meters" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
           <div class="plan-prop-row"><span class="plan-prop-label">Endpoints</span><span class="plan-prop-value" style="font-size: 0.70rem;">(${selected.x1?.toFixed(1)}, ${selected.y1?.toFixed(1)}) ➔ (${selected.x2?.toFixed(1)}, ${selected.y2?.toFixed(1)})</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Openings</span><span class="plan-prop-value">${openings.length}</span></div>
         </div>
@@ -21889,6 +22278,19 @@ function createPlanView(context) {
         selected.name = e.target.value.trim() || 'Wall';
         render();
       });
+
+      const wallThickInput = dom.planPropContent.querySelector('#prop-wall-thickness');
+      if (wallThickInput) {
+        attachNumericScrubber(wallThickInput, {
+          step: 0.02, min: 0.05, max: 1.5, precision: 2,
+          onChange: (val) => { selected.thickness = val; render(); },
+          onCommit: (val) => { selected.thickness = val; render(); }
+        });
+        wallThickInput.addEventListener('change', (e) => {
+          selected.thickness = Math.max(0.05, parseFloat(e.target.value) || 0.2);
+          render();
+        });
+      }
 
       dom.planPropContent.querySelector('#btn-prop-scratch-wall')?.addEventListener('click', () => {
         sendToScratchpad({
@@ -22114,12 +22516,39 @@ function createPlanView(context) {
     const snapped = { x: snapToGrid(world.x, state.plan.grid), y: snapToGrid(world.y, state.plan.grid) };
     const tool = state.plan.tool;
 
+    // 1. Check for handle hit (resize / rotate)
+    const handleEl = event.target.closest ? event.target.closest('.plan-handle') : null;
+    if (handleEl) {
+      const handle = handleEl.dataset.handle;
+      const entityId = handleEl.dataset.entityId;
+      const entity = entities().find(x => x.id === entityId);
+      if (entity && handle) {
+        dragState = {
+          mode: 'resize',
+          handle,
+          entity,
+          initial: JSON.parse(JSON.stringify(entity)),
+          startWorld: snapped,
+          lastWorld: snapped
+        };
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+    }
+
     if (tool === 'select') {
-      const hit = pickEntities(entities(), { x: world.x, y: world.y, width: 0, depth: 0 });
-      if (hit.length > 0) {
-        state.plan.selectedIds = new Set([hit[hit.length - 1]]);
-        const e = entities().find(x => x.id === hit[hit.length - 1]);
-        dragState = { mode: 'move', entity: e, start: snapped, last: snapped };
+      const entityEl = event.target.closest ? event.target.closest('.plan-entity') : null;
+      let hitId = entityEl ? entityEl.dataset.entityId : null;
+      if (!hitId) {
+        const hits = pickEntities(entities(), { x: world.x, y: world.y, width: 0, depth: 0 });
+        if (hits.length > 0) hitId = hits[hits.length - 1];
+      }
+
+      if (hitId) {
+        state.plan.selectedIds = new Set([hitId]);
+        const e = entities().find(x => x.id === hitId);
+        dragState = { mode: 'move', entity: e, start: snapped, last: snapped, initial: JSON.parse(JSON.stringify(e)) };
       } else {
         state.plan.selectedIds = new Set();
         dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
@@ -22152,6 +22581,76 @@ function createPlanView(context) {
     }
     const world = svgPoint(event);
     const snapped = { x: snapToGrid(world.x, state.plan.grid), y: snapToGrid(world.y, state.plan.grid) };
+
+    if (dragState.mode === 'resize' && dragState.entity) {
+      const e = dragState.entity;
+      const init = dragState.initial;
+      const grid = state.plan.grid;
+      const h = dragState.handle;
+
+      if (h === 'rotate') {
+        return;
+      }
+
+      if (e.kind === 'wall' || e.kind === 'dimension') {
+        if (h === 'p1') {
+          e.x1 = snapped.x;
+          e.y1 = snapped.y;
+        } else if (h === 'p2') {
+          e.x2 = snapped.x;
+          e.y2 = snapped.y;
+        }
+        if (e.kind === 'dimension') {
+          e.x = Math.min(e.x1, e.x2);
+          e.y = Math.min(e.y1, e.y2);
+          e.width = Math.abs(e.x2 - e.x1);
+          e.depth = Math.abs(e.y2 - e.y1);
+          e.name = `${Math.hypot(e.x2 - e.x1, e.y2 - e.y1).toFixed(2)}m`;
+        }
+        render();
+        return;
+      }
+
+      let minX = init.x;
+      let maxX = init.x + init.width;
+      let minY = init.y;
+      let maxY = init.y + init.depth;
+
+      if (h.includes('w')) {
+        minX = Math.min(snapped.x, maxX - grid);
+      }
+      if (h.includes('e')) {
+        maxX = Math.max(snapped.x, minX + grid);
+      }
+      if (h.includes('s')) {
+        minY = Math.min(snapped.y, maxY - grid);
+      }
+      if (h.includes('n')) {
+        maxY = Math.max(snapped.y, minY + grid);
+      }
+
+      e.x = minX;
+      e.y = minY;
+      e.width = Math.max(grid, maxX - minX);
+      e.depth = Math.max(grid, maxY - minY);
+
+      if (e.kind === 'stair') {
+        e.run = Math.max(grid, e.depth);
+        const tread = e.run / Math.max(1, (e.risers || 16) - 1);
+        e.tread = tread;
+        const riserHeight = e.riserHeight || (e.rise / (e.risers || 16));
+        e.blondel = 2 * riserHeight + tread;
+        e.pitchAngle = Math.atan2(e.rise, e.run) * (180 / Math.PI);
+      } else if (e.kind === 'ramp') {
+        e.run = Math.max(grid, e.depth);
+        e.slopePercent = (e.rise / e.run) * 100;
+        e.slopeRatio = e.run / e.rise;
+      }
+
+      render();
+      return;
+    }
+
     if (dragState.mode === 'create') {
       dragState.current = snapped;
       if (dragState.tool === 'measure') {
@@ -22165,8 +22664,19 @@ function createPlanView(context) {
       const dx = snapped.x - dragState.last.x;
       const dy = snapped.y - dragState.last.y;
       if (dx !== 0 || dy !== 0) {
-        dragState.entity.x += dx;
-        dragState.entity.y += dy;
+        if (dragState.entity.kind === 'wall' || dragState.entity.kind === 'dimension') {
+          dragState.entity.x1 += dx;
+          dragState.entity.y1 += dy;
+          dragState.entity.x2 += dx;
+          dragState.entity.y2 += dy;
+          if (dragState.entity.kind === 'dimension') {
+            dragState.entity.x = Math.min(dragState.entity.x1, dragState.entity.x2);
+            dragState.entity.y = Math.min(dragState.entity.y1, dragState.entity.y2);
+          }
+        } else {
+          dragState.entity.x += dx;
+          dragState.entity.y += dy;
+        }
         dragState.last = snapped;
         render();
       }
@@ -22175,7 +22685,48 @@ function createPlanView(context) {
 
   function onPointerUp(event) {
     if (!dragState) return;
-    if (dragState.mode === 'create') {
+    if (dragState.mode === 'resize' && dragState.entity) {
+      const e = dragState.entity;
+      const init = dragState.initial;
+      const h = dragState.handle;
+
+      if (h === 'rotate') {
+        const beforeState = JSON.parse(JSON.stringify(init));
+        e.rotated = !init.rotated;
+        const cx = e.x + e.width / 2;
+        const cy = e.y + e.depth / 2;
+        const oldW = e.width;
+        const oldD = e.depth;
+        e.width = oldD;
+        e.depth = oldW;
+        e.x = snapToGrid(cx - e.width / 2, state.plan.grid);
+        e.y = snapToGrid(cy - e.depth / 2, state.plan.grid);
+        const afterState = JSON.parse(JSON.stringify(e));
+
+        const cmd = {
+          label: `rotate ${e.name}`,
+          redo() { Object.assign(e, afterState); render(); },
+          undo() { Object.assign(e, beforeState); render(); }
+        };
+        history.push(cmd);
+        showToast(`Rotated ${e.name} to ${e.rotated ? '90°' : '0°'}`);
+        AudioService.playTick();
+      } else {
+        const changed = JSON.stringify(init) !== JSON.stringify(e);
+        if (changed) {
+          const beforeState = JSON.parse(JSON.stringify(init));
+          const afterState = JSON.parse(JSON.stringify(e));
+          const cmd = {
+            label: `resize ${e.name}`,
+            redo() { Object.assign(e, afterState); render(); },
+            undo() { Object.assign(e, beforeState); render(); }
+          };
+          history.push(cmd);
+          showToast(`Resized ${e.name}`);
+          AudioService.playTick();
+        }
+      }
+    } else if (dragState.mode === 'create') {
       const start = dragState.start;
       const end = { x: snapToGrid(svgPoint(event).x, state.plan.grid), y: snapToGrid(svgPoint(event).y, state.plan.grid) };
       if (dragState.tool === 'room') {
@@ -22197,9 +22748,14 @@ function createPlanView(context) {
       const dx = dragState.last.x - dragState.start.x;
       const dy = dragState.last.y - dragState.start.y;
       if (dx !== 0 || dy !== 0) {
-        const cmd = entityMoveCommand(dragState.entity, dx, dy, `move ${dragState.entity.name}`);
-        cmd.redo = () => { dragState.entity.x += dx; dragState.entity.y += dy; };
-        cmd.undo = () => { dragState.entity.x -= dx; dragState.entity.y -= dy; };
+        const e = dragState.entity;
+        const beforeState = JSON.parse(JSON.stringify(dragState.initial));
+        const afterState = JSON.parse(JSON.stringify(e));
+        const cmd = {
+          label: `move ${e.name}`,
+          redo() { Object.assign(e, afterState); render(); },
+          undo() { Object.assign(e, beforeState); render(); }
+        };
         history.push(cmd);
       }
     }
