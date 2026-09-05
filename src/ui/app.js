@@ -428,6 +428,7 @@ export function initializeApp() {
     closeCommandPaletteBtn: document.getElementById('close-command-palette-btn'),
     historyToggleBtn: document.getElementById('history-toggle-btn'),
     shortcutsHelpBtn: document.getElementById('shortcuts-help-btn'),
+    pwaInstallBtn: document.getElementById('pwa-install-btn'),
     appMenubar: document.getElementById('app-menubar'),
     shortcutsModal: document.getElementById('shortcuts-modal'),
     shortcutsListContainer: document.getElementById('shortcuts-list-container'),
@@ -6253,6 +6254,9 @@ export function initializeApp() {
   state.currentMode = 'home';
   switchMode('home');
 
+  // Initialize Progressive Web App (PWA) Service Worker and Desktop Install Prompt
+  initPwa();
+
   // QA/test hook (idempotent): lets browser automation drive mode switching
   // through the same entry point as the UI without touching internals.
   if (typeof window !== 'undefined') {
@@ -6260,4 +6264,78 @@ export function initializeApp() {
     window.__ahhState = state;
     window.__ahhViews = views;
   }
+
+  /** Initializes Progressive Web App (PWA) installation and Service Worker lifecycle. */
+  function initPwa() {
+  let deferredInstallPrompt = null;
+  const installBtn = dom.pwaInstallBtn;
+
+  // 1. Service Worker Registration (supports localhost and https)
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof window !== 'undefined') {
+    const isSecure = window.location.protocol === 'https:' ||
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+
+    if (isSecure) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => {
+            console.log('[PWA] Service Worker registered with scope:', reg.scope);
+          })
+          .catch(err => {
+            console.warn('[PWA] Service Worker registration failed:', err);
+          });
+      });
+    }
+  }
+
+  // 2. Browser Desktop/Mobile Install Prompt Interception
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      if (installBtn) {
+        installBtn.style.display = 'inline-flex';
+        installBtn.setAttribute('aria-hidden', 'false');
+      }
+    });
+
+    if (installBtn) {
+      installBtn.addEventListener('click', async () => {
+        if (!deferredInstallPrompt) {
+          showToast('To install as an app, click the install icon (⊞) in your browser address bar.', 'info');
+          return;
+        }
+        try {
+          deferredInstallPrompt.prompt();
+          const choiceResult = await deferredInstallPrompt.userChoice;
+          if (choiceResult && choiceResult.outcome === 'accepted') {
+            showToast('Architecture Helping Hand installed successfully!', 'success');
+            AudioService.play('success');
+            installBtn.style.display = 'none';
+          }
+        } catch (err) {
+          console.warn('[PWA] Install prompt error:', err);
+        }
+        deferredInstallPrompt = null;
+      });
+    }
+
+    window.addEventListener('appinstalled', () => {
+      deferredInstallPrompt = null;
+      if (installBtn) installBtn.style.display = 'none';
+      showToast('Architecture Helping Hand is now installed on your desktop!', 'success');
+      AudioService.play('success');
+    });
+
+    // Hide button if already running in standalone desktop mode
+    const isStandalone = (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches) ||
+      (typeof navigator !== 'undefined' && navigator.standalone === true);
+    if (isStandalone && installBtn) {
+      installBtn.style.display = 'none';
+    }
+  }
 }
+}
+
+

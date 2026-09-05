@@ -1,16 +1,74 @@
 {
   "name": "Architecture Helping Hand",
-  "short_name": "ArchHelpingHand",
+  "short_name": "Helping Hand",
+  "description": "Professional Architectural Drafting, Multi-Scale Calculation, Building Code Compliance and Studio Workstation.",
   "start_url": "./index.html",
+  "id": "./index.html",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#0d1117",
-  "theme_color": "#38bdf8",
-  "description": "Architecture Helping Hand - Professional Architectural scale, furniture sizing & unit conversion calculator for architects, designers, and engineers.",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
+  "background_color": "#121214",
+  "theme_color": "#18181b",
+  "orientation": "any",
+  "categories": [
+    "productivity",
+    "utilities",
+    "design",
+    "education"
+  ],
   "icons": [
     {
-      "src": "assets/icon.svg",
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-512.png",
       "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
       "type": "image/svg+xml"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Plan Canvas",
+      "short_name": "Plan",
+      "url": "./index.html#plan",
+      "description": "Architectural 2D Drafting and Space Planning"
+    },
+    {
+      "name": "Stair Calculator",
+      "short_name": "Stairs",
+      "url": "./index.html#stairs",
+      "description": "Calculate architectural stairs and Blondel formula"
+    },
+    {
+      "name": "Ramp Calculator",
+      "short_name": "Ramps",
+      "url": "./index.html#ramps",
+      "description": "Calculate multi-segment accessibility ramps and slopes"
+    },
+    {
+      "name": "Scale Converter",
+      "short_name": "Converter",
+      "url": "./index.html#converter",
+      "description": "Convert drawing dimensions to real world at any scale"
     }
   ]
 }

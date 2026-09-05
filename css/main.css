@@ -408,6 +408,20 @@ body.sidebar-hidden .app-sidebar {
   border-color: var(--accent-primary);
 }
 
+.control-btn.pwa-install-btn {
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--accent-primary, #38bdf8);
+  border-color: var(--accent-primary, #38bdf8);
+  display: inline-flex;
+  transition: all 0.2s ease;
+}
+
+.control-btn.pwa-install-btn:hover {
+  background: var(--accent-primary, #38bdf8);
+  color: #0f172a;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+}
+
 .theme-dropdown {
   height: var(--control-height-md);
   background: var(--bg-chip);

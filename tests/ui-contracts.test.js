@@ -795,7 +795,30 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
   assert(htmlContent.includes('Architectural Studio Quick Reference &amp; Formulas') || htmlContent.includes('Architectural Studio Quick Reference & Formulas'), 'index.html includes Architectural Studio Quick Reference in guide modal');
   assert(htmlContent.includes('Ctrl + B'), 'index.html includes Ctrl + B shortcut documentation for sidebar toggle');
   assert(htmlContent.includes('sidebar-toggle-text'), 'index.html includes visible text for sidebar toggle button');
+
+  // Progressive Web App (PWA) contracts
+  const manifestPath = path.join(rootDir, 'manifest.json');
+  assert(fs.existsSync(manifestPath), 'manifest.json exists in root');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+  assert(manifest.name === 'Architecture Helping Hand', 'manifest.json specifies full application name');
+  assert(manifest.display === 'standalone', 'manifest.json specifies display: standalone for borderless app window');
+  assert(Array.isArray(manifest.icons) && manifest.icons.length >= 3, 'manifest.json specifies at least 3 icon variants');
+
+  const swPath = path.join(rootDir, 'sw.js');
+  assert(fs.existsSync(swPath), 'sw.js Service Worker exists in root');
+  const swContent = fs.readFileSync(swPath, 'utf-8');
+  assert(swContent.includes('addEventListener(\'install\'') || swContent.includes('addEventListener("install"'), 'sw.js handles install event');
+  assert(swContent.includes('addEventListener(\'fetch\'') || swContent.includes('addEventListener("fetch"'), 'sw.js handles fetch event');
+
+  assert(htmlContent.includes('rel="manifest"'), 'index.html links to manifest.json');
+  assert(htmlContent.includes('id="pwa-install-btn"'), 'index.html includes #pwa-install-btn desktop install trigger');
+  assert(cssContent.includes('.pwa-install-btn'), 'css/main.css defines .pwa-install-btn styles');
+  assert(appJsContent.includes('function initPwa'), 'src/ui/app.js defines initPwa lifecycle');
+  assert(fs.existsSync(path.join(rootDir, 'assets', 'icon-192.png')), 'assets/icon-192.png exists');
+  assert(fs.existsSync(path.join(rootDir, 'assets', 'icon-512.png')), 'assets/icon-512.png exists');
+  assert(fs.existsSync(path.join(rootDir, 'assets', 'icon-maskable-512.png')), 'assets/icon-maskable-512.png exists');
 }
 
 console.log(`Summary: ${passed} passed, ${failed} failed.\n`);
 if (failed > 0) process.exit(1);
+
