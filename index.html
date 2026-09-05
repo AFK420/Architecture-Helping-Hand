@@ -247,6 +247,16 @@
               <span class="cmd-palette-btn-text">Journal</span>
             </button>
 
+            <!-- Scratchpad Drawer Toggle -->
+            <button id="scratchpad-toggle-btn" class="control-btn" title="Universal Project Scratchpad" aria-label="Open scratchpad">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+              </svg>
+              <span class="cmd-palette-btn-text">Scratchpad</span>
+              <span id="scratchpad-counter-badge" class="badge" style="display: none; margin-left: 4px; font-size: 0.65rem; padding: 1px 5px; background: var(--accent-primary); color: #fff; border-radius: 10px;">0</span>
+            </button>
+
             <!-- Theme Switcher -->
             <select id="theme-select" class="theme-dropdown" title="Select Theme" aria-label="Theme selector">
               <option value="dark" selected>📐 Studio Dark</option>
@@ -542,6 +552,13 @@
                     <polyline points="7 3 7 8 15 8"></polyline>
                   </svg>
                   Save Log
+                </button>
+                <button id="btn-scratch-converter" class="action-tool-btn" title="Send conversion result to Universal Scratchpad">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                  </svg>
+                  Scratchpad
                 </button>
               </div>
             </div>
@@ -2328,6 +2345,9 @@
             <button type="button" id="chains-send-cad-handoff-btn" class="result-action-btn" title="Send to CAD Handoff (Mode 13)">
               <span>🚀 Send to CAD</span>
             </button>
+            <button type="button" id="chains-send-scratchpad-btn" class="result-action-btn" title="Send chain total and segments to Universal Scratchpad">
+              <span>📋 Scratchpad</span>
+            </button>
           </div>
         </div>
       </div>
@@ -3127,6 +3147,12 @@
             <button type="button" id="stairs-save-project-btn" class="result-action-btn" title="Save this stair into the project document (versioned project store)">
               <span>💾 Save to Project</span>
             </button>
+            <button type="button" id="stairs-send-scratchpad-btn" class="result-action-btn" title="Send stair geometry to Universal Scratchpad">
+              <span>📋 Send to Scratchpad</span>
+            </button>
+            <button type="button" id="stairs-apply-plan-btn" class="result-action-btn" title="Apply this stair flight directly to the Plan Canvas">
+              <span>📐 Apply to Plan Canvas</span>
+            </button>
           </div>
         </div>
       </div>
@@ -3280,6 +3306,12 @@
             <button type="button" id="ramps-save-project-btn" class="result-action-btn" title="Save this ramp into the project document (versioned project store)">
               <span>💾 Save to Project</span>
             </button>
+            <button type="button" id="ramps-send-scratchpad-btn" class="result-action-btn" title="Send ramp geometry to Universal Scratchpad">
+              <span>📋 Send to Scratchpad</span>
+            </button>
+            <button type="button" id="ramps-apply-plan-btn" class="result-action-btn" title="Apply this ramp flight directly to the Plan Canvas">
+              <span>📐 Apply to Plan Canvas</span>
+            </button>
           </div>
         </div>
       </div>
@@ -3422,6 +3454,9 @@
             </button>
             <button type="button" id="slopes-save-project-btn" class="result-action-btn" title="Save this slope into the project document (versioned project store)">
               <span>💾 Save to Project</span>
+            </button>
+            <button type="button" id="slopes-send-scratchpad-btn" class="result-action-btn" title="Send slope geometry to Universal Scratchpad">
+              <span>📋 Send to Scratchpad</span>
             </button>
           </div>
         </div>
@@ -4339,6 +4374,39 @@
     </div>
     <div id="history-list" class="history-list-container">
       <!-- Populated dynamically by HistoryService -->
+    </div>
+  </aside>
+
+  <!-- Universal Scratchpad Drawer Side Panel -->
+  <div id="scratchpad-overlay" class="history-drawer-overlay"></div>
+  <aside id="scratchpad-drawer" class="history-drawer" aria-label="Universal Studio Scratchpad">
+    <div class="drawer-header">
+      <div class="drawer-title-area">
+        <h3>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+          </svg>
+          Universal Scratchpad
+        </h3>
+        <span id="scratchpad-count-badge" class="history-count-badge">0 saved</span>
+      </div>
+      <div class="drawer-actions">
+        <button id="scratchpad-export-md-btn" class="hist-btn" title="Copy scratchpad as Markdown table">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+          MD
+        </button>
+        <button id="scratchpad-clear-btn" class="hist-btn danger" title="Clear all scratchpad values">Clear</button>
+        <button id="scratchpad-close-btn" class="hist-btn close-btn" title="Close drawer">✕</button>
+      </div>
+    </div>
+    <div class="scratchpad-add-bar" style="display: flex; gap: 6px; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color-light); background: var(--bg-surface-elevated);">
+      <input type="text" id="scratchpad-quick-val" class="text-input" placeholder="e.g. 2400 mm or 4.2m" style="flex: 1; padding: 0.25rem 0.45rem; font-size: 0.78rem;" />
+      <input type="text" id="scratchpad-quick-label" class="text-input" placeholder="Label (optional)" style="flex: 1; padding: 0.25rem 0.45rem; font-size: 0.78rem;" />
+      <button id="scratchpad-quick-add-btn" class="action-btn" style="padding: 0.25rem 0.6rem; font-size: 0.78rem; background: var(--accent-primary); color: #fff;">+ Add</button>
+    </div>
+    <div id="scratchpad-list" class="history-list-container">
+      <!-- Populated dynamically by app.js -->
     </div>
   </aside>
 

@@ -100,6 +100,7 @@ export const BUNDLE_MODULES = [
   { name: 'ViewBatchCad', file: path.join(srcDir, 'ui', 'views', 'batch-cad.js') },
   { name: 'ViewQuickDimension', file: path.join(srcDir, 'ui', 'views', 'quick-dimension.js') },
   { name: 'ViewHistory', file: path.join(srcDir, 'ui', 'views', 'history.js') },
+  { name: 'ViewScratchpad', file: path.join(srcDir, 'ui', 'views', 'scratchpad.js') },
   { name: 'ViewStairs', file: path.join(srcDir, 'ui', 'views', 'stairs.js') },
   { name: 'ViewRamps', file: path.join(srcDir, 'ui', 'views', 'ramps.js') },
   { name: 'ViewSlopes', file: path.join(srcDir, 'ui', 'views', 'slopes.js') },

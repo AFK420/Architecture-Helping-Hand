@@ -19487,6 +19487,316 @@ function createHistoryView(context) {
 
 
   // =========================================================================
+  // MODULE: ViewScratchpad
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Universal Studio Scratchpad View
+ * Milestone 5: Global drawer and cross-tool scratchpad.
+ *
+ * Persists measurements, notes, and calculation values directly into the
+ * active project document (draft.scratchpad), with fallback to in-memory state.
+ * Supports quick-add, copy-to-clipboard, export as Markdown table,
+ * and dispatching to Dimension Workspace.
+ */
+
+
+
+function createScratchpadView(context) {
+  const {
+    state, dom, showToast, copyToClipboard, AudioService,
+    switchMode, views, projectStore
+  } = context;
+
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // Local fallback if project store not yet initialized
+  let localScratchpad = [];
+
+  function getItems() {
+    if (projectStore && typeof projectStore.getProject === 'function') {
+      try {
+        const p = projectStore.getProject();
+        if (p && Array.isArray(p.scratchpad)) {
+          return p.scratchpad;
+        }
+      } catch (err) {
+        // Fall back to local
+      }
+    }
+    return localScratchpad;
+  }
+
+  function updateBadge(count) {
+    if (dom.scratchpadCounterBadge) {
+      if (count > 0) {
+        dom.scratchpadCounterBadge.textContent = String(count);
+        dom.scratchpadCounterBadge.style.display = 'inline-block';
+      } else {
+        dom.scratchpadCounterBadge.style.display = 'none';
+      }
+    }
+    if (dom.scratchpadCountBadge) {
+      dom.scratchpadCountBadge.textContent = `${count} saved`;
+    }
+  }
+
+  function render() {
+    const items = getItems();
+    updateBadge(items.length);
+
+    if (!dom.scratchpadList) return;
+
+    if (items.length === 0) {
+      dom.scratchpadList.innerHTML = `
+        <div class="empty-history-box" style="padding: 2.5rem 1rem; text-align: center;">
+          <div class="empty-hist-icon" style="margin-bottom: 0.5rem; opacity: 0.5;">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+            </svg>
+          </div>
+          <div class="empty-hist-title" style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">Scratchpad is empty</div>
+          <div class="empty-hist-desc" style="color: var(--text-muted); font-size: 0.78rem; margin-top: 0.25rem;">
+            Send values from Scale, Stairs, Ramps, or enter quick measurements above.
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    dom.scratchpadList.innerHTML = items.map(item => `
+      <div class="history-item-card" data-id="${escapeHtml(item.id)}" style="margin-bottom: 0.6rem;">
+        <div class="hist-card-top" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+          <div class="hist-title-group" style="display: flex; gap: 0.4rem; align-items: center;">
+            <span class="hist-mode-tag" style="font-size: 0.7rem; padding: 2px 6px; border-radius: 3px; background: var(--bg-chip); color: var(--accent-primary); font-weight: 600;">
+              ${escapeHtml(item.source || 'Manual')}
+            </span>
+            <strong style="font-size: 0.82rem; color: var(--text-primary);">${escapeHtml(item.label || 'Measurement')}</strong>
+          </div>
+          <span class="hist-time-tag" style="font-size: 0.68rem; color: var(--text-muted);">${escapeHtml(item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '')}</span>
+        </div>
+
+        <div style="background: var(--bg-card-header); padding: 0.4rem 0.6rem; border-radius: 4px; border: 1px solid var(--border-color-light); margin-bottom: 0.45rem;">
+          <div style="font-family: var(--font-family-mono); font-size: 1.05rem; font-weight: 700; color: var(--accent-primary); word-break: break-all;">
+            ${escapeHtml(item.value)}
+          </div>
+        </div>
+
+        <div class="hist-card-actions" style="display: flex; gap: 0.4rem; justify-content: flex-end;">
+          <button class="scratch-btn-copy action-tool-btn compact" data-text="${escapeHtml(item.value)}" title="Copy value to clipboard" style="font-size: 0.72rem; padding: 2px 8px;">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            Copy
+          </button>
+          <button class="scratch-btn-workspace action-tool-btn compact" data-val="${escapeHtml(item.value)}" data-label="${escapeHtml(item.label || item.source || 'Scratchpad')}" title="Send to Dimension Workspace" style="font-size: 0.72rem; padding: 2px 8px;">
+            ?? Workspace
+          </button>
+          <button class="scratch-btn-del action-tool-btn compact danger" data-id="${escapeHtml(item.id)}" title="Delete item" style="font-size: 0.72rem; padding: 2px 8px; color: var(--color-error);">
+            ?
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    // Wire item buttons
+    dom.scratchpadList.querySelectorAll('.scratch-btn-copy').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const text = btn.dataset.text;
+        if (text) {
+          copyToClipboard(text, 'Scratchpad Value');
+        }
+      });
+    });
+
+    dom.scratchpadList.querySelectorAll('.scratch-btn-workspace').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const val = btn.dataset.val;
+        const lbl = btn.dataset.label;
+        if (val && state.workspace) {
+          const entry = createDimensionEntry({
+            name: lbl,
+            rawInput: val,
+            dimensionType: 'segment',
+            notes: 'Imported from Scratchpad'
+          }, 'mm');
+          state.workspace.entries.push(entry);
+          views.callController('workspace', 'saveWorkspace');
+          views.callController('workspace', 'renderWorkspace');
+          switchMode('workspace');
+          showToast(`Sent "${lbl}" to Dimension Workspace`);
+        }
+      });
+    });
+
+    dom.scratchpadList.querySelectorAll('.scratch-btn-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        if (id) removeItem(id);
+      });
+    });
+  }
+
+  function addItem({ value, label = '', unit = '', source = 'Studio', metadata = null }) {
+    if (!value || !String(value).trim()) {
+      showToast('Cannot add empty value to scratchpad', 'warning');
+      return;
+    }
+
+    const item = {
+      id: `scratch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      value: String(value).trim(),
+      label: String(label).trim(),
+      unit: String(unit).trim(),
+      source: String(source).trim(),
+      metadata,
+      timestamp: new Date().toISOString()
+    };
+
+    if (projectStore && typeof projectStore.updateProject === 'function') {
+      projectStore.updateProject(draft => {
+        if (!Array.isArray(draft.scratchpad)) draft.scratchpad = [];
+        draft.scratchpad.unshift(item);
+        return draft;
+      });
+    } else {
+      localScratchpad.unshift(item);
+    }
+
+    render();
+    AudioService.playTick();
+    showToast(`Added to Scratchpad: ${item.label || item.value}`);
+  }
+
+  function removeItem(id) {
+    if (projectStore && typeof projectStore.updateProject === 'function') {
+      projectStore.updateProject(draft => {
+        if (Array.isArray(draft.scratchpad)) {
+          draft.scratchpad = draft.scratchpad.filter(x => x.id !== id);
+        }
+        return draft;
+      });
+    } else {
+      localScratchpad = localScratchpad.filter(x => x.id !== id);
+    }
+    render();
+    showToast('Removed from scratchpad');
+  }
+
+  function clearAll() {
+    const items = getItems();
+    if (items.length === 0) return;
+    if (projectStore && typeof projectStore.updateProject === 'function') {
+      projectStore.updateProject(draft => {
+        draft.scratchpad = [];
+        return draft;
+      });
+    } else {
+      localScratchpad = [];
+    }
+    render();
+    showToast('Scratchpad cleared');
+  }
+
+  function exportMarkdown() {
+    const items = getItems();
+    if (items.length === 0) {
+      showToast('Scratchpad is empty', 'warning');
+      return;
+    }
+    const header = '| Source | Label | Value | Time |\n| --- | --- | --- | --- |';
+    const rows = items.map(item => {
+      const time = item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+      return `| ${item.source || 'Manual'} | ${item.label || '-'} | \`${item.value}\` | ${time} |`;
+    }).join('\n');
+
+    const md = `### Project Scratchpad (${items.length} items)\n\n${header}\n${rows}\n`;
+    copyToClipboard(md, 'Scratchpad (Markdown Table)');
+  }
+
+  function toggleDrawer(open) {
+    if (!dom.scratchpadDrawer || !dom.scratchpadOverlay) return;
+    const shouldOpen = open !== undefined ? Boolean(open) : !dom.scratchpadDrawer.classList.contains('open');
+    dom.scratchpadDrawer.classList.toggle('open', shouldOpen);
+    dom.scratchpadOverlay.classList.toggle('open', shouldOpen);
+    if (shouldOpen) {
+      render();
+      if (dom.scratchpadQuickVal) dom.scratchpadQuickVal.focus();
+    }
+  }
+
+  function handleQuickAdd() {
+    if (!dom.scratchpadQuickVal) return;
+    const val = dom.scratchpadQuickVal.value.trim();
+    const lbl = dom.scratchpadQuickLabel ? dom.scratchpadQuickLabel.value.trim() : '';
+    if (!val) {
+      showToast('Enter a measurement or note first', 'warning');
+      return;
+    }
+    addItem({ value: val, label: lbl, source: 'Quick Entry' });
+    dom.scratchpadQuickVal.value = '';
+    if (dom.scratchpadQuickLabel) dom.scratchpadQuickLabel.value = '';
+    dom.scratchpadQuickVal.focus();
+  }
+
+  return {
+    id: 'scratchpad',
+    mount() {
+      // Wire topbar toggle & overlay
+      if (dom.scratchpadToggleBtn) {
+        dom.scratchpadToggleBtn.addEventListener('click', () => toggleDrawer());
+      }
+      if (dom.scratchpadOverlay) {
+        dom.scratchpadOverlay.addEventListener('click', () => toggleDrawer(false));
+      }
+      if (dom.scratchpadCloseBtn) {
+        dom.scratchpadCloseBtn.addEventListener('click', () => toggleDrawer(false));
+      }
+      if (dom.scratchpadClearBtn) {
+        dom.scratchpadClearBtn.addEventListener('click', clearAll);
+      }
+      if (dom.scratchpadExportMdBtn) {
+        dom.scratchpadExportMdBtn.addEventListener('click', exportMarkdown);
+      }
+      if (dom.scratchpadQuickAddBtn) {
+        dom.scratchpadQuickAddBtn.addEventListener('click', handleQuickAdd);
+      }
+      if (dom.scratchpadQuickVal) {
+        dom.scratchpadQuickVal.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') handleQuickAdd();
+        });
+      }
+      if (dom.scratchpadQuickLabel) {
+        dom.scratchpadQuickLabel.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') handleQuickAdd();
+        });
+      }
+
+      render();
+    },
+    getController() {
+      return {
+        getItems,
+        addItem,
+        removeItem,
+        clearAll,
+        exportMarkdown,
+        toggleDrawer,
+        render
+      };
+    }
+  };
+}
+
+
+  // =========================================================================
   // MODULE: ViewStairs
   // =========================================================================
 
@@ -19500,6 +19810,7 @@ function createHistoryView(context) {
  * engine already produced and routes persistence through the shared
  * context (ProjectStore, Journal, Workspace, CAD views).
  */
+
 
 
 
@@ -19879,6 +20190,62 @@ function createStairsView(context) {
     }
   }
 
+  function applyToPlan() {
+    const r = requireResult();
+    if (!r) return;
+    const stair = createStairEntity({
+      x: 1.0,
+      y: 1.0,
+      width: 1.0,
+      run: r.geometry.totalRunMeters,
+      riserCount: r.risers.count,
+      totalRise: r.input.totalRiseMeters,
+      going: r.treads.depthMeters,
+      riser: r.risers.heightMeters,
+      name: `Stair ${r.risers.count}R`
+    });
+    if (projectStore && typeof projectStore.updateProject === 'function') {
+      projectStore.updateProject(draft => {
+        if (!draft.plan) draft.plan = { rooms: [], walls: [], doors: [], windows: [], furniture: [], dimensions: [], stairs: [], ramps: [] };
+        if (!Array.isArray(draft.plan.stairs)) draft.plan.stairs = [];
+        draft.plan.stairs.push(stair);
+        return draft;
+      });
+    }
+    if (state.plan && state.plan.document) {
+      if (!Array.isArray(state.plan.document.stairs)) state.plan.document.stairs = [];
+      state.plan.document.stairs.push(stair);
+      state.plan.selectedIds = new Set([stair.id]);
+    }
+    switchMode('plan');
+    if (views && typeof views.callController === 'function') {
+      views.callController('plan', 'render');
+    }
+    AudioService.playSuccess();
+    showToast(`Stair (${r.risers.count}R) placed onto Plan Canvas`);
+  }
+
+  function sendToScratchpad() {
+    const r = requireResult();
+    if (!r) return;
+    const f = r.formatted;
+    if (views && typeof views.callController === 'function') {
+      views.callController('scratchpad', 'addItem', {
+        label: `Stair ${f.riserCount}R (${f.riser} × ${f.tread})`,
+        value: `${f.totalRise} rise / ${f.totalRun} run`,
+        unit: 'm',
+        source: 'Stairs',
+        metadata: {
+          riserCount: r.risers.count,
+          riser: r.risers.heightMeters,
+          tread: r.treads.depthMeters,
+          totalRise: r.input.totalRiseMeters,
+          totalRun: r.geometry.totalRunMeters
+        }
+      });
+    }
+  }
+
   return {
     id: 'stairs',
     mount() {
@@ -19899,7 +20266,11 @@ function createStairsView(context) {
       calculate(false);
     },
     getController() {
-      return { calculate, syncModeVisibility, copyResult, copySchedule, sendToCad, sendToWorkspace, saveToJournal, saveToProject };
+      return {
+        calculate, syncModeVisibility, copyResult, copySchedule,
+        sendToCad, sendToWorkspace, saveToJournal, saveToProject,
+        sendToScratchpad, applyToPlan
+      };
     }
   };
 }
@@ -19917,6 +20288,7 @@ function createStairsView(context) {
  * src/core/ramps.js; persistence routes through the shared context
  * (ProjectStore, Journal, Workspace, CAD views).
  */
+
 
 
 
@@ -20277,6 +20649,60 @@ function createRampsView(context) {
     }
   }
 
+  function applyToPlan() {
+    const r = requireResult();
+    if (!r) return;
+    const g = r.geometry;
+    const ramp = createRampEntity({
+      x: 1.0,
+      y: 1.0,
+      width: 1.2,
+      run: g.runMeters,
+      rise: g.riseMeters,
+      name: `Ramp ${r.formatted.ratio}`
+    });
+    if (projectStore && typeof projectStore.updateProject === 'function') {
+      projectStore.updateProject(draft => {
+        if (!draft.plan) draft.plan = { rooms: [], walls: [], doors: [], windows: [], furniture: [], dimensions: [], stairs: [], ramps: [] };
+        if (!Array.isArray(draft.plan.ramps)) draft.plan.ramps = [];
+        draft.plan.ramps.push(ramp);
+        return draft;
+      });
+    }
+    if (state.plan && state.plan.document) {
+      if (!Array.isArray(state.plan.document.ramps)) state.plan.document.ramps = [];
+      state.plan.document.ramps.push(ramp);
+      state.plan.selectedIds = new Set([ramp.id]);
+    }
+    switchMode('plan');
+    if (views && typeof views.callController === 'function') {
+      views.callController('plan', 'render');
+    }
+    AudioService.playSuccess();
+    showToast(`Ramp (${r.formatted.ratio}) placed onto Plan Canvas`);
+  }
+
+  function sendToScratchpad() {
+    const r = requireResult();
+    if (!r) return;
+    const f = r.formatted;
+    const g = r.geometry;
+    if (views && typeof views.callController === 'function') {
+      views.callController('scratchpad', 'addItem', {
+        label: `Ramp ${f.ratio} (${f.slopePercent})`,
+        value: `${f.rise} rise / ${f.run} run`,
+        unit: 'm',
+        source: 'Ramps',
+        metadata: {
+          rise: g.riseMeters,
+          run: g.runMeters,
+          slopePercent: g.slopePercent,
+          ratio: f.ratio
+        }
+      });
+    }
+  }
+
   return {
     id: 'ramps',
     mount() {
@@ -20292,7 +20718,11 @@ function createRampsView(context) {
       calculate(false);
     },
     getController() {
-      return { calculate, syncModeVisibility, renderTargets, copyResult, copySchedule, sendToCad, sendToWorkspace, saveToJournal, saveToProject };
+      return {
+        calculate, syncModeVisibility, renderTargets, copyResult,
+        copySchedule, sendToCad, sendToWorkspace, saveToJournal,
+        saveToProject, sendToScratchpad, applyToPlan
+      };
     }
   };
 }
@@ -24953,6 +25383,10 @@ function createSurveyView(context) {
 
 
 
+
+
+
+
 function initializeApp() {
   /** Escapes user-controllable strings before innerHTML rendering (app-wide). */
   function escapeHtml(str) {
@@ -25259,6 +25693,25 @@ function initializeApp() {
     exportMdBtn: document.getElementById('export-md-btn'),
     historyCountBadge: document.getElementById('history-count-badge'),
     historyList: document.getElementById('history-list'),
+    scratchpadToggleBtn: document.getElementById('scratchpad-toggle-btn'),
+    scratchpadCounterBadge: document.getElementById('scratchpad-counter-badge'),
+    scratchpadDrawer: document.getElementById('scratchpad-drawer'),
+    scratchpadOverlay: document.getElementById('scratchpad-overlay'),
+    scratchpadCloseBtn: document.getElementById('scratchpad-close-btn'),
+    scratchpadClearBtn: document.getElementById('scratchpad-clear-btn'),
+    scratchpadExportMdBtn: document.getElementById('scratchpad-export-md-btn'),
+    scratchpadCountBadge: document.getElementById('scratchpad-count-badge'),
+    scratchpadList: document.getElementById('scratchpad-list'),
+    scratchpadQuickVal: document.getElementById('scratchpad-quick-val'),
+    scratchpadQuickLabel: document.getElementById('scratchpad-quick-label'),
+    scratchpadQuickAddBtn: document.getElementById('scratchpad-quick-add-btn'),
+    btnScratchConverter: document.getElementById('btn-scratch-converter'),
+    stairsSendScratchpadBtn: document.getElementById('stairs-send-scratchpad-btn'),
+    stairsApplyPlanBtn: document.getElementById('stairs-apply-plan-btn'),
+    rampsSendScratchpadBtn: document.getElementById('ramps-send-scratchpad-btn'),
+    rampsApplyPlanBtn: document.getElementById('ramps-apply-plan-btn'),
+    slopesSendScratchpadBtn: document.getElementById('slopes-send-scratchpad-btn'),
+    chainsSendScratchpadBtn: document.getElementById('chains-send-scratchpad-btn'),
     toastContainer: document.getElementById('toast-container'),
     modeTabs: document.querySelectorAll('.mode-tab'),
     modeViews: document.querySelectorAll('.tool-mode-view'),
@@ -27585,6 +28038,192 @@ function initializeApp() {
         }
       }
 
+      // 0d. Live Scale Command Detection: e.g. "scale 4.2m at 1:50" or "scale 2400mm 1:20"
+      const scaleMatch = query.match(/^scale\s+([0-9.]+\s*[a-z]*)\s+(?:at\s+|@\s+)?(?:1\s*:\s*)?([0-9.]+)/i);
+      if (scaleMatch) {
+        const dimStr = scaleMatch[1].trim();
+        const ratio = parseFloat(scaleMatch[2]);
+        if (ratio > 0) {
+          const parsed = parseInput(dimStr);
+          if (parsed && parsed.isValid) {
+            const canonicalM = parsed.canonicalMeters;
+            const drawM = canonicalM / ratio;
+            const drawMm = drawM * 1000;
+            const drawFormatted = drawMm >= 1000 ? `${(drawM).toFixed(3)} m` : (drawMm % 1 === 0 ? `${drawMm.toFixed(0)} mm` : `${drawMm.toFixed(1)} mm`);
+            const scaleItem = {
+              id: 'scale-live-calc',
+              title: `Scale ${dimStr} at 1:${ratio} = ${drawFormatted}`,
+              description: `Real: ${parsed.formattedCanonical} | Drawing: ${drawFormatted} @ 1:${ratio} • Press Enter to copy`,
+              icon: '📐',
+              shortcut: '↵ Copy',
+              available: true,
+              action: () => {
+                copyToClipboard(drawFormatted, 'Scaled Dimension');
+                showToast(`Copied ${drawFormatted} to clipboard`);
+              }
+            };
+            paletteItems.push(scaleItem);
+            html += `<div class="command-section-header">📐 LIVE SCALE CALCULATION</div>`;
+            html += renderCommandItemHTML(scaleItem, paletteItems.length - 1);
+          }
+        }
+      }
+
+      // 0e. Live Stair Command Detection: e.g. "stair rise 2.7m" or "stair 2700mm"
+      const stairMatch = query.match(/^stair(?:s)?(?:\s+rise)?\s+([0-9.]+\s*[a-z]+)/i);
+      if (stairMatch) {
+        const riseStr = stairMatch[1].trim();
+        const parsed = parseInput(riseStr);
+        if (parsed && parsed.isValid && parsed.canonicalMeters > 0) {
+          const stairRes = calculateStair({
+            mode: 'rise_target_riser',
+            totalRise: parsed.canonicalMeters,
+            desiredRiser: 0.175,
+            desiredTread: 0.28,
+            references: STAIR_REFERENCE_DEFAULTS
+          });
+          if (stairRes && stairRes.valid) {
+            const f = stairRes.formatted;
+            const stairItem = {
+              id: 'stair-live-calc',
+              title: `Stair: ${f.riserCount} risers @ ${f.riser}, run ${f.totalRun}`,
+              description: `Total Rise: ${f.totalRise} | 2R+T: ${f.twoRPlusT} (${f.proportionStatus}) • Press Enter to open Stairs`,
+              icon: '🪜',
+              shortcut: '↵ Open',
+              available: true,
+              action: () => {
+                switchMode('stairs');
+                if (dom.stairsTotalRise) dom.stairsTotalRise.value = riseStr;
+                views.callController('stairs', 'calculate', true);
+              }
+            };
+            paletteItems.push(stairItem);
+            html += `<div class="command-section-header">🪜 LIVE STAIR CALCULATION</div>`;
+            html += renderCommandItemHTML(stairItem, paletteItems.length - 1);
+          }
+        }
+      }
+
+      // 0f. Live Ramp Command Detection: e.g. "ramp rise 1.2m [at 1:12]" or "ramp 1.2m"
+      const rampMatch = query.match(/^ramp(?:s)?(?:\s+rise)?\s+([0-9.]+\s*[a-z]+)(?:\s+(?:(?:at|slope)\s+)?1\s*:\s*([0-9.]+))?/i);
+      if (rampMatch) {
+        const riseStr = rampMatch[1].trim();
+        const ratio = rampMatch[2] ? parseFloat(rampMatch[2]) : 12;
+        const parsed = parseInput(riseStr);
+        if (parsed && parsed.isValid && parsed.canonicalMeters > 0 && ratio > 0) {
+          const desiredSlope = (1 / ratio) * 100;
+          const rampRes = calculateRamp({
+            mode: 'rise_desired_slope',
+            rise: parsed.canonicalMeters,
+            slopePercent: desiredSlope,
+            references: RAMP_REFERENCE_DEFAULTS
+          });
+          if (rampRes && rampRes.valid) {
+            const f = rampRes.formatted;
+            const rampItem = {
+              id: 'ramp-live-calc',
+              title: `Ramp 1:${ratio}: run ${f.run} (rise ${f.rise})`,
+              description: `Slope: ${f.slopePercent} | Ratio: ${f.ratio} | Flight: ${f.flightLength} • Press Enter to open Ramps`,
+              icon: '📐',
+              shortcut: '↵ Open',
+              available: true,
+              action: () => {
+                switchMode('ramps');
+                if (dom.rampsRise) dom.rampsRise.value = riseStr;
+                if (dom.rampsSlope) dom.rampsSlope.value = String(desiredSlope.toFixed(2));
+                views.callController('ramps', 'calculate', true);
+              }
+            };
+            paletteItems.push(rampItem);
+            html += `<div class="command-section-header">📐 LIVE RAMP CALCULATION</div>`;
+            html += renderCommandItemHTML(rampItem, paletteItems.length - 1);
+          }
+        }
+      }
+
+      // 0g. Live Place Furniture Command: e.g. "place king bed" or "add desk"
+      const placeMatch = query.match(/^(?:place|add|insert)\s+([a-z0-9\s-]+)/i);
+      if (placeMatch) {
+        const furnName = placeMatch[1].trim().toLowerCase();
+        const piece = FURNITURE_DATABASE.find(f =>
+          f.name.toLowerCase().includes(furnName) ||
+          f.id.toLowerCase().includes(furnName) ||
+          f.category.toLowerCase() === furnName
+        );
+        if (piece) {
+          const furnItem = {
+            id: `place-furn-${piece.id}`,
+            title: `Place ${piece.name} (${(piece.width * 1000).toFixed(0)} × ${(piece.depth * 1000).toFixed(0)}mm)`,
+            description: `Category: ${piece.category} | Clearance: ${piece.clearance ? (piece.clearance * 1000).toFixed(0) + 'mm' : 'None'} • Press Enter to place on Plan Canvas`,
+            icon: '🛋️',
+            shortcut: '↵ Place',
+            available: true,
+            action: () => {
+              const entity = createFurnitureEntity({
+                catalogId: piece.id,
+                name: piece.name,
+                x: 2.0,
+                y: 2.0,
+                width: piece.width,
+                depth: piece.depth,
+                clearance: piece.clearance || 0,
+                category: piece.category
+              });
+              if (projectStore && typeof projectStore.updateProject === 'function') {
+                projectStore.updateProject(draft => {
+                  if (!draft.plan) draft.plan = { rooms: [], walls: [], doors: [], windows: [], furniture: [], dimensions: [], stairs: [], ramps: [] };
+                  if (!Array.isArray(draft.plan.furniture)) draft.plan.furniture = [];
+                  draft.plan.furniture.push(entity);
+                  return draft;
+                });
+              }
+              if (state.plan && state.plan.document) {
+                if (!Array.isArray(state.plan.document.furniture)) state.plan.document.furniture = [];
+                state.plan.document.furniture.push(entity);
+                state.plan.selectedIds = new Set([entity.id]);
+              }
+              switchMode('plan');
+              if (views && typeof views.callController === 'function') {
+                views.callController('plan', 'render');
+              }
+              AudioService.playSuccess();
+              showToast(`Placed ${piece.name} on Plan Canvas`);
+            }
+          };
+          paletteItems.push(furnItem);
+          html += `<div class="command-section-header">🛋️ SPATIAL PLACEMENT</div>`;
+          html += renderCommandItemHTML(furnItem, paletteItems.length - 1);
+        }
+      }
+
+      // 0h. Live Unit Conversion: e.g. "convert 12ft to m" or "convert 2400mm to in"
+      const convMatch = query.match(/^convert\s+([0-9.]+)\s*([a-z]+|\"|\')\s+(?:to\s+|in\s+)?([a-z]+|\"|\')/i);
+      if (convMatch) {
+        const val = parseFloat(convMatch[1]);
+        let fromKey = convMatch[2].toLowerCase().replace('"', 'in').replace("'", 'ft');
+        let toKey = convMatch[3].toLowerCase().replace('"', 'in').replace("'", 'ft');
+        if (UNITS[fromKey] && UNITS[toKey]) {
+          const canonicalM = val * UNITS[fromKey].toMeters;
+          const convertedVal = canonicalM / UNITS[toKey].toMeters;
+          const formattedRes = convertedVal % 1 === 0 ? `${convertedVal} ${toKey}` : `${convertedVal.toFixed(3)} ${toKey}`;
+          const convItem = {
+            id: 'convert-live-calc',
+            title: `Convert ${val} ${fromKey} = ${formattedRes}`,
+            description: `${val} ${UNITS[fromKey].name} = ${formattedRes} • Press Enter to copy`,
+            icon: '🔄',
+            shortcut: '↵ Copy',
+            available: true,
+            action: () => {
+              copyToClipboard(formattedRes, 'Converted Dimension');
+              showToast(`Copied ${formattedRes} to clipboard`);
+            }
+          };
+          paletteItems.push(convItem);
+          html += `<div class="command-section-header">🔄 UNIT CONVERSION</div>`;
+          html += renderCommandItemHTML(convItem, paletteItems.length - 1);
+        }
+      }
+
       if (searchData.results.length === 0 && paletteItems.length === 0) {
         html = `
           <div class="command-palette-empty">
@@ -28179,6 +28818,23 @@ function initializeApp() {
     if (dom.btnSaveHistory) {
       dom.btnSaveHistory.addEventListener('click', () => {
         views.callController('history', 'logCurrentCalculationToHistory', 'converter');
+      });
+    }
+
+    if (dom.btnScratchConverter) {
+      dom.btnScratchConverter.addEventListener('click', () => {
+        const val = dom.converterResultVal?.textContent;
+        const unit = dom.converterResultUnit?.textContent;
+        const inVal = dom.converterInputVal?.value;
+        const inUnit = dom.converterInputUnit?.value;
+        if (val && val !== '---') {
+          views.callController('scratchpad', 'addItem', {
+            label: `Scale ${state.activeScale || ''} (${inVal}${inUnit})`,
+            value: `${val} ${unit || ''}`.trim(),
+            unit: unit || '',
+            source: 'Converter'
+          });
+        }
       });
     }
 
@@ -29680,6 +30336,23 @@ function initializeApp() {
       });
     }
 
+    if (dom.chainsSendScratchpadBtn) {
+      dom.chainsSendScratchpadBtn.addEventListener('click', () => {
+        const chain = state.lastValidChain;
+        if (chain && chain.isValid) {
+          views.callController('scratchpad', 'addItem', {
+            label: `Chain: ${chain.name || 'Total'} (${chain.segmentCount} segs)`,
+            value: `${chain.overallExtentFormatted} (segs: ${chain.segments.map(s => s.lengthFormatted).join(' + ')})`,
+            unit: chain.defaultUnit || 'mm',
+            source: 'Chains',
+            metadata: { totalMeters: chain.overallExtentMeters, segments: chain.segments }
+          });
+        } else {
+          showToast('No active dimension chain to send', 'warning');
+        }
+      });
+    }
+
     if (dom.quickDimSendCadHandoffBtn) {
       dom.quickDimSendCadHandoffBtn.addEventListener('click', () => {
         views.callController('cad_handoff', 'openCadHandoffWithSource', 'quick');
@@ -29907,6 +30580,12 @@ function initializeApp() {
     if (dom.stairsSaveProjectBtn) {
       dom.stairsSaveProjectBtn.addEventListener('click', () => views.callController('stairs', 'saveToProject'));
     }
+    if (dom.stairsSendScratchpadBtn) {
+      dom.stairsSendScratchpadBtn.addEventListener('click', () => views.callController('stairs', 'sendToScratchpad'));
+    }
+    if (dom.stairsApplyPlanBtn) {
+      dom.stairsApplyPlanBtn.addEventListener('click', () => views.callController('stairs', 'applyToPlan'));
+    }
 
     // Mode 15: Ramp Calculator Listeners
     if (dom.rampsModeSelect) {
@@ -29952,6 +30631,12 @@ function initializeApp() {
     if (dom.rampsSaveProjectBtn) {
       dom.rampsSaveProjectBtn.addEventListener('click', () => views.callController('ramps', 'saveToProject'));
     }
+    if (dom.rampsSendScratchpadBtn) {
+      dom.rampsSendScratchpadBtn.addEventListener('click', () => views.callController('ramps', 'sendToScratchpad'));
+    }
+    if (dom.rampsApplyPlanBtn) {
+      dom.rampsApplyPlanBtn.addEventListener('click', () => views.callController('ramps', 'applyToPlan'));
+    }
 
     // Mode 16: Slope Analyzer Listeners
     if (dom.slopesModeSelect) {
@@ -29993,6 +30678,23 @@ function initializeApp() {
     }
     if (dom.slopesSaveProjectBtn) {
       dom.slopesSaveProjectBtn.addEventListener('click', () => views.callController('slopes', 'saveToProject'));
+    }
+    if (dom.slopesSendScratchpadBtn) {
+      dom.slopesSendScratchpadBtn.addEventListener('click', () => {
+        const r = state.slopes?.lastResult;
+        if (r && r.valid) {
+          const f = r.formatted;
+          views.callController('scratchpad', 'addItem', {
+            label: `Slope ${f.ratio} (${f.slopePercent})`,
+            value: `${f.rise} rise / ${f.run} run`,
+            unit: 'm',
+            source: 'Slopes',
+            metadata: { rise: r.geometry.riseMeters, run: r.geometry.runMeters, percent: r.geometry.slopePercent }
+          });
+        } else {
+          showToast('Run a valid slope calculation first', 'warning');
+        }
+      });
     }
 
     // Mode 17: Export Center Listeners
@@ -30202,7 +30904,7 @@ function initializeApp() {
         return;
       }
 
-      // Global Command Palette Shortcut: Ctrl+K or Cmd+K (Works everywhere)
+      // Global Command Palette Shortcut: Ctrl+K or Cmd+K, or '/' when not typing
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         if (dom.commandPaletteModal?.classList.contains('open')) {
@@ -30212,6 +30914,11 @@ function initializeApp() {
         }
         return;
       }
+      if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName) && !e.target?.isContentEditable) {
+        e.preventDefault();
+        openCommandPalette();
+        return;
+      }
 
       // Esc closes Command Palette first, then drawers/modals/selection/quick-strip
       if (e.key === 'Escape') {
@@ -30219,6 +30926,10 @@ function initializeApp() {
           e.preventDefault();
           e.stopPropagation();
           closeCommandPalette();
+          return;
+        }
+        if (dom.scratchpadDrawer?.classList.contains('open')) {
+          views.callController('scratchpad', 'toggleDrawer', false);
           return;
         }
         if (dom.historyDrawer?.classList.contains('open')) views.callController('history', 'toggleHistoryDrawer');
@@ -30436,6 +31147,7 @@ function initializeApp() {
     renderWorkspaceRef: () => views.callController('workspace', 'renderWorkspace'),
     toggleHistoryDrawerRef: () => views.callController('history', 'toggleHistoryDrawer')
   }));
+  views.register(createScratchpadView(viewContext));
   views.register(createStairsView(viewContext));
   views.register(createRampsView(viewContext));
   views.register(createSlopesView(viewContext));

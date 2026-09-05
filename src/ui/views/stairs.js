@@ -18,6 +18,7 @@ import {
 import { parseInput } from '../../core/parser.js';
 import { createDimensionEntry } from '../../core/dimension-workspace.js';
 import { UNITS } from '../../core/units.js';
+import { createStairEntity } from '../../core/entities.js';
 
 export function createStairsView(context) {
   const {
@@ -392,6 +393,62 @@ export function createStairsView(context) {
     }
   }
 
+  function applyToPlan() {
+    const r = requireResult();
+    if (!r) return;
+    const stair = createStairEntity({
+      x: 1.0,
+      y: 1.0,
+      width: 1.0,
+      run: r.geometry.totalRunMeters,
+      riserCount: r.risers.count,
+      totalRise: r.input.totalRiseMeters,
+      going: r.treads.depthMeters,
+      riser: r.risers.heightMeters,
+      name: `Stair ${r.risers.count}R`
+    });
+    if (projectStore && typeof projectStore.updateProject === 'function') {
+      projectStore.updateProject(draft => {
+        if (!draft.plan) draft.plan = { rooms: [], walls: [], doors: [], windows: [], furniture: [], dimensions: [], stairs: [], ramps: [] };
+        if (!Array.isArray(draft.plan.stairs)) draft.plan.stairs = [];
+        draft.plan.stairs.push(stair);
+        return draft;
+      });
+    }
+    if (state.plan && state.plan.document) {
+      if (!Array.isArray(state.plan.document.stairs)) state.plan.document.stairs = [];
+      state.plan.document.stairs.push(stair);
+      state.plan.selectedIds = new Set([stair.id]);
+    }
+    switchMode('plan');
+    if (views && typeof views.callController === 'function') {
+      views.callController('plan', 'render');
+    }
+    AudioService.playSuccess();
+    showToast(`Stair (${r.risers.count}R) placed onto Plan Canvas`);
+  }
+
+  function sendToScratchpad() {
+    const r = requireResult();
+    if (!r) return;
+    const f = r.formatted;
+    if (views && typeof views.callController === 'function') {
+      views.callController('scratchpad', 'addItem', {
+        label: `Stair ${f.riserCount}R (${f.riser} × ${f.tread})`,
+        value: `${f.totalRise} rise / ${f.totalRun} run`,
+        unit: 'm',
+        source: 'Stairs',
+        metadata: {
+          riserCount: r.risers.count,
+          riser: r.risers.heightMeters,
+          tread: r.treads.depthMeters,
+          totalRise: r.input.totalRiseMeters,
+          totalRun: r.geometry.totalRunMeters
+        }
+      });
+    }
+  }
+
   return {
     id: 'stairs',
     mount() {
@@ -412,7 +469,11 @@ export function createStairsView(context) {
       calculate(false);
     },
     getController() {
-      return { calculate, syncModeVisibility, copyResult, copySchedule, sendToCad, sendToWorkspace, saveToJournal, saveToProject };
+      return {
+        calculate, syncModeVisibility, copyResult, copySchedule,
+        sendToCad, sendToWorkspace, saveToJournal, saveToProject,
+        sendToScratchpad, applyToPlan
+      };
     }
   };
 }
