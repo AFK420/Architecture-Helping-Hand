@@ -4,6 +4,11 @@
  */
 
 import { StorageService } from './storage.js';
+import { parseInput } from '../core/parser.js';
+import { UNITS } from '../core/units.js';
+import { FURNITURE_DATABASE } from '../core/furniture.js';
+import { calculateStair, STAIR_REFERENCE_DEFAULTS } from '../core/stairs.js';
+import { calculateRamp, RAMP_REFERENCE_DEFAULTS } from '../core/ramps.js';
 
 export const RECENT_COMMANDS_KEY = 'archiscale_recent_commands';
 export const FAVORITE_COMMANDS_KEY = 'archiscale_favorite_commands';
@@ -621,3 +626,158 @@ class CommandRegistryClass {
 }
 
 export const CommandRegistry = new CommandRegistryClass();
+
+/**
+ * Parses natural language commands for direct architectural studio operations.
+ * Strictly avoids arbitrary code execution; compiles only into validated data payloads.
+ *
+ * @param {string} query
+ * @returns {Object|null}
+ */
+export function parseNaturalLanguageCommand(query) {
+  if (!query || typeof query !== 'string') return null;
+  const q = query.trim();
+
+  // 1. Scale calculation: "scale 4.2m at 1:50" or "scale 2400mm 1:20"
+  const scaleMatch = q.match(/^scale\s+([0-9.]+\s*[a-z]*)\s+(?:at\s+|@\s+)?(?:1\s*:\s*)?([0-9.]+)/i);
+  if (scaleMatch) {
+    const dimStr = scaleMatch[1].trim();
+    const ratio = parseFloat(scaleMatch[2]);
+    if (ratio > 0) {
+      const parsed = parseInput(dimStr);
+      if (parsed && parsed.isValid) {
+        const canonicalM = parsed.canonicalMeters;
+        const drawM = canonicalM / ratio;
+        const drawMm = drawM * 1000;
+        const drawFormatted = drawMm >= 1000
+          ? `${drawM.toFixed(3)} m`
+          : (drawMm % 1 === 0 ? `${drawMm.toFixed(0)} mm` : `${drawMm.toFixed(1)} mm`);
+        return {
+          type: 'scale',
+          query: q,
+          inputStr: dimStr,
+          ratio,
+          canonicalMeters: canonicalM,
+          drawingMeters: drawM,
+          drawingFormatted: drawFormatted,
+          formattedResult: drawFormatted,
+          title: `Scale ${dimStr} at 1:${ratio} = ${drawFormatted}`,
+          description: `Real: ${parsed.formattedCanonical} | Drawing: ${drawFormatted} @ 1:${ratio}`
+        };
+      }
+    }
+  }
+
+  // 2. Stair geometry: "stair rise 2.7m" or "stair 2700mm"
+  const stairMatch = q.match(/^stair(?:s)?(?:\s+rise)?\s+([0-9.]+\s*[a-z]+)/i);
+  if (stairMatch) {
+    const riseStr = stairMatch[1].trim();
+    const parsed = parseInput(riseStr);
+    if (parsed && parsed.isValid && parsed.canonicalMeters > 0) {
+      const stairRes = calculateStair({
+        mode: 'rise_target_riser',
+        totalRise: parsed.canonicalMeters,
+        desiredRiser: 0.175,
+        desiredTread: 0.28,
+        references: STAIR_REFERENCE_DEFAULTS
+      });
+      if (stairRes && stairRes.valid) {
+        const f = stairRes.formatted;
+        return {
+          type: 'stair',
+          query: q,
+          inputStr: riseStr,
+          totalRiseMeters: parsed.canonicalMeters,
+          riserCount: stairRes.risers.count,
+          riserHeightMeters: stairRes.risers.heightMeters,
+          treadDepthMeters: stairRes.treads.depthMeters,
+          totalRunMeters: stairRes.geometry.totalRunMeters,
+          formattedResult: `${f.riserCount}R (${f.riser} × ${f.tread}) — run ${f.totalRun}`,
+          result: stairRes,
+          title: `Stair: ${f.riserCount} risers @ ${f.riser}, run ${f.totalRun}`,
+          description: `Total Rise: ${f.totalRise} | 2R+T: ${f.twoRPlusT} (${f.proportionStatus})`
+        };
+      }
+    }
+  }
+
+  // 3. Ramp geometry: "ramp rise 1.2m at 1:12" or "ramp 1.2m 1:12"
+  const rampMatch = q.match(/^ramp(?:s)?(?:\s+rise)?\s+([0-9.]+\s*[a-z]+)(?:\s+(?:(?:at|slope)\s+)?1\s*:\s*([0-9.]+))?/i);
+  if (rampMatch) {
+    const riseStr = rampMatch[1].trim();
+    const ratio = rampMatch[2] ? parseFloat(rampMatch[2]) : 12;
+    const parsed = parseInput(riseStr);
+    if (parsed && parsed.isValid && parsed.canonicalMeters > 0 && ratio > 0) {
+      const desiredSlope = (1 / ratio) * 100;
+      const rampRes = calculateRamp({
+        mode: 'rise_desired_slope',
+        rise: parsed.canonicalMeters,
+        slopePercent: desiredSlope,
+        references: RAMP_REFERENCE_DEFAULTS
+      });
+      if (rampRes && rampRes.valid) {
+        const f = rampRes.formatted;
+        return {
+          type: 'ramp',
+          query: q,
+          inputStr: riseStr,
+          riseMeters: parsed.canonicalMeters,
+          ratio,
+          runMeters: rampRes.geometry.runMeters,
+          slopePercent: desiredSlope,
+          formattedResult: `Run ${f.run} @ 1:${ratio} (${f.slopePercent})`,
+          result: rampRes,
+          title: `Ramp 1:${ratio}: run ${f.run} (rise ${f.rise})`,
+          description: `Slope: ${f.slopePercent} | Ratio: ${f.ratio} | Flight: ${f.flightLength}`
+        };
+      }
+    }
+  }
+
+  // 4. Place furniture: "place king bed" or "add desk"
+  const placeMatch = q.match(/^(?:place|add|insert)\s+([a-z0-9\s-]+)/i);
+  if (placeMatch) {
+    const furnName = placeMatch[1].trim().toLowerCase();
+    const piece = FURNITURE_DATABASE.find(f =>
+      f.name.toLowerCase().includes(furnName) ||
+      f.id.toLowerCase().includes(furnName) ||
+      f.category.toLowerCase() === furnName
+    );
+    if (piece) {
+      return {
+        type: 'place',
+        query: q,
+        furniture: piece,
+        formattedResult: `${piece.name} (${(piece.width * 1000).toFixed(0)} × ${(piece.depth * 1000).toFixed(0)}mm)`,
+        title: `Place ${piece.name} (${(piece.width * 1000).toFixed(0)} × ${(piece.depth * 1000).toFixed(0)}mm)`,
+        description: `Category: ${piece.category} | Clearance: ${piece.clearance ? (piece.clearance * 1000).toFixed(0) + 'mm' : 'None'}`
+      };
+    }
+  }
+
+  // 5. Unit conversion: "convert 12ft to m" or "convert 2400mm to in"
+  const convMatch = q.match(/^convert\s+([0-9.]+)\s*([a-z]+|\"|\')\s+(?:to\s+|in\s+)?([a-z]+|\"|\')/i);
+  if (convMatch) {
+    const val = parseFloat(convMatch[1]);
+    let fromKey = convMatch[2].toLowerCase().replace('"', 'in').replace("'", 'ft');
+    let toKey = convMatch[3].toLowerCase().replace('"', 'in').replace("'", 'ft');
+    if (UNITS[fromKey] && UNITS[toKey]) {
+      const canonicalM = val * UNITS[fromKey].toMeters;
+      const convertedVal = canonicalM / UNITS[toKey].toMeters;
+      const formattedRes = convertedVal % 1 === 0 ? `${convertedVal} ${toKey}` : `${convertedVal.toFixed(3)} ${toKey}`;
+      return {
+        type: 'convert',
+        query: q,
+        val,
+        fromKey,
+        toKey,
+        convertedValue: convertedVal,
+        formattedResult: formattedRes,
+        title: `Convert ${val} ${fromKey} = ${formattedRes}`,
+        description: `${val} ${UNITS[fromKey].name} = ${formattedRes}`
+      };
+    }
+  }
+
+  return null;
+}

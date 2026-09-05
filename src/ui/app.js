@@ -126,7 +126,7 @@ import { StorageService } from '../services/storage.js';
 import { createProjectStore } from '../services/store.js';
 import { AudioService } from '../services/audio.js';
 import { HistoryService } from '../services/history.js';
-import { CommandRegistry } from '../services/commands.js';
+import { CommandRegistry, parseNaturalLanguageCommand } from '../services/commands.js';
 import { updateVisualization, getFurniturePlanSVG } from './visualizer.js';
 
 export function initializeApp() {
@@ -2780,123 +2780,67 @@ export function initializeApp() {
         }
       }
 
-      // 0d. Live Scale Command Detection: e.g. "scale 4.2m at 1:50" or "scale 2400mm 1:20"
-      const scaleMatch = query.match(/^scale\s+([0-9.]+\s*[a-z]*)\s+(?:at\s+|@\s+)?(?:1\s*:\s*)?([0-9.]+)/i);
-      if (scaleMatch) {
-        const dimStr = scaleMatch[1].trim();
-        const ratio = parseFloat(scaleMatch[2]);
-        if (ratio > 0) {
-          const parsed = parseInput(dimStr);
-          if (parsed && parsed.isValid) {
-            const canonicalM = parsed.canonicalMeters;
-            const drawM = canonicalM / ratio;
-            const drawMm = drawM * 1000;
-            const drawFormatted = drawMm >= 1000 ? `${(drawM).toFixed(3)} m` : (drawMm % 1 === 0 ? `${drawMm.toFixed(0)} mm` : `${drawMm.toFixed(1)} mm`);
-            const scaleItem = {
-              id: 'scale-live-calc',
-              title: `Scale ${dimStr} at 1:${ratio} = ${drawFormatted}`,
-              description: `Real: ${parsed.formattedCanonical} | Drawing: ${drawFormatted} @ 1:${ratio} • Press Enter to copy`,
-              icon: '📐',
-              shortcut: '↵ Copy',
-              available: true,
-              action: () => {
-                copyToClipboard(drawFormatted, 'Scaled Dimension');
-                showToast(`Copied ${drawFormatted} to clipboard`);
-              }
-            };
-            paletteItems.push(scaleItem);
-            html += `<div class="command-section-header">📐 LIVE SCALE CALCULATION</div>`;
-            html += renderCommandItemHTML(scaleItem, paletteItems.length - 1);
-          }
-        }
-      }
-
-      // 0e. Live Stair Command Detection: e.g. "stair rise 2.7m" or "stair 2700mm"
-      const stairMatch = query.match(/^stair(?:s)?(?:\s+rise)?\s+([0-9.]+\s*[a-z]+)/i);
-      if (stairMatch) {
-        const riseStr = stairMatch[1].trim();
-        const parsed = parseInput(riseStr);
-        if (parsed && parsed.isValid && parsed.canonicalMeters > 0) {
-          const stairRes = calculateStair({
-            mode: 'rise_target_riser',
-            totalRise: parsed.canonicalMeters,
-            desiredRiser: 0.175,
-            desiredTread: 0.28,
-            references: STAIR_REFERENCE_DEFAULTS
-          });
-          if (stairRes && stairRes.valid) {
-            const f = stairRes.formatted;
-            const stairItem = {
-              id: 'stair-live-calc',
-              title: `Stair: ${f.riserCount} risers @ ${f.riser}, run ${f.totalRun}`,
-              description: `Total Rise: ${f.totalRise} | 2R+T: ${f.twoRPlusT} (${f.proportionStatus}) • Press Enter to open Stairs`,
-              icon: '🪜',
-              shortcut: '↵ Open',
-              available: true,
-              action: () => {
-                switchMode('stairs');
-                if (dom.stairsTotalRise) dom.stairsTotalRise.value = riseStr;
-                views.callController('stairs', 'calculate', true);
-              }
-            };
-            paletteItems.push(stairItem);
-            html += `<div class="command-section-header">🪜 LIVE STAIR CALCULATION</div>`;
-            html += renderCommandItemHTML(stairItem, paletteItems.length - 1);
-          }
-        }
-      }
-
-      // 0f. Live Ramp Command Detection: e.g. "ramp rise 1.2m [at 1:12]" or "ramp 1.2m"
-      const rampMatch = query.match(/^ramp(?:s)?(?:\s+rise)?\s+([0-9.]+\s*[a-z]+)(?:\s+(?:(?:at|slope)\s+)?1\s*:\s*([0-9.]+))?/i);
-      if (rampMatch) {
-        const riseStr = rampMatch[1].trim();
-        const ratio = rampMatch[2] ? parseFloat(rampMatch[2]) : 12;
-        const parsed = parseInput(riseStr);
-        if (parsed && parsed.isValid && parsed.canonicalMeters > 0 && ratio > 0) {
-          const desiredSlope = (1 / ratio) * 100;
-          const rampRes = calculateRamp({
-            mode: 'rise_desired_slope',
-            rise: parsed.canonicalMeters,
-            slopePercent: desiredSlope,
-            references: RAMP_REFERENCE_DEFAULTS
-          });
-          if (rampRes && rampRes.valid) {
-            const f = rampRes.formatted;
-            const rampItem = {
-              id: 'ramp-live-calc',
-              title: `Ramp 1:${ratio}: run ${f.run} (rise ${f.rise})`,
-              description: `Slope: ${f.slopePercent} | Ratio: ${f.ratio} | Flight: ${f.flightLength} • Press Enter to open Ramps`,
-              icon: '📐',
-              shortcut: '↵ Open',
-              available: true,
-              action: () => {
-                switchMode('ramps');
-                if (dom.rampsRise) dom.rampsRise.value = riseStr;
-                if (dom.rampsSlope) dom.rampsSlope.value = String(desiredSlope.toFixed(2));
-                views.callController('ramps', 'calculate', true);
-              }
-            };
-            paletteItems.push(rampItem);
-            html += `<div class="command-section-header">📐 LIVE RAMP CALCULATION</div>`;
-            html += renderCommandItemHTML(rampItem, paletteItems.length - 1);
-          }
-        }
-      }
-
-      // 0g. Live Place Furniture Command: e.g. "place king bed" or "add desk"
-      const placeMatch = query.match(/^(?:place|add|insert)\s+([a-z0-9\s-]+)/i);
-      if (placeMatch) {
-        const furnName = placeMatch[1].trim().toLowerCase();
-        const piece = FURNITURE_DATABASE.find(f =>
-          f.name.toLowerCase().includes(furnName) ||
-          f.id.toLowerCase().includes(furnName) ||
-          f.category.toLowerCase() === furnName
-        );
-        if (piece) {
-          const furnItem = {
-            id: `place-furn-${piece.id}`,
-            title: `Place ${piece.name} (${(piece.width * 1000).toFixed(0)} × ${(piece.depth * 1000).toFixed(0)}mm)`,
-            description: `Category: ${piece.category} | Clearance: ${piece.clearance ? (piece.clearance * 1000).toFixed(0) + 'mm' : 'None'} • Press Enter to place on Plan Canvas`,
+      // 0d. Natural Language Studio Commands: Scale, Stairs, Ramps, Furniture, Conversion
+      const nlCommand = parseNaturalLanguageCommand(query);
+      if (nlCommand) {
+        let nlItem = null;
+        if (nlCommand.type === 'scale') {
+          nlItem = {
+            id: 'nl-scale-calc',
+            title: nlCommand.title,
+            description: `${nlCommand.description} • Press Enter to copy to clipboard`,
+            icon: '📐',
+            shortcut: '↵ Copy',
+            available: true,
+            action: () => {
+              copyToClipboard(nlCommand.drawingFormatted, 'Scaled Dimension');
+              showToast(`Copied ${nlCommand.drawingFormatted} to clipboard`);
+            }
+          };
+          paletteItems.push(nlItem);
+          html += `<div class="command-section-header">📐 LIVE SCALE CALCULATION</div>`;
+          html += renderCommandItemHTML(nlItem, paletteItems.length - 1);
+        } else if (nlCommand.type === 'stair') {
+          nlItem = {
+            id: 'nl-stair-calc',
+            title: nlCommand.title,
+            description: `${nlCommand.description} • Press Enter to open in Stairs Tool`,
+            icon: '🪜',
+            shortcut: '↵ Open',
+            available: true,
+            action: () => {
+              switchMode('stairs');
+              if (dom.stairsTotalRise) dom.stairsTotalRise.value = nlCommand.inputStr;
+              views.callController('stairs', 'calculate', true);
+            }
+          };
+          paletteItems.push(nlItem);
+          html += `<div class="command-section-header">🪜 LIVE STAIR GEOMETRY</div>`;
+          html += renderCommandItemHTML(nlItem, paletteItems.length - 1);
+        } else if (nlCommand.type === 'ramp') {
+          nlItem = {
+            id: 'nl-ramp-calc',
+            title: nlCommand.title,
+            description: `${nlCommand.description} • Press Enter to open in Ramp Tool`,
+            icon: '📐',
+            shortcut: '↵ Open',
+            available: true,
+            action: () => {
+              switchMode('ramps');
+              if (dom.rampsRise) dom.rampsRise.value = nlCommand.inputStr;
+              if (dom.rampsSlope) dom.rampsSlope.value = String(nlCommand.slopePercent.toFixed(2));
+              views.callController('ramps', 'calculate', true);
+            }
+          };
+          paletteItems.push(nlItem);
+          html += `<div class="command-section-header">📐 LIVE RAMP GEOMETRY</div>`;
+          html += renderCommandItemHTML(nlItem, paletteItems.length - 1);
+        } else if (nlCommand.type === 'place') {
+          const piece = nlCommand.furniture;
+          nlItem = {
+            id: `nl-place-${piece.id}`,
+            title: nlCommand.title,
+            description: `${nlCommand.description} • Press Enter to place on Plan Canvas`,
             icon: '🛋️',
             shortcut: '↵ Place',
             available: true,
@@ -2932,37 +2876,25 @@ export function initializeApp() {
               showToast(`Placed ${piece.name} on Plan Canvas`);
             }
           };
-          paletteItems.push(furnItem);
+          paletteItems.push(nlItem);
           html += `<div class="command-section-header">🛋️ SPATIAL PLACEMENT</div>`;
-          html += renderCommandItemHTML(furnItem, paletteItems.length - 1);
-        }
-      }
-
-      // 0h. Live Unit Conversion: e.g. "convert 12ft to m" or "convert 2400mm to in"
-      const convMatch = query.match(/^convert\s+([0-9.]+)\s*([a-z]+|\"|\')\s+(?:to\s+|in\s+)?([a-z]+|\"|\')/i);
-      if (convMatch) {
-        const val = parseFloat(convMatch[1]);
-        let fromKey = convMatch[2].toLowerCase().replace('"', 'in').replace("'", 'ft');
-        let toKey = convMatch[3].toLowerCase().replace('"', 'in').replace("'", 'ft');
-        if (UNITS[fromKey] && UNITS[toKey]) {
-          const canonicalM = val * UNITS[fromKey].toMeters;
-          const convertedVal = canonicalM / UNITS[toKey].toMeters;
-          const formattedRes = convertedVal % 1 === 0 ? `${convertedVal} ${toKey}` : `${convertedVal.toFixed(3)} ${toKey}`;
-          const convItem = {
-            id: 'convert-live-calc',
-            title: `Convert ${val} ${fromKey} = ${formattedRes}`,
-            description: `${val} ${UNITS[fromKey].name} = ${formattedRes} • Press Enter to copy`,
+          html += renderCommandItemHTML(nlItem, paletteItems.length - 1);
+        } else if (nlCommand.type === 'convert') {
+          nlItem = {
+            id: 'nl-convert-calc',
+            title: nlCommand.title,
+            description: `${nlCommand.description} • Press Enter to copy to clipboard`,
             icon: '🔄',
             shortcut: '↵ Copy',
             available: true,
             action: () => {
-              copyToClipboard(formattedRes, 'Converted Dimension');
-              showToast(`Copied ${formattedRes} to clipboard`);
+              copyToClipboard(nlCommand.formattedResult, 'Converted Dimension');
+              showToast(`Copied ${nlCommand.formattedResult} to clipboard`);
             }
           };
-          paletteItems.push(convItem);
+          paletteItems.push(nlItem);
           html += `<div class="command-section-header">🔄 UNIT CONVERSION</div>`;
-          html += renderCommandItemHTML(convItem, paletteItems.length - 1);
+          html += renderCommandItemHTML(nlItem, paletteItems.length - 1);
         }
       }
 
