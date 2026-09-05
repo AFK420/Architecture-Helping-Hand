@@ -19790,10 +19790,10 @@ function createScratchpadView(context) {
             Copy
           </button>
           <button class="scratch-btn-workspace action-tool-btn compact" data-val="${escapeHtml(item.value)}" data-label="${escapeHtml(item.label || item.source || 'Scratchpad')}" title="Send to Dimension Workspace" style="font-size: 0.72rem; padding: 2px 8px;">
-            ?? Workspace
+            → Workspace
           </button>
           <button class="scratch-btn-del action-tool-btn compact danger" data-id="${escapeHtml(item.id)}" title="Delete item" style="font-size: 0.72rem; padding: 2px 8px; color: var(--color-error);">
-            ?
+            ✕
           </button>
         </div>
       </div>

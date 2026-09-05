@@ -4392,18 +4392,18 @@
         <span id="scratchpad-count-badge" class="history-count-badge">0 saved</span>
       </div>
       <div class="drawer-actions">
-        <button id="scratchpad-export-md-btn" class="hist-btn" title="Copy scratchpad as Markdown table">
+        <button id="scratchpad-export-md-btn" class="hist-btn" title="Copy scratchpad as Markdown table" aria-label="Copy scratchpad as Markdown table">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
           MD
         </button>
-        <button id="scratchpad-clear-btn" class="hist-btn danger" title="Clear all scratchpad values">Clear</button>
-        <button id="scratchpad-close-btn" class="hist-btn close-btn" title="Close drawer">✕</button>
+        <button id="scratchpad-clear-btn" class="hist-btn danger" title="Clear all scratchpad values" aria-label="Clear all scratchpad values">Clear</button>
+        <button id="scratchpad-close-btn" class="hist-btn close-btn" title="Close drawer" aria-label="Close scratchpad drawer">✕</button>
       </div>
     </div>
     <div class="scratchpad-add-bar" style="display: flex; gap: 6px; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color-light); background: var(--bg-surface-elevated);">
-      <input type="text" id="scratchpad-quick-val" class="text-input" placeholder="e.g. 2400 mm or 4.2m" style="flex: 1; padding: 0.25rem 0.45rem; font-size: 0.78rem;" />
-      <input type="text" id="scratchpad-quick-label" class="text-input" placeholder="Label (optional)" style="flex: 1; padding: 0.25rem 0.45rem; font-size: 0.78rem;" />
-      <button id="scratchpad-quick-add-btn" class="action-btn" style="padding: 0.25rem 0.6rem; font-size: 0.78rem; background: var(--accent-primary); color: #fff;">+ Add</button>
+      <input type="text" id="scratchpad-quick-val" class="text-input" placeholder="e.g. 2400 mm or 4.2m" aria-label="Scratchpad value input" style="flex: 1; padding: 0.25rem 0.45rem; font-size: 0.78rem;" />
+      <input type="text" id="scratchpad-quick-label" class="text-input" placeholder="Label (optional)" aria-label="Scratchpad label input" style="flex: 1; padding: 0.25rem 0.45rem; font-size: 0.78rem;" />
+      <button id="scratchpad-quick-add-btn" class="action-btn" aria-label="Add to scratchpad" style="padding: 0.25rem 0.6rem; font-size: 0.78rem; background: var(--accent-primary); color: #fff;">+ Add</button>
     </div>
     <div id="scratchpad-list" class="history-list-container">
       <!-- Populated dynamically by app.js -->

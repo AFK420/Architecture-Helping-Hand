@@ -4967,6 +4967,7 @@ body.sidebar-hidden .app-sidebar {
 @media (max-width: 380px) {
   #sound-toggle-label,
   #history-toggle-btn span,
+  #scratchpad-toggle-btn span,
   #quick-dim-toggle-btn span {
     display: none;
   }
