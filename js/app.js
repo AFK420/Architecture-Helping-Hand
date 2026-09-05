@@ -34176,75 +34176,106 @@ function initializeApp() {
 
   /** Initializes Progressive Web App (PWA) installation and Service Worker lifecycle. */
   function initPwa() {
-  let deferredInstallPrompt = null;
-  const installBtn = dom.pwaInstallBtn;
+    let deferredInstallPrompt = null;
+    const installBtn = dom.pwaInstallBtn;
+    const pwaModal = document.getElementById('pwa-install-modal');
+    const closePwaBtn = document.getElementById('close-pwa-modal-btn');
+    const dismissPwaBtn = document.getElementById('btn-pwa-dismiss');
 
-  // 1. Service Worker Registration (supports localhost and https)
-  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof window !== 'undefined') {
-    const isSecure = window.location.protocol === 'https:' ||
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1';
-
-    if (isSecure) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then(reg => {
-            console.log('[PWA] Service Worker registered with scope:', reg.scope);
-          })
-          .catch(err => {
-            console.warn('[PWA] Service Worker registration failed:', err);
-          });
-      });
+    function openPwaModal() {
+      if (pwaModal) pwaModal.classList.add('open');
+      if (dom.modalBackdrop) dom.modalBackdrop.classList.add('open');
     }
-  }
 
-  // 2. Browser Desktop/Mobile Install Prompt Interception
-  if (typeof window !== 'undefined') {
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredInstallPrompt = e;
-      if (installBtn) {
-        installBtn.style.display = 'inline-flex';
-        installBtn.setAttribute('aria-hidden', 'false');
+    function closePwaModal() {
+      if (pwaModal) pwaModal.classList.remove('open');
+      if (dom.modalBackdrop && !dom.shortcutsModal?.classList.contains('open')) {
+        dom.modalBackdrop.classList.remove('open');
       }
-    });
+    }
 
-    if (installBtn) {
-      installBtn.addEventListener('click', async () => {
-        if (!deferredInstallPrompt) {
-          showToast('To install as an app, click the install icon (⊞) in your browser address bar.', 'info');
-          return;
-        }
-        try {
-          deferredInstallPrompt.prompt();
-          const choiceResult = await deferredInstallPrompt.userChoice;
-          if (choiceResult && choiceResult.outcome === 'accepted') {
-            showToast('Architecture Helping Hand installed successfully!', 'success');
-            AudioService.play('success');
-            installBtn.style.display = 'none';
-          }
-        } catch (err) {
-          console.warn('[PWA] Install prompt error:', err);
-        }
-        deferredInstallPrompt = null;
+    if (closePwaBtn) closePwaBtn.addEventListener('click', closePwaModal);
+    if (dismissPwaBtn) dismissPwaBtn.addEventListener('click', closePwaModal);
+    if (dom.modalBackdrop) {
+      dom.modalBackdrop.addEventListener('click', () => {
+        if (pwaModal?.classList.contains('open')) closePwaModal();
       });
     }
 
-    window.addEventListener('appinstalled', () => {
-      deferredInstallPrompt = null;
-      if (installBtn) installBtn.style.display = 'none';
-      showToast('Architecture Helping Hand is now installed on your desktop!', 'success');
-      AudioService.play('success');
-    });
+    // 1. Service Worker Registration (supports localhost and https)
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof window !== 'undefined') {
+      const isSecure = window.location.protocol === 'https:' ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
 
-    // Hide button if already running in standalone desktop mode
-    const isStandalone = (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches) ||
-      (typeof navigator !== 'undefined' && navigator.standalone === true);
-    if (isStandalone && installBtn) {
-      installBtn.style.display = 'none';
+      if (isSecure) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js')
+            .then(reg => {
+              console.log('[PWA] Service Worker registered with scope:', reg.scope);
+            })
+            .catch(err => {
+              console.warn('[PWA] Service Worker registration failed (ignoring for non-server protocols):', err);
+            });
+        });
+      }
+    }
+
+    // 2. Browser Desktop/Mobile Install Prompt Interception
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && pwaModal?.classList.contains('open')) {
+          closePwaModal();
+        }
+      });
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+        if (installBtn) {
+          installBtn.style.display = 'inline-flex';
+          installBtn.setAttribute('aria-hidden', 'false');
+        }
+      });
+
+      if (installBtn) {
+        installBtn.addEventListener('click', async () => {
+          if (!deferredInstallPrompt) {
+            openPwaModal();
+            return;
+          }
+          try {
+            deferredInstallPrompt.prompt();
+            const choiceResult = await deferredInstallPrompt.userChoice;
+            if (choiceResult && choiceResult.outcome === 'accepted') {
+              showToast('Architecture Helping Hand installed successfully!', 'success');
+              AudioService.play('success');
+              installBtn.style.display = 'none';
+            }
+          } catch (err) {
+            console.warn('[PWA] Install prompt error:', err);
+            openPwaModal();
+          }
+          deferredInstallPrompt = null;
+        });
+      }
+
+      window.addEventListener('appinstalled', () => {
+        deferredInstallPrompt = null;
+        if (installBtn) installBtn.style.display = 'none';
+        closePwaModal();
+        showToast('Architecture Helping Hand is now installed on your desktop!', 'success');
+        AudioService.play('success');
+      });
+
+      // Hide button if already running in standalone desktop mode
+      const isStandalone = (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches) ||
+        (typeof navigator !== 'undefined' && navigator.standalone === true);
+      if (isStandalone && installBtn) {
+        installBtn.style.display = 'none';
+      }
     }
   }
-}
 }
 
 

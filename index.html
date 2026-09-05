@@ -284,7 +284,7 @@
             </button>
 
             <!-- PWA Desktop App Install Trigger -->
-            <button id="pwa-install-btn" class="control-btn pwa-install-btn" title="Install Architecture Helping Hand as a Standalone Desktop App" aria-label="Install Desktop App" style="display: none;">
+            <button id="pwa-install-btn" class="control-btn pwa-install-btn" title="Install Architecture Helping Hand as a Standalone Desktop App" aria-label="Install Desktop App">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
                 <line x1="8" y1="21" x2="16" y2="21"></line>
@@ -4705,6 +4705,70 @@
               Click <strong style="color: #38bdf8;">🏛️ Revit Type</strong> to copy parameter schedules formatted directly for Autodesk Revit Stair and Ramp Type/Instance properties.
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progressive Web App (PWA) Desktop Install Modal -->
+  <div id="pwa-install-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="pwa-modal-title">
+    <div class="modal-card" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3 id="pwa-modal-title" style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+          <span>💻</span> Run Architecture Helping Hand as an App
+        </h3>
+        <button id="close-pwa-modal-btn" class="hist-btn" title="Close modal">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 1rem 1.25rem;">
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.5;">
+          You can run <strong>Architecture Helping Hand</strong> in its own dedicated, borderless desktop window without browser URL bars or tabs.
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 0.85rem;">
+          <!-- Option 1: 1-Click Windows App Launcher -->
+          <div style="background: rgba(56, 189, 248, 0.08); border: 1.5px solid rgba(56, 189, 248, 0.3); border-radius: var(--radius-md); padding: 0.85rem 1rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
+              <strong style="font-size: 0.9rem; color: var(--accent-primary, #38bdf8);">⚡ Option 1: 1-Click Desktop Launcher</strong>
+              <span class="unit-system-tag" style="font-size: 0.65rem;">RECOMMENDED</span>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0; line-height: 1.4;">
+              In your project folder (<code>E:\Scaler</code>), double-click:
+            </p>
+            <div style="background: var(--bg-surface); padding: 0.4rem 0.6rem; border-radius: 4px; font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-primary); margin: 0.4rem 0; border: 1px solid var(--border-medium);">
+              ▶ Launch Architecture App.bat
+            </div>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">
+              Opens immediately in a borderless standalone app window without browser tabs or address bar.
+            </p>
+          </div>
+
+          <!-- Option 2: Browser Install Menu -->
+          <div style="background: var(--bg-card); border: 1.5px solid var(--border-medium); border-radius: var(--radius-md); padding: 0.85rem 1rem;">
+            <strong style="font-size: 0.9rem; color: var(--text-primary); display: block; margin-bottom: 0.35rem;">
+              🌐 Option 2: Install from Chrome or Edge Menu
+            </strong>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0 0 0.4rem; line-height: 1.4;">
+              If running in your browser, you can install directly:
+            </p>
+            <ul style="font-size: 0.78rem; color: var(--text-secondary); margin: 0; padding-left: 1.2rem; line-height: 1.5;">
+              <li><strong>Google Chrome:</strong> Click <code>⋮</code> (top-right) ➔ <em>Cast, save, and share</em> ➔ <em>Install Architecture Helping Hand...</em></li>
+              <li><strong>Microsoft Edge:</strong> Click <code>…</code> (top-right) ➔ <em>Apps</em> ➔ <em>Install Architecture Helping Hand</em></li>
+            </ul>
+          </div>
+
+          <!-- Option 3: Local Server Mode -->
+          <div style="background: var(--bg-card); border: 1.5px solid var(--border-medium); border-radius: var(--radius-md); padding: 0.85rem 1rem;">
+            <strong style="font-size: 0.9rem; color: var(--text-primary); display: block; margin-bottom: 0.35rem;">
+              🚀 Option 3: Local Server Mode (Full PWA &amp; Offline Cache)
+            </strong>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0; line-height: 1.4;">
+              Double-click <code>Start Server.bat</code> (or run <code>npm start</code>) to launch <code>http://localhost:3500</code>. A one-click install button will appear in your address bar!
+            </p>
+          </div>
+        </div>
+
+        <div style="margin-top: 1.25rem; text-align: right;">
+          <button type="button" id="btn-pwa-dismiss" class="btn btn-primary" style="padding: 0.45rem 1.25rem; font-size: 0.85rem;">Got it</button>
         </div>
       </div>
     </div>
