@@ -50,6 +50,7 @@ export const BUNDLE_MODULES = [
   { name: 'Stairs', file: path.join(srcDir, 'core', 'stairs.js') },
   { name: 'Ramps', file: path.join(srcDir, 'core', 'ramps.js') },
   { name: 'Slopes', file: path.join(srcDir, 'core', 'slopes.js') },
+  { name: 'BuildingCodes', file: path.join(srcDir, 'core', 'building-codes.js') },
   { name: 'Project', file: path.join(srcDir, 'core', 'project.js') },
   { name: 'Entities', file: path.join(srcDir, 'core', 'entities.js') },
   { name: 'PlanCanvas', file: path.join(srcDir, 'core', 'plan-canvas.js') },

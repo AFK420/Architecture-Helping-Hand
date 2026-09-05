@@ -15,6 +15,7 @@ import {
   calculateStair,
   generateStairSVG
 } from '../../core/stairs.js';
+import { getBuildingCode, inspectStairCompliance } from '../../core/building-codes.js';
 import { parseInput } from '../../core/parser.js';
 import { createDimensionEntry } from '../../core/dimension-workspace.js';
 import { UNITS } from '../../core/units.js';
@@ -195,6 +196,7 @@ export function createStairsView(context) {
       if (dom[k]) dom[k].textContent = '—';
     });
     if (dom.stairsSvgWrap) dom.stairsSvgWrap.innerHTML = '';
+    if (dom.stairsCodeInspectorWrap) dom.stairsCodeInspectorWrap.innerHTML = '';
     if (dom.stairsCandidatesBody) dom.stairsCandidatesBody.innerHTML = '';
     if (dom.stairsBlondelStatus) {
       dom.stairsBlondelStatus.textContent = '—';
@@ -227,6 +229,49 @@ export function createStairsView(context) {
     // SVG diagram drawn from the actual calculated geometry
     if (dom.stairsSvgWrap) {
       dom.stairsSvgWrap.innerHTML = generateStairSVG(result, { width: 520, height: 240 });
+    }
+
+    // Building Code Compliance Inspection
+    if (dom.stairsCodeInspectorWrap) {
+      const selectedCodeId = dom.stairsCodeSelect?.value || 'jnbc';
+      const inspection = inspectStairCompliance(result, selectedCodeId);
+      const statusClass = inspection.overallStatus === 'pass' ? 'status-pass' : (inspection.overallStatus === 'warn' ? 'status-warn' : 'status-fail');
+      const badgeClass = inspection.overallStatus === 'pass' ? 'badge-pass' : (inspection.overallStatus === 'warn' ? 'badge-warn' : 'badge-fail');
+      const badgeIcon = inspection.overallStatus === 'pass' ? '✓' : (inspection.overallStatus === 'warn' ? '⚠️' : '✗');
+      const badgeText = inspection.overallStatus === 'pass' ? 'PASS · مطابق' : (inspection.overallStatus === 'warn' ? 'ADVISORY · تنبيه' : 'VIOLATION · مخالف');
+
+      dom.stairsCodeInspectorWrap.innerHTML = `
+        <div class="code-inspector-card ${statusClass}">
+          <div class="code-inspector-header">
+            <div class="code-inspector-title">
+              <span>${inspection.code.flag}</span>
+              <span>${inspection.code.name}</span>
+            </div>
+            <span class="code-badge-pill ${badgeClass}">
+              <span>${badgeIcon}</span>
+              <span>${badgeText}</span>
+            </span>
+          </div>
+          <div class="code-inspector-summary">
+            <span>${inspection.summaryText}</span>
+            <span class="code-inspector-arabic">${inspection.summaryArabic}</span>
+          </div>
+          <div class="code-checks-list">
+            ${inspection.checks.map(c => `
+              <div class="code-check-item">
+                <span class="code-check-icon">${c.status === 'pass' ? '🟢' : (c.status === 'warn' ? '🟡' : '🔴')}</span>
+                <span class="code-check-label">${c.label}</span>
+                <span class="code-check-val">${c.value}</span>
+                <span class="code-check-rule">${c.rule}</span>
+              </div>
+            `).join('')}
+          </div>
+          <div class="code-citation-footer">
+            <span><strong>Standard Citation:</strong> ${inspection.code.citation}</span>
+            <span>Legal Clause: ${inspection.checks[0]?.citation || ''}</span>
+          </div>
+        </div>
+      `;
     }
 
     // Candidate options list
@@ -449,6 +494,22 @@ export function createStairsView(context) {
     }
   }
 
+  function syncCodeSelection() {
+    if (!dom.stairsCodeSelect) return;
+    const codeId = dom.stairsCodeSelect.value || 'jnbc';
+    const code = getBuildingCode(codeId);
+    if (dom.stairsCodeBadge) {
+      dom.stairsCodeBadge.textContent = `${code.flag} ${code.id.toUpperCase()}`;
+    }
+    if (dom.stairsRefRiserMin) dom.stairsRefRiserMin.value = code.stair.riserMinMm;
+    if (dom.stairsRefRiserMax) dom.stairsRefRiserMax.value = code.stair.riserMaxMm;
+    if (dom.stairsRefBlondelMin) dom.stairsRefBlondelMin.value = code.stair.blondelMinMm;
+    if (dom.stairsRefBlondelMax) dom.stairsRefBlondelMax.value = code.stair.blondelMaxMm;
+    if (dom.stairsReferenceNote) {
+      dom.stairsReferenceNote.textContent = `${code.name}: ${code.citation}. Riser ${code.stair.riserMinMm}–${code.stair.riserMaxMm} mm, Tread min ${code.stair.treadMinMm} mm, 2R+T ${code.stair.blondelMinMm}–${code.stair.blondelMaxMm} mm, max ${code.stair.maxFlightRisers} risers/flight.`;
+    }
+  }
+
   return {
     id: 'stairs',
     mount() {
@@ -462,15 +523,21 @@ export function createStairsView(context) {
         state.stairs.objective = prefs.objective;
         if (dom.stairsObjectiveSelect) dom.stairsObjectiveSelect.value = prefs.objective;
       }
-      if (dom.stairsReferenceNote) {
-        dom.stairsReferenceNote.textContent = STAIR_REFERENCE_DEFAULTS.riser.note + ' ' + STAIR_REFERENCE_DEFAULTS.blondel.note;
+      if (dom.stairsCodeSelect) {
+        dom.stairsCodeSelect.addEventListener('change', () => {
+          syncCodeSelection();
+          calculate(true);
+          const code = getBuildingCode(dom.stairsCodeSelect.value);
+          showToast(`Applied ${code.shortName} standard`);
+        });
       }
+      syncCodeSelection();
       syncModeVisibility();
       calculate(false);
     },
     getController() {
       return {
-        calculate, syncModeVisibility, copyResult, copySchedule,
+        calculate, syncCodeSelection, syncModeVisibility, copyResult, copySchedule,
         sendToCad, sendToWorkspace, saveToJournal, saveToProject,
         sendToScratchpad, applyToPlan
       };

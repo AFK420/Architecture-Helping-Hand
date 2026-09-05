@@ -3009,6 +3009,22 @@
           </p>
 
           <div class="input-row-group" style="margin-bottom: 1.1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+              <label for="stairs-code-select" class="input-label" style="margin-bottom: 0;">Building Code Standard (كود البناء المعتمد)</label>
+              <span id="stairs-code-badge" class="unit-system-tag" style="font-size: 0.68rem; font-weight: 700; color: var(--accent-primary);">🇯🇴 JNBC</span>
+            </div>
+            <select id="stairs-code-select" class="calc-select" style="font-family: inherit;">
+              <option value="jnbc" selected>🇯🇴 Jordan JNBC (كودات البناء الوطني الأردني - كود 22 وكود 11)</option>
+              <option value="sbc">🇸🇦 Saudi SBC 201 / 1001 (كود البناء السعودي المعماري والوصول)</option>
+              <option value="dbc">🇦🇪 Dubai DBC 2021 (كود دبي للبناء وأصحاب الهمم)</option>
+              <option value="ebc">🇪🇬 Egypt Law 119 (الكود المصري للبناء وإتاحة المعاقين)</option>
+              <option value="gbc">🌐 Gulf GBC (كود البناء الخليجي الموحد)</option>
+              <option value="ibc_ada">🇺🇸 International & US ADA (IBC 2021 / 2010 ADA)</option>
+              <option value="uk_reg">🇬🇧 UK Building Regs (Approved Docs K & M)</option>
+            </select>
+          </div>
+
+          <div class="input-row-group" style="margin-bottom: 1.1rem;">
             <label for="stairs-mode-select" class="input-label">Input Mode</label>
             <select id="stairs-mode-select" class="calc-select">
               <option value="rise_desired_riser" selected>Rise + Desired Riser</option>
@@ -3123,6 +3139,9 @@
             <span id="stairs-blondel-status" class="type-badge badge-seg" style="font-size: 0.68rem;">—</span>
           </div>
 
+          <!-- Building Code Compliance Inspector Card -->
+          <div id="stairs-code-inspector-wrap" style="margin-bottom: 0.9rem;"></div>
+
           <div class="stairs-candidates-block" style="margin-bottom: 0.9rem;">
             <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-primary, #ffffff); letter-spacing: 0.03em; margin-bottom: 0.45rem;">Options (deterministic ranking)</div>
             <div id="stairs-candidates-body" style="display: flex; flex-direction: column; gap: 0.35rem;"></div>
@@ -3183,6 +3202,22 @@
           <p class="tool-description">
             <strong>Straight Ramp / Single Run — Landings Not Included.</strong> Straight-ramp slope geometry: rise, run, percentage, ratio (1:X), and angle from one canonical calculation source. Reference values are educational guidelines only — not an ADA or Part M compliance certification. Intermediate landings, resting platforms, and switchbacks are not calculated by this tool; always verify landing intervals and maximum slope limits against applicable local requirements.
           </p>
+
+          <div class="input-row-group" style="margin-bottom: 1.1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+              <label for="ramps-code-select" class="input-label" style="margin-bottom: 0;">Building Code Standard (كود البناء المعتمد)</label>
+              <span id="ramps-code-badge" class="unit-system-tag" style="font-size: 0.68rem; font-weight: 700; color: var(--accent-primary);">🇯🇴 JNBC</span>
+            </div>
+            <select id="ramps-code-select" class="calc-select" style="font-family: inherit;">
+              <option value="jnbc" selected>🇯🇴 Jordan JNBC (كودات البناء الوطني الأردني - كود 22 متطلبات المعوقين)</option>
+              <option value="sbc">🇸🇦 Saudi SBC 1001 (كود البناء السعودي للوصول الشامل)</option>
+              <option value="dbc">🇦🇪 Dubai DBC 2021 (كود دبي لأصحاب الهمم)</option>
+              <option value="ebc">🇪🇬 Egypt Law 119 (الكود المصري لإتاحة المعاقين)</option>
+              <option value="gbc">🌐 Gulf GBC (كود البناء الخليجي الموحد)</option>
+              <option value="ibc_ada">🇺🇸 International & US ADA (2010 ADA Standards Sec 405)</option>
+              <option value="uk_reg">🇬🇧 UK Building Regs (Approved Document M)</option>
+            </select>
+          </div>
 
           <div class="input-row-group" style="margin-bottom: 1.1rem;">
             <label for="ramps-mode-select" class="input-label">Input Mode</label>
@@ -3274,6 +3309,9 @@
           <!-- Proportional diagram from actual result geometry -->
           <div id="ramps-svg-wrap" aria-live="polite"></div>
 
+          <!-- Building Code Compliance Inspector Card -->
+          <div id="ramps-code-inspector-wrap" style="margin-bottom: 0.9rem;"></div>
+
           <!-- Available-run analysis (Mode B focus) -->
           <div id="ramps-run-analysis" style="display: none; border: 1px solid var(--border-color-light); border-radius: 6px; padding: 0.6rem 0.75rem; background: var(--bg-card-header); margin-bottom: 0.9rem;">
             <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.35rem;">Available-Run Analysis</div>
@@ -3342,6 +3380,22 @@
           <p class="tool-description">
             General rise/run analysis for sites, terrain, roofs, drainage, and paths. Signed geometry: positive rise = ascending, negative = descending. All representations derive from one canonical math source shared with the Ramp Calculator.
           </p>
+
+          <div class="input-row-group" style="margin-bottom: 1.1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+              <label for="slopes-code-select" class="input-label" style="margin-bottom: 0;">Building Code Standard (كود البناء المعتمد)</label>
+              <span id="slopes-code-badge" class="unit-system-tag" style="font-size: 0.68rem; font-weight: 700; color: var(--accent-primary);">🇯🇴 JNBC</span>
+            </div>
+            <select id="slopes-code-select" class="calc-select" style="font-family: inherit;">
+              <option value="jnbc" selected>🇯🇴 Jordan JNBC (كودات البناء الوطني الأردني - مسارات المشاة والأرصفة)</option>
+              <option value="sbc">🇸🇦 Saudi SBC 1001 (كود البناء السعودي للمسارات الميسرة)</option>
+              <option value="dbc">🇦🇪 Dubai DBC 2021 (كود دبي للمسارات الخارجية وأصحاب الهمم)</option>
+              <option value="ebc">🇪🇬 Egypt Law 119 (الكود المصري لإتاحة مسارات المعاقين)</option>
+              <option value="gbc">🌐 Gulf GBC (كود البناء الخليجي الموحد)</option>
+              <option value="ibc_ada">🇺🇸 International & US ADA (ADA Accessible Routes Sec 403)</option>
+              <option value="uk_reg">🇬🇧 UK Building Regs (Approved Document M External)</option>
+            </select>
+          </div>
 
           <div class="input-row-group" style="margin-bottom: 1.1rem;">
             <label for="slopes-mode-select" class="input-label">Define By</label>
@@ -3429,6 +3483,9 @@
 
           <!-- Proportional diagram from actual geometry -->
           <div id="slopes-svg-wrap" aria-live="polite"></div>
+
+          <!-- Building Code Compliance Inspector Card -->
+          <div id="slopes-code-inspector-wrap" style="margin-bottom: 0.9rem;"></div>
 
           <!-- Educational explanation -->
           <div class="slopes-explanation-block" style="border-left: 3px solid var(--accent-primary); padding: 0.4rem 0.75rem; margin-bottom: 0.9rem; background: var(--bg-card-header); border-radius: 0 5px 5px 0;">

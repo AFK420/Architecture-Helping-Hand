@@ -15,6 +15,7 @@ import {
   buildTargetComparison,
   generateRampSVG
 } from '../../core/ramps.js';
+import { getBuildingCode, inspectRampCompliance } from '../../core/building-codes.js';
 import { parseInput } from '../../core/parser.js';
 import { createDimensionEntry } from '../../core/dimension-workspace.js';
 import { UNITS } from '../../core/units.js';
@@ -160,6 +161,7 @@ export function createRampsView(context) {
       if (dom[k]) dom[k].textContent = '—';
     });
     if (dom.rampsSvgWrap) dom.rampsSvgWrap.innerHTML = '';
+    if (dom.rampsCodeInspectorWrap) dom.rampsCodeInspectorWrap.innerHTML = '';
     if (dom.rampsRunAnalysis) dom.rampsRunAnalysis.style.display = 'none';
     if (dom.rampsRefStatus) {
       dom.rampsRefStatus.textContent = '—';
@@ -191,6 +193,49 @@ export function createRampsView(context) {
     // SVG diagram from actual geometry
     if (dom.rampsSvgWrap) {
       dom.rampsSvgWrap.innerHTML = generateRampSVG(result, { width: 520, height: 220 });
+    }
+
+    // Building Code Compliance Inspection
+    if (dom.rampsCodeInspectorWrap) {
+      const selectedCodeId = dom.rampsCodeSelect?.value || 'jnbc';
+      const inspection = inspectRampCompliance(result, selectedCodeId);
+      const statusClass = inspection.overallStatus === 'pass' ? 'status-pass' : (inspection.overallStatus === 'warn' ? 'status-warn' : 'status-fail');
+      const badgeClass = inspection.overallStatus === 'pass' ? 'badge-pass' : (inspection.overallStatus === 'warn' ? 'badge-warn' : 'badge-fail');
+      const badgeIcon = inspection.overallStatus === 'pass' ? '✓' : (inspection.overallStatus === 'warn' ? '⚠️' : '✗');
+      const badgeText = inspection.overallStatus === 'pass' ? 'PASS · مطابق' : (inspection.overallStatus === 'warn' ? 'ADVISORY · تنبيه' : 'VIOLATION · مخالف');
+
+      dom.rampsCodeInspectorWrap.innerHTML = `
+        <div class="code-inspector-card ${statusClass}">
+          <div class="code-inspector-header">
+            <div class="code-inspector-title">
+              <span>${inspection.code.flag}</span>
+              <span>${inspection.code.name}</span>
+            </div>
+            <span class="code-badge-pill ${badgeClass}">
+              <span>${badgeIcon}</span>
+              <span>${badgeText}</span>
+            </span>
+          </div>
+          <div class="code-inspector-summary">
+            <span>${inspection.summaryText}</span>
+            <span class="code-inspector-arabic">${inspection.summaryArabic}</span>
+          </div>
+          <div class="code-checks-list">
+            ${inspection.checks.map(c => `
+              <div class="code-check-item">
+                <span class="code-check-icon">${c.status === 'pass' ? '🟢' : (c.status === 'warn' ? '🟡' : '🔴')}</span>
+                <span class="code-check-label">${c.label}</span>
+                <span class="code-check-val">${c.value}</span>
+                <span class="code-check-rule">${c.rule}</span>
+              </div>
+            `).join('')}
+          </div>
+          <div class="code-citation-footer">
+            <span><strong>Standard Citation:</strong> ${inspection.code.citation}</span>
+            <span>Legal Clause: ${inspection.checks[0]?.citation || ''}</span>
+          </div>
+        </div>
+      `;
     }
 
     // Available-run analysis for modes with an explicit available run
@@ -432,6 +477,21 @@ export function createRampsView(context) {
     }
   }
 
+  function syncCodeSelection() {
+    if (!dom.rampsCodeSelect) return;
+    const codeId = dom.rampsCodeSelect.value || 'jnbc';
+    const code = getBuildingCode(codeId);
+    if (dom.rampsCodeBadge) {
+      dom.rampsCodeBadge.textContent = `${code.flag} ${code.id.toUpperCase()}`;
+    }
+    if (dom.rampsRefTarget) dom.rampsRefTarget.value = code.ramp.maxSlopeRatio;
+    if (dom.rampsRefMin) dom.rampsRefMin.value = code.ramp.maxSlopeRatio;
+    if (dom.rampsRefMax) dom.rampsRefMax.value = code.ramp.preferredSlopeRatio;
+    if (dom.rampsReferenceNote) {
+      dom.rampsReferenceNote.textContent = `${code.name}: ${code.citation}. Max slope 1:${code.ramp.maxSlopeRatio} (${code.ramp.maxSlopePercent}%), preferred accessible 1:${code.ramp.preferredSlopeRatio} (${code.ramp.preferredSlopePercent}%), max single run rise ${code.ramp.maxRunRiseMeters * 1000} mm, min landing ${code.ramp.minLandingLengthMm} mm.`;
+    }
+  }
+
   return {
     id: 'ramps',
     mount() {
@@ -440,15 +500,21 @@ export function createRampsView(context) {
         state.ramps.mode = prefs.mode;
         if (dom.rampsModeSelect) dom.rampsModeSelect.value = prefs.mode;
       }
-      if (dom.rampsReferenceNote) {
-        dom.rampsReferenceNote.textContent = RAMP_REFERENCE_DEFAULTS.slope.note;
+      if (dom.rampsCodeSelect) {
+        dom.rampsCodeSelect.addEventListener('change', () => {
+          syncCodeSelection();
+          calculate(true);
+          const code = getBuildingCode(dom.rampsCodeSelect.value);
+          showToast(`Applied ${code.shortName} standard`);
+        });
       }
+      syncCodeSelection();
       syncModeVisibility();
       calculate(false);
     },
     getController() {
       return {
-        calculate, syncModeVisibility, renderTargets, copyResult,
+        calculate, syncCodeSelection, syncModeVisibility, renderTargets, copyResult,
         copySchedule, sendToCad, sendToWorkspace, saveToJournal,
         saveToProject, sendToScratchpad, applyToPlan
       };

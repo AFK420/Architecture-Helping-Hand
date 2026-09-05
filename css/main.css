@@ -7480,3 +7480,150 @@ body.sidebar-hidden .app-sidebar {
   }
 }
 
+/* =========================================================================
+   Building Code Compliance Inspector Scorecard
+   ========================================================================= */
+.code-inspector-card {
+  border: 1.5px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-elevated, #24262d);
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.95rem;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.code-inspector-card.status-pass {
+  border-left: 4px solid #10b981;
+}
+
+.code-inspector-card.status-warn {
+  border-left: 4px solid #f59e0b;
+}
+
+.code-inspector-card.status-fail {
+  border-left: 4px solid #ef4444;
+}
+
+.code-inspector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.code-inspector-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-primary, #ffffff);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.code-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  font-family: var(--font-mono);
+}
+
+.code-badge-pill.badge-pass {
+  background: rgba(16, 185, 129, 0.16);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.code-badge-pill.badge-warn {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.code-badge-pill.badge-fail {
+  background: rgba(239, 68, 68, 0.16);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.code-inspector-summary {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+  margin-bottom: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.code-inspector-arabic {
+  font-size: 0.8rem;
+  color: var(--accent-primary, #60a5fa);
+  direction: rtl;
+  font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+}
+
+.code-checks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.code-check-item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.18);
+  font-size: 0.76rem;
+}
+
+.code-check-icon {
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.code-check-label {
+  color: var(--text-primary, #ffffff);
+  font-weight: 500;
+}
+
+.code-check-val {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--accent-primary, #60a5fa);
+}
+
+.code-check-rule {
+  color: var(--text-muted, rgba(255, 255, 255, 0.65));
+  font-size: 0.72rem;
+}
+
+.code-citation-footer {
+  margin-top: 0.6rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed var(--border-subtle);
+  font-size: 0.69rem;
+  color: var(--text-muted, rgba(255, 255, 255, 0.6));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+

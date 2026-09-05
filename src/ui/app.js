@@ -881,6 +881,9 @@ export function initializeApp() {
     stairsTotalRun: document.getElementById('stairs-total-run'),
     stairsDesiredTreadGroup: document.getElementById('stairs-desired-tread-group'),
     stairsDesiredTread: document.getElementById('stairs-desired-tread'),
+    stairsCodeSelect: document.getElementById('stairs-code-select'),
+    stairsCodeBadge: document.getElementById('stairs-code-badge'),
+    stairsCodeInspectorWrap: document.getElementById('stairs-code-inspector-wrap'),
     stairsObjectiveSelect: document.getElementById('stairs-objective-select'),
     btnRunStairs: document.getElementById('btn-run-stairs'),
     stairsErrorMsg: document.getElementById('stairs-error-msg'),
@@ -910,6 +913,9 @@ export function initializeApp() {
     stairsSaveProjectBtn: document.getElementById('stairs-save-project-btn'),
 
     // Mode 15: Ramp Calculator Elements
+    rampsCodeSelect: document.getElementById('ramps-code-select'),
+    rampsCodeBadge: document.getElementById('ramps-code-badge'),
+    rampsCodeInspectorWrap: document.getElementById('ramps-code-inspector-wrap'),
     rampsModeSelect: document.getElementById('ramps-mode-select'),
     rampsRiseGroup: document.getElementById('ramps-rise-group'),
     rampsRise: document.getElementById('ramps-rise'),
@@ -947,6 +953,9 @@ export function initializeApp() {
     rampsSaveProjectBtn: document.getElementById('ramps-save-project-btn'),
 
     // Mode 16: Slope Analyzer Elements
+    slopesCodeSelect: document.getElementById('slopes-code-select'),
+    slopesCodeBadge: document.getElementById('slopes-code-badge'),
+    slopesCodeInspectorWrap: document.getElementById('slopes-code-inspector-wrap'),
     slopesModeSelect: document.getElementById('slopes-mode-select'),
     slopesRiseGroup: document.getElementById('slopes-rise-group'),
     slopesRise: document.getElementById('slopes-rise'),

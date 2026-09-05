@@ -13,6 +13,7 @@ import {
   explainSlope,
   generateSlopeSVG
 } from '../../core/slopes.js';
+import { getBuildingCode, inspectSlopeCompliance } from '../../core/building-codes.js';
 import { parseInput } from '../../core/parser.js';
 import { createDimensionEntry } from '../../core/dimension-workspace.js';
 import { UNITS } from '../../core/units.js';
@@ -165,6 +166,7 @@ export function createSlopesView(context) {
     if (dom.slopesRunVal) dom.slopesRunVal.textContent = '—';
     if (dom.slopesDirectionBadge) dom.slopesDirectionBadge.textContent = '—';
     if (dom.slopesSvgWrap) dom.slopesSvgWrap.innerHTML = '';
+    if (dom.slopesCodeInspectorWrap) dom.slopesCodeInspectorWrap.innerHTML = '';
     if (dom.slopesExplanation) dom.slopesExplanation.textContent = '';
     if (dom.slopesConsistencyRow) dom.slopesConsistencyRow.style.display = 'none';
     if (dom.slopesTargetsBody) dom.slopesTargetsBody.innerHTML = '';
@@ -185,6 +187,50 @@ export function createSlopesView(context) {
     if (dom.slopesSvgWrap) {
       dom.slopesSvgWrap.innerHTML = generateSlopeSVG(result, { width: 520, height: 220 });
     }
+
+    // Building Code Compliance Inspection for Slopes / Walkways
+    if (dom.slopesCodeInspectorWrap) {
+      const selectedCodeId = dom.slopesCodeSelect?.value || 'jnbc';
+      const inspection = inspectSlopeCompliance(result, selectedCodeId);
+      const statusClass = inspection.overallStatus === 'pass' ? 'status-pass' : (inspection.overallStatus === 'warn' ? 'status-warn' : 'status-fail');
+      const badgeClass = inspection.overallStatus === 'pass' ? 'badge-pass' : (inspection.overallStatus === 'warn' ? 'badge-warn' : 'badge-fail');
+      const badgeIcon = inspection.overallStatus === 'pass' ? '✓' : (inspection.overallStatus === 'warn' ? '⚠️' : '✗');
+      const badgeText = inspection.overallStatus === 'pass' ? 'PEDESTRIAN WALKWAY · مسار مشاة' : (inspection.overallStatus === 'warn' ? 'TREATED AS RAMP · يصنف كمنحدر' : 'VIOLATION · مخالف');
+
+      dom.slopesCodeInspectorWrap.innerHTML = `
+        <div class="code-inspector-card ${statusClass}">
+          <div class="code-inspector-header">
+            <div class="code-inspector-title">
+              <span>${inspection.code.flag}</span>
+              <span>${inspection.code.name}</span>
+            </div>
+            <span class="code-badge-pill ${badgeClass}">
+              <span>${badgeIcon}</span>
+              <span>${badgeText}</span>
+            </span>
+          </div>
+          <div class="code-inspector-summary">
+            <span>${inspection.summaryText}</span>
+            <span class="code-inspector-arabic">${inspection.summaryArabic}</span>
+          </div>
+          <div class="code-checks-list">
+            ${inspection.checks.map(c => `
+              <div class="code-check-item">
+                <span class="code-check-icon">${c.status === 'pass' ? '🟢' : (c.status === 'warn' ? '🟡' : '🔴')}</span>
+                <span class="code-check-label">${c.label}</span>
+                <span class="code-check-val">${c.value}</span>
+                <span class="code-check-rule">${c.rule}</span>
+              </div>
+            `).join('')}
+          </div>
+          <div class="code-citation-footer">
+            <span><strong>Standard Citation:</strong> ${inspection.code.citation}</span>
+            <span>Ref: ${inspection.checks[0]?.citation || ''}</span>
+          </div>
+        </div>
+      `;
+    }
+
     if (dom.slopesExplanation) {
       dom.slopesExplanation.textContent = explainSlope(result);
     }
@@ -364,6 +410,15 @@ export function createSlopesView(context) {
     }
   }
 
+  function syncCodeSelection() {
+    if (!dom.slopesCodeSelect) return;
+    const codeId = dom.slopesCodeSelect.value || 'jnbc';
+    const code = getBuildingCode(codeId);
+    if (dom.slopesCodeBadge) {
+      dom.slopesCodeBadge.textContent = `${code.flag} ${code.id.toUpperCase()}`;
+    }
+  }
+
   return {
     id: 'slopes',
     mount() {
@@ -372,11 +427,20 @@ export function createSlopesView(context) {
         state.slopes.mode = prefs.mode;
         if (dom.slopesModeSelect) dom.slopesModeSelect.value = prefs.mode;
       }
+      if (dom.slopesCodeSelect) {
+        dom.slopesCodeSelect.addEventListener('change', () => {
+          syncCodeSelection();
+          calculate(true);
+          const code = getBuildingCode(dom.slopesCodeSelect.value);
+          showToast(`Applied ${code.shortName} standard`);
+        });
+      }
+      syncCodeSelection();
       syncModeVisibility();
       calculate(false);
     },
     getController() {
-      return { calculate, syncModeVisibility, renderTargets, copyResult, copySchedule, sendToCad, sendToWorkspace, saveToJournal, saveToProject };
+      return { calculate, syncCodeSelection, syncModeVisibility, renderTargets, copyResult, copySchedule, sendToCad, sendToWorkspace, saveToJournal, saveToProject };
     }
   };
 }
