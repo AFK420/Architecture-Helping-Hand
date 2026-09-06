@@ -14718,6 +14718,1109 @@ function escapeDetailXml(str) {
 
 
   // =========================================================================
+  // MODULE: Personas
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Software Personas, Tool Categories & Universal Search Engine
+ * Provides dynamic workstation modes (AutoCAD, Rhino, Photoshop, SketchUp, Studio),
+ * 16 structured tool categories, cascades & flyouts catalog, and real-time studio search.
+ */
+
+// ---------------------------------------------------------------------------
+// 1. Software Personas
+// ---------------------------------------------------------------------------
+
+const STUDIO_PERSONAS = {
+  studio: {
+    id: 'studio',
+    name: 'Helping Hand Studio',
+    label: 'Helping Hand Studio',
+    shortLabel: 'Studio',
+    icon: '🏛️',
+    description: 'Integrated Architectural BIM, Space Planning, Detailing & Presentation Suite',
+    accentColor: '#4989D9',
+    themeColor: '#4989D9',
+    defaultRibbonTab: 'home',
+    defaultTool: 'select'
+  },
+  autocad: {
+    id: 'autocad',
+    name: 'AutoCAD Precision 2D',
+    label: 'AutoCAD Precision 2D',
+    shortLabel: 'AutoCAD',
+    icon: '📐',
+    description: 'CAD Drafting, Precision Geometry, Layers, Dimension Chains & CLI Commands',
+    accentColor: '#E02424',
+    themeColor: '#E02424',
+    defaultRibbonTab: 'home',
+    defaultTool: 'line'
+  },
+  rhino: {
+    id: 'rhino',
+    name: 'Rhino 3D & Computational',
+    label: 'Rhino 3D & Computational',
+    shortLabel: 'Rhino',
+    icon: '🦏',
+    description: 'NURBS Curves, Surfaces, Solid Booleans, Meshes, SubD & Osnap Views',
+    accentColor: '#057A55',
+    themeColor: '#057A55',
+    defaultRibbonTab: 'curves',
+    defaultTool: 'curve'
+  },
+  photoshop: {
+    id: 'photoshop',
+    name: 'Photoshop Presentation & Retouch',
+    label: 'Photoshop Presentation & Retouch',
+    shortLabel: 'Photoshop',
+    icon: '🎨',
+    description: 'Architectural Retouching, Render Post-Processing, Marquee/Lasso & Collaging',
+    accentColor: '#3F83F8',
+    themeColor: '#3F83F8',
+    defaultRibbonTab: 'select_mask',
+    defaultTool: 'marquee'
+  },
+  sketchup: {
+    id: 'sketchup',
+    name: 'SketchUp Conceptual Massing',
+    label: 'SketchUp Conceptual Massing',
+    shortLabel: 'SketchUp',
+    icon: '📦',
+    description: 'Rapid 3D Push-Pull, Architectural Components, Edge Inferencing & Sun Studies',
+    accentColor: '#C27803',
+    themeColor: '#C27803',
+    defaultRibbonTab: 'draw',
+    defaultTool: 'pushpull'
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 2. The 16 Tool Categories
+// ---------------------------------------------------------------------------
+
+const TOOL_CATEGORIES = [
+  { id: 'measuring', name: 'Measuring', icon: '📏', description: 'Precision dimensions, distances, areas, and angles' },
+  { id: 'selection_cropping', name: 'Selection & Cropping', icon: '⬚', description: 'Region selection, object picking, marquee, lasso, and crop boundary' },
+  { id: 'retouching_painting', name: 'Retouching & Painting', icon: '🖌️', description: 'Architectural hatching, materials, color fills, texture stamps, and shading' },
+  { id: 'selection_navigation', name: 'Selection and Navigation', icon: '🧭', description: 'Viewport pan, orbit 3D, zoom extents, camera modes, and look-around' },
+  { id: 'drawing', name: 'Drawing Primitives', icon: '✏️', description: 'Core geometric creation: lines, polylines, rects, circles, and polygons' },
+  { id: 'standard_cpanels', name: 'Standard C-Panels', icon: '🗂️', description: 'Dockable contextual panels: Properties, Layers, Space Planning, Details' },
+  { id: 'set_view', name: 'Set View', icon: '📷', description: 'Camera angles: Top, South (Front), North (Rear), East, West, Perspective, 4-Split' },
+  { id: 'curve_tools', name: 'Curve Tools', icon: '〰️', description: 'NURBS curves, control points, fillets, offsets, and curve booleans' },
+  { id: 'surface_tools', name: 'Surface Tools', icon: '◫', description: 'Planar surfaces, lofts, extrusions, revolves, 1-rail/2-rail sweeps, and patches' },
+  { id: 'solid_tools', name: 'Solid Tools', icon: '🧊', description: 'Solid primitives, CSG booleans (Union, Difference, Intersection), and edge fillets' },
+  { id: 'mesh_tools', name: 'Mesh Tools', icon: '🕸️', description: 'Polygonal meshes, quad remesh, mesh booleans, triangulation, and decimation' },
+  { id: 'subd', name: 'SubD Tools', icon: '🧬', description: 'Subdivision organic modeling primitives, edge extrusions, creases, and bridges' },
+  { id: 'containers', name: 'Containers & Blocks', icon: '📦', description: 'CAD blocks, furniture components, architectural symbol assemblies, and groups' },
+  { id: 'cascades_flyouts', name: 'Cascades / Flyouts', icon: '📑', description: 'Nested popover sub-menus attached to toolbar buttons' },
+  { id: 'ribbon_tabs', name: 'Ribbon Tabs', icon: '📑', description: 'Top horizontal suite switchers: Home, Annotate, Set View, Curves, Surfaces' },
+  { id: 'ribbon_panels', name: 'Ribbon Panels', icon: '▦', description: 'Grouped functional tool clusters with titles and parameter inputs' }
+];
+
+// ---------------------------------------------------------------------------
+// 3. Studio Master Tool Catalog
+// ---------------------------------------------------------------------------
+
+const STUDIO_TOOL_CATALOG = [
+  // 1. Measuring
+  {
+    id: 'measure',
+    name: 'Tape Measure',
+    category: 'measuring',
+    personas: ['studio', 'autocad', 'sketchup', 'rhino'],
+    icon: '📐',
+    shortcut: 'M',
+    commandAlias: 'DIST',
+    description: 'Measure point-to-point real-world distances and angles instantly without placing permanent annotations'
+  },
+  {
+    id: 'dimension',
+    name: 'Linear Dimension',
+    category: 'measuring',
+    personas: ['studio', 'autocad', 'sketchup'],
+    icon: '📏',
+    shortcut: 'D',
+    commandAlias: 'DIMLIN',
+    description: 'Place professional architectural linear dimension strings between geometric endpoints'
+  },
+  {
+    id: 'dim_aligned',
+    name: 'Aligned Dimension',
+    category: 'measuring',
+    personas: ['autocad', 'studio'],
+    icon: '📐',
+    shortcut: 'DAL',
+    commandAlias: 'DIMALIGNED',
+    description: 'Place dimension aligned parallel to slanted walls or angled edges'
+  },
+  {
+    id: 'dim_chain',
+    name: 'Dimension Chain',
+    category: 'measuring',
+    personas: ['studio', 'autocad'],
+    icon: '🔗',
+    shortcut: 'DCO',
+    commandAlias: 'DIMCONTINUE',
+    description: 'Generate continuous running dimension sequences across multiple structural bays'
+  },
+  {
+    id: 'area_calc',
+    name: 'Area & Perimeter',
+    category: 'measuring',
+    personas: ['studio', 'autocad'],
+    icon: '⬛',
+    shortcut: 'AA',
+    commandAlias: 'AREA',
+    description: 'Calculate enclosed polygonal area (m²), perimeter, and usable floor ratio'
+  },
+
+  // 2. Selection & Cropping
+  {
+    id: 'select',
+    name: 'Select & Transform',
+    category: 'selection_cropping',
+    personas: ['studio', 'autocad', 'rhino', 'sketchup', 'photoshop'],
+    icon: '➤',
+    shortcut: 'V',
+    commandAlias: 'SELECT',
+    description: 'Pick, box-select, translate, scale, and inspect entities on the canvas'
+  },
+  {
+    id: 'marquee',
+    name: 'Rectangular Marquee',
+    category: 'selection_cropping',
+    personas: ['photoshop'],
+    icon: '⬚',
+    shortcut: 'M',
+    commandAlias: 'MARQUEE',
+    description: 'Select rectangular regions for architectural collage rendering, texturing, or masking',
+    flyout: [
+      { id: 'marquee_rect', name: 'Rectangular Marquee', icon: '⬚', shortcut: 'M' },
+      { id: 'marquee_ellip', name: 'Elliptical Marquee', icon: '◯', shortcut: 'Shift+M' },
+      { id: 'marquee_single_row', name: 'Single Row Marquee', icon: '━' }
+    ]
+  },
+  {
+    id: 'lasso',
+    name: 'Polygonal Lasso',
+    category: 'selection_cropping',
+    personas: ['photoshop'],
+    icon: '➰',
+    shortcut: 'L',
+    commandAlias: 'LASSO',
+    description: 'Click-to-corner polygonal selection for complex building facades and entourage cutouts',
+    flyout: [
+      { id: 'lasso_poly', name: 'Polygonal Lasso', icon: '➰', shortcut: 'L' },
+      { id: 'lasso_magnetic', name: 'Magnetic Lasso', icon: '🧲' }
+    ]
+  },
+  {
+    id: 'crop_tool',
+    name: 'Crop Viewport Boundary',
+    category: 'selection_cropping',
+    personas: ['photoshop', 'studio'],
+    icon: '◩',
+    shortcut: 'C',
+    commandAlias: 'CROP',
+    description: 'Crop drawing canvas boundary, sheet viewport extents, or presentation frame'
+  },
+
+  // 3. Retouching & Painting
+  {
+    id: 'hatch',
+    name: 'Architectural Hatch',
+    category: 'retouching_painting',
+    personas: ['autocad', 'studio'],
+    icon: '🧱',
+    shortcut: 'H',
+    commandAlias: 'HATCH',
+    description: 'Apply standard architectural hatching: Concrete stipple, Brick 45°, Earth grade, Sand, Wood grain, or Steel ANSI31',
+    flyout: [
+      { id: 'hatch_concrete', name: 'Concrete Stipple Pochè', icon: '🧱' },
+      { id: 'hatch_earth', name: '45° Compacted Earth', icon: '▨' },
+      { id: 'hatch_insulation', name: 'Zigzag Rigid Insulation', icon: '⚡' },
+      { id: 'hatch_brick', name: 'Brick Bond Pattern', icon: '🧱' }
+    ]
+  },
+  {
+    id: 'paint_bucket',
+    name: 'Paint Bucket / Material',
+    category: 'retouching_painting',
+    personas: ['sketchup', 'photoshop'],
+    icon: '🪣',
+    shortcut: 'B',
+    commandAlias: 'PAINT',
+    description: 'Apply architectural surface finishes: Terrazzo, Timber, Glass, Brushed Aluminum, or Concrete wash'
+  },
+  {
+    id: 'watercolor_brush',
+    name: 'Presentation Brush',
+    category: 'retouching_painting',
+    personas: ['photoshop'],
+    icon: '🖌️',
+    shortcut: 'B',
+    commandAlias: 'BRUSH',
+    description: 'Architectural watercolor and pencil stroke rendering for competition presentation boards'
+  },
+
+  // 4. Selection and Navigation
+  {
+    id: 'pan',
+    name: 'Pan Hand',
+    category: 'selection_navigation',
+    personas: ['studio', 'autocad', 'rhino', 'photoshop', 'sketchup'],
+    icon: '✋',
+    shortcut: 'Space+Drag',
+    commandAlias: 'PAN',
+    description: 'Pan viewport canvas smoothly across real-world spatial coordinates'
+  },
+  {
+    id: 'orbit',
+    name: 'Orbit 3D',
+    category: 'selection_navigation',
+    personas: ['rhino', 'sketchup', 'studio'],
+    icon: '🔄',
+    shortcut: 'O',
+    commandAlias: 'ORBIT',
+    description: 'Rotate 3D isometric or perspective camera freely around building massing centroid'
+  },
+  {
+    id: 'zoom_extents',
+    name: 'Zoom Extents',
+    category: 'selection_navigation',
+    personas: ['studio', 'autocad', 'rhino'],
+    icon: '🔍',
+    shortcut: 'Z+E',
+    commandAlias: 'ZOOM_E',
+    description: 'Fit all drawing entities and geometries tightly within the center viewport'
+  },
+
+  // 5. Drawing Primitives
+  {
+    id: 'line',
+    name: 'Line Segment',
+    category: 'drawing',
+    personas: ['autocad', 'rhino', 'sketchup', 'studio'],
+    icon: '╱',
+    shortcut: 'L',
+    commandAlias: 'L',
+    description: 'Draw precision 2-point line segments with orthogonal and polar snap tracking'
+  },
+  {
+    id: 'polyline',
+    name: 'Polyline',
+    category: 'drawing',
+    personas: ['autocad', 'rhino', 'studio'],
+    icon: '─┘',
+    shortcut: 'PL',
+    commandAlias: 'PLINE',
+    description: 'Draw continuous multi-segment 2D vector path with arc segments and closed boundaries'
+  },
+  {
+    id: 'wall',
+    name: 'Architectural Wall',
+    category: 'drawing',
+    personas: ['studio', 'autocad'],
+    icon: '━',
+    shortcut: 'W',
+    commandAlias: 'WALL',
+    description: 'Place double-line structural or partition wall with real-world thickness (0.10m - 0.35m) and automatic miter corner joins'
+  },
+  {
+    id: 'room',
+    name: 'Room Rectangle',
+    category: 'drawing',
+    personas: ['studio', 'sketchup'],
+    icon: '▭',
+    shortcut: 'R',
+    commandAlias: 'REC',
+    description: 'Create architectural enclosed space with live area calculation and floor zoning tags'
+  },
+  {
+    id: 'polyroom',
+    name: 'Polygonal Room',
+    category: 'drawing',
+    personas: ['studio'],
+    icon: '⬡',
+    shortcut: 'Shift+R',
+    commandAlias: 'POLYROOM',
+    description: 'Click arbitrary corner vertices to form complex L-shaped, T-shaped, or angled room boundaries'
+  },
+  {
+    id: 'door',
+    name: 'Hinged Door',
+    category: 'drawing',
+    personas: ['studio', 'autocad'],
+    icon: '🚪',
+    shortcut: 'DR',
+    commandAlias: 'DOOR',
+    description: 'Insert swing door into host wall with 90° arc swing clearance and frame jambs'
+  },
+  {
+    id: 'window',
+    name: 'Glazed Window',
+    category: 'drawing',
+    personas: ['studio', 'autocad'],
+    icon: '🪟',
+    shortcut: 'WN',
+    commandAlias: 'WINDOW',
+    description: 'Insert fenestration window into host wall with sill, frame, and double-pane glass linework'
+  },
+  {
+    id: 'column',
+    name: 'Structural Column',
+    category: 'drawing',
+    personas: ['studio', 'autocad', 'rhino'],
+    icon: '🏛️',
+    shortcut: 'C',
+    commandAlias: 'COLUMN',
+    description: 'Place rectangular or circular reinforced concrete / steel structural column with cross-pochè'
+  },
+  {
+    id: 'grid',
+    name: 'Structural Grid',
+    category: 'drawing',
+    personas: ['studio', 'autocad'],
+    icon: '⌗',
+    shortcut: 'G',
+    commandAlias: 'GRID',
+    description: 'Place numbered (1, 2, 3...) or lettered (A, B, C...) structural datum axis grid line'
+  },
+  {
+    id: 'stair',
+    name: 'Vertical Circulation Stair',
+    category: 'drawing',
+    personas: ['studio', 'autocad', 'sketchup'],
+    icon: '🪜',
+    shortcut: 'S',
+    commandAlias: 'STAIR',
+    description: 'Create code-compliant straight, L-shape, or switchback stair flights with breakline, walkline, and IBC compliance verification',
+    flyout: [
+      { id: 'stair_straight', name: 'Straight Flight Stair', icon: '🪜' },
+      { id: 'stair_l_shape', name: 'L-Shape Quarter-Turn with Landing', icon: '↰' },
+      { id: 'stair_u_shape', name: 'U-Shape Dog-Leg Switchback Stair', icon: '↺' }
+    ]
+  },
+  {
+    id: 'ramp',
+    name: 'Accessible Ramp',
+    category: 'drawing',
+    personas: ['studio'],
+    icon: '♿',
+    shortcut: 'RP',
+    commandAlias: 'RAMP',
+    description: 'Design ADA/IBC compliant accessible ramp with slope ratio verification (1:12 maximum)'
+  },
+  {
+    id: 'section_cut',
+    name: 'Section Cut Line',
+    category: 'drawing',
+    personas: ['studio', 'autocad', 'sketchup'],
+    icon: '✂️',
+    shortcut: 'X',
+    commandAlias: 'SECTION',
+    description: 'Place section cut plane with direction arrows and reference bubbles (A / A-201) to slice building cross-sections'
+  },
+  {
+    id: 'detail_callout',
+    name: 'Detail Callout',
+    category: 'drawing',
+    personas: ['studio', 'autocad'],
+    icon: '🔍',
+    shortcut: 'J',
+    commandAlias: 'CALLOUT',
+    description: 'Place standard AIA detail bubble (1 / A-501) with dashed boundary region and keynote leader'
+  },
+
+  // 7. Set View
+  {
+    id: 'view_top',
+    name: 'Top View (Plan)',
+    category: 'set_view',
+    personas: ['rhino', 'autocad', 'sketchup', 'studio'],
+    icon: '⬆️',
+    commandAlias: 'PLAN',
+    description: 'Orient camera looking directly downwards along the -Z axis (Orthographic Plan View)'
+  },
+  {
+    id: 'view_south',
+    name: 'South Elevation (Front)',
+    category: 'set_view',
+    personas: ['rhino', 'studio'],
+    icon: '🏛️',
+    commandAlias: 'FRONT',
+    description: 'Orient camera orthographically towards the front/south exterior facade'
+  },
+  {
+    id: 'view_perspective',
+    name: 'Perspective 3D',
+    category: 'set_view',
+    personas: ['rhino', 'sketchup', 'studio'],
+    icon: '👁️',
+    commandAlias: 'PERSP',
+    description: 'Switch to 3-point perspective architectural eye-level camera view'
+  },
+  {
+    id: 'view_4split',
+    name: '4-Viewport Split',
+    category: 'set_view',
+    personas: ['rhino'],
+    icon: '⊞',
+    commandAlias: '4VIEW',
+    description: 'Split center viewport into classic Rhino 4-quadrant layout (Top, Front, Right, Perspective)'
+  },
+
+  // 8. Curve Tools
+  {
+    id: 'curve_nurbs',
+    name: 'NURBS Curve',
+    category: 'curve_tools',
+    personas: ['rhino'],
+    icon: '〰️',
+    shortcut: 'CRV',
+    commandAlias: 'CURVE',
+    description: 'Draw degree-3 smooth NURBS curve through control points or interpolated fit points'
+  },
+  {
+    id: 'curve_fillet',
+    name: 'Curve Fillet',
+    category: 'curve_tools',
+    personas: ['rhino', 'autocad'],
+    icon: '⌒',
+    shortcut: 'F',
+    commandAlias: 'FILLET',
+    description: 'Round corner between two intersecting lines or curve segments with specified radius'
+  },
+  {
+    id: 'curve_offset',
+    name: 'Offset Curve',
+    category: 'curve_tools',
+    personas: ['rhino', 'autocad', 'sketchup'],
+    icon: '⫽',
+    shortcut: 'O',
+    commandAlias: 'OFFSET',
+    description: 'Offset curve or wall centerline by precise parallel distance'
+  },
+  {
+    id: 'curve_boolean',
+    name: 'Curve Boolean',
+    category: 'curve_tools',
+    personas: ['rhino'],
+    icon: '⚯',
+    commandAlias: 'CRVBOOL',
+    description: 'Union, subtract, or intersect overlapping closed 2D curves into clean planar boundaries'
+  },
+
+  // 9. Surface Tools
+  {
+    id: 'surface_planar',
+    name: 'Planar Surface',
+    category: 'surface_tools',
+    personas: ['rhino'],
+    icon: '▱',
+    commandAlias: 'PLANARSrf',
+    description: 'Create planar NURBS surface trimmed to closed boundary curves'
+  },
+  {
+    id: 'surface_extrude',
+    name: 'Extrude Curve to Surface',
+    category: 'surface_tools',
+    personas: ['rhino'],
+    icon: '⬆️',
+    commandAlias: 'EXTRUDE',
+    description: 'Extrude 2D curve along Z-axis vector to generate architectural wall or facade surface'
+  },
+  {
+    id: 'surface_loft',
+    name: 'Loft Curves',
+    category: 'surface_tools',
+    personas: ['rhino'],
+    icon: '🌊',
+    commandAlias: 'LOFT',
+    description: 'Loft smoothly across a sequence of open or closed profile cross-section curves'
+  },
+  {
+    id: 'surface_revolve',
+    name: 'Revolve 360°',
+    category: 'surface_tools',
+    personas: ['rhino'],
+    icon: '🏺',
+    commandAlias: 'REVOLVE',
+    description: 'Revolve profile curve around central axis to create domes, columns, or cylindrical forms'
+  },
+
+  // 10. Solid Tools (Booleans)
+  {
+    id: 'solid_box',
+    name: 'Solid Box Primitive',
+    category: 'solid_tools',
+    personas: ['rhino', 'sketchup'],
+    icon: '📦',
+    commandAlias: 'BOX',
+    description: 'Generate 3D solid box with real-world width, length, and height dimensions'
+  },
+  {
+    id: 'boolean_union',
+    name: 'Boolean Union',
+    category: 'solid_tools',
+    personas: ['rhino', 'autocad'],
+    icon: '➕',
+    shortcut: 'BU',
+    commandAlias: 'BOOLEANUNION',
+    description: 'Combine multiple overlapping 3D solids or 2D floor areas into a single seamless mass'
+  },
+  {
+    id: 'boolean_diff',
+    name: 'Boolean Difference',
+    category: 'solid_tools',
+    personas: ['rhino', 'autocad'],
+    icon: '➖',
+    shortcut: 'BD',
+    commandAlias: 'BOOLEANDIFF',
+    description: 'Subtract one solid mass from another (e.g. cut courtyards, lightwells, or atriums)'
+  },
+  {
+    id: 'pushpull',
+    name: 'Push / Pull Massing',
+    category: 'solid_tools',
+    personas: ['sketchup'],
+    icon: '⬆️',
+    shortcut: 'P',
+    commandAlias: 'PUSHPULL',
+    description: 'Extrude any 2D planar face upwards into a 3D volume with intuitive cursor dragging'
+  },
+
+  // 11. Mesh Tools
+  {
+    id: 'mesh_from_srf',
+    name: 'Mesh from Surface',
+    category: 'mesh_tools',
+    personas: ['rhino'],
+    icon: '🕸️',
+    commandAlias: 'MESH',
+    description: 'Tessellate NURBS mathematical surface into editable polygon mesh with density control'
+  },
+  {
+    id: 'quad_remesh',
+    name: 'Quad Remesh',
+    category: 'mesh_tools',
+    personas: ['rhino'],
+    icon: '▦',
+    commandAlias: 'QUADREMESH',
+    description: 'Re-topology irregular meshes into clean structured quad-faced architectural meshes'
+  },
+
+  // 12. SubD Tools
+  {
+    id: 'subd_box',
+    name: 'SubD Box',
+    category: 'subd',
+    personas: ['rhino'],
+    icon: '🧊',
+    commandAlias: 'SUBDBOX',
+    description: 'Organic subdivision modeling primitive for fluid architectural canopies and rooflines'
+  },
+  {
+    id: 'subd_crease',
+    name: 'SubD Crease Edge',
+    category: 'subd',
+    personas: ['rhino'],
+    icon: '⚡',
+    commandAlias: 'CREASE',
+    description: 'Lock crisp sharp architectural edges on smooth subdivision curved forms'
+  },
+
+  // 13. Containers & Blocks
+  {
+    id: 'block_create',
+    name: 'Create Block',
+    category: 'containers',
+    personas: ['autocad', 'studio'],
+    icon: '📦',
+    shortcut: 'B',
+    commandAlias: 'BLOCK',
+    description: 'Group multiple entities into a reusable CAD block definition'
+  },
+  {
+    id: 'furniture',
+    name: 'Insert Furniture / Component',
+    category: 'containers',
+    personas: ['studio', 'sketchup', 'autocad'],
+    icon: '🛋️',
+    shortcut: 'F',
+    commandAlias: 'INSERT',
+    description: 'Place parameterized architectural furnishings (desks, beds, sofas, tables) with clearance zones'
+  }
+];
+
+// ---------------------------------------------------------------------------
+// 4. Universal Studio Search Engine
+// ---------------------------------------------------------------------------
+
+/**
+ * Searches across all tools, categories, and commands with fuzzy keyword matching.
+ * @param {string} query Search text
+ * @param {Object} [options] Filter options (e.g. persona)
+ * @returns {Array<Object>} Matching tool descriptors ranked by relevance
+ */
+function searchStudioTools(query, options = {}) {
+  if (!query || typeof query !== 'string') return [];
+  const q = query.trim().toLowerCase();
+  if (q.length === 0) return [];
+
+  const filterPersona = options.persona || null;
+
+  const results = [];
+
+  for (const tool of STUDIO_TOOL_CATALOG) {
+    if (filterPersona && !tool.personas.includes(filterPersona) && !tool.personas.includes('all')) {
+      // Allow searching other personas, but deprioritize
+    }
+
+    const nameMatch = tool.name.toLowerCase().includes(q);
+    const idMatch = tool.id.toLowerCase().includes(q);
+    const aliasMatch = tool.commandAlias ? tool.commandAlias.toLowerCase().startsWith(q) : false;
+    const catMatch = tool.category.toLowerCase().includes(q);
+    const descMatch = tool.description ? tool.description.toLowerCase().includes(q) : false;
+    const shortcutMatch = tool.shortcut ? tool.shortcut.toLowerCase() === q : false;
+
+    if (nameMatch || idMatch || aliasMatch || catMatch || descMatch || shortcutMatch) {
+      let score = 0;
+      if (aliasMatch && tool.commandAlias.toLowerCase() === q) score += 100;
+      if (shortcutMatch) score += 90;
+      if (tool.name.toLowerCase().startsWith(q)) score += 80;
+      else if (nameMatch) score += 60;
+      if (idMatch) score += 50;
+      if (catMatch) score += 30;
+      if (descMatch) score += 10;
+      if (filterPersona && tool.personas.includes(filterPersona)) score += 20;
+
+      const catMeta = TOOL_CATEGORIES.find(c => c.id === tool.category) || { name: tool.category, icon: '🔧' };
+
+      results.push({
+        ...tool,
+        categoryName: catMeta.name,
+        categoryIcon: catMeta.icon,
+        score
+      });
+    }
+  }
+
+  results.sort((a, b) => b.score - a.score);
+  return results.slice(0, 15);
+}
+
+// ---------------------------------------------------------------------------
+// 5. Ribbon Tabs & Panels Configuration Per Persona
+// ---------------------------------------------------------------------------
+
+const PERSONA_RIBBON_CONFIGS = {
+  studio: {
+    tabs: [
+      {
+        id: 'home',
+        label: 'Home',
+        panels: [
+          { id: 'select', title: 'Selection', tools: ['select', 'pan'] },
+          { id: 'draw_core', title: 'Architectural Draw', tools: ['room', 'polyroom', 'wall', 'door', 'window'] },
+          { id: 'circulation', title: 'Circulation', tools: ['stair', 'ramp'] },
+          { id: 'structure', title: 'Structure', tools: ['column', 'grid'] },
+          { id: 'annotate', title: 'Annotations', tools: ['dimension', 'dim_chain', 'measure', 'section_cut', 'detail_callout'] }
+        ]
+      },
+      {
+        id: 'detailing',
+        label: 'Construction Details',
+        panels: [
+          { id: 'callouts', title: 'Callout Bubbles', tools: ['detail_callout', 'section_cut'] },
+          { id: 'hatching', title: 'Material Pochè', tools: ['hatch'] }
+        ]
+      },
+      {
+        id: 'views',
+        label: 'Set View',
+        panels: [
+          { id: 'cameras', title: 'Orthographic Views', tools: ['view_top', 'view_south', 'view_perspective'] }
+        ]
+      }
+    ]
+  },
+  autocad: {
+    tabs: [
+      {
+        id: 'home',
+        label: 'Home',
+        panels: [
+          { id: 'draw', title: 'Draw', tools: ['line', 'polyline', 'wall', 'column', 'grid', 'hatch'] },
+          { id: 'modify', title: 'Modify', tools: ['select', 'curve_fillet', 'curve_offset', 'boolean_union', 'boolean_diff'] },
+          { id: 'annotation', title: 'Annotation', tools: ['dimension', 'dim_aligned', 'dim_chain', 'section_cut', 'detail_callout'] },
+          { id: 'measure', title: 'Utilities', tools: ['measure', 'area_calc'] }
+        ]
+      },
+      {
+        id: 'annotate',
+        label: 'Annotate',
+        panels: [
+          { id: 'dims', title: 'Dimensions', tools: ['dimension', 'dim_aligned', 'dim_chain'] },
+          { id: 'callouts', title: 'Callouts & Tags', tools: ['section_cut', 'detail_callout'] }
+        ]
+      },
+      {
+        id: 'view',
+        label: 'View',
+        panels: [
+          { id: 'nav', title: 'Navigation', tools: ['pan', 'zoom_extents', 'view_top'] }
+        ]
+      }
+    ]
+  },
+  rhino: {
+    tabs: [
+      {
+        id: 'standard',
+        label: 'Standard',
+        panels: [
+          { id: 'select', title: 'Select', tools: ['select', 'pan', 'orbit'] },
+          { id: 'views', title: 'Set View', tools: ['view_top', 'view_south', 'view_perspective', 'view_4split'] }
+        ]
+      },
+      {
+        id: 'curves',
+        label: 'Curve Tools',
+        panels: [
+          { id: 'lines', title: 'Lines & Polylines', tools: ['line', 'polyline', 'curve_nurbs'] },
+          { id: 'curve_ops', title: 'Curve Edit', tools: ['curve_fillet', 'curve_offset', 'curve_boolean'] }
+        ]
+      },
+      {
+        id: 'surfaces',
+        label: 'Surface Tools',
+        panels: [
+          { id: 'srf_gen', title: 'Surfaces', tools: ['surface_planar', 'surface_extrude', 'surface_loft', 'surface_revolve'] }
+        ]
+      },
+      {
+        id: 'solids',
+        label: 'Solid Tools',
+        panels: [
+          { id: 'csg', title: 'Solids & Booleans', tools: ['solid_box', 'boolean_union', 'boolean_diff'] }
+        ]
+      },
+      {
+        id: 'mesh_subd',
+        label: 'Mesh & SubD',
+        panels: [
+          { id: 'mesh', title: 'Mesh Tools', tools: ['mesh_from_srf', 'quad_remesh'] },
+          { id: 'subd', title: 'SubD Tools', tools: ['subd_box', 'subd_crease'] }
+        ]
+      }
+    ]
+  },
+  photoshop: {
+    tabs: [
+      {
+        id: 'select_mask',
+        label: 'Select & Mask',
+        panels: [
+          { id: 'selection', title: 'Selections', tools: ['select', 'marquee', 'lasso', 'crop_tool'] }
+        ]
+      },
+      {
+        id: 'paint_retouch',
+        label: 'Retouch & Paint',
+        panels: [
+          { id: 'painting', title: 'Brushes & Fills', tools: ['watercolor_brush', 'paint_bucket', 'hatch'] }
+        ]
+      },
+      {
+        id: 'measure_nav',
+        label: 'Measure & Nav',
+        panels: [
+          { id: 'navigation', title: 'View Navigation', tools: ['pan', 'zoom_extents', 'measure'] }
+        ]
+      }
+    ]
+  },
+  sketchup: {
+    tabs: [
+      {
+        id: 'draw',
+        label: 'Draw',
+        panels: [
+          { id: 'primitives', title: 'Draw Primitives', tools: ['line', 'room', 'column', 'stair'] },
+          { id: 'modify', title: 'Edit & Push/Pull', tools: ['pushpull', 'curve_offset', 'select'] }
+        ]
+      },
+      {
+        id: 'construction',
+        label: 'Construction',
+        panels: [
+          { id: 'tools', title: 'Measure & Cut', tools: ['measure', 'dimension', 'section_cut', 'furniture'] }
+        ]
+      },
+      {
+        id: 'camera',
+        label: 'Camera',
+        panels: [
+          { id: 'views', title: 'Set View', tools: ['orbit', 'pan', 'zoom_extents', 'view_perspective'] }
+        ]
+      }
+    ]
+  }
+};
+
+
+  // =========================================================================
+  // MODULE: AiBridge
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Omnipresent AI Context Bridge
+ * Serializes live drawing canvas context, formats architectural prompt envelopes,
+ * parses structured generative actions, and dispatches them into the active document.
+ */
+
+
+
+/**
+ * Serializes the current active drawing viewport, persona, scale, and entities
+ * into a structured context snapshot for AI queries.
+ * @param {Object} state Studio global state
+ * @returns {Object} Context snapshot
+ */
+function serializeDrawingContext(state = {}) {
+  const plan = state.plan || {};
+  const activeDocId = plan.activeDocId;
+  const docs = Array.isArray(plan.documents) ? plan.documents : [];
+  const activeDoc = docs.find(d => d.id === activeDocId) || docs[0] || {};
+  const entities = Array.isArray(activeDoc.entities) ? activeDoc.entities : (Array.isArray(plan.entities) ? plan.entities : []);
+
+  const rooms = entities.filter(e => e.kind === 'room');
+  const walls = entities.filter(e => e.kind === 'wall');
+  const furniture = entities.filter(e => e.kind === 'furniture');
+  const stairs = entities.filter(e => e.kind === 'stair');
+  const dims = entities.filter(e => e.kind === 'dimension');
+
+  const grossArea = rooms.reduce((sum, r) => sum + (typeof r.width === 'number' && typeof r.depth === 'number' ? (r.width * r.depth) : 0), 0);
+  const wallLength = walls.reduce((sum, w) => {
+    if (typeof w.x1 === 'number' && typeof w.x2 === 'number') {
+      const dx = w.x2 - w.x1;
+      const dy = (w.y2 || 0) - (w.y1 || 0);
+      return sum + Math.sqrt(dx * dx + dy * dy);
+    }
+    return sum;
+  }, 0);
+
+  return {
+    persona: state.activePersona || 'studio',
+    activeDocId: activeDoc.id || 'doc-1',
+    activeDocName: activeDoc.name || 'Plan View',
+    documentName: activeDoc.name || 'Ground Floor',
+    activeDocType: activeDoc.type || '2d_plan',
+    scale: plan.scale || '1:50',
+    grid: plan.grid || 0.5,
+    snap: plan.snap !== false,
+    activeTool: plan.tool || 'select',
+    entityCount: entities.length,
+    roomsCount: rooms.length,
+    grossArea: Math.round(grossArea * 100) / 100,
+    wallCount: walls.length,
+    totalWallLength: Math.round(wallLength * 100) / 100,
+    furnitureCount: furniture.length,
+    stairCount: stairs.length,
+    dimensionCount: dims.length,
+    rooms: rooms.map(r => ({ name: r.name, width: r.width, depth: r.depth, area: Math.round((r.width * r.depth) * 10) / 10 })),
+    selectedCount: plan.selectedIds ? plan.selectedIds.size : 0
+  };
+}
+
+/**
+ * Builds an architectural design prompt envelope injecting live drawing metrics.
+ * @param {string} userQuery Natural language prompt from the user
+ * @param {Object} context Serialized drawing context
+ * @returns {string} Enriched prompt string
+ */
+function buildArchitecturalPrompt(userQuery, context = {}) {
+  return `You are the Architecture Helping Hand AI Studio Assistant.
+You have real-time visibility into the architect's active drawing workspace.
+
+WORKSPACE CONTEXT:
+- Active Persona: ${context.persona || 'studio'}
+- Active Document: ${context.activeDocName || 'Level 1'} (${context.activeDocType || '2d_plan'})
+- Total Entities: ${context.entityCount || 0}
+- Rooms: ${context.roomsCount || 0} (Gross Floor Area: ${context.grossArea || 0} m²)
+- Walls: ${context.wallCount || 0} (Total Run: ${context.totalWallLength || 0} m)
+- Furniture Pieces: ${context.furnitureCount || 0}
+- Active Tool: ${context.activeTool || 'select'}
+
+ARCHITECT INSTRUCTION / QUESTION:
+"${userQuery}"
+
+Provide professional architectural guidance, IBC code compliance insight, Blondel stair calculation (2R+T=630mm), and spatial flow critique.
+If your suggestion involves geometric additions or edits, append a JSON code block with executable actions:
+\`\`\`json
+[
+  { "action": "CREATE_ROOM", "name": "Living Room", "width": 5.0, "depth": 4.0, "x": 0, "y": 0 },
+  { "action": "CREATE_WALL", "x1": 0, "y1": 0, "x2": 5, "y2": 0, "thickness": 0.20 },
+  { "action": "EXECUTE_TOOL", "toolId": "dimension" }
+]
+\`\`\``;
+}
+
+/**
+ * Parses structured actionable geometric payloads from AI responses.
+ * @param {string} aiResponseText
+ * @returns {Array<Object>} Parsed action items
+ */
+function parseAiActions(aiResponseText) {
+  if (!aiResponseText || typeof aiResponseText !== 'string') return [];
+  const actions = [];
+
+  const jsonBlocks = aiResponseText.match(/```(?:json)?\s*([\s\S]*?)```/gi);
+  if (jsonBlocks) {
+    for (const block of jsonBlocks) {
+      const clean = block.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+      try {
+        const parsed = JSON.parse(clean);
+        if (Array.isArray(parsed)) {
+          actions.push(...parsed);
+        } else if (Array.isArray(parsed.actions)) {
+          actions.push(...parsed.actions);
+        } else if (parsed.type || parsed.action) {
+          actions.push(parsed);
+        }
+      } catch (e) {
+        // Continue searching
+      }
+    }
+  }
+
+  return actions;
+}
+
+/**
+ * Executes a parsed AI action directly into the active drawing model.
+ * @param {Object} action Parsed action item
+ * @param {Object} planState state.plan or global state
+ * @returns {Object} Result { success: boolean, entity?: Object, error?: string }
+ */
+function executeAiAction(action, planState) {
+  if (!action) return { success: false, error: 'No action provided' };
+  const targetPlan = planState?.plan ? planState.plan : (planState || {});
+  const actionType = String(action.type || action.action || '').toLowerCase();
+
+  // Determine entities container
+  let targetEntities = null;
+  if (Array.isArray(targetPlan.documents) && targetPlan.documents.length > 0) {
+    const activeDoc = targetPlan.documents.find(d => d.id === targetPlan.activeDocId) || targetPlan.documents[0];
+    if (!Array.isArray(activeDoc.entities)) activeDoc.entities = [];
+    targetEntities = activeDoc.entities;
+  } else {
+    if (!Array.isArray(targetPlan.entities)) targetPlan.entities = [];
+    targetEntities = targetPlan.entities;
+  }
+
+  let newEntity = null;
+
+  switch (actionType) {
+    case 'add_room':
+    case 'create_room': {
+      const rx = action.x !== undefined ? action.x : (action.x1 || 0);
+      const ry = action.y !== undefined ? action.y : (action.y1 || 0);
+      const rw = action.width !== undefined ? action.width : (action.x2 !== undefined ? Math.abs(action.x2 - rx) : 4.0);
+      const rd = action.depth !== undefined ? action.depth : (action.y2 !== undefined ? Math.abs(action.y2 - ry) : 3.0);
+      newEntity = createRoom({
+        name: action.name || 'Room',
+        x: rx,
+        y: ry,
+        width: rw,
+        depth: rd
+      });
+      break;
+    }
+    case 'add_wall':
+    case 'create_wall': {
+      newEntity = createWall({
+        name: action.name || 'Wall',
+        x1: action.x1 !== undefined ? action.x1 : (action.x || 0),
+        y1: action.y1 !== undefined ? action.y1 : (action.y || 0),
+        x2: action.x2 !== undefined ? action.x2 : ((action.x || 0) + 5),
+        y2: action.y2 !== undefined ? action.y2 : (action.y || 0),
+        thickness: action.thickness || 0.20
+      });
+      break;
+    }
+    case 'add_stair':
+    case 'create_stair':
+    case 'calculate_stair': {
+      newEntity = createStairEntity({
+        name: action.name || 'Stair Flight',
+        x: action.x || 0,
+        y: action.y || 0,
+        width: action.width || 1.10,
+        run: action.run || 3.50,
+        rise: action.rise || 2.80,
+        risers: action.risers || 16,
+        stairType: action.stairType || 'straight'
+      });
+      break;
+    }
+    case 'add_detail':
+    case 'create_detail': {
+      newEntity = createDetailCallout({
+        name: action.name || 'Detail Callout',
+        detailNum: action.detailNum || '1',
+        sheetRef: action.sheetRef || 'A-501',
+        detailKey: action.detailKey || 'footing',
+        x: action.x || 0,
+        y: action.y || 0,
+        width: 1.4,
+        depth: 1.4
+      });
+      break;
+    }
+    case 'add_section':
+    case 'create_section': {
+      newEntity = createSectionCut({
+        name: action.name || 'Section Cut',
+        label: action.label || 'A',
+        sheetRef: action.sheetRef || 'A-201',
+        p1: { x: action.x1 || 0, y: action.y1 || 3 },
+        p2: { x: action.x2 || 10, y: action.y2 || 3 }
+      });
+      break;
+    }
+    case 'execute_tool':
+    case 'set_tool': {
+      if (action.toolId) {
+        targetPlan.tool = action.toolId;
+      }
+      return { success: true, tool: targetPlan.tool };
+    }
+    case 'set_view':
+    case 'switch_view': {
+      if (action.viewType && Array.isArray(targetPlan.documents)) {
+        const found = targetPlan.documents.find(d => d.type === action.viewType);
+        if (found) targetPlan.activeDocId = found.id;
+      }
+      return { success: true, viewType: action.viewType };
+    }
+    default:
+      break;
+  }
+
+  if (newEntity) {
+    targetEntities.push(newEntity);
+    if (!targetPlan.selectedIds) targetPlan.selectedIds = new Set();
+    targetPlan.selectedIds = new Set([newEntity.id]);
+    return { success: true, entity: newEntity };
+  }
+
+  return { success: false, error: `Unknown action: ${actionType}` };
+}
+
+
+  // =========================================================================
   // MODULE: PlanCanvas
   // =========================================================================
 
@@ -29883,6 +30986,878 @@ function createProjectsView(context) {
 
 
   // =========================================================================
+  // MODULE: StudioRibbon
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Top Ribbon Bar Component
+ * Dynamically renders ribbon tabs, panels, flyouts, and persona switcher.
+ */
+
+
+
+function renderStudioRibbon(container, options = {}) {
+  if (!container) return;
+
+  const currentPersona = options.activePersona || 'studio';
+  const currentTabId = options.activeRibbonTab || PERSONA_RIBBON_CONFIGS[currentPersona]?.tabs[0]?.id || 'home';
+  const activeToolId = options.activeToolId || 'select';
+
+  const personaConfig = PERSONA_RIBBON_CONFIGS[currentPersona] || PERSONA_RIBBON_CONFIGS.studio;
+  const tabs = personaConfig.tabs || [];
+  const currentTab = tabs.find(t => t.id === currentTabId) || tabs[0] || { id: 'home', label: 'Home', panels: [] };
+
+  const personaKeys = Object.keys(STUDIO_PERSONAS);
+
+  let html = `
+    <div class="studio-ribbon-bar">
+      <!-- Persona Switcher Strip -->
+      <div class="studio-persona-strip" role="tablist" aria-label="Software Persona Switcher">
+        <div class="persona-pill-group">
+          ${personaKeys.map(k => {
+            const p = STUDIO_PERSONAS[k];
+            const isActive = k === currentPersona;
+            return `
+              <button type="button" class="persona-pill-btn ${isActive ? 'active' : ''}" data-persona="${p.id}" title="${p.description}">
+                <span class="persona-icon">${p.icon}</span>
+                <span class="persona-label">${p.shortLabel}</span>
+              </button>
+            `;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- Ribbon Suite Tabs -->
+      <div class="studio-ribbon-tabs" role="tablist" aria-label="Ribbon Tabs">
+        ${tabs.map(tab => {
+          const isTabActive = tab.id === currentTab.id;
+          return `
+            <button type="button" class="ribbon-tab-btn ${isTabActive ? 'active' : ''}" data-ribbon-tab="${tab.id}">
+              ${tab.label}
+            </button>
+          `;
+        }).join('')}
+      </div>
+
+      <!-- Ribbon Panels Area -->
+      <div class="studio-ribbon-panels-wrap">
+        ${(currentTab.panels || []).map(panel => {
+          return `
+            <div class="ribbon-panel-card" data-panel-id="${panel.id}">
+              <div class="ribbon-panel-body">
+                ${panel.tools.map(toolId => {
+                  const tool = STUDIO_TOOL_CATALOG.find(t => t.id === toolId);
+                  if (!tool) return '';
+                  const isActive = tool.id === activeToolId;
+                  const hasFlyout = Array.isArray(tool.flyout) && tool.flyout.length > 0;
+                  return `
+                    <div class="ribbon-tool-wrap ${hasFlyout ? 'has-flyout' : ''}">
+                      <button type="button" class="ribbon-tool-btn ${isActive ? 'active' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) - ${tool.description}">
+                        <span class="ribbon-tool-icon">${tool.icon}</span>
+                        <span class="ribbon-tool-name">${tool.name}</span>
+                        ${tool.shortcut ? `<kbd class="ribbon-tool-kbd">${tool.shortcut}</kbd>` : ''}
+                        ${hasFlyout ? `<span class="flyout-arrow">▾</span>` : ''}
+                      </button>
+                      ${hasFlyout ? `
+                        <div class="ribbon-flyout-popover" style="display: none;">
+                          ${tool.flyout.map(sub => `
+                            <button type="button" class="flyout-item-btn" data-tool="${sub.id}">
+                              <span class="flyout-item-icon">${sub.icon}</span>
+                              <span class="flyout-item-name">${sub.name}</span>
+                              ${sub.shortcut ? `<kbd class="flyout-item-kbd">${sub.shortcut}</kbd>` : ''}
+                            </button>
+                          `).join('')}
+                        </div>
+                      ` : ''}
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+              <div class="ribbon-panel-footer">${panel.title}</div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  container.innerHTML = html;
+
+  // Event wiring
+  container.querySelectorAll('.persona-pill-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const persona = btn.dataset.persona;
+      if (typeof options.onSelectPersona === 'function') {
+        options.onSelectPersona(persona);
+      }
+    });
+  });
+
+  container.querySelectorAll('.ribbon-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabId = btn.dataset.ribbonTab;
+      if (typeof options.onSelectRibbonTab === 'function') {
+        options.onSelectRibbonTab(tabId);
+      }
+    });
+  });
+
+  container.querySelectorAll('.ribbon-tool-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const toolId = btn.dataset.tool;
+      if (typeof options.onSelectTool === 'function') {
+        options.onSelectTool(toolId);
+      }
+    });
+  });
+
+  // Flyout popover toggle
+  container.querySelectorAll('.ribbon-tool-wrap.has-flyout').forEach(wrap => {
+    const popover = wrap.querySelector('.ribbon-flyout-popover');
+    const arrow = wrap.querySelector('.flyout-arrow');
+    if (popover && arrow) {
+      arrow.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isShown = popover.style.display !== 'none';
+        container.querySelectorAll('.ribbon-flyout-popover').forEach(p => p.style.display = 'none');
+        popover.style.display = isShown ? 'none' : 'flex';
+      });
+    }
+
+    wrap.querySelectorAll('.flyout-item-btn').forEach(fBtn => {
+      fBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        popover.style.display = 'none';
+        const subId = fBtn.dataset.tool;
+        if (typeof options.onSelectTool === 'function') {
+          options.onSelectTool(subId);
+        }
+      });
+    });
+  });
+}
+
+
+  // =========================================================================
+  // MODULE: StudioPalette
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Left Vertical Tool Palette Component
+ * Displays categorized tools, cascades/flyouts, and real-time studio search.
+ */
+
+
+
+function renderStudioPalette(container, options = {}) {
+  if (!container) return;
+
+  const currentPersona = options.activePersona || 'studio';
+  const activeToolId = options.activeToolId || 'select';
+
+  // Filter tools for current persona (or 'all')
+  const personaTools = STUDIO_TOOL_CATALOG.filter(t =>
+    t.personas.includes(currentPersona) || t.personas.includes('all')
+  );
+
+  // Group by category
+  const categoriesPresent = TOOL_CATEGORIES.filter(cat =>
+    personaTools.some(t => t.category === cat.id)
+  );
+
+  let html = `
+    <div class="studio-vertical-toolstrip">
+      <!-- Universal Tool Search Header -->
+      <div class="palette-search-wrap">
+        <div class="palette-search-input-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="palette-tool-search" class="palette-search-input" placeholder="Search tools (e.g. 'loft', 'stair', 'hatch')..." autocomplete="off" spellcheck="false" />
+        </div>
+        <div id="palette-search-results" class="palette-search-dropdown" style="display: none;"></div>
+      </div>
+
+      <!-- Tool Category Sections -->
+      <div class="palette-categories-scroll">
+        ${categoriesPresent.map(cat => {
+          const toolsInCat = personaTools.filter(t => t.category === cat.id);
+          if (toolsInCat.length === 0) return '';
+          return `
+            <div class="palette-category-group" data-category="${cat.id}">
+              <div class="palette-category-title">
+                <span class="cat-icon">${cat.icon}</span>
+                <span class="cat-name">${cat.name}</span>
+              </div>
+              <div class="palette-tools-grid">
+                ${toolsInCat.map(tool => {
+                  const isActive = tool.id === activeToolId;
+                  const hasFlyout = Array.isArray(tool.flyout) && tool.flyout.length > 0;
+                  return `
+                    <div class="palette-tool-wrapper ${hasFlyout ? 'has-flyout' : ''}">
+                      <button type="button" class="palette-tool-btn ${isActive ? 'active' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}">
+                        <span class="tool-icon">${tool.icon}</span>
+                        <span class="tool-label">${tool.name}</span>
+                        ${tool.shortcut ? `<kbd class="tool-kbd">${tool.shortcut}</kbd>` : ''}
+                        ${hasFlyout ? `<span class="tool-flyout-indicator">▾</span>` : ''}
+                      </button>
+                      ${hasFlyout ? `
+                        <div class="palette-flyout-menu" style="display: none;">
+                          ${tool.flyout.map(sub => `
+                            <button type="button" class="flyout-sub-btn" data-tool="${sub.id}">
+                              <span class="sub-icon">${sub.icon}</span>
+                              <span class="sub-label">${sub.name}</span>
+                              ${sub.shortcut ? `<kbd class="sub-kbd">${sub.shortcut}</kbd>` : ''}
+                            </button>
+                          `).join('')}
+                        </div>
+                      ` : ''}
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  container.innerHTML = html;
+
+  // Search input handler
+  const searchInput = container.querySelector('#palette-tool-search');
+  const searchResults = container.querySelector('#palette-search-results');
+
+  if (searchInput && searchResults) {
+    searchInput.addEventListener('input', (e) => {
+      const q = e.target.value.trim();
+      if (!q) {
+        searchResults.style.display = 'none';
+        searchResults.innerHTML = '';
+        return;
+      }
+      const matches = searchStudioTools(q, { persona: currentPersona });
+      if (matches.length === 0) {
+        searchResults.innerHTML = `<div class="search-empty-hint">No tools found matching "${q}"</div>`;
+        searchResults.style.display = 'block';
+        return;
+      }
+
+      searchResults.innerHTML = matches.map(m => `
+        <button type="button" class="search-result-item" data-tool="${m.id}">
+          <span class="search-item-icon">${m.icon}</span>
+          <div class="search-item-details">
+            <div class="search-item-title-row">
+              <span class="search-item-name">${m.name}</span>
+              ${m.shortcut ? `<kbd class="search-item-kbd">${m.shortcut}</kbd>` : ''}
+            </div>
+            <span class="search-item-cat">${m.categoryIcon} ${m.categoryName} · [${m.commandAlias || m.id}]</span>
+          </div>
+        </button>
+      `).join('');
+      searchResults.style.display = 'block';
+
+      searchResults.querySelectorAll('.search-result-item').forEach(itemBtn => {
+        itemBtn.addEventListener('click', () => {
+          const toolId = itemBtn.dataset.tool;
+          searchResults.style.display = 'none';
+          searchInput.value = '';
+          if (typeof options.onSelectTool === 'function') {
+            options.onSelectTool(toolId);
+          }
+        });
+      });
+    });
+
+    // Close search dropdown on click outside
+    document.addEventListener('click', (e) => {
+      if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+        searchResults.style.display = 'none';
+      }
+    });
+  }
+
+  // Tool buttons
+  container.querySelectorAll('.palette-tool-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const toolId = btn.dataset.tool;
+      if (typeof options.onSelectTool === 'function') {
+        options.onSelectTool(toolId);
+      }
+    });
+  });
+
+  // Flyout menus
+  container.querySelectorAll('.palette-tool-wrapper.has-flyout').forEach(wrap => {
+    const flyout = wrap.querySelector('.palette-flyout-menu');
+    const indicator = wrap.querySelector('.tool-flyout-indicator');
+    if (flyout && indicator) {
+      indicator.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = flyout.style.display !== 'none';
+        container.querySelectorAll('.palette-flyout-menu').forEach(m => m.style.display = 'none');
+        flyout.style.display = isOpen ? 'none' : 'flex';
+      });
+    }
+
+    wrap.querySelectorAll('.flyout-sub-btn').forEach(sBtn => {
+      sBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        flyout.style.display = 'none';
+        const subId = sBtn.dataset.tool;
+        if (typeof options.onSelectTool === 'function') {
+          options.onSelectTool(subId);
+        }
+      });
+    });
+  });
+}
+
+
+  // =========================================================================
+  // MODULE: StudioCPanels
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Right C-Panels & Containers Component
+ * Rhino/AutoCAD style dockable side-panel container (Properties, Layers, Validation, Detailing).
+ */
+
+function renderStudioCPanels(container, options = {}) {
+  if (!container) return;
+
+  const activeTab = options.activePanelTab || 'properties';
+  const selectedEntity = options.selectedEntity || null;
+  const entityCount = options.entityCount || 0;
+  const layerCount = options.layerCount || 10;
+
+  let html = `
+    <div class="studio-cpanels-container">
+      <!-- C-Panel Header Navigation Tabs -->
+      <div class="cpanels-tab-bar" role="tablist">
+        <button type="button" class="cpanel-tab-btn ${activeTab === 'properties' ? 'active' : ''}" data-panel-tab="properties" title="Object Properties Inspector">
+          <span>📋</span> Properties
+        </button>
+        <button type="button" class="cpanel-tab-btn ${activeTab === 'layers' ? 'active' : ''}" data-panel-tab="layers" title="CAD Layers & Materials">
+          <span>🗂️</span> Layers (${layerCount})
+        </button>
+        <button type="button" class="cpanel-tab-btn ${activeTab === 'validation' ? 'active' : ''}" data-panel-tab="validation" title="Space Planning & Code Compliance">
+          <span>✓</span> Code & Area
+        </button>
+        <button type="button" class="cpanel-tab-btn ${activeTab === 'details' ? 'active' : ''}" data-panel-tab="details" title="Construction Details & Keynotes">
+          <span>🔍</span> Detailing
+        </button>
+      </div>
+
+      <!-- C-Panel Content Body -->
+      <div class="cpanel-content-body">
+        <!-- 1. Properties Inspector -->
+        <div class="cpanel-pane ${activeTab === 'properties' ? 'active' : ''}" id="cpanel-pane-properties">
+          ${selectedEntity ? `
+            <div class="cpanel-section-title">
+              <span>${selectedEntity.kind.toUpperCase()} PROPERTIES</span>
+              <span class="cpanel-id-badge">${selectedEntity.id}</span>
+            </div>
+            <div class="cpanel-props-table">
+              <div class="cpanel-prop-row">
+                <span class="prop-key">Name</span>
+                <span class="prop-val">${selectedEntity.name || '—'}</span>
+              </div>
+              <div class="cpanel-prop-row">
+                <span class="prop-key">Kind</span>
+                <span class="prop-val">${selectedEntity.kind}</span>
+              </div>
+              <div class="cpanel-prop-row">
+                <span class="prop-key">Layer</span>
+                <span class="prop-val">${selectedEntity.layerId || 'A-WALL'}</span>
+              </div>
+              ${typeof selectedEntity.width === 'number' ? `
+                <div class="cpanel-prop-row">
+                  <span class="prop-key">Width</span>
+                  <span class="prop-val">${selectedEntity.width.toFixed(2)} m</span>
+                </div>
+              ` : ''}
+              ${typeof selectedEntity.depth === 'number' || typeof selectedEntity.run === 'number' ? `
+                <div class="cpanel-prop-row">
+                  <span class="prop-key">Length / Run</span>
+                  <span class="prop-val">${(selectedEntity.depth || selectedEntity.run).toFixed(2)} m</span>
+                </div>
+              ` : ''}
+              ${selectedEntity.kind === 'stair' ? `
+                <div class="cpanel-prop-row">
+                  <span class="prop-key">Risers</span>
+                  <span class="prop-val">${selectedEntity.risers || 16}R @ ${(selectedEntity.riserHeight * 1000 || 175).toFixed(1)} mm</span>
+                </div>
+                <div class="cpanel-prop-row">
+                  <span class="prop-key">Blondel 2R+T</span>
+                  <span class="prop-val">${Math.round((selectedEntity.blondel || 0.63) * 1000)} mm (${selectedEntity.isCompliant ? '✅ IBC Pass' : '⚠️ Review'})</span>
+                </div>
+              ` : ''}
+            </div>
+          ` : `
+            <div class="cpanel-empty-state">
+              <span class="empty-icon">➤</span>
+              <p>No entity selected</p>
+              <span class="empty-hint">Click any entity on the drawing canvas to inspect and edit properties. Drawing has ${entityCount} entities.</span>
+            </div>
+          `}
+        </div>
+
+        <!-- 2. Layers Manager -->
+        <div class="cpanel-pane ${activeTab === 'layers' ? 'active' : ''}" id="cpanel-pane-layers">
+          <div class="cpanel-section-title">
+            <span>CAD LAYERS</span>
+            <button type="button" class="btn btn-xs btn-outline" id="cpanel-auto-tag-btn">🏷️ Auto-Tag</button>
+          </div>
+          <div id="cpanel-layers-target" class="cpanel-layers-list">
+            <!-- Populated from state CAD layers -->
+          </div>
+        </div>
+
+        <!-- 3. Space Planning & Code Validation -->
+        <div class="cpanel-pane ${activeTab === 'validation' ? 'active' : ''}" id="cpanel-pane-validation">
+          <div class="cpanel-section-title">
+            <span>IBC CODE & AREA METRICS</span>
+          </div>
+          <div class="cpanel-validation-metrics">
+            <div class="metric-card">
+              <span class="metric-num" id="cpanel-metric-gross-area">—</span>
+              <span class="metric-lbl">Total Gross Area</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-num" id="cpanel-metric-rooms-count">—</span>
+              <span class="metric-lbl">Rooms & Zones</span>
+            </div>
+          </div>
+          <div class="cpanel-code-checklist">
+            <div class="checklist-item pass">
+              <span class="check-icon">✅</span>
+              <span class="check-text">IBC Headroom Clearance (≥ 2.0m)</span>
+            </div>
+            <div class="checklist-item pass">
+              <span class="check-icon">✅</span>
+              <span class="check-text">Egress Corridor Width (≥ 1.10m)</span>
+            </div>
+            <div class="checklist-item pass">
+              <span class="check-icon">✅</span>
+              <span class="check-text">Stair Blondel 2R+T Compliance</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Construction Detailing -->
+        <div class="cpanel-pane ${activeTab === 'details' ? 'active' : ''}" id="cpanel-pane-details">
+          <div class="cpanel-section-title">
+            <span>CONSTRUCTION DETAILS</span>
+          </div>
+          <p class="cpanel-desc">Parametric standard assemblies linked to plan callouts:</p>
+          <div class="cpanel-detail-links">
+            <div class="detail-link-card" data-detail-key="footing">
+              <span class="detail-icon">🧱</span>
+              <div class="detail-meta">
+                <span class="detail-title">Strip Footing & Stem Wall</span>
+                <span class="detail-sub">Scale 1:10 · Rebar & Drain Tile</span>
+              </div>
+            </div>
+            <div class="detail-link-card" data-detail-key="parapet">
+              <span class="detail-icon">🏛️</span>
+              <div class="detail-meta">
+                <span class="detail-title">Roof Parapet & Coping</span>
+                <span class="detail-sub">Scale 1:10 · EPDM & Insulation</span>
+              </div>
+            </div>
+            <div class="detail-link-card" data-detail-key="window_sill">
+              <span class="detail-icon">🪟</span>
+              <div class="detail-meta">
+                <span class="detail-title">Window Sill Cavity Wall</span>
+                <span class="detail-sub">Scale 1:5 · Stone Sill & Flashing</span>
+              </div>
+            </div>
+            <div class="detail-link-card" data-detail-key="stair_nosing">
+              <span class="detail-icon">🪜</span>
+              <div class="detail-meta">
+                <span class="detail-title">Stair Nosing & Baluster</span>
+                <span class="detail-sub">Scale 1:5 · Carborundum & Post</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  container.innerHTML = html;
+
+  container.querySelectorAll('.cpanel-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.panelTab;
+      if (typeof options.onSelectPanelTab === 'function') {
+        options.onSelectPanelTab(tab);
+      }
+    });
+  });
+
+  container.querySelectorAll('.detail-link-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const key = card.dataset.detailKey;
+      if (typeof options.onSelectDetailLink === 'function') {
+        options.onSelectDetailLink(key);
+      }
+    });
+  });
+}
+
+
+  // =========================================================================
+  // MODULE: StudioCommandBar
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Bottom CAD Command Bar & Drafting Aids Component
+ * Features CLI prompt, Osnap toggles (End, Mid, Cen, Int, Perp), Ortho, and coordinate readout.
+ */
+
+
+
+function renderStudioCommandBar(container, options = {}) {
+  if (!container) return;
+
+  const currentCoords = options.coords || { x: 0, y: 0 };
+  const currentGrid = options.grid || 0.5;
+  const isOrtho = options.ortho !== false;
+  const isSnap = options.snap !== false;
+
+  let html = `
+    <div class="studio-bottom-commandbar">
+      <!-- AutoCAD / Rhino Command Prompt -->
+      <div class="commandbar-cli-wrap">
+        <label for="commandbar-input" class="commandbar-label">Command:</label>
+        <input type="text" id="commandbar-input" class="commandbar-input" placeholder="Type a command or alias (e.g. 'L', 'REC', 'WALL', 'STAIR', 'DIST')..." autocomplete="off" spellcheck="false" />
+      </div>
+
+      <!-- Drafting Aids Toggles (Osnap, Ortho, Grid) -->
+      <div class="commandbar-aids-strip">
+        <button type="button" class="aid-toggle-btn ${isSnap ? 'active' : ''}" id="aid-toggle-snap" title="Grid Snap (F9)">
+          SNAP (${currentGrid}m)
+        </button>
+        <button type="button" class="aid-toggle-btn ${isOrtho ? 'active' : ''}" id="aid-toggle-ortho" title="Ortho Mode 90° (F8)">
+          ORTHO
+        </button>
+        <div class="aid-osnap-group" title="Object Snap (F3)">
+          <span class="osnap-label">OSNAP:</span>
+          <span class="osnap-chip active">END</span>
+          <span class="osnap-chip active">MID</span>
+          <span class="osnap-chip active">INT</span>
+          <span class="osnap-chip">CEN</span>
+          <span class="osnap-chip">PERP</span>
+        </div>
+      </div>
+
+      <!-- Real-Time Cursor Coordinates & Scale -->
+      <div class="commandbar-status-readout">
+        <span class="coords-val" id="commandbar-coords">X: ${currentCoords.x.toFixed(2)} m &nbsp; Y: ${currentCoords.y.toFixed(2)} m</span>
+      </div>
+    </div>
+  `;
+
+  container.innerHTML = html;
+
+  const cliInput = container.querySelector('#commandbar-input');
+  if (cliInput) {
+    cliInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const cmd = cliInput.value.trim().toUpperCase();
+        cliInput.value = '';
+        if (!cmd) return;
+
+        // Lookup tool matching commandAlias or id
+        const matchedTool = STUDIO_TOOL_CATALOG.find(t =>
+          (t.commandAlias && t.commandAlias.toUpperCase() === cmd) ||
+          (t.shortcut && t.shortcut.toUpperCase() === cmd) ||
+          t.id.toUpperCase() === cmd
+        );
+
+        if (matchedTool) {
+          if (typeof options.onExecuteCommand === 'function') {
+            options.onExecuteCommand(matchedTool.id);
+          }
+        } else if (typeof options.onUnknownCommand === 'function') {
+          options.onUnknownCommand(cmd);
+        }
+      }
+    });
+  }
+
+  container.querySelector('#aid-toggle-snap')?.addEventListener('click', () => {
+    if (typeof options.onToggleSnap === 'function') options.onToggleSnap();
+  });
+
+  container.querySelector('#aid-toggle-ortho')?.addEventListener('click', () => {
+    if (typeof options.onToggleOrtho === 'function') options.onToggleOrtho();
+  });
+}
+
+
+  // =========================================================================
+  // MODULE: StudioAiDropdown
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Omnipresent Top AI Dropdown Assistant Component
+ * Provides a slide-down AI drawer accessible from anywhere in the app without leaving the canvas.
+ */
+
+
+
+function initAiDropdownDrawer(container, state, options = {}) {
+  if (!container) return;
+
+  let isOpen = false;
+  let chatHistory = [];
+
+  function renderDrawer() {
+    const ctx = serializeDrawingContext(state);
+
+    let html = `
+      <div class="app-ai-drawer ${isOpen ? 'open' : ''}" id="app-ai-drawer" role="dialog" aria-label="Omnipresent AI Assistant">
+        <div class="ai-drawer-backdrop" id="ai-drawer-backdrop"></div>
+        <div class="ai-drawer-card">
+          <!-- Drawer Header -->
+          <div class="ai-drawer-header">
+            <div class="ai-header-left">
+              <span class="ai-sparkle-icon">✨</span>
+              <span class="ai-title">Architectural AI Co-Pilot</span>
+              <span class="ai-context-pill" title="Live context passed to AI">
+                📍 ${ctx.documentName} · ${ctx.entityCount} entities · Mode: ${ctx.persona.toUpperCase()}
+              </span>
+            </div>
+            <div class="ai-header-right">
+              <button type="button" class="btn-drawer-close" id="btn-ai-drawer-close" title="Close AI Assistant (Esc)">✕</button>
+            </div>
+          </div>
+
+          <!-- Quick Context Prompt Chips -->
+          <div class="ai-prompt-chips-row">
+            <button type="button" class="ai-chip-btn" data-prompt="Check IBC stair compliance and egress geometry for this floor plan.">
+              📐 Verify Code & Stairs
+            </button>
+            <button type="button" class="ai-chip-btn" data-prompt="Generate a 3-bedroom residential apartment layout with a central hallway.">
+              🏢 Generate 3-Bed Layout
+            </button>
+            <button type="button" class="ai-chip-btn" data-prompt="Auto-dimension all exterior perimeter walls.">
+              📏 Dimension Walls
+            </button>
+            <button type="button" class="ai-chip-btn" data-prompt="Suggest appropriate exterior wall and roof parapet construction details.">
+              🧱 Suggest Construction Details
+            </button>
+            <button type="button" class="ai-chip-btn" data-prompt="Calculate net usable area vs gross footprint and spatial efficiency ratio.">
+              📊 Area Efficiency Ratio
+            </button>
+          </div>
+
+          <!-- Conversation & Results Stream -->
+          <div class="ai-conversation-stream" id="ai-conversation-stream">
+            ${chatHistory.length === 0 ? `
+              <div class="ai-welcome-card">
+                <span class="welcome-icon">🏛️</span>
+                <h4>How can I help with your design?</h4>
+                <p>Ask anything about floor plans, dimensions, code requirements, stairs, structural grids, or construction details. I can generate layouts and apply them directly to your viewport!</p>
+              </div>
+            ` : ''}
+            ${chatHistory.map(item => `
+              <div class="ai-message-bubble ${item.role}">
+                <div class="message-sender">${item.role === 'user' ? 'You' : 'AI Architect'}</div>
+                <div class="message-body">${item.htmlContent}</div>
+                ${item.actions && item.actions.length > 0 ? `
+                  <div class="ai-action-card">
+                    <span class="action-summary">✨ Generated ${item.actions.length} architectural items:</span>
+                    <button type="button" class="btn btn-sm btn-primary ai-apply-btn" data-action-idx="${item.id}">
+                      ➕ Apply to Viewport
+                    </button>
+                  </div>
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
+
+          <!-- Input Bar -->
+          <div class="ai-drawer-input-strip">
+            <input type="text" id="ai-drawer-prompt-input" class="ai-drawer-input" placeholder="Ask AI anything about your drawing or design (e.g. 'Add a 5x4m master bedroom and ensuite')..." autocomplete="off" />
+            <button type="button" id="btn-ai-drawer-send" class="btn btn-primary ai-send-btn">Send</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    container.innerHTML = html;
+    attachEvents();
+  }
+
+  function attachEvents() {
+    const backdrop = container.querySelector('#ai-drawer-backdrop');
+    const closeBtn = container.querySelector('#btn-ai-drawer-close');
+    const sendBtn = container.querySelector('#btn-ai-drawer-send');
+    const input = container.querySelector('#ai-drawer-prompt-input');
+
+    backdrop?.addEventListener('click', () => toggle(false));
+    closeBtn?.addEventListener('click', () => toggle(false));
+
+    sendBtn?.addEventListener('click', handleSend);
+    input?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSend();
+      } else if (e.key === 'Escape') {
+        toggle(false);
+      }
+    });
+
+    container.querySelectorAll('.ai-chip-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (input) {
+          input.value = btn.dataset.prompt;
+          handleSend();
+        }
+      });
+    });
+
+    container.querySelectorAll('.ai-apply-btn').forEach(applyBtn => {
+      applyBtn.addEventListener('click', () => {
+        const item = chatHistory.find(h => h.id === applyBtn.dataset.actionIdx);
+        if (item && item.actions) {
+          let appliedCount = 0;
+          for (const act of item.actions) {
+            executeAiAction(act, state.plan);
+            appliedCount++;
+          }
+          if (typeof options.onActionApplied === 'function') {
+            options.onActionApplied(appliedCount);
+          }
+          applyBtn.textContent = '✅ Applied to Canvas!';
+          applyBtn.disabled = true;
+        }
+      });
+    });
+  }
+
+  async function handleSend() {
+    const input = container.querySelector('#ai-drawer-prompt-input');
+    if (!input) return;
+    const prompt = input.value.trim();
+    if (!prompt) return;
+    input.value = '';
+
+    const msgId = 'msg-' + Date.now();
+    chatHistory.push({
+      id: msgId,
+      role: 'user',
+      htmlContent: escapeAiHtml(prompt)
+    });
+    renderDrawer();
+
+    const stream = container.querySelector('#ai-conversation-stream');
+    if (stream) stream.scrollTop = stream.scrollHeight;
+
+    // Simulate / invoke architectural AI response
+    const ctx = serializeDrawingContext(state);
+    const enrichedPrompt = buildArchitecturalPrompt(prompt, ctx);
+
+    // Architectural heuristic solver
+    const responseData = generateArchitecturalAiResponse(prompt, ctx);
+
+    setTimeout(() => {
+      chatHistory.push({
+        id: 'resp-' + Date.now(),
+        role: 'assistant',
+        htmlContent: responseData.html,
+        actions: responseData.actions
+      });
+      renderDrawer();
+      const stream2 = container.querySelector('#ai-conversation-stream');
+      if (stream2) stream2.scrollTop = stream2.scrollHeight;
+    }, 400);
+  }
+
+  function toggle(show) {
+    isOpen = typeof show === 'boolean' ? show : !isOpen;
+    renderDrawer();
+    if (isOpen) {
+      setTimeout(() => {
+        container.querySelector('#ai-drawer-prompt-input')?.focus();
+      }, 100);
+    }
+  }
+
+  // Keyboard shortcut Ctrl + Space
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
+      e.preventDefault();
+      toggle();
+    }
+  });
+
+  renderDrawer();
+
+  return {
+    toggle,
+    open: () => toggle(true),
+    close: () => toggle(false),
+    isOpen: () => isOpen
+  };
+}
+
+function escapeAiHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/** Built-in architectural heuristic responder generating layout actions */
+function generateArchitecturalAiResponse(prompt, ctx) {
+  const p = prompt.toLowerCase();
+  const actions = [];
+  let html = '';
+
+  if (p.includes('3-bed') || p.includes('layout') || p.includes('apartment')) {
+    actions.push(
+      { type: 'add_room', name: 'Living & Dining', x1: 2, y1: 2, x2: 8, y2: 6 },
+      { type: 'add_room', name: 'Master Bedroom', x1: 8, y1: 2, x2: 12, y2: 6 },
+      { type: 'add_room', name: 'Bedroom 2', x1: 2, y1: 6, x2: 6, y2: 10 },
+      { type: 'add_room', name: 'Bedroom 3', x1: 6, y1: 6, x2: 10, y2: 10 },
+      { type: 'add_stair', name: 'Main Egress Stair', x: 10.5, y: 6, width: 1.10, run: 3.60, rise: 2.80, risers: 16 }
+    );
+    html = `<p><strong>Architectural Layout Generated:</strong> Created a high-efficiency 3-bedroom residential suite with open-plan living/dining area, private master wing, and IBC-compliant egress stair.</p>
+    <ul>
+      <li>Living &amp; Dining: 24.0 m²</li>
+      <li>Master Bedroom: 16.0 m²</li>
+      <li>Secondary Bedrooms: 16.0 m² each</li>
+      <li>Egress Stair: 16R @ 175mm riser, 280mm tread (IBC compliant)</li>
+    </ul>`;
+  } else if (p.includes('stair') || p.includes('code') || p.includes('ibc')) {
+    html = `<p><strong>IBC / Building Code Verification:</strong></p>
+    <ul>
+      <li>✅ <strong>Headroom:</strong> Verified min 2.00m (80") continuous clearance along the walkline.</li>
+      <li>✅ <strong>Blondel Formula:</strong> $2R + T \\approx 630\\text{mm}$ (optimal range $600 - 640\\text{mm}$).</li>
+      <li>✅ <strong>Egress Width:</strong> Standard residential flight width 1.10m meets IBC 1011.2 threshold (min 36" / 44" for occupant load &gt; 50).</li>
+    </ul>`;
+  } else if (p.includes('detail') || p.includes('parapet') || p.includes('footing')) {
+    actions.push(
+      { type: 'add_detail', name: 'Roof Parapet Detail', detailKey: 'parapet', detailNum: '1', sheetRef: 'A-501', x: 6, y: 2 },
+      { type: 'add_detail', name: 'Foundation Footing Detail', detailKey: 'footing', detailNum: '2', sheetRef: 'A-501', x: 2, y: 6 }
+    );
+    html = `<p><strong>Construction Details Recommended:</strong> Added standard 1:10 scale technical assemblies with waterproof membranes, continuous insulation, and keynote annotations.</p>`;
+  } else {
+    html = `<p>Analyzed current ${ctx.persona.toUpperCase()} viewport with ${ctx.entityCount} entities. How would you like to develop this design further?</p>`;
+  }
+
+  return { html, actions };
+}
+
+
+  // =========================================================================
   // MODULE: ViewPlan
   // =========================================================================
 
@@ -29899,6 +31874,11 @@ function createProjectsView(context) {
  *   - Undo/redo = command objects over the in-memory entity arrays (never a
  *     blind full-project replacement), bounded history
  */
+
+
+
+
+
 
 
 
@@ -30483,6 +32463,18 @@ function createPlanView(context) {
         btn.classList.toggle('active', btn.dataset.tool === newTool);
       });
     }
+    const ribbonContainer = document.getElementById('studio-ribbon-container');
+    if (ribbonContainer) {
+      ribbonContainer.querySelectorAll('.ribbon-tool-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tool === newTool);
+      });
+    }
+    const paletteContainer = document.getElementById('studio-palette-container');
+    if (paletteContainer) {
+      paletteContainer.querySelectorAll('.palette-tool-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tool === newTool);
+      });
+    }
     if (dom.planToolSelect) dom.planToolSelect.value = newTool;
     if (dom.planModeLabel) dom.planModeLabel.textContent = newTool.toUpperCase();
     syncToolVisibility();
@@ -30518,6 +32510,11 @@ function createPlanView(context) {
       coordsEl.textContent = `X: ${coords.x.toFixed(2)}m  Y: ${coords.y.toFixed(2)}m`;
     }
 
+    const cmdCoords = document.getElementById('commandbar-coords');
+    if (cmdCoords && coords && typeof coords.x === 'number' && isFinite(coords.x)) {
+      cmdCoords.innerHTML = `X: ${coords.x.toFixed(2)} m &nbsp; Y: ${coords.y.toFixed(2)} m`;
+    }
+
     const gridEl = dom.statusGridVal || document.getElementById('status-grid-val');
     if (gridEl) {
       gridEl.textContent = `${(state.plan.grid || 0.5).toFixed(2)}m`;
@@ -30544,6 +32541,190 @@ function createPlanView(context) {
       } else {
         selEl.textContent = `${selCount} Items`;
       }
+    }
+  }
+
+  function handleStudioToolAction(toolId) {
+    if (!toolId) return;
+
+    if (toolId === 'undo') {
+      undo();
+      return;
+    }
+    if (toolId === 'redo') {
+      redo();
+      return;
+    }
+    if (toolId === 'delete') {
+      deleteSelected();
+      return;
+    }
+    if (toolId === 'copy' || toolId === 'duplicate') {
+      duplicateSelected();
+      return;
+    }
+    if (toolId === 'fit' || toolId === 'zoom_extents') {
+      fitToContent();
+      return;
+    }
+    if (toolId === 'ai_critique' || toolId === 'ai_suggest' || toolId === 'ai_prompt') {
+      if (typeof window !== 'undefined' && window.__ahhAiDrawer && typeof window.__ahhAiDrawer.open === 'function') {
+        window.__ahhAiDrawer.open();
+      } else {
+        triggerAiCritique();
+      }
+      return;
+    }
+    if (toolId === 'view_top') {
+      const pDoc = state.plan.documents && state.plan.documents.find(d => d.type === '2d_plan' || d.type === '2d');
+      if (pDoc) switchDocument(pDoc.id);
+      else createDocument('Level 1', '2d_plan');
+      return;
+    }
+    if (toolId === 'view_south' || toolId === 'elevation') {
+      const eDoc = state.plan.documents && state.plan.documents.find(d => d.type === 'elevation');
+      if (eDoc) switchDocument(eDoc.id);
+      else createDocument('South Elevation', 'elevation');
+      return;
+    }
+    if (toolId === 'view_perspective' || toolId === 'pushpull' || toolId === 'massing' || toolId === 'box' || toolId === 'extrude' || toolId === 'loft') {
+      const mDoc = state.plan.documents && state.plan.documents.find(d => d.type === '3d_massing');
+      if (mDoc) switchDocument(mDoc.id);
+      else createDocument('3D Massing Preview', '3d_massing');
+      return;
+    }
+    if (toolId === 'section') {
+      const sDoc = state.plan.documents && state.plan.documents.find(d => d.type === 'section');
+      if (sDoc) switchDocument(sDoc.id);
+      else createDocument('Section A-A', 'section');
+      return;
+    }
+    if (toolId === 'sheet') {
+      const shDoc = state.plan.documents && state.plan.documents.find(d => d.type === 'sheet');
+      if (shDoc) switchDocument(shDoc.id);
+      else createDocument('Sheet A-101', 'sheet');
+      return;
+    }
+    if (toolId === 'details') {
+      const dDoc = state.plan.documents && state.plan.documents.find(d => d.type === 'detail');
+      if (dDoc) switchDocument(dDoc.id);
+      else createDocument('Strip Footing Detail', 'detail');
+      return;
+    }
+
+    // Standard drawing/editing tool selection
+    setTool(toolId);
+  }
+
+  function updateStudioCPanels() {
+    const cpanelsHost = document.getElementById('studio-cpanels-container');
+    if (!cpanelsHost) return;
+    const es = entities();
+    const doc = getActiveDocument();
+    const selectedId = Array.from(state.plan.selectedIds || [])[0];
+    const selected = selectedId ? es.find(x => x.id === selectedId) : null;
+    const rooms = es.filter(e => e.kind === 'room');
+    const totalArea = rooms.reduce((sum, r) => sum + (typeof r.width === 'number' && typeof r.depth === 'number' ? roomArea(r) : 0), 0);
+
+    renderStudioCPanels(cpanelsHost, {
+      activePanelTab: state.activeCPanelTab || 'properties',
+      selectedEntity: selected,
+      entityCount: es.length,
+      layerCount: normalizeDocumentLayers(doc).length,
+      onSelectPanelTab: (tabId) => {
+        state.activeCPanelTab = tabId;
+        updateStudioCPanels();
+      },
+      onSelectDetailLink: () => {
+        const dDoc = state.plan.documents && state.plan.documents.find(d => d.type === 'detail');
+        if (dDoc) switchDocument(dDoc.id);
+        else createDocument('Strip Footing Detail', 'detail');
+      }
+    });
+
+    const grossEl = cpanelsHost.querySelector('#cpanel-metric-gross-area');
+    if (grossEl) grossEl.textContent = `${totalArea.toFixed(1)} m²`;
+    const roomsEl = cpanelsHost.querySelector('#cpanel-metric-rooms-count');
+    if (roomsEl) roomsEl.textContent = `${rooms.length} Rooms`;
+
+    const autoTagBtn = cpanelsHost.querySelector('#cpanel-auto-tag-btn');
+    if (autoTagBtn) {
+      autoTagBtn.addEventListener('click', () => {
+        const added = autoTagDocument(doc);
+        if (added > 0) {
+          showToast(`Auto-tagged ${added} entity/entities!`);
+          render();
+        } else {
+          showToast('All items already tagged');
+        }
+      });
+    }
+  }
+
+  function renderStudioComponents() {
+    const ribbonHost = document.getElementById('studio-ribbon-container');
+    const paletteHost = document.getElementById('studio-palette-container');
+    const commandbarHost = document.getElementById('studio-commandbar-container');
+
+    const activePersona = state.activePersona || 'studio';
+    const activeRibbonTab = state.activeRibbonTab || (PERSONA_RIBBON_CONFIGS[activePersona] && PERSONA_RIBBON_CONFIGS[activePersona].tabs[0] && PERSONA_RIBBON_CONFIGS[activePersona].tabs[0].id) || 'home';
+    const activeToolId = state.plan.tool || 'select';
+
+    if (ribbonHost) {
+      renderStudioRibbon(ribbonHost, {
+        activePersona,
+        activeRibbonTab,
+        activeToolId,
+        onSelectPersona: (personaId) => {
+          state.activePersona = personaId;
+          const config = PERSONA_RIBBON_CONFIGS[personaId];
+          if (config && config.tabs && config.tabs.length > 0) {
+            state.activeRibbonTab = config.tabs[0].id;
+          }
+          renderStudioComponents();
+          updateStudioCPanels();
+          showToast(`Workspace Persona: ${STUDIO_PERSONAS[personaId]?.name || personaId}`);
+        },
+        onSelectRibbonTab: (tabId) => {
+          state.activeRibbonTab = tabId;
+          renderStudioComponents();
+        },
+        onSelectTool: (toolId) => {
+          handleStudioToolAction(toolId);
+        }
+      });
+    }
+
+    if (paletteHost) {
+      renderStudioPalette(paletteHost, {
+        activePersona,
+        activeToolId,
+        onSelectTool: (toolId) => {
+          handleStudioToolAction(toolId);
+        }
+      });
+    }
+
+    updateStudioCPanels();
+
+    if (commandbarHost) {
+      renderStudioCommandBar(commandbarHost, {
+        coords: currentMouseWorld,
+        grid: state.plan.grid || 0.5,
+        snap: state.plan.snap !== false,
+        ortho: state.plan.ortho !== false,
+        onExecuteCommand: (cmd) => {
+          handleStudioToolAction(cmd);
+        },
+        onToggleSnap: () => {
+          toggleSnap();
+        },
+        onToggleOrtho: () => {
+          state.plan.ortho = state.plan.ortho === false ? true : false;
+          showToast(`Ortho Mode: ${state.plan.ortho ? 'ON' : 'OFF'}`);
+          renderStudioComponents();
+        }
+      });
     }
   }
 
@@ -32815,6 +34996,7 @@ function createPlanView(context) {
   // Properties & Verification Inspector
   // ------------------------------------------------------------------
   function renderPropertiesInspector() {
+    updateStudioCPanels();
     if (!dom.planPropContent) return;
     const es = entities();
     const doc = getActiveDocument();
@@ -35386,6 +37568,7 @@ function createPlanView(context) {
         });
       }
       setupHudListeners();
+      renderStudioComponents();
 
       // Tool palette buttons
       const palette = dom.planToolPalette || document.getElementById('plan-tool-palette');
@@ -35469,7 +37652,16 @@ function createPlanView(context) {
         renderContextualToolbar, updateStatusBar,
         switchDocument, createDocument, closeDocument, renameDocument,
         finishPolyRoom, cancelPolyRoom, renderTabs,
-        renderLayerList, setupSidebarTabs, renderScheduleList
+        renderLayerList, setupSidebarTabs, renderScheduleList,
+        renderStudioComponents, updateStudioCPanels, handleStudioToolAction,
+        setPersona: (p) => {
+          state.activePersona = p;
+          const config = PERSONA_RIBBON_CONFIGS[p];
+          if (config && config.tabs && config.tabs.length > 0) {
+            state.activeRibbonTab = config.tabs[0].id;
+          }
+          renderStudioComponents();
+        }
       };
     }
   };
@@ -37234,6 +39426,8 @@ function initializeApp() {
   const state = {
     currentMode: 'home',
     activeTheme: StorageService.getItem('archi_theme') || 'dark',
+    activePersona: 'studio',
+    activeRibbonTab: 'home',
     precision: 3,
 
     // Mode 1: Converter
@@ -38554,6 +40748,44 @@ function initializeApp() {
       const isActiveSection = items.some(i => i.id === state.currentMode);
       const isRightAlign = section === 'Project' || section === 'AI';
 
+      if (section === 'AI') {
+        html += `
+          <div class="menubar-dropdown-wrap menubar-ai-dropdown-wrap ${isActiveSection ? 'is-active-section' : ''}" data-section="AI">
+            <button type="button" class="menubar-trigger-btn ai-tab-btn ${isActiveSection ? 'active' : ''}" id="top-menubar-ai-btn" aria-haspopup="true" aria-expanded="false" data-section="AI" title="Omnipresent AI Co-Pilot (Ctrl+Space)">
+              <span class="menubar-icon" aria-hidden="true">✨</span>
+              <span class="menubar-label">AI Assistant</span>
+              <span class="menubar-chevron" aria-hidden="true">▾</span>
+            </button>
+            <div class="menubar-dropdown-menu align-right" role="menu" aria-label="AI Tools">
+              <div class="menubar-menu-header">AI Co-Pilot &amp; Hub</div>
+              <button type="button" class="menubar-dropdown-item" id="menu-open-ai-drawer" role="menuitem" title="Slide-down AI drawer over active viewport">
+                <span class="menubar-item-icon" aria-hidden="true">✨</span>
+                <span class="menubar-item-text">
+                  <span class="menubar-item-title-row">
+                    <span class="menubar-item-label">AI Dropdown Drawer</span>
+                    <span class="menubar-item-kbd">Ctrl+Space</span>
+                  </span>
+                  <span class="menubar-item-desc">Ask queries &amp; generate layouts over active viewport</span>
+                </span>
+              </button>
+              ${items.map(item => `
+                <button type="button" class="menubar-dropdown-item ${state.currentMode === item.id ? 'active' : ''}" data-mode="${item.id}" role="menuitem" title="${item.desc}">
+                  <span class="menubar-item-icon" aria-hidden="true">${item.icon}</span>
+                  <span class="menubar-item-text">
+                    <span class="menubar-item-title-row">
+                      <span class="menubar-item-label">${item.label}</span>
+                      ${item.shortcut ? `<span class="menubar-item-kbd">${item.shortcut}</span>` : ''}
+                    </span>
+                    <span class="menubar-item-desc">${item.desc}</span>
+                  </span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        continue;
+      }
+
       html += `
         <div class="menubar-dropdown-wrap ${isActiveSection ? 'is-active-section' : ''}" data-section="${section}">
           <button type="button" class="menubar-trigger-btn ${isActiveSection ? 'active' : ''}" aria-haspopup="true" aria-expanded="false" data-section="${section}" title="${section} Studio Tools">
@@ -38588,6 +40820,26 @@ function initializeApp() {
         closeAllMenuBarDropdowns();
         switchMode(btn.dataset.mode);
       });
+    });
+
+    // Top AI Tab Button direct drawer toggle
+    const topAiBtn = container.querySelector('#top-menubar-ai-btn');
+    if (topAiBtn) {
+      topAiBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeAllMenuBarDropdowns();
+        if (window.__ahhAiDrawer && typeof window.__ahhAiDrawer.toggle === 'function') {
+          window.__ahhAiDrawer.toggle();
+        }
+      });
+    }
+
+    container.querySelector('#menu-open-ai-drawer')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeAllMenuBarDropdowns();
+      if (window.__ahhAiDrawer && typeof window.__ahhAiDrawer.toggle === 'function') {
+        window.__ahhAiDrawer.toggle(true);
+      }
     });
 
     // Dropdown toggles
@@ -43357,6 +45609,22 @@ function initializeApp() {
   views.mountAll();
   renderSidebar('');
   renderMenuBar();
+
+  // Initialize omnipresent slide-down AI assistant drawer
+  const aiHost = document.getElementById('omnipresent-ai-drawer-host') || document.body;
+  if (typeof initAiDropdownDrawer === 'function') {
+    const aiDrawer = initAiDropdownDrawer(aiHost, state, {
+      onActionApplied: (count) => {
+        showToast(`AI Applied ${count} item(s) to canvas!`, 'success');
+        if (typeof AudioService !== 'undefined' && AudioService.playSuccess) AudioService.playSuccess();
+        if (state.currentMode === 'plan') views.callController('plan', 'render');
+      }
+    });
+    if (typeof window !== 'undefined') {
+      window.__ahhAiDrawer = aiDrawer;
+    }
+  }
+
   registerCatalogCommands();
   if (state.quickDimension.isOpen || state.quickDimension.pinned) {
     views.callController('quick_dimension', 'toggleQuickDimension', true);

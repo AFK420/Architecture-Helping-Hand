@@ -308,6 +308,9 @@
         <!-- Architectural Menu Bar: Always-accessible tool navigation ribbon -->
         <nav class="app-menubar" id="app-menubar" aria-label="Tool Menu Bar"></nav>
 
+        <!-- Omnipresent Top AI Assistant Dropdown Drawer Host -->
+        <div id="omnipresent-ai-drawer-host"></div>
+
         <!-- Tool Surface -->
         <main class="tool-surface" id="tool-surface">
 
@@ -3790,6 +3793,9 @@
     <!-- MODE 19: PLAN CANVAS                                     -->
     <!-- ======================================================== -->
     <section id="mode-view-plan" class="tool-mode-view" aria-labelledby="heading-plan" hidden>
+      <!-- Top Studio Ribbon Bar Container -->
+      <div id="studio-ribbon-container"></div>
+
       <div class="tool-layout tool-layout-plan-3col">
         <!-- Column 1: Tools & Navigation / History (Left) -->
         <div class="archi-card main-calc-card plan-tools-card">
@@ -3797,6 +3803,9 @@
           <div class="corner-mark top-right"></div>
           <div class="corner-mark bottom-left"></div>
           <div class="corner-mark bottom-right"></div>
+
+          <!-- Studio Left Vertical Toolstrip Container -->
+          <div id="studio-palette-container"></div>
 
           <div class="card-header">
             <div>
@@ -4093,6 +4102,9 @@
             </div>
           </footer>
 
+          <!-- Bottom CAD Command Bar & Drafting Aids Container -->
+          <div id="studio-commandbar-container"></div>
+
           <div class="result-actions-strip" style="flex-wrap: wrap; gap: 0.5rem;">
             <button type="button" id="btn-plan-save" class="result-action-btn" title="Persist the plan into the project document">
               <span>💾 Save to Project</span>
@@ -4112,6 +4124,9 @@
           <div class="corner-mark top-right"></div>
           <div class="corner-mark bottom-left"></div>
           <div class="corner-mark bottom-right"></div>
+
+          <!-- Studio C-Panels Dockable Container -->
+          <div id="studio-cpanels-container"></div>
 
           <div class="card-header">
             <div>

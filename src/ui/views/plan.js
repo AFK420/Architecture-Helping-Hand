@@ -69,6 +69,17 @@ import { UNITS } from '../../core/units.js';
 import { wrapSVGDocument, createExportProvenance, EXPORT_FORMATS } from '../../core/export/export-model.js';
 import { attachNumericScrubber } from '../scrubber.js';
 import { ShortcutsManager } from '../../core/shortcuts-manager.js';
+import {
+  STUDIO_PERSONAS,
+  TOOL_CATEGORIES,
+  STUDIO_TOOL_CATALOG,
+  searchStudioTools,
+  PERSONA_RIBBON_CONFIGS
+} from '../../core/personas.js';
+import { renderStudioRibbon } from '../components/ribbon.js';
+import { renderStudioPalette } from '../components/palette.js';
+import { renderStudioCPanels } from '../components/cpanels.js';
+import { renderStudioCommandBar } from '../components/commandbar.js';
 
 const PLAN_STATE_KEY = 'archiscale_plan_prefs'; // user preferences only
 
@@ -633,6 +644,18 @@ export function createPlanView(context) {
         btn.classList.toggle('active', btn.dataset.tool === newTool);
       });
     }
+    const ribbonContainer = document.getElementById('studio-ribbon-container');
+    if (ribbonContainer) {
+      ribbonContainer.querySelectorAll('.ribbon-tool-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tool === newTool);
+      });
+    }
+    const paletteContainer = document.getElementById('studio-palette-container');
+    if (paletteContainer) {
+      paletteContainer.querySelectorAll('.palette-tool-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tool === newTool);
+      });
+    }
     if (dom.planToolSelect) dom.planToolSelect.value = newTool;
     if (dom.planModeLabel) dom.planModeLabel.textContent = newTool.toUpperCase();
     syncToolVisibility();
@@ -668,6 +691,11 @@ export function createPlanView(context) {
       coordsEl.textContent = `X: ${coords.x.toFixed(2)}m  Y: ${coords.y.toFixed(2)}m`;
     }
 
+    const cmdCoords = document.getElementById('commandbar-coords');
+    if (cmdCoords && coords && typeof coords.x === 'number' && isFinite(coords.x)) {
+      cmdCoords.innerHTML = `X: ${coords.x.toFixed(2)} m &nbsp; Y: ${coords.y.toFixed(2)} m`;
+    }
+
     const gridEl = dom.statusGridVal || document.getElementById('status-grid-val');
     if (gridEl) {
       gridEl.textContent = `${(state.plan.grid || 0.5).toFixed(2)}m`;
@@ -694,6 +722,190 @@ export function createPlanView(context) {
       } else {
         selEl.textContent = `${selCount} Items`;
       }
+    }
+  }
+
+  function handleStudioToolAction(toolId) {
+    if (!toolId) return;
+
+    if (toolId === 'undo') {
+      undo();
+      return;
+    }
+    if (toolId === 'redo') {
+      redo();
+      return;
+    }
+    if (toolId === 'delete') {
+      deleteSelected();
+      return;
+    }
+    if (toolId === 'copy' || toolId === 'duplicate') {
+      duplicateSelected();
+      return;
+    }
+    if (toolId === 'fit' || toolId === 'zoom_extents') {
+      fitToContent();
+      return;
+    }
+    if (toolId === 'ai_critique' || toolId === 'ai_suggest' || toolId === 'ai_prompt') {
+      if (typeof window !== 'undefined' && window.__ahhAiDrawer && typeof window.__ahhAiDrawer.open === 'function') {
+        window.__ahhAiDrawer.open();
+      } else {
+        triggerAiCritique();
+      }
+      return;
+    }
+    if (toolId === 'view_top') {
+      const pDoc = state.plan.documents && state.plan.documents.find(d => d.type === '2d_plan' || d.type === '2d');
+      if (pDoc) switchDocument(pDoc.id);
+      else createDocument('Level 1', '2d_plan');
+      return;
+    }
+    if (toolId === 'view_south' || toolId === 'elevation') {
+      const eDoc = state.plan.documents && state.plan.documents.find(d => d.type === 'elevation');
+      if (eDoc) switchDocument(eDoc.id);
+      else createDocument('South Elevation', 'elevation');
+      return;
+    }
+    if (toolId === 'view_perspective' || toolId === 'pushpull' || toolId === 'massing' || toolId === 'box' || toolId === 'extrude' || toolId === 'loft') {
+      const mDoc = state.plan.documents && state.plan.documents.find(d => d.type === '3d_massing');
+      if (mDoc) switchDocument(mDoc.id);
+      else createDocument('3D Massing Preview', '3d_massing');
+      return;
+    }
+    if (toolId === 'section') {
+      const sDoc = state.plan.documents && state.plan.documents.find(d => d.type === 'section');
+      if (sDoc) switchDocument(sDoc.id);
+      else createDocument('Section A-A', 'section');
+      return;
+    }
+    if (toolId === 'sheet') {
+      const shDoc = state.plan.documents && state.plan.documents.find(d => d.type === 'sheet');
+      if (shDoc) switchDocument(shDoc.id);
+      else createDocument('Sheet A-101', 'sheet');
+      return;
+    }
+    if (toolId === 'details') {
+      const dDoc = state.plan.documents && state.plan.documents.find(d => d.type === 'detail');
+      if (dDoc) switchDocument(dDoc.id);
+      else createDocument('Strip Footing Detail', 'detail');
+      return;
+    }
+
+    // Standard drawing/editing tool selection
+    setTool(toolId);
+  }
+
+  function updateStudioCPanels() {
+    const cpanelsHost = document.getElementById('studio-cpanels-container');
+    if (!cpanelsHost) return;
+    const es = entities();
+    const doc = getActiveDocument();
+    const selectedId = Array.from(state.plan.selectedIds || [])[0];
+    const selected = selectedId ? es.find(x => x.id === selectedId) : null;
+    const rooms = es.filter(e => e.kind === 'room');
+    const totalArea = rooms.reduce((sum, r) => sum + (typeof r.width === 'number' && typeof r.depth === 'number' ? roomArea(r) : 0), 0);
+
+    renderStudioCPanels(cpanelsHost, {
+      activePanelTab: state.activeCPanelTab || 'properties',
+      selectedEntity: selected,
+      entityCount: es.length,
+      layerCount: normalizeDocumentLayers(doc).length,
+      onSelectPanelTab: (tabId) => {
+        state.activeCPanelTab = tabId;
+        updateStudioCPanels();
+      },
+      onSelectDetailLink: () => {
+        const dDoc = state.plan.documents && state.plan.documents.find(d => d.type === 'detail');
+        if (dDoc) switchDocument(dDoc.id);
+        else createDocument('Strip Footing Detail', 'detail');
+      }
+    });
+
+    const grossEl = cpanelsHost.querySelector('#cpanel-metric-gross-area');
+    if (grossEl) grossEl.textContent = `${totalArea.toFixed(1)} m²`;
+    const roomsEl = cpanelsHost.querySelector('#cpanel-metric-rooms-count');
+    if (roomsEl) roomsEl.textContent = `${rooms.length} Rooms`;
+
+    const autoTagBtn = cpanelsHost.querySelector('#cpanel-auto-tag-btn');
+    if (autoTagBtn) {
+      autoTagBtn.addEventListener('click', () => {
+        const added = autoTagDocument(doc);
+        if (added > 0) {
+          showToast(`Auto-tagged ${added} entity/entities!`);
+          render();
+        } else {
+          showToast('All items already tagged');
+        }
+      });
+    }
+  }
+
+  function renderStudioComponents() {
+    const ribbonHost = document.getElementById('studio-ribbon-container');
+    const paletteHost = document.getElementById('studio-palette-container');
+    const commandbarHost = document.getElementById('studio-commandbar-container');
+
+    const activePersona = state.activePersona || 'studio';
+    const activeRibbonTab = state.activeRibbonTab || (PERSONA_RIBBON_CONFIGS[activePersona] && PERSONA_RIBBON_CONFIGS[activePersona].tabs[0] && PERSONA_RIBBON_CONFIGS[activePersona].tabs[0].id) || 'home';
+    const activeToolId = state.plan.tool || 'select';
+
+    if (ribbonHost) {
+      renderStudioRibbon(ribbonHost, {
+        activePersona,
+        activeRibbonTab,
+        activeToolId,
+        onSelectPersona: (personaId) => {
+          state.activePersona = personaId;
+          const config = PERSONA_RIBBON_CONFIGS[personaId];
+          if (config && config.tabs && config.tabs.length > 0) {
+            state.activeRibbonTab = config.tabs[0].id;
+          }
+          renderStudioComponents();
+          updateStudioCPanels();
+          showToast(`Workspace Persona: ${STUDIO_PERSONAS[personaId]?.name || personaId}`);
+        },
+        onSelectRibbonTab: (tabId) => {
+          state.activeRibbonTab = tabId;
+          renderStudioComponents();
+        },
+        onSelectTool: (toolId) => {
+          handleStudioToolAction(toolId);
+        }
+      });
+    }
+
+    if (paletteHost) {
+      renderStudioPalette(paletteHost, {
+        activePersona,
+        activeToolId,
+        onSelectTool: (toolId) => {
+          handleStudioToolAction(toolId);
+        }
+      });
+    }
+
+    updateStudioCPanels();
+
+    if (commandbarHost) {
+      renderStudioCommandBar(commandbarHost, {
+        coords: currentMouseWorld,
+        grid: state.plan.grid || 0.5,
+        snap: state.plan.snap !== false,
+        ortho: state.plan.ortho !== false,
+        onExecuteCommand: (cmd) => {
+          handleStudioToolAction(cmd);
+        },
+        onToggleSnap: () => {
+          toggleSnap();
+        },
+        onToggleOrtho: () => {
+          state.plan.ortho = state.plan.ortho === false ? true : false;
+          showToast(`Ortho Mode: ${state.plan.ortho ? 'ON' : 'OFF'}`);
+          renderStudioComponents();
+        }
+      });
     }
   }
 
@@ -2965,6 +3177,7 @@ export function createPlanView(context) {
   // Properties & Verification Inspector
   // ------------------------------------------------------------------
   function renderPropertiesInspector() {
+    updateStudioCPanels();
     if (!dom.planPropContent) return;
     const es = entities();
     const doc = getActiveDocument();
@@ -5536,6 +5749,7 @@ export function createPlanView(context) {
         });
       }
       setupHudListeners();
+      renderStudioComponents();
 
       // Tool palette buttons
       const palette = dom.planToolPalette || document.getElementById('plan-tool-palette');
@@ -5619,7 +5833,16 @@ export function createPlanView(context) {
         renderContextualToolbar, updateStatusBar,
         switchDocument, createDocument, closeDocument, renameDocument,
         finishPolyRoom, cancelPolyRoom, renderTabs,
-        renderLayerList, setupSidebarTabs, renderScheduleList
+        renderLayerList, setupSidebarTabs, renderScheduleList,
+        renderStudioComponents, updateStudioCPanels, handleStudioToolAction,
+        setPersona: (p) => {
+          state.activePersona = p;
+          const config = PERSONA_RIBBON_CONFIGS[p];
+          if (config && config.tabs && config.tabs.length > 0) {
+            state.activeRibbonTab = config.tabs[0].id;
+          }
+          renderStudioComponents();
+        }
       };
     }
   };

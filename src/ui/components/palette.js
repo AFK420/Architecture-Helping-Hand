@@ -1,0 +1,174 @@
+/**
+ * Architecture Helping Hand - Left Vertical Tool Palette Component
+ * Displays categorized tools, cascades/flyouts, and real-time studio search.
+ */
+
+import {
+  STUDIO_TOOL_CATALOG,
+  TOOL_CATEGORIES,
+  searchStudioTools
+} from '../../core/personas.js';
+
+export function renderStudioPalette(container, options = {}) {
+  if (!container) return;
+
+  const currentPersona = options.activePersona || 'studio';
+  const activeToolId = options.activeToolId || 'select';
+
+  // Filter tools for current persona (or 'all')
+  const personaTools = STUDIO_TOOL_CATALOG.filter(t =>
+    t.personas.includes(currentPersona) || t.personas.includes('all')
+  );
+
+  // Group by category
+  const categoriesPresent = TOOL_CATEGORIES.filter(cat =>
+    personaTools.some(t => t.category === cat.id)
+  );
+
+  let html = `
+    <div class="studio-vertical-toolstrip">
+      <!-- Universal Tool Search Header -->
+      <div class="palette-search-wrap">
+        <div class="palette-search-input-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="palette-tool-search" class="palette-search-input" placeholder="Search tools (e.g. 'loft', 'stair', 'hatch')..." autocomplete="off" spellcheck="false" />
+        </div>
+        <div id="palette-search-results" class="palette-search-dropdown" style="display: none;"></div>
+      </div>
+
+      <!-- Tool Category Sections -->
+      <div class="palette-categories-scroll">
+        ${categoriesPresent.map(cat => {
+          const toolsInCat = personaTools.filter(t => t.category === cat.id);
+          if (toolsInCat.length === 0) return '';
+          return `
+            <div class="palette-category-group" data-category="${cat.id}">
+              <div class="palette-category-title">
+                <span class="cat-icon">${cat.icon}</span>
+                <span class="cat-name">${cat.name}</span>
+              </div>
+              <div class="palette-tools-grid">
+                ${toolsInCat.map(tool => {
+                  const isActive = tool.id === activeToolId;
+                  const hasFlyout = Array.isArray(tool.flyout) && tool.flyout.length > 0;
+                  return `
+                    <div class="palette-tool-wrapper ${hasFlyout ? 'has-flyout' : ''}">
+                      <button type="button" class="palette-tool-btn ${isActive ? 'active' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}">
+                        <span class="tool-icon">${tool.icon}</span>
+                        <span class="tool-label">${tool.name}</span>
+                        ${tool.shortcut ? `<kbd class="tool-kbd">${tool.shortcut}</kbd>` : ''}
+                        ${hasFlyout ? `<span class="tool-flyout-indicator">▾</span>` : ''}
+                      </button>
+                      ${hasFlyout ? `
+                        <div class="palette-flyout-menu" style="display: none;">
+                          ${tool.flyout.map(sub => `
+                            <button type="button" class="flyout-sub-btn" data-tool="${sub.id}">
+                              <span class="sub-icon">${sub.icon}</span>
+                              <span class="sub-label">${sub.name}</span>
+                              ${sub.shortcut ? `<kbd class="sub-kbd">${sub.shortcut}</kbd>` : ''}
+                            </button>
+                          `).join('')}
+                        </div>
+                      ` : ''}
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  container.innerHTML = html;
+
+  // Search input handler
+  const searchInput = container.querySelector('#palette-tool-search');
+  const searchResults = container.querySelector('#palette-search-results');
+
+  if (searchInput && searchResults) {
+    searchInput.addEventListener('input', (e) => {
+      const q = e.target.value.trim();
+      if (!q) {
+        searchResults.style.display = 'none';
+        searchResults.innerHTML = '';
+        return;
+      }
+      const matches = searchStudioTools(q, { persona: currentPersona });
+      if (matches.length === 0) {
+        searchResults.innerHTML = `<div class="search-empty-hint">No tools found matching "${q}"</div>`;
+        searchResults.style.display = 'block';
+        return;
+      }
+
+      searchResults.innerHTML = matches.map(m => `
+        <button type="button" class="search-result-item" data-tool="${m.id}">
+          <span class="search-item-icon">${m.icon}</span>
+          <div class="search-item-details">
+            <div class="search-item-title-row">
+              <span class="search-item-name">${m.name}</span>
+              ${m.shortcut ? `<kbd class="search-item-kbd">${m.shortcut}</kbd>` : ''}
+            </div>
+            <span class="search-item-cat">${m.categoryIcon} ${m.categoryName} · [${m.commandAlias || m.id}]</span>
+          </div>
+        </button>
+      `).join('');
+      searchResults.style.display = 'block';
+
+      searchResults.querySelectorAll('.search-result-item').forEach(itemBtn => {
+        itemBtn.addEventListener('click', () => {
+          const toolId = itemBtn.dataset.tool;
+          searchResults.style.display = 'none';
+          searchInput.value = '';
+          if (typeof options.onSelectTool === 'function') {
+            options.onSelectTool(toolId);
+          }
+        });
+      });
+    });
+
+    // Close search dropdown on click outside
+    document.addEventListener('click', (e) => {
+      if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+        searchResults.style.display = 'none';
+      }
+    });
+  }
+
+  // Tool buttons
+  container.querySelectorAll('.palette-tool-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const toolId = btn.dataset.tool;
+      if (typeof options.onSelectTool === 'function') {
+        options.onSelectTool(toolId);
+      }
+    });
+  });
+
+  // Flyout menus
+  container.querySelectorAll('.palette-tool-wrapper.has-flyout').forEach(wrap => {
+    const flyout = wrap.querySelector('.palette-flyout-menu');
+    const indicator = wrap.querySelector('.tool-flyout-indicator');
+    if (flyout && indicator) {
+      indicator.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = flyout.style.display !== 'none';
+        container.querySelectorAll('.palette-flyout-menu').forEach(m => m.style.display = 'none');
+        flyout.style.display = isOpen ? 'none' : 'flex';
+      });
+    }
+
+    wrap.querySelectorAll('.flyout-sub-btn').forEach(sBtn => {
+      sBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        flyout.style.display = 'none';
+        const subId = sBtn.dataset.tool;
+        if (typeof options.onSelectTool === 'function') {
+          options.onSelectTool(subId);
+        }
+      });
+    });
+  });
+}

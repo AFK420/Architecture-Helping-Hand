@@ -127,8 +127,8 @@ import { createProjectStore } from '../services/store.js';
 import { AudioService } from '../services/audio.js';
 import { HistoryService } from '../services/history.js';
 import { CommandRegistry, parseNaturalLanguageCommand } from '../services/commands.js';
-import { updateVisualization, getFurniturePlanSVG } from './visualizer.js';
 import { ShortcutsManager, formatDisplayKey, normalizeKeyCombo } from '../core/shortcuts-manager.js';
+import { initAiDropdownDrawer } from './components/ai-dropdown.js';
 
 export function initializeApp() {
   /** Escapes user-controllable strings before innerHTML rendering (app-wide). */
@@ -145,6 +145,8 @@ export function initializeApp() {
   const state = {
     currentMode: 'home',
     activeTheme: StorageService.getItem('archi_theme') || 'dark',
+    activePersona: 'studio',
+    activeRibbonTab: 'home',
     precision: 3,
 
     // Mode 1: Converter
@@ -1465,6 +1467,44 @@ export function initializeApp() {
       const isActiveSection = items.some(i => i.id === state.currentMode);
       const isRightAlign = section === 'Project' || section === 'AI';
 
+      if (section === 'AI') {
+        html += `
+          <div class="menubar-dropdown-wrap menubar-ai-dropdown-wrap ${isActiveSection ? 'is-active-section' : ''}" data-section="AI">
+            <button type="button" class="menubar-trigger-btn ai-tab-btn ${isActiveSection ? 'active' : ''}" id="top-menubar-ai-btn" aria-haspopup="true" aria-expanded="false" data-section="AI" title="Omnipresent AI Co-Pilot (Ctrl+Space)">
+              <span class="menubar-icon" aria-hidden="true">✨</span>
+              <span class="menubar-label">AI Assistant</span>
+              <span class="menubar-chevron" aria-hidden="true">▾</span>
+            </button>
+            <div class="menubar-dropdown-menu align-right" role="menu" aria-label="AI Tools">
+              <div class="menubar-menu-header">AI Co-Pilot &amp; Hub</div>
+              <button type="button" class="menubar-dropdown-item" id="menu-open-ai-drawer" role="menuitem" title="Slide-down AI drawer over active viewport">
+                <span class="menubar-item-icon" aria-hidden="true">✨</span>
+                <span class="menubar-item-text">
+                  <span class="menubar-item-title-row">
+                    <span class="menubar-item-label">AI Dropdown Drawer</span>
+                    <span class="menubar-item-kbd">Ctrl+Space</span>
+                  </span>
+                  <span class="menubar-item-desc">Ask queries &amp; generate layouts over active viewport</span>
+                </span>
+              </button>
+              ${items.map(item => `
+                <button type="button" class="menubar-dropdown-item ${state.currentMode === item.id ? 'active' : ''}" data-mode="${item.id}" role="menuitem" title="${item.desc}">
+                  <span class="menubar-item-icon" aria-hidden="true">${item.icon}</span>
+                  <span class="menubar-item-text">
+                    <span class="menubar-item-title-row">
+                      <span class="menubar-item-label">${item.label}</span>
+                      ${item.shortcut ? `<span class="menubar-item-kbd">${item.shortcut}</span>` : ''}
+                    </span>
+                    <span class="menubar-item-desc">${item.desc}</span>
+                  </span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        continue;
+      }
+
       html += `
         <div class="menubar-dropdown-wrap ${isActiveSection ? 'is-active-section' : ''}" data-section="${section}">
           <button type="button" class="menubar-trigger-btn ${isActiveSection ? 'active' : ''}" aria-haspopup="true" aria-expanded="false" data-section="${section}" title="${section} Studio Tools">
@@ -1499,6 +1539,26 @@ export function initializeApp() {
         closeAllMenuBarDropdowns();
         switchMode(btn.dataset.mode);
       });
+    });
+
+    // Top AI Tab Button direct drawer toggle
+    const topAiBtn = container.querySelector('#top-menubar-ai-btn');
+    if (topAiBtn) {
+      topAiBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeAllMenuBarDropdowns();
+        if (window.__ahhAiDrawer && typeof window.__ahhAiDrawer.toggle === 'function') {
+          window.__ahhAiDrawer.toggle();
+        }
+      });
+    }
+
+    container.querySelector('#menu-open-ai-drawer')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeAllMenuBarDropdowns();
+      if (window.__ahhAiDrawer && typeof window.__ahhAiDrawer.toggle === 'function') {
+        window.__ahhAiDrawer.toggle(true);
+      }
     });
 
     // Dropdown toggles
@@ -6268,6 +6328,22 @@ export function initializeApp() {
   views.mountAll();
   renderSidebar('');
   renderMenuBar();
+
+  // Initialize omnipresent slide-down AI assistant drawer
+  const aiHost = document.getElementById('omnipresent-ai-drawer-host') || document.body;
+  if (typeof initAiDropdownDrawer === 'function') {
+    const aiDrawer = initAiDropdownDrawer(aiHost, state, {
+      onActionApplied: (count) => {
+        showToast(`AI Applied ${count} item(s) to canvas!`, 'success');
+        if (typeof AudioService !== 'undefined' && AudioService.playSuccess) AudioService.playSuccess();
+        if (state.currentMode === 'plan') views.callController('plan', 'render');
+      }
+    });
+    if (typeof window !== 'undefined') {
+      window.__ahhAiDrawer = aiDrawer;
+    }
+  }
+
   registerCatalogCommands();
   if (state.quickDimension.isOpen || state.quickDimension.pinned) {
     views.callController('quick_dimension', 'toggleQuickDimension', true);
