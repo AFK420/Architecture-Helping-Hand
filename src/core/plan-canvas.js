@@ -13,6 +13,9 @@ import { rectsIntersect, generateEntityId } from './entities.js';
 import {
   pointInPolygon,
   calcWallPolygon,
+  calcDoorCADGeometry,
+  calcWindowCADGeometry,
+  calcDimensionGeometry,
   projectPointOnSegment,
   findPerpendicularProjection,
   findExtensionSnap,
@@ -634,27 +637,39 @@ export function planToExportGeometry(entities, options = {}) {
     : (entities && typeof entities === 'object' ? Object.values(entities).flat().filter(Boolean) : []);
   for (const e of list) {
     if (!e || typeof e !== 'object') continue;
+    const lyr = e.layerId || (e.kind === 'wall' ? 'A-WALL'
+      : e.kind === 'door' ? 'A-DOOR'
+      : e.kind === 'window' ? 'A-GLAZ'
+      : e.kind === 'room' ? 'A-AREA'
+      : (e.kind === 'stair' || e.kind === 'ramp') ? 'A-FLOR-STRS'
+      : e.kind === 'furniture' ? 'A-FURN'
+      : e.kind === 'dimension' ? 'A-DIMS'
+      : (e.kind === 'room_tag' || e.kind === 'door_tag' || e.kind === 'window_tag' || e.kind === 'north_arrow') ? 'A-ANNO-TAGS'
+      : 'A-ANNO-TEXT');
+
     if (e.kind === 'room') {
       if (Array.isArray(e.boundary) && e.boundary.length >= 3) {
         out.polygons.push({
           closed: true,
           points: e.boundary.map(pt => [pt.x, pt.y]),
-          label: e.name || 'Room'
+          label: e.name || 'Room',
+          layer: lyr
         });
         if (includeLabels) {
           const cx = e.boundary.reduce((sum, p) => sum + p.x, 0) / e.boundary.length;
           const cy = e.boundary.reduce((sum, p) => sum + p.y, 0) / e.boundary.length;
-          out.texts.push({ x: cx, y: cy, text: e.name || 'Room' });
+          out.texts.push({ x: cx, y: cy, text: e.name || 'Room', layer: lyr });
         }
       } else if (typeof e.x === 'number' && typeof e.width === 'number' &&
                  typeof e.y === 'number' && typeof e.depth === 'number') {
         out.polygons.push({
           closed: true,
           points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
-          label: e.name || 'Room'
+          label: e.name || 'Room',
+          layer: lyr
         });
         if (includeLabels) {
-          out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: e.name || 'Room' });
+          out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: e.name || 'Room', layer: lyr });
         }
       }
     } else if (e.kind === 'wall' && typeof e.x1 === 'number') {
@@ -669,42 +684,156 @@ export function planToExportGeometry(entities, options = {}) {
         out.polygons.push({
           closed: true,
           points: [[minX, minY], [minX + w, minY], [minX + w, minY + d], [minX, minY + d]],
-          label: e.name || 'Wall'
+          label: e.name || 'Wall',
+          layer: lyr
         });
       } else {
         const wallCorners = calcWallPolygon(e);
         out.polygons.push({
           closed: true,
           points: wallCorners.map(pt => [pt.x, pt.y]),
-          label: e.name || 'Wall'
+          label: e.name || 'Wall',
+          layer: lyr
         });
+      }
+    } else if (e.kind === 'door') {
+      const host = list.find(w => w.id === e.wallId);
+      if (host && typeof host.x1 === 'number') {
+        try {
+          const doorCAD = calcDoorCADGeometry(host, e);
+          if (doorCAD.jamb1Line) {
+            out.lines.push({ x1: doorCAD.jamb1Line[0].x, y1: doorCAD.jamb1Line[0].y, x2: doorCAD.jamb1Line[1].x, y2: doorCAD.jamb1Line[1].y, layer: lyr });
+          }
+          if (doorCAD.jamb2Line) {
+            out.lines.push({ x1: doorCAD.jamb2Line[0].x, y1: doorCAD.jamb2Line[0].y, x2: doorCAD.jamb2Line[1].x, y2: doorCAD.jamb2Line[1].y, layer: lyr });
+          }
+          if (doorCAD.type === 'double' && Array.isArray(doorCAD.leaves)) {
+            for (const leaf of doorCAD.leaves) {
+              out.lines.push({ x1: leaf.hinge.x, y1: leaf.hinge.y, x2: leaf.openEnd.x, y2: leaf.openEnd.y, layer: lyr });
+            }
+          } else if (doorCAD.hinge && doorCAD.openEnd) {
+            out.lines.push({ x1: doorCAD.hinge.x, y1: doorCAD.hinge.y, x2: doorCAD.openEnd.x, y2: doorCAD.openEnd.y, layer: lyr });
+          }
+        } catch (_) {}
+      }
+    } else if (e.kind === 'window') {
+      const host = list.find(w => w.id === e.wallId);
+      if (host && typeof host.x1 === 'number') {
+        try {
+          const winCAD = calcWindowCADGeometry(host, e);
+          if (winCAD.jamb1) out.lines.push({ x1: winCAD.jamb1[0].x, y1: winCAD.jamb1[0].y, x2: winCAD.jamb1[1].x, y2: winCAD.jamb1[1].y, layer: lyr });
+          if (winCAD.jamb2) out.lines.push({ x1: winCAD.jamb2[0].x, y1: winCAD.jamb2[0].y, x2: winCAD.jamb2[1].x, y2: winCAD.jamb2[1].y, layer: lyr });
+          if (winCAD.sillOuter) out.lines.push({ x1: winCAD.sillOuter[0].x, y1: winCAD.sillOuter[0].y, x2: winCAD.sillOuter[1].x, y2: winCAD.sillOuter[1].y, layer: lyr });
+          if (winCAD.sillInner) out.lines.push({ x1: winCAD.sillInner[0].x, y1: winCAD.sillInner[0].y, x2: winCAD.sillInner[1].x, y2: winCAD.sillInner[1].y, layer: lyr });
+          if (winCAD.glassPane1) out.lines.push({ x1: winCAD.glassPane1[0].x, y1: winCAD.glassPane1[0].y, x2: winCAD.glassPane1[1].x, y2: winCAD.glassPane1[1].y, layer: lyr });
+          if (winCAD.glassPane2) out.lines.push({ x1: winCAD.glassPane2[0].x, y1: winCAD.glassPane2[0].y, x2: winCAD.glassPane2[1].x, y2: winCAD.glassPane2[1].y, layer: lyr });
+        } catch (_) {}
       }
     } else if (e.kind === 'furniture' && typeof e.x === 'number' && typeof e.width === 'number') {
       out.polygons.push({
         closed: true,
         points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
-        label: e.name || 'Furniture'
+        label: e.name || 'Furniture',
+        layer: lyr
       });
       if (includeLabels) {
-        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: e.name || 'Furniture' });
+        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: e.name || 'Furniture', layer: lyr });
       }
     } else if (e.kind === 'stair' && typeof e.x === 'number' && typeof e.width === 'number') {
       out.polygons.push({
         closed: true,
         points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
-        label: e.name || 'Stair'
+        label: e.name || 'Stair',
+        layer: lyr
       });
       if (includeLabels) {
-        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: `${e.name || 'Stair'} (${e.risers || 0}R)` });
+        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: `${e.name || 'Stair'} (${e.risers || 0}R)`, layer: lyr });
       }
     } else if (e.kind === 'ramp' && typeof e.x === 'number' && typeof e.width === 'number') {
       out.polygons.push({
         closed: true,
         points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
-        label: e.name || 'Ramp'
+        label: e.name || 'Ramp',
+        layer: lyr
       });
       if (includeLabels) {
-        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: `${e.name || 'Ramp'} (1:${(e.slopeRatio || 12).toFixed(1)})` });
+        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: `${e.name || 'Ramp'} (1:${(e.slopeRatio || 12).toFixed(1)})`, layer: lyr });
+      }
+    } else if (e.kind === 'dimension') {
+      const p1 = e.p1 || { x: e.x1 ?? 0, y: e.y1 ?? 0 };
+      const p2 = e.p2 || { x: e.x2 ?? 0, y: e.y2 ?? 0 };
+      const dimGeom = calcDimensionGeometry(p1, p2, e);
+      if (dimGeom && dimGeom.dimLine && dimGeom.dimLine[0] && dimGeom.dimLine[1]) {
+        out.lines.push({
+          x1: dimGeom.dimLine[0].x, y1: dimGeom.dimLine[0].y,
+          x2: dimGeom.dimLine[1].x, y2: dimGeom.dimLine[1].y,
+          layer: lyr
+        });
+      }
+      if (dimGeom && dimGeom.witness1 && dimGeom.witness1[0] && dimGeom.witness1[1]) {
+        out.lines.push({
+          x1: dimGeom.witness1[0].x, y1: dimGeom.witness1[0].y,
+          x2: dimGeom.witness1[1].x, y2: dimGeom.witness1[1].y,
+          layer: lyr
+        });
+      }
+      if (dimGeom && dimGeom.witness2 && dimGeom.witness2[0] && dimGeom.witness2[1]) {
+        out.lines.push({
+          x1: dimGeom.witness2[0].x, y1: dimGeom.witness2[0].y,
+          x2: dimGeom.witness2[1].x, y2: dimGeom.witness2[1].y,
+          layer: lyr
+        });
+      }
+      if (includeLabels && dimGeom && dimGeom.textMid) {
+        out.texts.push({
+          x: dimGeom.textMid.x,
+          y: dimGeom.textMid.y,
+          text: e.textOverride || `${(dimGeom.distance || 0).toFixed(2)}m`,
+          height: 0.18,
+          layer: lyr
+        });
+      }
+    } else if (e.kind === 'leader') {
+      const p1 = e.p1 || { x: e.x1 ?? 0, y: e.y1 ?? 0 };
+      const knee = e.knee || { x: p1.x + 0.5, y: p1.y + 0.5 };
+      const p2 = e.p2 || { x: knee.x + 1.0, y: knee.y };
+      out.lines.push({ x1: p1.x, y1: p1.y, x2: knee.x, y2: knee.y, layer: lyr });
+      out.lines.push({ x1: knee.x, y1: knee.y, x2: p2.x, y2: p2.y, layer: lyr });
+      if (includeLabels && e.text) {
+        out.texts.push({ x: (knee.x + p2.x) / 2, y: knee.y + 0.15, text: e.text, height: 0.18, layer: lyr });
+      }
+    } else if (e.kind === 'room_tag') {
+      if (includeLabels) {
+        const areaStr = typeof e.area === 'number' ? `${e.area.toFixed(1)}m²` : '';
+        const tagLine = [e.roomNumber ? `#${e.roomNumber}` : '', areaStr].filter(Boolean).join(' · ');
+        out.texts.push({ x: e.x, y: e.y + 0.12, text: e.name || 'Room', height: 0.22, layer: lyr });
+        if (tagLine) {
+          out.texts.push({ x: e.x, y: e.y - 0.12, text: tagLine, height: 0.16, layer: lyr });
+        }
+      }
+    } else if (e.kind === 'door_tag' || e.kind === 'window_tag') {
+      if (includeLabels) {
+        out.texts.push({ x: e.x, y: e.y, text: e.tagText || (e.kind === 'door_tag' ? 'D01' : 'W01'), height: 0.18, layer: lyr });
+      }
+    } else if (e.kind === 'north_arrow') {
+      const s = (e.size || 1.0) / 2;
+      const rotRad = ((e.rotation || 0) * Math.PI) / 180;
+      const cosR = Math.cos(rotRad);
+      const sinR = Math.sin(rotRad);
+      const rot = (px, py) => [e.x + px * cosR - py * sinR, e.y + px * sinR + py * cosR];
+      const tip = rot(0, s);
+      const bL = rot(-s * 0.35, -s * 0.7);
+      const bR = rot(s * 0.35, -s * 0.7);
+      const center = rot(0, -s * 0.3);
+      out.polygons.push({ closed: true, points: [tip, bL, center], label: 'North Arrow', layer: lyr });
+      out.polygons.push({ closed: true, points: [tip, center, bR], label: 'North Arrow', layer: lyr });
+      if (includeLabels) {
+        const labelPos = rot(0, s + 0.25);
+        out.texts.push({ x: labelPos[0], y: labelPos[1], text: 'N', height: 0.25, layer: lyr });
+      }
+    } else if (e.kind === 'text' && typeof e.x === 'number' && typeof e.y === 'number') {
+      if (includeLabels) {
+        out.texts.push({ x: e.x, y: e.y, text: e.text || e.name || '', height: 0.2, layer: lyr });
       }
     }
   }

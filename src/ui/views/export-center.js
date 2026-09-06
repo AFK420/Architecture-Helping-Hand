@@ -92,14 +92,17 @@ export function createExportCenterView(context) {
     if (key === 'chain') return chainToDXFEntities(state.lastValidChain);
     if (key === 'rooms' || key === 'project') return roomsToDXFEntities(requireProject()?.rooms);
     if (key === 'plan' && Array.isArray(state.plan?.entities)) {
-      // Plan entities (rooms/walls/furniture outlines) → DXF geometry in meters
+      // Plan entities (rooms/walls/furniture/dims/tags) → DXF geometry in meters
       const geo = planToExportGeometry(state.plan.entities);
       const entities = [];
       for (const poly of geo.polygons) {
-        entities.push({ type: 'polyline', closed: true, layer: 'PLAN', points: poly.points });
+        entities.push({ type: 'polyline', closed: true, layer: poly.layer || 'PLAN', points: poly.points });
+      }
+      for (const l of geo.lines || []) {
+        entities.push({ type: 'line', x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, layer: l.layer || 'PLAN' });
       }
       for (const t of geo.texts) {
-        entities.push({ type: 'text', x: t.x, y: t.y, text: t.text, height: 0.2 });
+        entities.push({ type: 'text', x: t.x, y: t.y, text: t.text, height: t.height || 0.2, layer: t.layer || 'PLAN' });
       }
       return entities;
     }

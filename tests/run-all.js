@@ -53,7 +53,8 @@ const testFiles = [
   'responsive.test.js',
   'studio-phase1.test.js',
   'studio-phase2.test.js',
-  'studio-phase3.test.js'
+  'studio-phase3.test.js',
+  'studio-phase4.test.js'
 ];
 
 console.log('=================================================================');

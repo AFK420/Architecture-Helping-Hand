@@ -10385,6 +10385,218 @@ function parseProject(json) {
 
 
   // =========================================================================
+  // MODULE: Layers
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - CAD Layer Management Engine
+ * Standard AIA / ISO 13567 architectural layer definitions, visibility/lock states,
+ * and entity layer resolution.
+ */
+
+const DEFAULT_CAD_LAYERS = [
+  { id: 'A-WALL', name: 'Walls', kinds: ['wall'], color: '#4989D9', lineweight: 0.35, visible: true, locked: false, printable: true },
+  { id: 'A-DOOR', name: 'Doors', kinds: ['door'], color: '#F59E0B', lineweight: 0.25, visible: true, locked: false, printable: true },
+  { id: 'A-GLAZ', name: 'Windows / Glazing', kinds: ['window'], color: '#06B6D4', lineweight: 0.25, visible: true, locked: false, printable: true },
+  { id: 'A-AREA', name: 'Rooms / Areas', kinds: ['room'], color: '#10B981', lineweight: 0.18, visible: true, locked: false, printable: true },
+  { id: 'A-FLOR-STRS', name: 'Stairs & Ramps', kinds: ['stair', 'ramp'], color: '#EC4899', lineweight: 0.25, visible: true, locked: false, printable: true },
+  { id: 'A-FURN', name: 'Furniture', kinds: ['furniture'], color: '#8B5CF6', lineweight: 0.18, visible: true, locked: false, printable: true },
+  { id: 'A-DIMS', name: 'Dimensions', kinds: ['dimension'], color: '#38BDF8', lineweight: 0.18, visible: true, locked: false, printable: true },
+  { id: 'A-ANNO-TEXT', name: 'Text & Notes', kinds: ['text', 'leader'], color: '#E5E7EB', lineweight: 0.18, visible: true, locked: false, printable: true },
+  { id: 'A-ANNO-TAGS', name: 'Tags & Callouts', kinds: ['room_tag', 'door_tag', 'window_tag', 'north_arrow'], color: '#FBBF24', lineweight: 0.18, visible: true, locked: false, printable: true },
+  { id: 'A-GRID', name: 'Grid & Guidelines', kinds: ['grid'], color: '#6B7280', lineweight: 0.13, visible: true, locked: false, printable: false }
+];
+
+function cloneDefaultLayers() {
+  return DEFAULT_CAD_LAYERS.map(l => ({ ...l, kinds: [...(l.kinds || [])] }));
+}
+
+/**
+ * Normalizes document layers.
+ * If doc.layers is a legacy boolean map (e.g. { walls: true, doors: false, ... })
+ * or missing, it is safely upgraded to an array of layer objects.
+ * If already an array, ensures standard default layers exist and are intact.
+ * @param {Object} doc - Document object
+ * @returns {Array<Object>} Normalized layer definitions array
+ */
+function normalizeDocumentLayers(doc) {
+  if (!doc) return cloneDefaultLayers();
+
+  // Legacy format: dictionary of booleans
+  if (doc.layers && !Array.isArray(doc.layers) && typeof doc.layers === 'object') {
+    const legacy = doc.layers;
+    const layers = cloneDefaultLayers();
+    for (const l of layers) {
+      if (l.id === 'A-WALL' && legacy.walls !== undefined) l.visible = Boolean(legacy.walls);
+      else if (l.id === 'A-DOOR' && legacy.doors !== undefined) l.visible = Boolean(legacy.doors);
+      else if (l.id === 'A-GLAZ' && legacy.windows !== undefined) l.visible = Boolean(legacy.windows);
+      else if (l.id === 'A-AREA' && legacy.rooms !== undefined) l.visible = Boolean(legacy.rooms);
+      else if (l.id === 'A-FURN' && legacy.furniture !== undefined) l.visible = Boolean(legacy.furniture);
+      else if (l.id === 'A-DIMS' && legacy.dimensions !== undefined) l.visible = Boolean(legacy.dimensions);
+      else if (l.id === 'A-ANNO-TEXT' && legacy.textNotes !== undefined) l.visible = Boolean(legacy.textNotes);
+      else if (l.id === 'A-GRID' && legacy.grid !== undefined) l.visible = Boolean(legacy.grid);
+    }
+    doc.layers = layers;
+    return layers;
+  }
+
+  if (Array.isArray(doc.layers) && doc.layers.length > 0) {
+    // Ensure all standard layers exist
+    const defaults = cloneDefaultLayers();
+    for (const def of defaults) {
+      if (!doc.layers.some(l => l.id === def.id)) {
+        doc.layers.push(def);
+      }
+    }
+    return doc.layers;
+  }
+
+  const layers = cloneDefaultLayers();
+  doc.layers = layers;
+  return layers;
+}
+
+/**
+ * Resolves which layer an entity belongs to.
+ * Checks entity.layerId first. If unset or invalid, falls back to the default layer
+ * for the entity's kind.
+ * @param {Object} entity
+ * @param {Array<Object>} [layers]
+ * @returns {Object} Layer definition
+ */
+function resolveEntityLayer(entity, layers = DEFAULT_CAD_LAYERS) {
+  if (!entity || typeof entity !== 'object') return DEFAULT_CAD_LAYERS[0];
+  const layerList = Array.isArray(layers)
+    ? (layers.length > 0 ? layers : DEFAULT_CAD_LAYERS)
+    : (layers && Array.isArray(layers.layers) && layers.layers.length > 0 ? layers.layers : DEFAULT_CAD_LAYERS);
+
+  // 1. Explicit layer assignment
+  if (entity.layerId) {
+    const matched = layerList.find(l => l.id === entity.layerId);
+    if (matched) return matched;
+  }
+
+  // 2. Kind-based matching
+  const kind = entity.kind || 'wall';
+  const matchedKind = layerList.find(l => Array.isArray(l.kinds) && l.kinds.includes(kind));
+  if (matchedKind) return matchedKind;
+
+  // 3. Fallback to first layer
+  return layerList[0];
+}
+
+/**
+ * Checks if an entity is visible based on its document's layer state.
+ * @param {Object} entity
+ * @param {Object} doc - Document containing layers
+ * @returns {boolean}
+ */
+function isEntityVisible(entity, doc) {
+  if (!entity) return false;
+  if (!doc) return true;
+  const layers = normalizeDocumentLayers(doc);
+  const layer = resolveEntityLayer(entity, layers);
+  return layer ? layer.visible !== false : true;
+}
+
+/**
+ * Checks if an entity is locked (protected against edit/drag/selection).
+ * @param {Object} entity
+ * @param {Object} doc - Document containing layers
+ * @returns {boolean}
+ */
+function isEntityLocked(entity, doc) {
+  if (!entity) return false;
+  if (!doc) return false;
+  const layers = normalizeDocumentLayers(doc);
+  const layer = resolveEntityLayer(entity, layers);
+  return layer ? Boolean(layer.locked) : false;
+}
+
+/**
+ * Toggles visibility for a specific layer.
+ * @param {Object} doc
+ * @param {string} layerId
+ * @returns {boolean} New visibility state
+ */
+function toggleLayerVisibility(doc, layerId) {
+  const layers = normalizeDocumentLayers(doc);
+  const layer = layers.find(l => l.id === layerId);
+  if (!layer) return true;
+  layer.visible = !layer.visible;
+  return layer.visible;
+}
+
+/**
+ * Toggles locked state for a specific layer.
+ * @param {Object} doc
+ * @param {string} layerId
+ * @returns {boolean} New locked state
+ */
+function toggleLayerLock(doc, layerId) {
+  const layers = normalizeDocumentLayers(doc);
+  const layer = layers.find(l => l.id === layerId);
+  if (!layer) return false;
+  layer.locked = !layer.locked;
+  return layer.locked;
+}
+
+/**
+ * Adds a custom user layer to the document.
+ * @param {Object} doc
+ * @param {Object} layerDef - { id, name, color, lineweight }
+ * @returns {Object} Created layer
+ */
+function addCustomLayer(doc, layerDef = {}) {
+  const layers = normalizeDocumentLayers(doc);
+  const id = layerDef.id || `CUSTOM-${Date.now().toString(36)}`;
+  if (layers.some(l => l.id === id)) {
+    throw new Error(`Layer with id "${id}" already exists`);
+  }
+  const newLayer = {
+    id,
+    name: layerDef.name || id,
+    kinds: Array.isArray(layerDef.kinds) ? layerDef.kinds : [],
+    color: layerDef.color || '#E5E7EB',
+    lineweight: typeof layerDef.lineweight === 'number' ? layerDef.lineweight : 0.25,
+    visible: layerDef.visible !== false,
+    locked: Boolean(layerDef.locked),
+    printable: layerDef.printable !== false,
+    isCustom: true
+  };
+  layers.push(newLayer);
+  return newLayer;
+}
+
+/**
+ * Deletes a custom layer from the document. Standard layers cannot be deleted.
+ * @param {Object} doc
+ * @param {string} layerId
+ * @returns {boolean} True if deleted
+ */
+function deleteCustomLayer(doc, layerId) {
+  const layers = normalizeDocumentLayers(doc);
+  const idx = layers.findIndex(l => l.id === layerId);
+  if (idx === -1) return false;
+  if (!layers[idx].isCustom) {
+    throw new Error('Standard architectural CAD layers cannot be deleted');
+  }
+  layers.splice(idx, 1);
+  return true;
+}
+
+/**
+ * Assigns an entity to a specific layer.
+ * @param {Object} entity
+ * @param {string} layerId
+ */
+function setEntityLayer(entity, layerId) {
+  if (!entity || typeof entity !== 'object') return;
+  entity.layerId = layerId;
+}
+
+
+  // =========================================================================
   // MODULE: Entities
   // =========================================================================
 
@@ -11132,12 +11344,291 @@ function autoDimensionWall(wall, allEntities = [], options = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Architectural Callouts & Tag Entities
+// ---------------------------------------------------------------------------
+
+/**
+ * Factory for a room tag annotation.
+ * Can be linked to a room entity or standalone.
+ * Displays Room Name, Room Number, and Area.
+ */
+function createRoomTag({
+  id,
+  name,
+  roomId = null,
+  x,
+  y,
+  roomNumber = '101',
+  area = null,
+  showArea = true,
+  showNumber = true,
+  layerId = 'A-ANNO-TAGS',
+  floorId = 'floor-1'
+} = {}) {
+  requireFiniteNumber(x, 'roomTag.x');
+  requireFiniteNumber(y, 'roomTag.y');
+
+  return {
+    kind: 'room_tag',
+    id: id || generateEntityId('rtag'),
+    name: typeof name === 'string' && name ? name : 'Room Tag',
+    roomId,
+    x,
+    y,
+    width: 1.6,
+    depth: 0.8,
+    roomNumber: String(roomNumber || '101'),
+    area: typeof area === 'number' && !isNaN(area) ? area : null,
+    showArea: showArea !== false,
+    showNumber: showNumber !== false,
+    layerId,
+    floorId
+  };
+}
+
+/**
+ * Factory for a door tag bubble (e.g. "D01").
+ */
+function createDoorTag({
+  id,
+  name,
+  doorId = null,
+  x,
+  y,
+  tagText = 'D01',
+  layerId = 'A-ANNO-TAGS',
+  floorId = 'floor-1'
+} = {}) {
+  requireFiniteNumber(x, 'doorTag.x');
+  requireFiniteNumber(y, 'doorTag.y');
+
+  return {
+    kind: 'door_tag',
+    id: id || generateEntityId('dtag'),
+    name: typeof name === 'string' && name ? name : 'Door Tag',
+    doorId,
+    x,
+    y,
+    width: 0.6,
+    depth: 0.4,
+    tagText: String(tagText || 'D01'),
+    layerId,
+    floorId
+  };
+}
+
+/**
+ * Factory for a window tag badge (e.g. "W01").
+ */
+function createWindowTag({
+  id,
+  name,
+  windowId = null,
+  x,
+  y,
+  tagText = 'W01',
+  layerId = 'A-ANNO-TAGS',
+  floorId = 'floor-1'
+} = {}) {
+  requireFiniteNumber(x, 'windowTag.x');
+  requireFiniteNumber(y, 'windowTag.y');
+
+  return {
+    kind: 'window_tag',
+    id: id || generateEntityId('wtag'),
+    name: typeof name === 'string' && name ? name : 'Window Tag',
+    windowId,
+    x,
+    y,
+    width: 0.6,
+    depth: 0.4,
+    tagText: String(tagText || 'W01'),
+    layerId,
+    floorId
+  };
+}
+
+/**
+ * Factory for an architectural leader line callout with arrowhead and shelf text.
+ */
+function createLeaderNote({
+  id,
+  name,
+  p1,
+  knee,
+  p2,
+  x1, y1, x2, y2, kneeX, kneeY,
+  text = 'Note',
+  arrowStyle = 'arrow',
+  layerId = 'A-ANNO-TEXT',
+  floorId = 'floor-1'
+} = {}) {
+  const actualP1 = p1 || { x: x1 ?? 0, y: y1 ?? 0 };
+  const actualKnee = knee || { x: kneeX ?? (actualP1.x + 0.8), y: kneeY ?? (actualP1.y + 0.6) };
+  const actualP2 = p2 || { x: x2 ?? (actualKnee.x + 1.2), y: y2 ?? actualKnee.y };
+
+  requireFiniteNumber(actualP1.x, 'leader.p1.x');
+  requireFiniteNumber(actualP1.y, 'leader.p1.y');
+  requireFiniteNumber(actualKnee.x, 'leader.knee.x');
+  requireFiniteNumber(actualKnee.y, 'leader.knee.y');
+  requireFiniteNumber(actualP2.x, 'leader.p2.x');
+  requireFiniteNumber(actualP2.y, 'leader.p2.y');
+
+  const minX = Math.min(actualP1.x, actualKnee.x, actualP2.x);
+  const maxX = Math.max(actualP1.x, actualKnee.x, actualP2.x);
+  const minY = Math.min(actualP1.y, actualKnee.y, actualP2.y);
+  const maxY = Math.max(actualP1.y, actualKnee.y, actualP2.y);
+
+  return {
+    kind: 'leader',
+    id: id || generateEntityId('ldr'),
+    name: typeof name === 'string' && name ? name : (text || 'Leader'),
+    p1: { x: actualP1.x, y: actualP1.y },
+    knee: { x: actualKnee.x, y: actualKnee.y },
+    p2: { x: actualP2.x, y: actualP2.y },
+    x: minX,
+    y: minY,
+    width: Math.max(0.2, maxX - minX),
+    depth: Math.max(0.2, maxY - minY),
+    text: String(text || 'Note'),
+    arrowStyle: arrowStyle === 'dot' ? 'dot' : 'arrow',
+    layerId,
+    floorId
+  };
+}
+
+/**
+ * Factory for a CAD North Arrow symbol.
+ */
+function createNorthArrow({
+  id,
+  name,
+  x = 0,
+  y = 0,
+  rotation = 0,
+  size = 1.0,
+  layerId = 'A-ANNO-TAGS',
+  floorId = 'floor-1'
+} = {}) {
+  requireFiniteNumber(x, 'northArrow.x');
+  requireFiniteNumber(y, 'northArrow.y');
+
+  return {
+    kind: 'north_arrow',
+    id: id || generateEntityId('na'),
+    name: typeof name === 'string' && name ? name : 'North Arrow',
+    x,
+    y,
+    width: size,
+    depth: size,
+    rotation: typeof rotation === 'number' && !isNaN(rotation) ? rotation : 0,
+    size: typeof size === 'number' && size > 0 ? size : 1.0,
+    layerId,
+    floorId
+  };
+}
+
+/**
+ * Automatically inspects a document's entities and generates tags for all
+ * un-tagged rooms, doors, and windows.
+ * @param {Array<Object>} entities
+ * @returns {Array<Object>} Array of newly created tag entities
+ */
+function autoTagDocument(entities = []) {
+  if (!Array.isArray(entities)) return [];
+  const tags = [];
+  const existingTags = entities.filter(e => e.kind === 'room_tag' || e.kind === 'door_tag' || e.kind === 'window_tag');
+  const taggedRoomIds = new Set(existingTags.map(t => t.roomId).filter(Boolean));
+  const taggedDoorIds = new Set(existingTags.map(t => t.doorId).filter(Boolean));
+  const taggedWindowIds = new Set(existingTags.map(t => t.windowId).filter(Boolean));
+
+  let roomNum = 101;
+  let doorNum = 1;
+  let winNum = 1;
+
+  for (const e of entities) {
+    if (!e) continue;
+    if (e.kind === 'room' && !taggedRoomIds.has(e.id)) {
+      let cx = e.x + (e.width || 0) / 2;
+      let cy = e.y + (e.depth || 0) / 2;
+      if (Array.isArray(e.boundary) && e.boundary.length >= 3) {
+        cx = e.boundary.reduce((s, p) => s + p.x, 0) / e.boundary.length;
+        cy = e.boundary.reduce((s, p) => s + p.y, 0) / e.boundary.length;
+      }
+      tags.push(
+        createRoomTag({
+          name: `${e.name || 'Room'} Tag`,
+          roomId: e.id,
+          x: cx,
+          y: cy,
+          roomNumber: String(roomNum++),
+          area: roomArea(e)
+        })
+      );
+    } else if (e.kind === 'door' && !taggedDoorIds.has(e.id)) {
+      const host = entities.find(w => w.id === e.wallId);
+      if (host && typeof host.x1 === 'number') {
+        const dx = host.x2 - host.x1;
+        const dy = host.y2 - host.y1;
+        const len = Math.hypot(dx, dy);
+        if (len > 1e-4) {
+          const ux = dx / len;
+          const uy = dy / len;
+          const nx = -uy;
+          const ny = ux;
+          const midPos = (e.position || 0) + (e.width || 0.9) / 2;
+          const tagX = host.x1 + ux * midPos + nx * 0.5;
+          const tagY = host.y1 + uy * midPos + ny * 0.5;
+          tags.push(
+            createDoorTag({
+              name: `Tag D${String(doorNum).padStart(2, '0')}`,
+              doorId: e.id,
+              x: tagX,
+              y: tagY,
+              tagText: `D${String(doorNum++).padStart(2, '0')}`
+            })
+          );
+        }
+      }
+    } else if (e.kind === 'window' && !taggedWindowIds.has(e.id)) {
+      const host = entities.find(w => w.id === e.wallId);
+      if (host && typeof host.x1 === 'number') {
+        const dx = host.x2 - host.x1;
+        const dy = host.y2 - host.y1;
+        const len = Math.hypot(dx, dy);
+        if (len > 1e-4) {
+          const ux = dx / len;
+          const uy = dy / len;
+          const nx = -uy;
+          const ny = ux;
+          const midPos = (e.position || 0) + (e.width || 1.2) / 2;
+          const tagX = host.x1 + ux * midPos - nx * 0.5;
+          const tagY = host.y1 + uy * midPos - ny * 0.5;
+          tags.push(
+            createWindowTag({
+              name: `Tag W${String(winNum).padStart(2, '0')}`,
+              windowId: e.id,
+              x: tagX,
+              y: tagY,
+              tagText: `W${String(winNum++).padStart(2, '0')}`
+            })
+          );
+        }
+      }
+    }
+  }
+
+  return tags;
+}
+
+// ---------------------------------------------------------------------------
 // ID helper
 // ---------------------------------------------------------------------------
 
 function generateEntityId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
+
 
 
 
@@ -11775,27 +12266,39 @@ function planToExportGeometry(entities, options = {}) {
     : (entities && typeof entities === 'object' ? Object.values(entities).flat().filter(Boolean) : []);
   for (const e of list) {
     if (!e || typeof e !== 'object') continue;
+    const lyr = e.layerId || (e.kind === 'wall' ? 'A-WALL'
+      : e.kind === 'door' ? 'A-DOOR'
+      : e.kind === 'window' ? 'A-GLAZ'
+      : e.kind === 'room' ? 'A-AREA'
+      : (e.kind === 'stair' || e.kind === 'ramp') ? 'A-FLOR-STRS'
+      : e.kind === 'furniture' ? 'A-FURN'
+      : e.kind === 'dimension' ? 'A-DIMS'
+      : (e.kind === 'room_tag' || e.kind === 'door_tag' || e.kind === 'window_tag' || e.kind === 'north_arrow') ? 'A-ANNO-TAGS'
+      : 'A-ANNO-TEXT');
+
     if (e.kind === 'room') {
       if (Array.isArray(e.boundary) && e.boundary.length >= 3) {
         out.polygons.push({
           closed: true,
           points: e.boundary.map(pt => [pt.x, pt.y]),
-          label: e.name || 'Room'
+          label: e.name || 'Room',
+          layer: lyr
         });
         if (includeLabels) {
           const cx = e.boundary.reduce((sum, p) => sum + p.x, 0) / e.boundary.length;
           const cy = e.boundary.reduce((sum, p) => sum + p.y, 0) / e.boundary.length;
-          out.texts.push({ x: cx, y: cy, text: e.name || 'Room' });
+          out.texts.push({ x: cx, y: cy, text: e.name || 'Room', layer: lyr });
         }
       } else if (typeof e.x === 'number' && typeof e.width === 'number' &&
                  typeof e.y === 'number' && typeof e.depth === 'number') {
         out.polygons.push({
           closed: true,
           points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
-          label: e.name || 'Room'
+          label: e.name || 'Room',
+          layer: lyr
         });
         if (includeLabels) {
-          out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: e.name || 'Room' });
+          out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: e.name || 'Room', layer: lyr });
         }
       }
     } else if (e.kind === 'wall' && typeof e.x1 === 'number') {
@@ -11810,42 +12313,156 @@ function planToExportGeometry(entities, options = {}) {
         out.polygons.push({
           closed: true,
           points: [[minX, minY], [minX + w, minY], [minX + w, minY + d], [minX, minY + d]],
-          label: e.name || 'Wall'
+          label: e.name || 'Wall',
+          layer: lyr
         });
       } else {
         const wallCorners = calcWallPolygon(e);
         out.polygons.push({
           closed: true,
           points: wallCorners.map(pt => [pt.x, pt.y]),
-          label: e.name || 'Wall'
+          label: e.name || 'Wall',
+          layer: lyr
         });
+      }
+    } else if (e.kind === 'door') {
+      const host = list.find(w => w.id === e.wallId);
+      if (host && typeof host.x1 === 'number') {
+        try {
+          const doorCAD = calcDoorCADGeometry(host, e);
+          if (doorCAD.jamb1Line) {
+            out.lines.push({ x1: doorCAD.jamb1Line[0].x, y1: doorCAD.jamb1Line[0].y, x2: doorCAD.jamb1Line[1].x, y2: doorCAD.jamb1Line[1].y, layer: lyr });
+          }
+          if (doorCAD.jamb2Line) {
+            out.lines.push({ x1: doorCAD.jamb2Line[0].x, y1: doorCAD.jamb2Line[0].y, x2: doorCAD.jamb2Line[1].x, y2: doorCAD.jamb2Line[1].y, layer: lyr });
+          }
+          if (doorCAD.type === 'double' && Array.isArray(doorCAD.leaves)) {
+            for (const leaf of doorCAD.leaves) {
+              out.lines.push({ x1: leaf.hinge.x, y1: leaf.hinge.y, x2: leaf.openEnd.x, y2: leaf.openEnd.y, layer: lyr });
+            }
+          } else if (doorCAD.hinge && doorCAD.openEnd) {
+            out.lines.push({ x1: doorCAD.hinge.x, y1: doorCAD.hinge.y, x2: doorCAD.openEnd.x, y2: doorCAD.openEnd.y, layer: lyr });
+          }
+        } catch (_) {}
+      }
+    } else if (e.kind === 'window') {
+      const host = list.find(w => w.id === e.wallId);
+      if (host && typeof host.x1 === 'number') {
+        try {
+          const winCAD = calcWindowCADGeometry(host, e);
+          if (winCAD.jamb1) out.lines.push({ x1: winCAD.jamb1[0].x, y1: winCAD.jamb1[0].y, x2: winCAD.jamb1[1].x, y2: winCAD.jamb1[1].y, layer: lyr });
+          if (winCAD.jamb2) out.lines.push({ x1: winCAD.jamb2[0].x, y1: winCAD.jamb2[0].y, x2: winCAD.jamb2[1].x, y2: winCAD.jamb2[1].y, layer: lyr });
+          if (winCAD.sillOuter) out.lines.push({ x1: winCAD.sillOuter[0].x, y1: winCAD.sillOuter[0].y, x2: winCAD.sillOuter[1].x, y2: winCAD.sillOuter[1].y, layer: lyr });
+          if (winCAD.sillInner) out.lines.push({ x1: winCAD.sillInner[0].x, y1: winCAD.sillInner[0].y, x2: winCAD.sillInner[1].x, y2: winCAD.sillInner[1].y, layer: lyr });
+          if (winCAD.glassPane1) out.lines.push({ x1: winCAD.glassPane1[0].x, y1: winCAD.glassPane1[0].y, x2: winCAD.glassPane1[1].x, y2: winCAD.glassPane1[1].y, layer: lyr });
+          if (winCAD.glassPane2) out.lines.push({ x1: winCAD.glassPane2[0].x, y1: winCAD.glassPane2[0].y, x2: winCAD.glassPane2[1].x, y2: winCAD.glassPane2[1].y, layer: lyr });
+        } catch (_) {}
       }
     } else if (e.kind === 'furniture' && typeof e.x === 'number' && typeof e.width === 'number') {
       out.polygons.push({
         closed: true,
         points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
-        label: e.name || 'Furniture'
+        label: e.name || 'Furniture',
+        layer: lyr
       });
       if (includeLabels) {
-        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: e.name || 'Furniture' });
+        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: e.name || 'Furniture', layer: lyr });
       }
     } else if (e.kind === 'stair' && typeof e.x === 'number' && typeof e.width === 'number') {
       out.polygons.push({
         closed: true,
         points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
-        label: e.name || 'Stair'
+        label: e.name || 'Stair',
+        layer: lyr
       });
       if (includeLabels) {
-        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: `${e.name || 'Stair'} (${e.risers || 0}R)` });
+        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: `${e.name || 'Stair'} (${e.risers || 0}R)`, layer: lyr });
       }
     } else if (e.kind === 'ramp' && typeof e.x === 'number' && typeof e.width === 'number') {
       out.polygons.push({
         closed: true,
         points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
-        label: e.name || 'Ramp'
+        label: e.name || 'Ramp',
+        layer: lyr
       });
       if (includeLabels) {
-        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: `${e.name || 'Ramp'} (1:${(e.slopeRatio || 12).toFixed(1)})` });
+        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: `${e.name || 'Ramp'} (1:${(e.slopeRatio || 12).toFixed(1)})`, layer: lyr });
+      }
+    } else if (e.kind === 'dimension') {
+      const p1 = e.p1 || { x: e.x1 ?? 0, y: e.y1 ?? 0 };
+      const p2 = e.p2 || { x: e.x2 ?? 0, y: e.y2 ?? 0 };
+      const dimGeom = calcDimensionGeometry(p1, p2, e);
+      if (dimGeom && dimGeom.dimLine && dimGeom.dimLine[0] && dimGeom.dimLine[1]) {
+        out.lines.push({
+          x1: dimGeom.dimLine[0].x, y1: dimGeom.dimLine[0].y,
+          x2: dimGeom.dimLine[1].x, y2: dimGeom.dimLine[1].y,
+          layer: lyr
+        });
+      }
+      if (dimGeom && dimGeom.witness1 && dimGeom.witness1[0] && dimGeom.witness1[1]) {
+        out.lines.push({
+          x1: dimGeom.witness1[0].x, y1: dimGeom.witness1[0].y,
+          x2: dimGeom.witness1[1].x, y2: dimGeom.witness1[1].y,
+          layer: lyr
+        });
+      }
+      if (dimGeom && dimGeom.witness2 && dimGeom.witness2[0] && dimGeom.witness2[1]) {
+        out.lines.push({
+          x1: dimGeom.witness2[0].x, y1: dimGeom.witness2[0].y,
+          x2: dimGeom.witness2[1].x, y2: dimGeom.witness2[1].y,
+          layer: lyr
+        });
+      }
+      if (includeLabels && dimGeom && dimGeom.textMid) {
+        out.texts.push({
+          x: dimGeom.textMid.x,
+          y: dimGeom.textMid.y,
+          text: e.textOverride || `${(dimGeom.distance || 0).toFixed(2)}m`,
+          height: 0.18,
+          layer: lyr
+        });
+      }
+    } else if (e.kind === 'leader') {
+      const p1 = e.p1 || { x: e.x1 ?? 0, y: e.y1 ?? 0 };
+      const knee = e.knee || { x: p1.x + 0.5, y: p1.y + 0.5 };
+      const p2 = e.p2 || { x: knee.x + 1.0, y: knee.y };
+      out.lines.push({ x1: p1.x, y1: p1.y, x2: knee.x, y2: knee.y, layer: lyr });
+      out.lines.push({ x1: knee.x, y1: knee.y, x2: p2.x, y2: p2.y, layer: lyr });
+      if (includeLabels && e.text) {
+        out.texts.push({ x: (knee.x + p2.x) / 2, y: knee.y + 0.15, text: e.text, height: 0.18, layer: lyr });
+      }
+    } else if (e.kind === 'room_tag') {
+      if (includeLabels) {
+        const areaStr = typeof e.area === 'number' ? `${e.area.toFixed(1)}m²` : '';
+        const tagLine = [e.roomNumber ? `#${e.roomNumber}` : '', areaStr].filter(Boolean).join(' · ');
+        out.texts.push({ x: e.x, y: e.y + 0.12, text: e.name || 'Room', height: 0.22, layer: lyr });
+        if (tagLine) {
+          out.texts.push({ x: e.x, y: e.y - 0.12, text: tagLine, height: 0.16, layer: lyr });
+        }
+      }
+    } else if (e.kind === 'door_tag' || e.kind === 'window_tag') {
+      if (includeLabels) {
+        out.texts.push({ x: e.x, y: e.y, text: e.tagText || (e.kind === 'door_tag' ? 'D01' : 'W01'), height: 0.18, layer: lyr });
+      }
+    } else if (e.kind === 'north_arrow') {
+      const s = (e.size || 1.0) / 2;
+      const rotRad = ((e.rotation || 0) * Math.PI) / 180;
+      const cosR = Math.cos(rotRad);
+      const sinR = Math.sin(rotRad);
+      const rot = (px, py) => [e.x + px * cosR - py * sinR, e.y + px * sinR + py * cosR];
+      const tip = rot(0, s);
+      const bL = rot(-s * 0.35, -s * 0.7);
+      const bR = rot(s * 0.35, -s * 0.7);
+      const center = rot(0, -s * 0.3);
+      out.polygons.push({ closed: true, points: [tip, bL, center], label: 'North Arrow', layer: lyr });
+      out.polygons.push({ closed: true, points: [tip, center, bR], label: 'North Arrow', layer: lyr });
+      if (includeLabels) {
+        const labelPos = rot(0, s + 0.25);
+        out.texts.push({ x: labelPos[0], y: labelPos[1], text: 'N', height: 0.25, layer: lyr });
+      }
+    } else if (e.kind === 'text' && typeof e.x === 'number' && typeof e.y === 'number') {
+      if (includeLabels) {
+        out.texts.push({ x: e.x, y: e.y, text: e.text || e.name || '', height: 0.2, layer: lyr });
       }
     }
   }
@@ -13187,12 +13804,57 @@ function buildDXF(entities, options = {}) {
     }
   }
 
+  const usedLayers = new Set(['0']);
+  for (const e of list) {
+    if (e && e.layer) usedLayers.add(String(e.layer));
+  }
+  const sortedLayers = Array.from(usedLayers).sort();
+
+  const LAYER_COLOR_MAP = {
+    '0': 7,
+    'A-WALL': 4,
+    'A-DOOR': 2,
+    'A-GLAZ': 4,
+    'A-AREA': 3,
+    'A-FLOR-STRS': 6,
+    'A-FURN': 5,
+    'A-DIMS': 1,
+    'A-ANNO-TEXT': 7,
+    'A-ANNO-TAGS': 2,
+    'A-GRID': 8,
+    'REF': 1,
+    'CHAIN': 4,
+    'ROOM': 3,
+    'PLAN': 7
+  };
+
+  const tableParts = [
+    dxfPair(0, 'SECTION'),
+    dxfPair(2, 'TABLES'),
+    dxfPair(0, 'TABLE'),
+    dxfPair(2, 'LAYER'),
+    dxfPair(70, sortedLayers.length)
+  ];
+
+  for (const lyr of sortedLayers) {
+    const col = LAYER_COLOR_MAP[lyr] || 7;
+    tableParts.push(
+      dxfPair(0, 'LAYER'),
+      dxfPair(2, lyr),
+      dxfPair(70, 0),
+      dxfPair(62, col),
+      dxfPair(6, 'CONTINUOUS')
+    );
+  }
+  tableParts.push(dxfPair(0, 'ENDTAB'), dxfPair(0, 'ENDSEC'));
+
   return [
     dxfPair(0, 'SECTION'),
     dxfPair(2, 'HEADER'),
     dxfPair(9, '$ACADVER'), dxfPair(1, 'AC1009'),
     dxfPair(9, '$INSUNITS'), dxfPair(70, 4), // 4 = millimeters
     dxfPair(0, 'ENDSEC'),
+    tableParts.join('\n'),
     dxfPair(0, 'SECTION'),
     dxfPair(2, 'ENTITIES'),
     body.join('\n'),
@@ -24942,14 +25604,17 @@ function createExportCenterView(context) {
     if (key === 'chain') return chainToDXFEntities(state.lastValidChain);
     if (key === 'rooms' || key === 'project') return roomsToDXFEntities(requireProject()?.rooms);
     if (key === 'plan' && Array.isArray(state.plan?.entities)) {
-      // Plan entities (rooms/walls/furniture outlines) → DXF geometry in meters
+      // Plan entities (rooms/walls/furniture/dims/tags) → DXF geometry in meters
       const geo = planToExportGeometry(state.plan.entities);
       const entities = [];
       for (const poly of geo.polygons) {
-        entities.push({ type: 'polyline', closed: true, layer: 'PLAN', points: poly.points });
+        entities.push({ type: 'polyline', closed: true, layer: poly.layer || 'PLAN', points: poly.points });
+      }
+      for (const l of geo.lines || []) {
+        entities.push({ type: 'line', x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, layer: l.layer || 'PLAN' });
       }
       for (const t of geo.texts) {
-        entities.push({ type: 'text', x: t.x, y: t.y, text: t.text, height: 0.2 });
+        entities.push({ type: 'text', x: t.x, y: t.y, text: t.text, height: t.height || 0.2, layer: t.layer || 'PLAN' });
       }
       return entities;
     }
@@ -25435,6 +26100,7 @@ function createProjectsView(context) {
 
 
 
+
 const PLAN_STATE_KEY = 'archiscale_plan_prefs'; // user preferences only
 
 function createPlanView(context) {
@@ -25457,6 +26123,7 @@ function createPlanView(context) {
   let resizeObserver = null;
   let polyRoomVertices = []; // [{x, y}, ...]
   let currentMouseWorld = { x: 0, y: 0 };
+  let activeSidebarTab = 'entities'; // 'entities' | 'layers'
 
   function initDocuments() {
     if (!state.plan) state.plan = {};
@@ -25482,7 +26149,9 @@ function createPlanView(context) {
     if (!state.plan || !Array.isArray(state.plan.documents) || state.plan.documents.length === 0) {
       initDocuments();
     }
-    return state.plan.documents.find(d => d.id === state.plan.activeDocId) || state.plan.documents[0];
+    const doc = state.plan.documents.find(d => d.id === state.plan.activeDocId) || state.plan.documents[0];
+    if (doc) normalizeDocumentLayers(doc);
+    return doc;
   }
 
   function switchDocument(docId) {
@@ -26037,12 +26706,23 @@ function createPlanView(context) {
         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
           <span class="context-tag-badge" style="background: rgba(73,137,217,0.18); color: var(--note-number, #4989D9); border-color: rgba(73,137,217,0.4);">ROOM</span>
           <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(sel.name)} (${roomArea(sel).toFixed(1)}m²)</span>
+          <button type="button" class="context-action-btn" id="ctx-tag-room-btn"><span>🏷️ Tag Room</span></button>
           <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate (Ctrl+D)</span></button>
           <button type="button" class="context-action-btn" id="ctx-overlap-btn"><span>✓ Check Overlaps</span></button>
           <button type="button" class="context-action-btn" id="ctx-ai-room-btn"><span>🤖 AI Review</span></button>
           <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete (Del)</span></button>
         </div>
       `;
+      bar.querySelector('#ctx-tag-room-btn')?.addEventListener('click', () => {
+        const rTag = createRoomTag({ room: sel, roomId: sel.id, name: sel.name });
+        const cmd = entityAddRemoveCommand(entities(), rTag, `tag room ${sel.name}`);
+        cmd.redo();
+        history.push(cmd);
+        state.plan.selectedIds = new Set([rTag.id]);
+        showToast(`Tagged room "${sel.name}"`);
+        AudioService.playTick();
+        render();
+      });
       bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
       bar.querySelector('#ctx-overlap-btn')?.addEventListener('click', () => {
         const furn = entities().filter(e => e.kind === 'furniture');
@@ -26202,6 +26882,7 @@ function createPlanView(context) {
         <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
           <span class="context-tag-badge" style="background: rgba(251,191,36,0.15); color: var(--color-warning, #fbbf24);">DOOR</span>
           <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(sel.name)} (${(sel.width * 1000).toFixed(0)}mm)</span>
+          <button type="button" class="context-action-btn" id="ctx-tag-door-btn"><span>🏷️ Tag Door</span></button>
           <button type="button" class="context-action-btn" id="ctx-door-swing"><span>↻ Swing: ${sel.swing.toUpperCase()}</span></button>
           <button type="button" class="context-action-btn" id="ctx-door-flip"><span>⇄ Side: ${sel.flipSide ? 'OUT' : 'IN'}</span></button>
           <span style="font-size: 0.68rem; color: var(--text-muted); margin-left: 2px;">Width:</span>
@@ -26213,6 +26894,17 @@ function createPlanView(context) {
           <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete</span></button>
         </div>
       `;
+
+      bar.querySelector('#ctx-tag-door-btn')?.addEventListener('click', () => {
+        const dTag = createDoorTag({ door: sel, doorId: sel.id });
+        const cmd = entityAddRemoveCommand(entities(), dTag, `tag door ${sel.name}`);
+        cmd.redo();
+        history.push(cmd);
+        state.plan.selectedIds = new Set([dTag.id]);
+        showToast(`Tagged door "${sel.name}" with badge ${dTag.tag}`);
+        AudioService.playTick();
+        render();
+      });
 
       bar.querySelector('#ctx-door-swing')?.addEventListener('click', () => {
         const nextSwing = sel.swing === 'left' ? 'right' : (sel.swing === 'right' ? 'double' : 'left');
@@ -26254,6 +26946,7 @@ function createPlanView(context) {
         <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
           <span class="context-tag-badge" style="background: rgba(56,189,248,0.15); color: var(--accent-primary, #38bdf8);">WINDOW</span>
           <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(sel.name)} (${(sel.width * 1000).toFixed(0)}mm)</span>
+          <button type="button" class="context-action-btn" id="ctx-tag-win-btn"><span>🏷️ Tag Window</span></button>
           <span style="font-size: 0.68rem; color: var(--text-muted); margin-left: 2px;">Width:</span>
           <button type="button" class="context-action-btn ${Math.abs(sel.width - 0.9) < 0.01 ? 'active' : ''}" id="ctx-win-w900">900</button>
           <button type="button" class="context-action-btn ${Math.abs(sel.width - 1.2) < 0.01 ? 'active' : ''}" id="ctx-win-w1200">1200</button>
@@ -26263,6 +26956,17 @@ function createPlanView(context) {
           <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete</span></button>
         </div>
       `;
+
+      bar.querySelector('#ctx-tag-win-btn')?.addEventListener('click', () => {
+        const wTag = createWindowTag({ windowEntity: sel, windowId: sel.id });
+        const cmd = entityAddRemoveCommand(entities(), wTag, `tag window ${sel.name}`);
+        cmd.redo();
+        history.push(cmd);
+        state.plan.selectedIds = new Set([wTag.id]);
+        showToast(`Tagged window "${sel.name}" with badge ${wTag.tag}`);
+        AudioService.playTick();
+        render();
+      });
 
       const setWinW = (w) => {
         sel.width = w;
@@ -26572,7 +27276,9 @@ function createPlanView(context) {
         </pattern>
       </defs>`;
 
+    const doc = getActiveDocument();
     const entityMarkup = entities().map(e => {
+      if (!isEntityVisible(e, doc)) return '';
       const selected = state.plan.selectedIds.has(e.id);
       const stroke = selected ? 'var(--color-warning, #fbbf24)' : 'var(--accent-primary, #7aa2ff)';
       const hasRect = isNum(e.x) && isNum(e.y) && isNum(e.width) && isNum(e.depth);
@@ -26964,6 +27670,89 @@ function createPlanView(context) {
           <text x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}" font-size="11" font-family="var(--font-sans)" fill="var(--text-primary, #EAEAEC)" font-weight="600">${escapeHtml(textStr)}</text>
         </g>`;
       }
+      if (e.kind === 'room_tag') {
+        const room = e.roomId ? entities().find(r => r.id === e.roomId) : null;
+        const areaVal = room ? roomArea(room) : (e.area || 0);
+        const p = worldToSvg(transform, e.x, e.y);
+        const tagNum = e.roomNumber || '101';
+        const roomTitle = (e.name || (room ? room.name : 'ROOM')).toUpperCase();
+        const areaStr = `${areaVal.toFixed(1)} m²`;
+        const boxW = Math.max(76, Math.max(roomTitle.length * 7.5, areaStr.length * 7.5) + 20);
+        const boxH = 44;
+
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <rect x="${(p.x - boxW / 2).toFixed(1)}" y="${(p.y - boxH / 2).toFixed(1)}" width="${boxW.toFixed(1)}" height="${boxH}" rx="4"
+            fill="var(--bg-surface-elevated, #222327)" stroke="${stroke}" stroke-width="${selected ? 2.2 : 1.2}"/>
+          <rect x="${(p.x - 22).toFixed(1)}" y="${(p.y - boxH / 2 - 8).toFixed(1)}" width="44" height="14" rx="3"
+            fill="var(--accent-primary, #4989D9)" stroke="${stroke}" stroke-width="0.8"/>
+          <text x="${p.x.toFixed(1)}" y="${(p.y - boxH / 2 + 3).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="#ffffff" font-weight="700">${escapeHtml(tagNum)}</text>
+          <text x="${p.x.toFixed(1)}" y="${(p.y + 3).toFixed(1)}" text-anchor="middle" font-size="9.5" font-family="var(--font-mono)" fill="var(--text-primary, #EAEAEC)" font-weight="700">${escapeHtml(roomTitle)}</text>
+          <text x="${p.x.toFixed(1)}" y="${(p.y + 16).toFixed(1)}" text-anchor="middle" font-size="8.5" font-family="var(--font-mono)" fill="var(--note-number, #4989D9)">${escapeHtml(areaStr)}</text>
+        </g>`;
+      }
+      if (e.kind === 'door_tag') {
+        const p = worldToSvg(transform, e.x, e.y);
+        const tagText = e.tag || 'D01';
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <ellipse cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" rx="15" ry="10"
+            fill="var(--bg-surface-elevated, #222327)" stroke="${stroke}" stroke-width="${selected ? 2.2 : 1.4}"/>
+          <text x="${p.x.toFixed(1)}" y="${(p.y + 3.5).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="var(--color-warning, #fbbf24)" font-weight="700">${escapeHtml(tagText)}</text>
+        </g>`;
+      }
+      if (e.kind === 'window_tag') {
+        const p = worldToSvg(transform, e.x, e.y);
+        const tagText = e.tag || 'W01';
+        const s = 12;
+        const hexPts = [0, 60, 120, 180, 240, 300].map(deg => {
+          const rad = deg * Math.PI / 180;
+          return `${(p.x + s * Math.cos(rad)).toFixed(1)},${(p.y + s * Math.sin(rad)).toFixed(1)}`;
+        }).join(' ');
+
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <polygon points="${hexPts}"
+            fill="var(--bg-surface-elevated, #222327)" stroke="${stroke}" stroke-width="${selected ? 2.2 : 1.4}"/>
+          <text x="${p.x.toFixed(1)}" y="${(p.y + 3.5).toFixed(1)}" text-anchor="middle" font-size="8.5" font-family="var(--font-mono)" fill="var(--cyan-glow, #38bdf8)" font-weight="700">${escapeHtml(tagText)}</text>
+        </g>`;
+      }
+      if (e.kind === 'leader') {
+        const p1 = e.p1 || { x: e.x || 0, y: e.y || 0 };
+        const knee = e.knee || { x: p1.x + 0.5, y: p1.y + 0.5 };
+        const p2 = e.p2 || { x: knee.x + 0.8, y: knee.y };
+        const sP1 = worldToSvg(transform, p1.x, p1.y);
+        const sKnee = worldToSvg(transform, knee.x, knee.y);
+        const sP2 = worldToSvg(transform, p2.x, p2.y);
+        const textStr = String(e.text || 'Callout');
+        const textX = sP2.x + (sP2.x >= sKnee.x ? 4 : -4);
+        const textAnchor = sP2.x >= sKnee.x ? 'start' : 'end';
+
+        const ang = Math.atan2(sKnee.y - sP1.y, sKnee.x - sP1.x);
+        const arrowLen = 9;
+        const a1 = { x: sP1.x + arrowLen * Math.cos(ang - 0.4), y: sP1.y + arrowLen * Math.sin(ang - 0.4) };
+        const a2 = { x: sP1.x + arrowLen * Math.cos(ang + 0.4), y: sP1.y + arrowLen * Math.sin(ang + 0.4) };
+
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <polygon points="${sP1.x.toFixed(1)},${sP1.y.toFixed(1)} ${a1.x.toFixed(1)},${a1.y.toFixed(1)} ${a2.x.toFixed(1)},${a2.y.toFixed(1)}" fill="${stroke}"/>
+          <polyline points="${sP1.x.toFixed(1)},${sP1.y.toFixed(1)} ${sKnee.x.toFixed(1)},${sKnee.y.toFixed(1)} ${sP2.x.toFixed(1)},${sP2.y.toFixed(1)}"
+            fill="none" stroke="${stroke}" stroke-width="${selected ? 2.2 : 1.4}"/>
+          <text x="${textX.toFixed(1)}" y="${(sP2.y - 4).toFixed(1)}" text-anchor="${textAnchor}" font-size="10.5" font-family="var(--font-mono)" fill="var(--text-primary, #EAEAEC)" font-weight="600">${escapeHtml(textStr)}</text>
+        </g>`;
+      }
+      if (e.kind === 'north_arrow') {
+        const p = worldToSvg(transform, e.x, e.y);
+        const rot = typeof e.rotation === 'number' ? e.rotation : 0;
+        const sc = typeof e.scale === 'number' ? e.scale : 1.0;
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}" transform="translate(${p.x.toFixed(1)}, ${p.y.toFixed(1)}) rotate(${rot}) scale(${sc})">
+          <circle cx="0" cy="0" r="18" fill="var(--bg-surface-elevated, #222327)" stroke="${stroke}" stroke-width="${selected ? 2.4 : 1.5}"/>
+          <line x1="0" y1="-18" x2="0" y2="18" stroke="var(--border-color-light, #444)" stroke-width="0.8"/>
+          <line x1="-18" y1="0" x2="18" y2="0" stroke="var(--border-color-light, #444)" stroke-width="0.8"/>
+          <polygon points="0,-16 -5,0 0,0" fill="${stroke}"/>
+          <polygon points="0,-16 5,0 0,0" fill="none" stroke="${stroke}" stroke-width="1.2"/>
+          <polygon points="0,16 -4,0 0,0" fill="none" stroke="var(--text-muted, #777)" stroke-width="0.8"/>
+          <polygon points="0,16 4,0 0,0" fill="var(--text-muted, #777)" opacity="0.5"/>
+          <circle cx="0" cy="0" r="2.5" fill="${stroke}"/>
+          <text x="0" y="-22" text-anchor="middle" font-size="11" font-family="var(--font-mono)" font-weight="800" fill="${stroke}">N</text>
+        </g>`;
+      }
       return '';
     }).join('');
 
@@ -26984,6 +27773,17 @@ function createPlanView(context) {
             <rect x="${(mid.x - 48).toFixed(1)}" y="${(mid.y - 20).toFixed(1)}" width="96" height="20" rx="3" fill="var(--bg-surface-elevated, #222327)" stroke="${col}" stroke-width="1.2"/>
             <text x="${mid.x.toFixed(1)}" y="${(mid.y - 6).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="#ffffff" font-weight="700">${meas.distance.toFixed(2)}m · ${meas.angleDeg.toFixed(0)}°</text>
           </g>`;
+      } else if (dragState.tool === 'leader') {
+        const a = worldToSvg(transform, dragState.start.x, dragState.start.y);
+        const b = worldToSvg(transform, dragState.current.x, dragState.current.y);
+        const kneeWorld = { x: dragState.start.x + (dragState.current.x - dragState.start.x) * 0.6, y: dragState.current.y };
+        const k = worldToSvg(transform, kneeWorld.x, kneeWorld.y);
+        const col = 'var(--accent-primary, #7aa2ff)';
+        dragMarkup = `
+          <polyline points="${a.x.toFixed(1)},${a.y.toFixed(1)} ${k.x.toFixed(1)},${k.y.toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)}" fill="none" stroke="${col}" stroke-width="2" stroke-dasharray="4 2"/>
+          <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="3.5" fill="${col}"/>
+          <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="3.5" fill="${col}"/>
+          <text x="${(b.x + 6).toFixed(1)}" y="${(b.y - 4).toFixed(1)}" font-size="10" font-family="var(--font-mono)" fill="${col}">Note</text>`;
       } else if (dragState.tool === 'wall' || dragState.tool === 'dimension') {
         const a = worldToSvg(transform, dragState.start.x, dragState.start.y);
         const b = worldToSvg(transform, dragState.current.x, dragState.current.y);
@@ -27128,6 +27928,7 @@ function createPlanView(context) {
       dom.planStatusBadge.textContent = `zoom ${transform.zoom.toFixed(0)} px/m · ${entities().length} entities`;
     }
     renderEntityList();
+    renderLayerList();
     renderPropertiesInspector();
     renderContextualToolbar();
     updateStatusBar();
@@ -27156,6 +27957,11 @@ function createPlanView(context) {
         const d = (typeof p1?.x === 'number' && typeof p2?.x === 'number') ? Math.hypot(p2.x - p1.x, p2.y - p1.y) : null;
         desc = `Dim · ${d !== null ? d.toFixed(2) : '?'} m`;
       }
+      else if (e.kind === 'room_tag') desc = `Tag #${escapeHtml(e.roomNumber || '')} · ${escapeHtml(e.name || '')}`;
+      else if (e.kind === 'door_tag') desc = `Badge [${escapeHtml(e.tag || '')}]`;
+      else if (e.kind === 'window_tag') desc = `Badge <${escapeHtml(e.tag || '')}>`;
+      else if (e.kind === 'leader') desc = `Leader · "${escapeHtml(e.text || '')}"`;
+      else if (e.kind === 'north_arrow') desc = `North · ${Math.round(e.rotation || 0)}°`;
       else if (e.kind === 'text') desc = `"${escapeHtml(e.text || e.name)}"`;
       else desc = e.kind;
 
@@ -27173,14 +27979,181 @@ function createPlanView(context) {
     });
   }
 
+  function renderLayerList() {
+    const container = dom.planLayerList || document.getElementById('plan-layer-list');
+    const countEl = dom.planLayersCount || document.getElementById('plan-layers-count');
+    if (!container) return;
+
+    const doc = getActiveDocument();
+    const layers = normalizeDocumentLayers(doc);
+    if (countEl) countEl.textContent = String(layers.length);
+
+    const es = entities();
+    const layerCounts = {};
+    for (const l of layers) layerCounts[l.id] = 0;
+    for (const e of es) {
+      const l = resolveEntityLayer(e, doc);
+      layerCounts[l.id] = (layerCounts[l.id] || 0) + 1;
+    }
+
+    container.innerHTML = layers.map(l => {
+      const isVis = l.visible !== false;
+      const isLck = !!l.locked;
+      const count = layerCounts[l.id] || 0;
+      return `
+        <div class="plan-layer-row" data-layer-id="${escapeHtml(l.id)}" style="display: flex; align-items: center; justify-content: space-between; padding: 0.3rem 0.45rem; border: 1px solid var(--border-color-light, #333); border-radius: 4px; font-family: var(--font-mono); font-size: 0.72rem; background: var(--bg-surface-raised, rgba(255,255,255,0.02)); margin-bottom: 2px;">
+          <div style="display: flex; align-items: center; gap: 0.4rem; min-width: 0; flex: 1;">
+            <span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: ${escapeHtml(l.color)}; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.25);"></span>
+            <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; color: ${isVis ? 'var(--text-primary, #fff)' : 'var(--text-muted, #777)'};" title="${escapeHtml(l.name)}">${escapeHtml(l.name)}</span>
+            <span style="font-size: 0.65rem; color: var(--text-muted, #888); flex-shrink: 0;">(${count})</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0;">
+            <button type="button" class="layer-toggle-vis" data-layer-id="${escapeHtml(l.id)}" title="${isVis ? 'Hide layer (currently visible)' : 'Show layer (currently hidden)'}" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; font-size: 0.8rem; opacity: ${isVis ? '1.0' : '0.4'};">
+              ${isVis ? '👁️' : '🚫'}
+            </button>
+            <button type="button" class="layer-toggle-lock" data-layer-id="${escapeHtml(l.id)}" title="${isLck ? 'Unlock layer (currently locked)' : 'Lock layer (currently editable)'}" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; font-size: 0.8rem; opacity: ${isLck ? '1.0' : '0.45'};">
+              ${isLck ? '🔒' : '🔓'}
+            </button>
+            ${l.custom ? `
+              <button type="button" class="layer-delete-btn" data-layer-id="${escapeHtml(l.id)}" title="Delete custom layer" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; font-size: 0.75rem; color: var(--accent-action, #f43f5e);">
+                ✕
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.layer-toggle-vis').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const lid = btn.dataset.layerId;
+        toggleLayerVisibility(doc, lid);
+        AudioService.playTick();
+        render();
+      });
+    });
+
+    container.querySelectorAll('.layer-toggle-lock').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const lid = btn.dataset.layerId;
+        toggleLayerLock(doc, lid);
+        AudioService.playTick();
+        render();
+      });
+    });
+
+    container.querySelectorAll('.layer-delete-btn').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const lid = btn.dataset.layerId;
+        if (window.confirm(`Delete custom layer "${lid}"? Entities on this layer will fall back to their default architectural layer.`)) {
+          deleteCustomLayer(doc, lid);
+          AudioService.playTick();
+          render();
+        }
+      });
+    });
+  }
+
+  function setupSidebarTabs() {
+    const tabEntities = dom.tabPlanEntities || document.getElementById('tab-plan-entities');
+    const tabLayers = dom.tabPlanLayers || document.getElementById('tab-plan-layers');
+    const viewEntities = dom.planEntitiesView || document.getElementById('plan-entities-view');
+    const viewLayers = dom.planLayersView || document.getElementById('plan-layers-view');
+
+    const updateTabUI = () => {
+      if (tabEntities) {
+        tabEntities.classList.toggle('active', activeSidebarTab === 'entities');
+        tabEntities.style.borderBottom = activeSidebarTab === 'entities' ? '2px solid var(--accent-primary, #4989D9)' : '2px solid transparent';
+        tabEntities.style.color = activeSidebarTab === 'entities' ? 'var(--accent-primary, #4989D9)' : 'var(--text-muted, #888)';
+      }
+      if (tabLayers) {
+        tabLayers.classList.toggle('active', activeSidebarTab === 'layers');
+        tabLayers.style.borderBottom = activeSidebarTab === 'layers' ? '2px solid var(--accent-primary, #4989D9)' : '2px solid transparent';
+        tabLayers.style.color = activeSidebarTab === 'layers' ? 'var(--accent-primary, #4989D9)' : 'var(--text-muted, #888)';
+      }
+      if (viewEntities) viewEntities.style.display = activeSidebarTab === 'entities' ? 'block' : 'none';
+      if (viewLayers) viewLayers.style.display = activeSidebarTab === 'layers' ? 'block' : 'none';
+    };
+
+    if (tabEntities) {
+      tabEntities.addEventListener('click', () => {
+        activeSidebarTab = 'entities';
+        updateTabUI();
+      });
+    }
+    if (tabLayers) {
+      tabLayers.addEventListener('click', () => {
+        activeSidebarTab = 'layers';
+        updateTabUI();
+        renderLayerList();
+      });
+    }
+
+    const btnAutoTag = dom.btnAutoTagAll || document.getElementById('btn-auto-tag-all');
+    if (btnAutoTag) {
+      btnAutoTag.addEventListener('click', () => {
+        const res = autoTagDocument(entities());
+        if (res.count > 0) {
+          for (const t of res.newTags) {
+            const cmd = entityAddRemoveCommand(entities(), t, `auto-tag ${t.name}`);
+            cmd.redo();
+            history.push(cmd);
+          }
+          showToast(`Auto-tagged ${res.count} items (${res.roomsTagged} rooms, ${res.doorsTagged} doors, ${res.windowsTagged} windows)`, 'success');
+          AudioService.playTick();
+          render();
+        } else {
+          showToast('All rooms, doors, and windows are already tagged!', 'info');
+        }
+      });
+    }
+
+    const btnAdd = dom.btnAddLayer || document.getElementById('btn-add-layer');
+    if (btnAdd) {
+      btnAdd.addEventListener('click', () => {
+        const name = window.prompt('Enter new custom CAD layer name (e.g. A-DEMO-EXST or E-POWR):');
+        if (!name || !name.trim()) return;
+        const color = window.prompt('Enter layer hex color:', '#f97316') || '#f97316';
+        const doc = getActiveDocument();
+        const newLayer = addCustomLayer(doc, { name: name.trim(), color: color.trim() });
+        showToast(`Created layer "${newLayer.name}"`, 'success');
+        AudioService.playTick();
+        render();
+      });
+    }
+
+    updateTabUI();
+  }
+
   // ------------------------------------------------------------------
   // Properties & Verification Inspector
   // ------------------------------------------------------------------
   function renderPropertiesInspector() {
     if (!dom.planPropContent) return;
     const es = entities();
+    const doc = getActiveDocument();
     const selectedId = Array.from(state.plan.selectedIds || [])[0];
     const selected = selectedId ? es.find(x => x.id === selectedId) : null;
+
+    function buildLayerSelectRow(selectedEntity) {
+      if (!selectedEntity) return '';
+      const currentLayer = resolveEntityLayer(selectedEntity, doc);
+      const layers = normalizeDocumentLayers(doc);
+      const options = layers.map(l =>
+        `<option value="${escapeHtml(l.id)}" ${currentLayer.id === l.id ? 'selected' : ''}>${escapeHtml(l.name)}</option>`
+      ).join('');
+      return `
+        <div class="plan-prop-row">
+          <span class="plan-prop-label">CAD Layer</span>
+          <select id="prop-entity-layer" class="calc-select" style="width: 140px; height: 24px; padding: 0 4px; font-size: 0.74rem;">
+            ${options}
+          </select>
+        </div>
+      `;
+    }
 
     if (dom.planEntitiesCount) {
       dom.planEntitiesCount.textContent = String(es.length);
@@ -27265,6 +28238,7 @@ function createPlanView(context) {
           <div class="plan-prop-row"><span class="plan-prop-label">Perimeter</span><span class="plan-prop-value">${p.toFixed(2)} m</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Aspect Ratio</span><span class="plan-prop-value">1 : ${isFinite(ratio) ? ratio.toFixed(2) : '—'}</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Pieces Inside</span><span class="plan-prop-value">${furnInside.length}</span></div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div id="prop-verification-box" style="margin-top: 0.3rem;"></div>
         <div class="plan-prop-actions">
@@ -27361,6 +28335,7 @@ function createPlanView(context) {
               <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
             </div>
           </div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div id="prop-verification-box" style="margin-top: 0.3rem;"></div>
         <div class="plan-prop-actions">
@@ -27507,6 +28482,7 @@ function createPlanView(context) {
           <div class="plan-prop-row"><span class="plan-prop-label">Tread (Going)</span><span class="plan-prop-value">${(selected.tread * 1000).toFixed(1)} mm</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Pitch Angle</span><span class="plan-prop-value">${pitchDeg}°</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Blondel (2R+T)</span><span class="plan-prop-value" style="font-weight: 700; color: ${isBlondelOptimal ? 'var(--color-success, #4ade80)' : 'var(--color-warning, #fbbf24)'};">${blondelMm} mm</span></div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div class="plan-prop-section" style="background: rgba(0,0,0,0.2); padding: 0.45rem; border-radius: 4px; margin-top: 0.4rem;">
           <div style="font-size: 0.68rem; color: var(--text-secondary); line-height: 1.4;">
@@ -27638,6 +28614,7 @@ function createPlanView(context) {
           </div>
           <div class="plan-prop-row"><span class="plan-prop-label">Slope Ratio</span><span class="plan-prop-value" style="font-weight: 700;">1 : ${ratio}</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Slope Gradient</span><span class="plan-prop-value">${slopePct}% (${angleDeg}°)</span></div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div class="plan-prop-section" style="background: rgba(0,0,0,0.2); padding: 0.45rem; border-radius: 4px; margin-top: 0.4rem;">
           <div style="font-size: 0.68rem; color: ${isCompliant ? 'var(--color-success, #4ade80)' : 'var(--color-warning, #fbbf24)'}; font-weight: 600;">
@@ -27752,6 +28729,7 @@ function createPlanView(context) {
           </div>
           <div class="plan-prop-row"><span class="plan-prop-label">Endpoints</span><span class="plan-prop-value" style="font-size: 0.70rem;">(${selected.x1?.toFixed(1)}, ${selected.y1?.toFixed(1)}) ➔ (${selected.x2?.toFixed(1)}, ${selected.y2?.toFixed(1)})</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Openings</span><span class="plan-prop-value">${openings.length}</span></div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div class="plan-prop-actions">
           <button type="button" id="btn-prop-scratch-wall" class="plan-prop-btn"><span>📋 Send Length to Scratchpad</span></button>
@@ -27835,6 +28813,7 @@ function createPlanView(context) {
             <button type="button" class="plan-prop-btn" id="prop-door-flip-btn" style="padding: 2px 8px; font-size: 0.72rem;">${selected.flipSide ? 'Outward' : 'Inward'}</button>
           </div>
           <div class="plan-prop-row"><span class="plan-prop-label">Wall Fit</span><span class="plan-prop-badge ${fits.fits ? 'fits' : 'no-fit'}">${fits.fits ? 'FITS' : 'OVERFLOW'}</span></div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div class="plan-prop-actions">
           <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Door</span></button>
@@ -27916,6 +28895,7 @@ function createPlanView(context) {
             </div>
           </div>
           <div class="plan-prop-row"><span class="plan-prop-label">Wall Fit</span><span class="plan-prop-badge ${fits.fits ? 'fits' : 'no-fit'}">${fits.fits ? 'FITS' : 'OVERFLOW'}</span></div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div class="plan-prop-actions">
           <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Window</span></button>
@@ -28034,6 +29014,7 @@ function createPlanView(context) {
           </div>
 
           <div class="plan-prop-row"><span class="plan-prop-label">Endpoints</span><span class="plan-prop-value" style="font-size: 0.70rem;">(${p1World.x.toFixed(2)}, ${p1World.y.toFixed(2)}) ➔ (${p2World.x.toFixed(2)}, ${p2World.y.toFixed(2)})</span></div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div class="plan-prop-actions">
           <button type="button" id="btn-prop-scratch-dim" class="plan-prop-btn"><span>📋 Send to Scratchpad</span></button>
@@ -28105,6 +29086,7 @@ function createPlanView(context) {
           <div class="plan-prop-title">Text Annotation</div>
           <div class="plan-prop-row"><span class="plan-prop-label">Label</span><input type="text" id="prop-entity-text" class="text-input" value="${escapeHtml(selected.text || selected.name)}" style="width: 150px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Position</span><span class="plan-prop-value">(${selected.x?.toFixed(2)}, ${selected.y?.toFixed(2)})</span></div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div class="plan-prop-actions">
           <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Text</span></button>
@@ -28115,10 +29097,130 @@ function createPlanView(context) {
         selected.name = selected.text;
         render();
       });
+
+    } else if (selected.kind === 'room_tag') {
+      const room = selected.roomId ? es.find(r => r.id === selected.roomId) : null;
+      const areaVal = room ? roomArea(room) : (selected.area || 0);
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Room Callout Tag</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Room Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name || '')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Room Number</span><input type="text" id="prop-room-number" class="text-input" value="${escapeHtml(selected.roomNumber || '101')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Linked Room</span><span class="plan-prop-value">${room ? escapeHtml(room.name) : 'Detached'}</span></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Reported Area</span><span class="plan-prop-value note-number">${areaVal.toFixed(2)} m²</span></div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Tag</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-entity-name')?.addEventListener('change', (e) => {
+        selected.name = e.target.value.trim() || 'Room Tag';
+        render();
+      });
+      dom.planPropContent.querySelector('#prop-room-number')?.addEventListener('change', (e) => {
+        selected.roomNumber = e.target.value.trim() || '101';
+        render();
+      });
+
+    } else if (selected.kind === 'door_tag') {
+      const door = selected.doorId ? es.find(d => d.id === selected.doorId) : null;
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Door Callout Badge</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Tag Badge</span><input type="text" id="prop-door-tag" class="text-input" value="${escapeHtml(selected.tag || 'D01')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Linked Door</span><span class="plan-prop-value">${door ? escapeHtml(door.name) : 'Detached'}</span></div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Tag</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-door-tag')?.addEventListener('change', (e) => {
+        selected.tag = e.target.value.trim() || 'D01';
+        selected.name = `Door Tag ${selected.tag}`;
+        render();
+      });
+
+    } else if (selected.kind === 'window_tag') {
+      const win = selected.windowId ? es.find(w => w.id === selected.windowId) : null;
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Window Callout Badge</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Tag Badge</span><input type="text" id="prop-win-tag" class="text-input" value="${escapeHtml(selected.tag || 'W01')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Linked Window</span><span class="plan-prop-value">${win ? escapeHtml(win.name) : 'Detached'}</span></div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Tag</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-win-tag')?.addEventListener('change', (e) => {
+        selected.tag = e.target.value.trim() || 'W01';
+        selected.name = `Window Tag ${selected.tag}`;
+        render();
+      });
+
+    } else if (selected.kind === 'leader') {
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Leader Note Annotation</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Callout Text</span><input type="text" id="prop-leader-text" class="text-input" value="${escapeHtml(selected.text || '')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Leader</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-leader-text')?.addEventListener('change', (e) => {
+        selected.text = e.target.value.trim() || 'Callout';
+        selected.name = `Leader: ${selected.text}`;
+        render();
+      });
+
+    } else if (selected.kind === 'north_arrow') {
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">North Arrow Compass</div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Rotation</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-north-rot" class="text-input" value="${Math.round(selected.rotation || 0)}" step="15" min="0" max="360" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">deg</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Scale</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-north-scale" class="text-input" value="${(selected.scale || 1.0).toFixed(1)}" step="0.1" min="0.2" max="5.0" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">x</span>
+            </div>
+          </div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Symbol</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-north-rot')?.addEventListener('change', (e) => {
+        selected.rotation = ((parseFloat(e.target.value) || 0) % 360 + 360) % 360;
+        render();
+      });
+      dom.planPropContent.querySelector('#prop-north-scale')?.addEventListener('change', (e) => {
+        selected.scale = Math.max(0.2, parseFloat(e.target.value) || 1.0);
+        render();
+      });
     }
 
     dom.planPropContent.querySelector('#btn-prop-delete')?.addEventListener('click', () => {
       deleteSelected();
+    });
+
+    dom.planPropContent.querySelector('#prop-entity-layer')?.addEventListener('change', (e) => {
+      setEntityLayer(selected, e.target.value);
+      showToast(`Moved to CAD layer "${e.target.value}"`);
+      AudioService.playTick();
+      render();
     });
   }
 
@@ -28279,6 +29381,8 @@ function createPlanView(context) {
       dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
       return;
     }
+    const doc = getActiveDocument();
+    const visible = entities().filter(x => isEntityVisible(x, doc));
     const world = svgPoint(event);
     const snapOn = state.plan.snap !== false;
     let initialPt = { x: snapToGrid(world.x, state.plan.grid), y: snapToGrid(world.y, state.plan.grid) };
@@ -28291,6 +29395,11 @@ function createPlanView(context) {
       const entityId = handleEl.dataset.entityId;
       const entity = entities().find(x => x.id === entityId);
       if (entity && handle) {
+        if (isEntityLocked(entity, doc)) {
+          const l = resolveEntityLayer(entity, doc);
+          showToast(`Layer "${l.name}" is locked — cannot transform`, 'warning');
+          return;
+        }
         dragState = {
           mode: 'resize',
           handle,
@@ -28308,24 +29417,44 @@ function createPlanView(context) {
     if (tool === 'select') {
       const entityEl = event.target.closest ? event.target.closest('.plan-entity') : null;
       let hitId = entityEl ? entityEl.dataset.entityId : null;
+      if (hitId) {
+        const hitE = entities().find(x => x.id === hitId);
+        if (!hitE || !isEntityVisible(hitE, doc)) hitId = null;
+      }
       if (!hitId) {
-        const hits = pickEntities(entities(), { x: world.x, y: world.y, width: 0, depth: 0 });
+        const hits = pickEntities(visible, { x: world.x, y: world.y, width: 0, depth: 0 });
         if (hits.length > 0) hitId = hits[hits.length - 1];
       }
 
       if (hitId) {
-        state.plan.selectedIds = new Set([hitId]);
         const e = entities().find(x => x.id === hitId);
+        if (e && isEntityLocked(e, doc)) {
+          const l = resolveEntityLayer(e, doc);
+          showToast(`Layer "${l.name}" is locked — cannot select or move`, 'warning');
+          return;
+        }
+        state.plan.selectedIds = new Set([hitId]);
         dragState = { mode: 'move', entity: e, start: initialPt, last: initialPt, initial: JSON.parse(JSON.stringify(e)) };
       } else {
         state.plan.selectedIds = new Set();
         dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
       }
       render();
+    } else if (tool === 'north') {
+      const na = createNorthArrow({ x: initialPt.x, y: initialPt.y });
+      const cmd = entityAddRemoveCommand(entities(), na, 'place North Arrow');
+      cmd.redo();
+      history.push(cmd);
+      state.plan.selectedIds = new Set([na.id]);
+      showToast('Placed North Arrow compass');
+      AudioService.playTick();
+      setTool('select');
+      render();
+      return;
     } else if (tool === 'polyroom') {
       let targetPt = initialPt;
       if (snapOn) {
-        const snapRes = findSnapPoint(world, entities(), { threshold: 0.35, snapGrid: true, gridSize: state.plan.grid });
+        const snapRes = findSnapPoint(world, visible, { threshold: 0.35, snapGrid: true, gridSize: state.plan.grid });
         if (snapRes.snapped) {
           targetPt = { x: snapRes.x, y: snapRes.y };
         }
@@ -28343,9 +29472,9 @@ function createPlanView(context) {
       render();
       renderContextualToolbar();
       return;
-    } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'measure') {
+    } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'leader' || tool === 'measure') {
       if (snapOn) {
-        const snapRes = findSnapPoint(world, entities(), { snapDistance: 0.25, snapGrid: true, gridMeters: state.plan.grid });
+        const snapRes = findSnapPoint(world, visible, { snapDistance: 0.25, snapGrid: true, gridMeters: state.plan.grid });
         if (snapRes.snapped) {
           initialPt = { x: snapRes.x, y: snapRes.y };
           activeSnap = snapRes;
@@ -28532,6 +29661,12 @@ function createPlanView(context) {
             dragState.entity.x = Math.min(dragState.entity.x1, dragState.entity.x2);
             dragState.entity.y = Math.min(dragState.entity.y1, dragState.entity.y2);
           }
+        } else if (dragState.entity.kind === 'leader') {
+          if (dragState.entity.p1) { dragState.entity.p1.x += dx; dragState.entity.p1.y += dy; }
+          if (dragState.entity.knee) { dragState.entity.knee.x += dx; dragState.entity.knee.y += dy; }
+          if (dragState.entity.p2) { dragState.entity.p2.x += dx; dragState.entity.p2.y += dy; }
+          dragState.entity.x = (dragState.entity.x || 0) + dx;
+          dragState.entity.y = (dragState.entity.y || 0) + dy;
         } else if (dragState.entity.kind === 'door' || dragState.entity.kind === 'window') {
           const hostWall = entities().find(w => w.id === dragState.entity.wallId);
           if (hostWall && typeof hostWall.x1 === 'number') {
@@ -28628,6 +29763,17 @@ function createPlanView(context) {
         createRampEntityFromDrag(start, end);
       } else if (dragState.tool === 'dimension') {
         createDimensionEntity(start, end);
+      } else if (dragState.tool === 'leader') {
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const knee = { x: start.x + dx * 0.6, y: end.y };
+        const lNote = createLeaderNote({ p1: start, knee, p2: end, text: 'Note' });
+        const cmd = entityAddRemoveCommand(entities(), lNote, 'add leader note');
+        cmd.redo();
+        history.push(cmd);
+        state.plan.selectedIds = new Set([lNote.id]);
+        showToast('Placed Leader Note');
+        AudioService.playTick();
       } else if (dragState.tool === 'measure') {
         const m = computeMeasurement(start, end);
         showToast(`Measured: ${m.formatted}`);
@@ -28882,15 +30028,27 @@ function createPlanView(context) {
       showToast('Nothing selected', 'warning');
       return;
     }
+    const doc = getActiveDocument();
+    let deletedCount = 0;
+    let lockedCount = 0;
     for (const id of state.plan.selectedIds) {
       const e = entities().find(x => x.id === id);
       if (!e) continue;
+      if (isEntityLocked(e, doc)) {
+        lockedCount++;
+        continue;
+      }
       const cmd = entityAddRemoveCommand(entities(), e, `delete ${e.name}`);
       cmd.undo(); // remove now
       history.push(cmd);
+      deletedCount++;
+    }
+    if (lockedCount > 0 && deletedCount === 0) {
+      showToast('Cannot delete: selected item(s) are on a locked layer', 'warning');
+      return;
     }
     state.plan.selectedIds = new Set();
-    showToast('Selection deleted (undo available)');
+    showToast(deletedCount > 0 ? 'Selection deleted (undo available)' : 'Nothing deleted');
     render();
   }
 
@@ -29189,6 +30347,7 @@ function createPlanView(context) {
       loadFromProject();
       initDocuments();
       renderTabs();
+      setupSidebarTabs();
 
       const newDocBtn = dom.btnPlanNewDoc || document.getElementById('btn-plan-new-doc');
       if (newDocBtn) {
@@ -29269,7 +30428,8 @@ function createPlanView(context) {
         triggerAiCritique, setTool, cycleGrid, toggleSnap, duplicateSelected,
         renderContextualToolbar, updateStatusBar,
         switchDocument, createDocument, closeDocument, renameDocument,
-        finishPolyRoom, cancelPolyRoom, renderTabs
+        finishPolyRoom, cancelPolyRoom, renderTabs,
+        renderLayerList, setupSidebarTabs
       };
     }
   };
@@ -31944,6 +33104,14 @@ function initializeApp() {
     btnPlanClear: document.getElementById('btn-plan-clear'),
     planErrorMsg: document.getElementById('plan-error-msg'),
     planEntityList: document.getElementById('plan-entity-list'),
+    tabPlanEntities: document.getElementById('tab-plan-entities'),
+    tabPlanLayers: document.getElementById('tab-plan-layers'),
+    planEntitiesView: document.getElementById('plan-entities-view'),
+    planLayersView: document.getElementById('plan-layers-view'),
+    planLayerList: document.getElementById('plan-layer-list'),
+    planLayersCount: document.getElementById('plan-layers-count'),
+    btnAutoTagAll: document.getElementById('btn-auto-tag-all'),
+    btnAddLayer: document.getElementById('btn-add-layer'),
     planResultPanel: document.getElementById('plan-result-panel'),
     planStateBadge: document.getElementById('plan-state-badge'),
     planStatusBadge: document.getElementById('plan-status-badge'),

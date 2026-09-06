@@ -25,8 +25,15 @@ import {
   DIMENSION_STYLES, DIMENSION_ORIENTATIONS, DIMENSION_UNITS,
   roomArea, wallLength, roomPerimeter, roomAspectRatio,
   wallDirection, openingFitsWall, generateEntityId,
-  WALL_ASSEMBLIES, wallOpenings
+  WALL_ASSEMBLIES, wallOpenings,
+  createRoomTag, createDoorTag, createWindowTag,
+  createLeaderNote, createNorthArrow, autoTagDocument
 } from '../../core/entities.js';
+import {
+  normalizeDocumentLayers, resolveEntityLayer, isEntityVisible, isEntityLocked,
+  toggleLayerVisibility, toggleLayerLock, addCustomLayer, deleteCustomLayer,
+  setEntityLayer, DEFAULT_CAD_LAYERS
+} from '../../core/layers.js';
 import {
   calcWallJunctions, punchWallSpans, calcDoorCADGeometry,
   calcWindowCADGeometry, calcWallPolygon, calcDimensionGeometry
@@ -63,6 +70,7 @@ export function createPlanView(context) {
   let resizeObserver = null;
   let polyRoomVertices = []; // [{x, y}, ...]
   let currentMouseWorld = { x: 0, y: 0 };
+  let activeSidebarTab = 'entities'; // 'entities' | 'layers'
 
   function initDocuments() {
     if (!state.plan) state.plan = {};
@@ -88,7 +96,9 @@ export function createPlanView(context) {
     if (!state.plan || !Array.isArray(state.plan.documents) || state.plan.documents.length === 0) {
       initDocuments();
     }
-    return state.plan.documents.find(d => d.id === state.plan.activeDocId) || state.plan.documents[0];
+    const doc = state.plan.documents.find(d => d.id === state.plan.activeDocId) || state.plan.documents[0];
+    if (doc) normalizeDocumentLayers(doc);
+    return doc;
   }
 
   function switchDocument(docId) {
@@ -643,12 +653,23 @@ export function createPlanView(context) {
         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
           <span class="context-tag-badge" style="background: rgba(73,137,217,0.18); color: var(--note-number, #4989D9); border-color: rgba(73,137,217,0.4);">ROOM</span>
           <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(sel.name)} (${roomArea(sel).toFixed(1)}m²)</span>
+          <button type="button" class="context-action-btn" id="ctx-tag-room-btn"><span>🏷️ Tag Room</span></button>
           <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate (Ctrl+D)</span></button>
           <button type="button" class="context-action-btn" id="ctx-overlap-btn"><span>✓ Check Overlaps</span></button>
           <button type="button" class="context-action-btn" id="ctx-ai-room-btn"><span>🤖 AI Review</span></button>
           <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete (Del)</span></button>
         </div>
       `;
+      bar.querySelector('#ctx-tag-room-btn')?.addEventListener('click', () => {
+        const rTag = createRoomTag({ room: sel, roomId: sel.id, name: sel.name });
+        const cmd = entityAddRemoveCommand(entities(), rTag, `tag room ${sel.name}`);
+        cmd.redo();
+        history.push(cmd);
+        state.plan.selectedIds = new Set([rTag.id]);
+        showToast(`Tagged room "${sel.name}"`);
+        AudioService.playTick();
+        render();
+      });
       bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
       bar.querySelector('#ctx-overlap-btn')?.addEventListener('click', () => {
         const furn = entities().filter(e => e.kind === 'furniture');
@@ -808,6 +829,7 @@ export function createPlanView(context) {
         <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
           <span class="context-tag-badge" style="background: rgba(251,191,36,0.15); color: var(--color-warning, #fbbf24);">DOOR</span>
           <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(sel.name)} (${(sel.width * 1000).toFixed(0)}mm)</span>
+          <button type="button" class="context-action-btn" id="ctx-tag-door-btn"><span>🏷️ Tag Door</span></button>
           <button type="button" class="context-action-btn" id="ctx-door-swing"><span>↻ Swing: ${sel.swing.toUpperCase()}</span></button>
           <button type="button" class="context-action-btn" id="ctx-door-flip"><span>⇄ Side: ${sel.flipSide ? 'OUT' : 'IN'}</span></button>
           <span style="font-size: 0.68rem; color: var(--text-muted); margin-left: 2px;">Width:</span>
@@ -819,6 +841,17 @@ export function createPlanView(context) {
           <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete</span></button>
         </div>
       `;
+
+      bar.querySelector('#ctx-tag-door-btn')?.addEventListener('click', () => {
+        const dTag = createDoorTag({ door: sel, doorId: sel.id });
+        const cmd = entityAddRemoveCommand(entities(), dTag, `tag door ${sel.name}`);
+        cmd.redo();
+        history.push(cmd);
+        state.plan.selectedIds = new Set([dTag.id]);
+        showToast(`Tagged door "${sel.name}" with badge ${dTag.tag}`);
+        AudioService.playTick();
+        render();
+      });
 
       bar.querySelector('#ctx-door-swing')?.addEventListener('click', () => {
         const nextSwing = sel.swing === 'left' ? 'right' : (sel.swing === 'right' ? 'double' : 'left');
@@ -860,6 +893,7 @@ export function createPlanView(context) {
         <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
           <span class="context-tag-badge" style="background: rgba(56,189,248,0.15); color: var(--accent-primary, #38bdf8);">WINDOW</span>
           <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(sel.name)} (${(sel.width * 1000).toFixed(0)}mm)</span>
+          <button type="button" class="context-action-btn" id="ctx-tag-win-btn"><span>🏷️ Tag Window</span></button>
           <span style="font-size: 0.68rem; color: var(--text-muted); margin-left: 2px;">Width:</span>
           <button type="button" class="context-action-btn ${Math.abs(sel.width - 0.9) < 0.01 ? 'active' : ''}" id="ctx-win-w900">900</button>
           <button type="button" class="context-action-btn ${Math.abs(sel.width - 1.2) < 0.01 ? 'active' : ''}" id="ctx-win-w1200">1200</button>
@@ -869,6 +903,17 @@ export function createPlanView(context) {
           <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete</span></button>
         </div>
       `;
+
+      bar.querySelector('#ctx-tag-win-btn')?.addEventListener('click', () => {
+        const wTag = createWindowTag({ windowEntity: sel, windowId: sel.id });
+        const cmd = entityAddRemoveCommand(entities(), wTag, `tag window ${sel.name}`);
+        cmd.redo();
+        history.push(cmd);
+        state.plan.selectedIds = new Set([wTag.id]);
+        showToast(`Tagged window "${sel.name}" with badge ${wTag.tag}`);
+        AudioService.playTick();
+        render();
+      });
 
       const setWinW = (w) => {
         sel.width = w;
@@ -1178,7 +1223,9 @@ export function createPlanView(context) {
         </pattern>
       </defs>`;
 
+    const doc = getActiveDocument();
     const entityMarkup = entities().map(e => {
+      if (!isEntityVisible(e, doc)) return '';
       const selected = state.plan.selectedIds.has(e.id);
       const stroke = selected ? 'var(--color-warning, #fbbf24)' : 'var(--accent-primary, #7aa2ff)';
       const hasRect = isNum(e.x) && isNum(e.y) && isNum(e.width) && isNum(e.depth);
@@ -1570,6 +1617,89 @@ export function createPlanView(context) {
           <text x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}" font-size="11" font-family="var(--font-sans)" fill="var(--text-primary, #EAEAEC)" font-weight="600">${escapeHtml(textStr)}</text>
         </g>`;
       }
+      if (e.kind === 'room_tag') {
+        const room = e.roomId ? entities().find(r => r.id === e.roomId) : null;
+        const areaVal = room ? roomArea(room) : (e.area || 0);
+        const p = worldToSvg(transform, e.x, e.y);
+        const tagNum = e.roomNumber || '101';
+        const roomTitle = (e.name || (room ? room.name : 'ROOM')).toUpperCase();
+        const areaStr = `${areaVal.toFixed(1)} m²`;
+        const boxW = Math.max(76, Math.max(roomTitle.length * 7.5, areaStr.length * 7.5) + 20);
+        const boxH = 44;
+
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <rect x="${(p.x - boxW / 2).toFixed(1)}" y="${(p.y - boxH / 2).toFixed(1)}" width="${boxW.toFixed(1)}" height="${boxH}" rx="4"
+            fill="var(--bg-surface-elevated, #222327)" stroke="${stroke}" stroke-width="${selected ? 2.2 : 1.2}"/>
+          <rect x="${(p.x - 22).toFixed(1)}" y="${(p.y - boxH / 2 - 8).toFixed(1)}" width="44" height="14" rx="3"
+            fill="var(--accent-primary, #4989D9)" stroke="${stroke}" stroke-width="0.8"/>
+          <text x="${p.x.toFixed(1)}" y="${(p.y - boxH / 2 + 3).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="#ffffff" font-weight="700">${escapeHtml(tagNum)}</text>
+          <text x="${p.x.toFixed(1)}" y="${(p.y + 3).toFixed(1)}" text-anchor="middle" font-size="9.5" font-family="var(--font-mono)" fill="var(--text-primary, #EAEAEC)" font-weight="700">${escapeHtml(roomTitle)}</text>
+          <text x="${p.x.toFixed(1)}" y="${(p.y + 16).toFixed(1)}" text-anchor="middle" font-size="8.5" font-family="var(--font-mono)" fill="var(--note-number, #4989D9)">${escapeHtml(areaStr)}</text>
+        </g>`;
+      }
+      if (e.kind === 'door_tag') {
+        const p = worldToSvg(transform, e.x, e.y);
+        const tagText = e.tag || 'D01';
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <ellipse cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" rx="15" ry="10"
+            fill="var(--bg-surface-elevated, #222327)" stroke="${stroke}" stroke-width="${selected ? 2.2 : 1.4}"/>
+          <text x="${p.x.toFixed(1)}" y="${(p.y + 3.5).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="var(--color-warning, #fbbf24)" font-weight="700">${escapeHtml(tagText)}</text>
+        </g>`;
+      }
+      if (e.kind === 'window_tag') {
+        const p = worldToSvg(transform, e.x, e.y);
+        const tagText = e.tag || 'W01';
+        const s = 12;
+        const hexPts = [0, 60, 120, 180, 240, 300].map(deg => {
+          const rad = deg * Math.PI / 180;
+          return `${(p.x + s * Math.cos(rad)).toFixed(1)},${(p.y + s * Math.sin(rad)).toFixed(1)}`;
+        }).join(' ');
+
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <polygon points="${hexPts}"
+            fill="var(--bg-surface-elevated, #222327)" stroke="${stroke}" stroke-width="${selected ? 2.2 : 1.4}"/>
+          <text x="${p.x.toFixed(1)}" y="${(p.y + 3.5).toFixed(1)}" text-anchor="middle" font-size="8.5" font-family="var(--font-mono)" fill="var(--cyan-glow, #38bdf8)" font-weight="700">${escapeHtml(tagText)}</text>
+        </g>`;
+      }
+      if (e.kind === 'leader') {
+        const p1 = e.p1 || { x: e.x || 0, y: e.y || 0 };
+        const knee = e.knee || { x: p1.x + 0.5, y: p1.y + 0.5 };
+        const p2 = e.p2 || { x: knee.x + 0.8, y: knee.y };
+        const sP1 = worldToSvg(transform, p1.x, p1.y);
+        const sKnee = worldToSvg(transform, knee.x, knee.y);
+        const sP2 = worldToSvg(transform, p2.x, p2.y);
+        const textStr = String(e.text || 'Callout');
+        const textX = sP2.x + (sP2.x >= sKnee.x ? 4 : -4);
+        const textAnchor = sP2.x >= sKnee.x ? 'start' : 'end';
+
+        const ang = Math.atan2(sKnee.y - sP1.y, sKnee.x - sP1.x);
+        const arrowLen = 9;
+        const a1 = { x: sP1.x + arrowLen * Math.cos(ang - 0.4), y: sP1.y + arrowLen * Math.sin(ang - 0.4) };
+        const a2 = { x: sP1.x + arrowLen * Math.cos(ang + 0.4), y: sP1.y + arrowLen * Math.sin(ang + 0.4) };
+
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <polygon points="${sP1.x.toFixed(1)},${sP1.y.toFixed(1)} ${a1.x.toFixed(1)},${a1.y.toFixed(1)} ${a2.x.toFixed(1)},${a2.y.toFixed(1)}" fill="${stroke}"/>
+          <polyline points="${sP1.x.toFixed(1)},${sP1.y.toFixed(1)} ${sKnee.x.toFixed(1)},${sKnee.y.toFixed(1)} ${sP2.x.toFixed(1)},${sP2.y.toFixed(1)}"
+            fill="none" stroke="${stroke}" stroke-width="${selected ? 2.2 : 1.4}"/>
+          <text x="${textX.toFixed(1)}" y="${(sP2.y - 4).toFixed(1)}" text-anchor="${textAnchor}" font-size="10.5" font-family="var(--font-mono)" fill="var(--text-primary, #EAEAEC)" font-weight="600">${escapeHtml(textStr)}</text>
+        </g>`;
+      }
+      if (e.kind === 'north_arrow') {
+        const p = worldToSvg(transform, e.x, e.y);
+        const rot = typeof e.rotation === 'number' ? e.rotation : 0;
+        const sc = typeof e.scale === 'number' ? e.scale : 1.0;
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}" transform="translate(${p.x.toFixed(1)}, ${p.y.toFixed(1)}) rotate(${rot}) scale(${sc})">
+          <circle cx="0" cy="0" r="18" fill="var(--bg-surface-elevated, #222327)" stroke="${stroke}" stroke-width="${selected ? 2.4 : 1.5}"/>
+          <line x1="0" y1="-18" x2="0" y2="18" stroke="var(--border-color-light, #444)" stroke-width="0.8"/>
+          <line x1="-18" y1="0" x2="18" y2="0" stroke="var(--border-color-light, #444)" stroke-width="0.8"/>
+          <polygon points="0,-16 -5,0 0,0" fill="${stroke}"/>
+          <polygon points="0,-16 5,0 0,0" fill="none" stroke="${stroke}" stroke-width="1.2"/>
+          <polygon points="0,16 -4,0 0,0" fill="none" stroke="var(--text-muted, #777)" stroke-width="0.8"/>
+          <polygon points="0,16 4,0 0,0" fill="var(--text-muted, #777)" opacity="0.5"/>
+          <circle cx="0" cy="0" r="2.5" fill="${stroke}"/>
+          <text x="0" y="-22" text-anchor="middle" font-size="11" font-family="var(--font-mono)" font-weight="800" fill="${stroke}">N</text>
+        </g>`;
+      }
       return '';
     }).join('');
 
@@ -1590,6 +1720,17 @@ export function createPlanView(context) {
             <rect x="${(mid.x - 48).toFixed(1)}" y="${(mid.y - 20).toFixed(1)}" width="96" height="20" rx="3" fill="var(--bg-surface-elevated, #222327)" stroke="${col}" stroke-width="1.2"/>
             <text x="${mid.x.toFixed(1)}" y="${(mid.y - 6).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="#ffffff" font-weight="700">${meas.distance.toFixed(2)}m · ${meas.angleDeg.toFixed(0)}°</text>
           </g>`;
+      } else if (dragState.tool === 'leader') {
+        const a = worldToSvg(transform, dragState.start.x, dragState.start.y);
+        const b = worldToSvg(transform, dragState.current.x, dragState.current.y);
+        const kneeWorld = { x: dragState.start.x + (dragState.current.x - dragState.start.x) * 0.6, y: dragState.current.y };
+        const k = worldToSvg(transform, kneeWorld.x, kneeWorld.y);
+        const col = 'var(--accent-primary, #7aa2ff)';
+        dragMarkup = `
+          <polyline points="${a.x.toFixed(1)},${a.y.toFixed(1)} ${k.x.toFixed(1)},${k.y.toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)}" fill="none" stroke="${col}" stroke-width="2" stroke-dasharray="4 2"/>
+          <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="3.5" fill="${col}"/>
+          <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="3.5" fill="${col}"/>
+          <text x="${(b.x + 6).toFixed(1)}" y="${(b.y - 4).toFixed(1)}" font-size="10" font-family="var(--font-mono)" fill="${col}">Note</text>`;
       } else if (dragState.tool === 'wall' || dragState.tool === 'dimension') {
         const a = worldToSvg(transform, dragState.start.x, dragState.start.y);
         const b = worldToSvg(transform, dragState.current.x, dragState.current.y);
@@ -1734,6 +1875,7 @@ export function createPlanView(context) {
       dom.planStatusBadge.textContent = `zoom ${transform.zoom.toFixed(0)} px/m · ${entities().length} entities`;
     }
     renderEntityList();
+    renderLayerList();
     renderPropertiesInspector();
     renderContextualToolbar();
     updateStatusBar();
@@ -1762,6 +1904,11 @@ export function createPlanView(context) {
         const d = (typeof p1?.x === 'number' && typeof p2?.x === 'number') ? Math.hypot(p2.x - p1.x, p2.y - p1.y) : null;
         desc = `Dim · ${d !== null ? d.toFixed(2) : '?'} m`;
       }
+      else if (e.kind === 'room_tag') desc = `Tag #${escapeHtml(e.roomNumber || '')} · ${escapeHtml(e.name || '')}`;
+      else if (e.kind === 'door_tag') desc = `Badge [${escapeHtml(e.tag || '')}]`;
+      else if (e.kind === 'window_tag') desc = `Badge <${escapeHtml(e.tag || '')}>`;
+      else if (e.kind === 'leader') desc = `Leader · "${escapeHtml(e.text || '')}"`;
+      else if (e.kind === 'north_arrow') desc = `North · ${Math.round(e.rotation || 0)}°`;
       else if (e.kind === 'text') desc = `"${escapeHtml(e.text || e.name)}"`;
       else desc = e.kind;
 
@@ -1779,14 +1926,181 @@ export function createPlanView(context) {
     });
   }
 
+  function renderLayerList() {
+    const container = dom.planLayerList || document.getElementById('plan-layer-list');
+    const countEl = dom.planLayersCount || document.getElementById('plan-layers-count');
+    if (!container) return;
+
+    const doc = getActiveDocument();
+    const layers = normalizeDocumentLayers(doc);
+    if (countEl) countEl.textContent = String(layers.length);
+
+    const es = entities();
+    const layerCounts = {};
+    for (const l of layers) layerCounts[l.id] = 0;
+    for (const e of es) {
+      const l = resolveEntityLayer(e, doc);
+      layerCounts[l.id] = (layerCounts[l.id] || 0) + 1;
+    }
+
+    container.innerHTML = layers.map(l => {
+      const isVis = l.visible !== false;
+      const isLck = !!l.locked;
+      const count = layerCounts[l.id] || 0;
+      return `
+        <div class="plan-layer-row" data-layer-id="${escapeHtml(l.id)}" style="display: flex; align-items: center; justify-content: space-between; padding: 0.3rem 0.45rem; border: 1px solid var(--border-color-light, #333); border-radius: 4px; font-family: var(--font-mono); font-size: 0.72rem; background: var(--bg-surface-raised, rgba(255,255,255,0.02)); margin-bottom: 2px;">
+          <div style="display: flex; align-items: center; gap: 0.4rem; min-width: 0; flex: 1;">
+            <span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: ${escapeHtml(l.color)}; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.25);"></span>
+            <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; color: ${isVis ? 'var(--text-primary, #fff)' : 'var(--text-muted, #777)'};" title="${escapeHtml(l.name)}">${escapeHtml(l.name)}</span>
+            <span style="font-size: 0.65rem; color: var(--text-muted, #888); flex-shrink: 0;">(${count})</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0;">
+            <button type="button" class="layer-toggle-vis" data-layer-id="${escapeHtml(l.id)}" title="${isVis ? 'Hide layer (currently visible)' : 'Show layer (currently hidden)'}" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; font-size: 0.8rem; opacity: ${isVis ? '1.0' : '0.4'};">
+              ${isVis ? '👁️' : '🚫'}
+            </button>
+            <button type="button" class="layer-toggle-lock" data-layer-id="${escapeHtml(l.id)}" title="${isLck ? 'Unlock layer (currently locked)' : 'Lock layer (currently editable)'}" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; font-size: 0.8rem; opacity: ${isLck ? '1.0' : '0.45'};">
+              ${isLck ? '🔒' : '🔓'}
+            </button>
+            ${l.custom ? `
+              <button type="button" class="layer-delete-btn" data-layer-id="${escapeHtml(l.id)}" title="Delete custom layer" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; font-size: 0.75rem; color: var(--accent-action, #f43f5e);">
+                ✕
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.layer-toggle-vis').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const lid = btn.dataset.layerId;
+        toggleLayerVisibility(doc, lid);
+        AudioService.playTick();
+        render();
+      });
+    });
+
+    container.querySelectorAll('.layer-toggle-lock').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const lid = btn.dataset.layerId;
+        toggleLayerLock(doc, lid);
+        AudioService.playTick();
+        render();
+      });
+    });
+
+    container.querySelectorAll('.layer-delete-btn').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const lid = btn.dataset.layerId;
+        if (window.confirm(`Delete custom layer "${lid}"? Entities on this layer will fall back to their default architectural layer.`)) {
+          deleteCustomLayer(doc, lid);
+          AudioService.playTick();
+          render();
+        }
+      });
+    });
+  }
+
+  function setupSidebarTabs() {
+    const tabEntities = dom.tabPlanEntities || document.getElementById('tab-plan-entities');
+    const tabLayers = dom.tabPlanLayers || document.getElementById('tab-plan-layers');
+    const viewEntities = dom.planEntitiesView || document.getElementById('plan-entities-view');
+    const viewLayers = dom.planLayersView || document.getElementById('plan-layers-view');
+
+    const updateTabUI = () => {
+      if (tabEntities) {
+        tabEntities.classList.toggle('active', activeSidebarTab === 'entities');
+        tabEntities.style.borderBottom = activeSidebarTab === 'entities' ? '2px solid var(--accent-primary, #4989D9)' : '2px solid transparent';
+        tabEntities.style.color = activeSidebarTab === 'entities' ? 'var(--accent-primary, #4989D9)' : 'var(--text-muted, #888)';
+      }
+      if (tabLayers) {
+        tabLayers.classList.toggle('active', activeSidebarTab === 'layers');
+        tabLayers.style.borderBottom = activeSidebarTab === 'layers' ? '2px solid var(--accent-primary, #4989D9)' : '2px solid transparent';
+        tabLayers.style.color = activeSidebarTab === 'layers' ? 'var(--accent-primary, #4989D9)' : 'var(--text-muted, #888)';
+      }
+      if (viewEntities) viewEntities.style.display = activeSidebarTab === 'entities' ? 'block' : 'none';
+      if (viewLayers) viewLayers.style.display = activeSidebarTab === 'layers' ? 'block' : 'none';
+    };
+
+    if (tabEntities) {
+      tabEntities.addEventListener('click', () => {
+        activeSidebarTab = 'entities';
+        updateTabUI();
+      });
+    }
+    if (tabLayers) {
+      tabLayers.addEventListener('click', () => {
+        activeSidebarTab = 'layers';
+        updateTabUI();
+        renderLayerList();
+      });
+    }
+
+    const btnAutoTag = dom.btnAutoTagAll || document.getElementById('btn-auto-tag-all');
+    if (btnAutoTag) {
+      btnAutoTag.addEventListener('click', () => {
+        const res = autoTagDocument(entities());
+        if (res.count > 0) {
+          for (const t of res.newTags) {
+            const cmd = entityAddRemoveCommand(entities(), t, `auto-tag ${t.name}`);
+            cmd.redo();
+            history.push(cmd);
+          }
+          showToast(`Auto-tagged ${res.count} items (${res.roomsTagged} rooms, ${res.doorsTagged} doors, ${res.windowsTagged} windows)`, 'success');
+          AudioService.playTick();
+          render();
+        } else {
+          showToast('All rooms, doors, and windows are already tagged!', 'info');
+        }
+      });
+    }
+
+    const btnAdd = dom.btnAddLayer || document.getElementById('btn-add-layer');
+    if (btnAdd) {
+      btnAdd.addEventListener('click', () => {
+        const name = window.prompt('Enter new custom CAD layer name (e.g. A-DEMO-EXST or E-POWR):');
+        if (!name || !name.trim()) return;
+        const color = window.prompt('Enter layer hex color:', '#f97316') || '#f97316';
+        const doc = getActiveDocument();
+        const newLayer = addCustomLayer(doc, { name: name.trim(), color: color.trim() });
+        showToast(`Created layer "${newLayer.name}"`, 'success');
+        AudioService.playTick();
+        render();
+      });
+    }
+
+    updateTabUI();
+  }
+
   // ------------------------------------------------------------------
   // Properties & Verification Inspector
   // ------------------------------------------------------------------
   function renderPropertiesInspector() {
     if (!dom.planPropContent) return;
     const es = entities();
+    const doc = getActiveDocument();
     const selectedId = Array.from(state.plan.selectedIds || [])[0];
     const selected = selectedId ? es.find(x => x.id === selectedId) : null;
+
+    function buildLayerSelectRow(selectedEntity) {
+      if (!selectedEntity) return '';
+      const currentLayer = resolveEntityLayer(selectedEntity, doc);
+      const layers = normalizeDocumentLayers(doc);
+      const options = layers.map(l =>
+        `<option value="${escapeHtml(l.id)}" ${currentLayer.id === l.id ? 'selected' : ''}>${escapeHtml(l.name)}</option>`
+      ).join('');
+      return `
+        <div class="plan-prop-row">
+          <span class="plan-prop-label">CAD Layer</span>
+          <select id="prop-entity-layer" class="calc-select" style="width: 140px; height: 24px; padding: 0 4px; font-size: 0.74rem;">
+            ${options}
+          </select>
+        </div>
+      `;
+    }
 
     if (dom.planEntitiesCount) {
       dom.planEntitiesCount.textContent = String(es.length);
@@ -1871,6 +2185,7 @@ export function createPlanView(context) {
           <div class="plan-prop-row"><span class="plan-prop-label">Perimeter</span><span class="plan-prop-value">${p.toFixed(2)} m</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Aspect Ratio</span><span class="plan-prop-value">1 : ${isFinite(ratio) ? ratio.toFixed(2) : '—'}</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Pieces Inside</span><span class="plan-prop-value">${furnInside.length}</span></div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div id="prop-verification-box" style="margin-top: 0.3rem;"></div>
         <div class="plan-prop-actions">
@@ -1967,6 +2282,7 @@ export function createPlanView(context) {
               <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
             </div>
           </div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div id="prop-verification-box" style="margin-top: 0.3rem;"></div>
         <div class="plan-prop-actions">
@@ -2113,6 +2429,7 @@ export function createPlanView(context) {
           <div class="plan-prop-row"><span class="plan-prop-label">Tread (Going)</span><span class="plan-prop-value">${(selected.tread * 1000).toFixed(1)} mm</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Pitch Angle</span><span class="plan-prop-value">${pitchDeg}°</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Blondel (2R+T)</span><span class="plan-prop-value" style="font-weight: 700; color: ${isBlondelOptimal ? 'var(--color-success, #4ade80)' : 'var(--color-warning, #fbbf24)'};">${blondelMm} mm</span></div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div class="plan-prop-section" style="background: rgba(0,0,0,0.2); padding: 0.45rem; border-radius: 4px; margin-top: 0.4rem;">
           <div style="font-size: 0.68rem; color: var(--text-secondary); line-height: 1.4;">
@@ -2244,6 +2561,7 @@ export function createPlanView(context) {
           </div>
           <div class="plan-prop-row"><span class="plan-prop-label">Slope Ratio</span><span class="plan-prop-value" style="font-weight: 700;">1 : ${ratio}</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Slope Gradient</span><span class="plan-prop-value">${slopePct}% (${angleDeg}°)</span></div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div class="plan-prop-section" style="background: rgba(0,0,0,0.2); padding: 0.45rem; border-radius: 4px; margin-top: 0.4rem;">
           <div style="font-size: 0.68rem; color: ${isCompliant ? 'var(--color-success, #4ade80)' : 'var(--color-warning, #fbbf24)'}; font-weight: 600;">
@@ -2358,6 +2676,7 @@ export function createPlanView(context) {
           </div>
           <div class="plan-prop-row"><span class="plan-prop-label">Endpoints</span><span class="plan-prop-value" style="font-size: 0.70rem;">(${selected.x1?.toFixed(1)}, ${selected.y1?.toFixed(1)}) ➔ (${selected.x2?.toFixed(1)}, ${selected.y2?.toFixed(1)})</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Openings</span><span class="plan-prop-value">${openings.length}</span></div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div class="plan-prop-actions">
           <button type="button" id="btn-prop-scratch-wall" class="plan-prop-btn"><span>📋 Send Length to Scratchpad</span></button>
@@ -2441,6 +2760,7 @@ export function createPlanView(context) {
             <button type="button" class="plan-prop-btn" id="prop-door-flip-btn" style="padding: 2px 8px; font-size: 0.72rem;">${selected.flipSide ? 'Outward' : 'Inward'}</button>
           </div>
           <div class="plan-prop-row"><span class="plan-prop-label">Wall Fit</span><span class="plan-prop-badge ${fits.fits ? 'fits' : 'no-fit'}">${fits.fits ? 'FITS' : 'OVERFLOW'}</span></div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div class="plan-prop-actions">
           <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Door</span></button>
@@ -2522,6 +2842,7 @@ export function createPlanView(context) {
             </div>
           </div>
           <div class="plan-prop-row"><span class="plan-prop-label">Wall Fit</span><span class="plan-prop-badge ${fits.fits ? 'fits' : 'no-fit'}">${fits.fits ? 'FITS' : 'OVERFLOW'}</span></div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div class="plan-prop-actions">
           <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Window</span></button>
@@ -2640,6 +2961,7 @@ export function createPlanView(context) {
           </div>
 
           <div class="plan-prop-row"><span class="plan-prop-label">Endpoints</span><span class="plan-prop-value" style="font-size: 0.70rem;">(${p1World.x.toFixed(2)}, ${p1World.y.toFixed(2)}) ➔ (${p2World.x.toFixed(2)}, ${p2World.y.toFixed(2)})</span></div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div class="plan-prop-actions">
           <button type="button" id="btn-prop-scratch-dim" class="plan-prop-btn"><span>📋 Send to Scratchpad</span></button>
@@ -2711,6 +3033,7 @@ export function createPlanView(context) {
           <div class="plan-prop-title">Text Annotation</div>
           <div class="plan-prop-row"><span class="plan-prop-label">Label</span><input type="text" id="prop-entity-text" class="text-input" value="${escapeHtml(selected.text || selected.name)}" style="width: 150px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Position</span><span class="plan-prop-value">(${selected.x?.toFixed(2)}, ${selected.y?.toFixed(2)})</span></div>
+          ${buildLayerSelectRow(selected)}
         </div>
         <div class="plan-prop-actions">
           <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Text</span></button>
@@ -2721,10 +3044,130 @@ export function createPlanView(context) {
         selected.name = selected.text;
         render();
       });
+
+    } else if (selected.kind === 'room_tag') {
+      const room = selected.roomId ? es.find(r => r.id === selected.roomId) : null;
+      const areaVal = room ? roomArea(room) : (selected.area || 0);
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Room Callout Tag</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Room Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name || '')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Room Number</span><input type="text" id="prop-room-number" class="text-input" value="${escapeHtml(selected.roomNumber || '101')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Linked Room</span><span class="plan-prop-value">${room ? escapeHtml(room.name) : 'Detached'}</span></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Reported Area</span><span class="plan-prop-value note-number">${areaVal.toFixed(2)} m²</span></div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Tag</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-entity-name')?.addEventListener('change', (e) => {
+        selected.name = e.target.value.trim() || 'Room Tag';
+        render();
+      });
+      dom.planPropContent.querySelector('#prop-room-number')?.addEventListener('change', (e) => {
+        selected.roomNumber = e.target.value.trim() || '101';
+        render();
+      });
+
+    } else if (selected.kind === 'door_tag') {
+      const door = selected.doorId ? es.find(d => d.id === selected.doorId) : null;
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Door Callout Badge</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Tag Badge</span><input type="text" id="prop-door-tag" class="text-input" value="${escapeHtml(selected.tag || 'D01')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Linked Door</span><span class="plan-prop-value">${door ? escapeHtml(door.name) : 'Detached'}</span></div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Tag</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-door-tag')?.addEventListener('change', (e) => {
+        selected.tag = e.target.value.trim() || 'D01';
+        selected.name = `Door Tag ${selected.tag}`;
+        render();
+      });
+
+    } else if (selected.kind === 'window_tag') {
+      const win = selected.windowId ? es.find(w => w.id === selected.windowId) : null;
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Window Callout Badge</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Tag Badge</span><input type="text" id="prop-win-tag" class="text-input" value="${escapeHtml(selected.tag || 'W01')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Linked Window</span><span class="plan-prop-value">${win ? escapeHtml(win.name) : 'Detached'}</span></div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Tag</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-win-tag')?.addEventListener('change', (e) => {
+        selected.tag = e.target.value.trim() || 'W01';
+        selected.name = `Window Tag ${selected.tag}`;
+        render();
+      });
+
+    } else if (selected.kind === 'leader') {
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Leader Note Annotation</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Callout Text</span><input type="text" id="prop-leader-text" class="text-input" value="${escapeHtml(selected.text || '')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Leader</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-leader-text')?.addEventListener('change', (e) => {
+        selected.text = e.target.value.trim() || 'Callout';
+        selected.name = `Leader: ${selected.text}`;
+        render();
+      });
+
+    } else if (selected.kind === 'north_arrow') {
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">North Arrow Compass</div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Rotation</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-north-rot" class="text-input" value="${Math.round(selected.rotation || 0)}" step="15" min="0" max="360" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">deg</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Scale</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-north-scale" class="text-input" value="${(selected.scale || 1.0).toFixed(1)}" step="0.1" min="0.2" max="5.0" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">x</span>
+            </div>
+          </div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Symbol</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-north-rot')?.addEventListener('change', (e) => {
+        selected.rotation = ((parseFloat(e.target.value) || 0) % 360 + 360) % 360;
+        render();
+      });
+      dom.planPropContent.querySelector('#prop-north-scale')?.addEventListener('change', (e) => {
+        selected.scale = Math.max(0.2, parseFloat(e.target.value) || 1.0);
+        render();
+      });
     }
 
     dom.planPropContent.querySelector('#btn-prop-delete')?.addEventListener('click', () => {
       deleteSelected();
+    });
+
+    dom.planPropContent.querySelector('#prop-entity-layer')?.addEventListener('change', (e) => {
+      setEntityLayer(selected, e.target.value);
+      showToast(`Moved to CAD layer "${e.target.value}"`);
+      AudioService.playTick();
+      render();
     });
   }
 
@@ -2885,6 +3328,8 @@ export function createPlanView(context) {
       dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
       return;
     }
+    const doc = getActiveDocument();
+    const visible = entities().filter(x => isEntityVisible(x, doc));
     const world = svgPoint(event);
     const snapOn = state.plan.snap !== false;
     let initialPt = { x: snapToGrid(world.x, state.plan.grid), y: snapToGrid(world.y, state.plan.grid) };
@@ -2897,6 +3342,11 @@ export function createPlanView(context) {
       const entityId = handleEl.dataset.entityId;
       const entity = entities().find(x => x.id === entityId);
       if (entity && handle) {
+        if (isEntityLocked(entity, doc)) {
+          const l = resolveEntityLayer(entity, doc);
+          showToast(`Layer "${l.name}" is locked — cannot transform`, 'warning');
+          return;
+        }
         dragState = {
           mode: 'resize',
           handle,
@@ -2914,24 +3364,44 @@ export function createPlanView(context) {
     if (tool === 'select') {
       const entityEl = event.target.closest ? event.target.closest('.plan-entity') : null;
       let hitId = entityEl ? entityEl.dataset.entityId : null;
+      if (hitId) {
+        const hitE = entities().find(x => x.id === hitId);
+        if (!hitE || !isEntityVisible(hitE, doc)) hitId = null;
+      }
       if (!hitId) {
-        const hits = pickEntities(entities(), { x: world.x, y: world.y, width: 0, depth: 0 });
+        const hits = pickEntities(visible, { x: world.x, y: world.y, width: 0, depth: 0 });
         if (hits.length > 0) hitId = hits[hits.length - 1];
       }
 
       if (hitId) {
-        state.plan.selectedIds = new Set([hitId]);
         const e = entities().find(x => x.id === hitId);
+        if (e && isEntityLocked(e, doc)) {
+          const l = resolveEntityLayer(e, doc);
+          showToast(`Layer "${l.name}" is locked — cannot select or move`, 'warning');
+          return;
+        }
+        state.plan.selectedIds = new Set([hitId]);
         dragState = { mode: 'move', entity: e, start: initialPt, last: initialPt, initial: JSON.parse(JSON.stringify(e)) };
       } else {
         state.plan.selectedIds = new Set();
         dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
       }
       render();
+    } else if (tool === 'north') {
+      const na = createNorthArrow({ x: initialPt.x, y: initialPt.y });
+      const cmd = entityAddRemoveCommand(entities(), na, 'place North Arrow');
+      cmd.redo();
+      history.push(cmd);
+      state.plan.selectedIds = new Set([na.id]);
+      showToast('Placed North Arrow compass');
+      AudioService.playTick();
+      setTool('select');
+      render();
+      return;
     } else if (tool === 'polyroom') {
       let targetPt = initialPt;
       if (snapOn) {
-        const snapRes = findSnapPoint(world, entities(), { threshold: 0.35, snapGrid: true, gridSize: state.plan.grid });
+        const snapRes = findSnapPoint(world, visible, { threshold: 0.35, snapGrid: true, gridSize: state.plan.grid });
         if (snapRes.snapped) {
           targetPt = { x: snapRes.x, y: snapRes.y };
         }
@@ -2949,9 +3419,9 @@ export function createPlanView(context) {
       render();
       renderContextualToolbar();
       return;
-    } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'measure') {
+    } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'leader' || tool === 'measure') {
       if (snapOn) {
-        const snapRes = findSnapPoint(world, entities(), { snapDistance: 0.25, snapGrid: true, gridMeters: state.plan.grid });
+        const snapRes = findSnapPoint(world, visible, { snapDistance: 0.25, snapGrid: true, gridMeters: state.plan.grid });
         if (snapRes.snapped) {
           initialPt = { x: snapRes.x, y: snapRes.y };
           activeSnap = snapRes;
@@ -3138,6 +3608,12 @@ export function createPlanView(context) {
             dragState.entity.x = Math.min(dragState.entity.x1, dragState.entity.x2);
             dragState.entity.y = Math.min(dragState.entity.y1, dragState.entity.y2);
           }
+        } else if (dragState.entity.kind === 'leader') {
+          if (dragState.entity.p1) { dragState.entity.p1.x += dx; dragState.entity.p1.y += dy; }
+          if (dragState.entity.knee) { dragState.entity.knee.x += dx; dragState.entity.knee.y += dy; }
+          if (dragState.entity.p2) { dragState.entity.p2.x += dx; dragState.entity.p2.y += dy; }
+          dragState.entity.x = (dragState.entity.x || 0) + dx;
+          dragState.entity.y = (dragState.entity.y || 0) + dy;
         } else if (dragState.entity.kind === 'door' || dragState.entity.kind === 'window') {
           const hostWall = entities().find(w => w.id === dragState.entity.wallId);
           if (hostWall && typeof hostWall.x1 === 'number') {
@@ -3234,6 +3710,17 @@ export function createPlanView(context) {
         createRampEntityFromDrag(start, end);
       } else if (dragState.tool === 'dimension') {
         createDimensionEntity(start, end);
+      } else if (dragState.tool === 'leader') {
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const knee = { x: start.x + dx * 0.6, y: end.y };
+        const lNote = createLeaderNote({ p1: start, knee, p2: end, text: 'Note' });
+        const cmd = entityAddRemoveCommand(entities(), lNote, 'add leader note');
+        cmd.redo();
+        history.push(cmd);
+        state.plan.selectedIds = new Set([lNote.id]);
+        showToast('Placed Leader Note');
+        AudioService.playTick();
       } else if (dragState.tool === 'measure') {
         const m = computeMeasurement(start, end);
         showToast(`Measured: ${m.formatted}`);
@@ -3488,15 +3975,27 @@ export function createPlanView(context) {
       showToast('Nothing selected', 'warning');
       return;
     }
+    const doc = getActiveDocument();
+    let deletedCount = 0;
+    let lockedCount = 0;
     for (const id of state.plan.selectedIds) {
       const e = entities().find(x => x.id === id);
       if (!e) continue;
+      if (isEntityLocked(e, doc)) {
+        lockedCount++;
+        continue;
+      }
       const cmd = entityAddRemoveCommand(entities(), e, `delete ${e.name}`);
       cmd.undo(); // remove now
       history.push(cmd);
+      deletedCount++;
+    }
+    if (lockedCount > 0 && deletedCount === 0) {
+      showToast('Cannot delete: selected item(s) are on a locked layer', 'warning');
+      return;
     }
     state.plan.selectedIds = new Set();
-    showToast('Selection deleted (undo available)');
+    showToast(deletedCount > 0 ? 'Selection deleted (undo available)' : 'Nothing deleted');
     render();
   }
 
@@ -3795,6 +4294,7 @@ export function createPlanView(context) {
       loadFromProject();
       initDocuments();
       renderTabs();
+      setupSidebarTabs();
 
       const newDocBtn = dom.btnPlanNewDoc || document.getElementById('btn-plan-new-doc');
       if (newDocBtn) {
@@ -3875,7 +4375,8 @@ export function createPlanView(context) {
         triggerAiCritique, setTool, cycleGrid, toggleSnap, duplicateSelected,
         renderContextualToolbar, updateStatusBar,
         switchDocument, createDocument, closeDocument, renameDocument,
-        finishPolyRoom, cancelPolyRoom, renderTabs
+        finishPolyRoom, cancelPolyRoom, renderTabs,
+        renderLayerList, setupSidebarTabs
       };
     }
   };

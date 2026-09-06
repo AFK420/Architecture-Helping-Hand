@@ -374,12 +374,57 @@ export function buildDXF(entities, options = {}) {
     }
   }
 
+  const usedLayers = new Set(['0']);
+  for (const e of list) {
+    if (e && e.layer) usedLayers.add(String(e.layer));
+  }
+  const sortedLayers = Array.from(usedLayers).sort();
+
+  const LAYER_COLOR_MAP = {
+    '0': 7,
+    'A-WALL': 4,
+    'A-DOOR': 2,
+    'A-GLAZ': 4,
+    'A-AREA': 3,
+    'A-FLOR-STRS': 6,
+    'A-FURN': 5,
+    'A-DIMS': 1,
+    'A-ANNO-TEXT': 7,
+    'A-ANNO-TAGS': 2,
+    'A-GRID': 8,
+    'REF': 1,
+    'CHAIN': 4,
+    'ROOM': 3,
+    'PLAN': 7
+  };
+
+  const tableParts = [
+    dxfPair(0, 'SECTION'),
+    dxfPair(2, 'TABLES'),
+    dxfPair(0, 'TABLE'),
+    dxfPair(2, 'LAYER'),
+    dxfPair(70, sortedLayers.length)
+  ];
+
+  for (const lyr of sortedLayers) {
+    const col = LAYER_COLOR_MAP[lyr] || 7;
+    tableParts.push(
+      dxfPair(0, 'LAYER'),
+      dxfPair(2, lyr),
+      dxfPair(70, 0),
+      dxfPair(62, col),
+      dxfPair(6, 'CONTINUOUS')
+    );
+  }
+  tableParts.push(dxfPair(0, 'ENDTAB'), dxfPair(0, 'ENDSEC'));
+
   return [
     dxfPair(0, 'SECTION'),
     dxfPair(2, 'HEADER'),
     dxfPair(9, '$ACADVER'), dxfPair(1, 'AC1009'),
     dxfPair(9, '$INSUNITS'), dxfPair(70, 4), // 4 = millimeters
     dxfPair(0, 'ENDSEC'),
+    tableParts.join('\n'),
     dxfPair(0, 'SECTION'),
     dxfPair(2, 'ENTITIES'),
     body.join('\n'),

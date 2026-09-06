@@ -742,11 +742,290 @@ export function autoDimensionWall(wall, allEntities = [], options = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Architectural Callouts & Tag Entities
+// ---------------------------------------------------------------------------
+
+/**
+ * Factory for a room tag annotation.
+ * Can be linked to a room entity or standalone.
+ * Displays Room Name, Room Number, and Area.
+ */
+export function createRoomTag({
+  id,
+  name,
+  roomId = null,
+  x,
+  y,
+  roomNumber = '101',
+  area = null,
+  showArea = true,
+  showNumber = true,
+  layerId = 'A-ANNO-TAGS',
+  floorId = 'floor-1'
+} = {}) {
+  requireFiniteNumber(x, 'roomTag.x');
+  requireFiniteNumber(y, 'roomTag.y');
+
+  return {
+    kind: 'room_tag',
+    id: id || generateEntityId('rtag'),
+    name: typeof name === 'string' && name ? name : 'Room Tag',
+    roomId,
+    x,
+    y,
+    width: 1.6,
+    depth: 0.8,
+    roomNumber: String(roomNumber || '101'),
+    area: typeof area === 'number' && !isNaN(area) ? area : null,
+    showArea: showArea !== false,
+    showNumber: showNumber !== false,
+    layerId,
+    floorId
+  };
+}
+
+/**
+ * Factory for a door tag bubble (e.g. "D01").
+ */
+export function createDoorTag({
+  id,
+  name,
+  doorId = null,
+  x,
+  y,
+  tagText = 'D01',
+  layerId = 'A-ANNO-TAGS',
+  floorId = 'floor-1'
+} = {}) {
+  requireFiniteNumber(x, 'doorTag.x');
+  requireFiniteNumber(y, 'doorTag.y');
+
+  return {
+    kind: 'door_tag',
+    id: id || generateEntityId('dtag'),
+    name: typeof name === 'string' && name ? name : 'Door Tag',
+    doorId,
+    x,
+    y,
+    width: 0.6,
+    depth: 0.4,
+    tagText: String(tagText || 'D01'),
+    layerId,
+    floorId
+  };
+}
+
+/**
+ * Factory for a window tag badge (e.g. "W01").
+ */
+export function createWindowTag({
+  id,
+  name,
+  windowId = null,
+  x,
+  y,
+  tagText = 'W01',
+  layerId = 'A-ANNO-TAGS',
+  floorId = 'floor-1'
+} = {}) {
+  requireFiniteNumber(x, 'windowTag.x');
+  requireFiniteNumber(y, 'windowTag.y');
+
+  return {
+    kind: 'window_tag',
+    id: id || generateEntityId('wtag'),
+    name: typeof name === 'string' && name ? name : 'Window Tag',
+    windowId,
+    x,
+    y,
+    width: 0.6,
+    depth: 0.4,
+    tagText: String(tagText || 'W01'),
+    layerId,
+    floorId
+  };
+}
+
+/**
+ * Factory for an architectural leader line callout with arrowhead and shelf text.
+ */
+export function createLeaderNote({
+  id,
+  name,
+  p1,
+  knee,
+  p2,
+  x1, y1, x2, y2, kneeX, kneeY,
+  text = 'Note',
+  arrowStyle = 'arrow',
+  layerId = 'A-ANNO-TEXT',
+  floorId = 'floor-1'
+} = {}) {
+  const actualP1 = p1 || { x: x1 ?? 0, y: y1 ?? 0 };
+  const actualKnee = knee || { x: kneeX ?? (actualP1.x + 0.8), y: kneeY ?? (actualP1.y + 0.6) };
+  const actualP2 = p2 || { x: x2 ?? (actualKnee.x + 1.2), y: y2 ?? actualKnee.y };
+
+  requireFiniteNumber(actualP1.x, 'leader.p1.x');
+  requireFiniteNumber(actualP1.y, 'leader.p1.y');
+  requireFiniteNumber(actualKnee.x, 'leader.knee.x');
+  requireFiniteNumber(actualKnee.y, 'leader.knee.y');
+  requireFiniteNumber(actualP2.x, 'leader.p2.x');
+  requireFiniteNumber(actualP2.y, 'leader.p2.y');
+
+  const minX = Math.min(actualP1.x, actualKnee.x, actualP2.x);
+  const maxX = Math.max(actualP1.x, actualKnee.x, actualP2.x);
+  const minY = Math.min(actualP1.y, actualKnee.y, actualP2.y);
+  const maxY = Math.max(actualP1.y, actualKnee.y, actualP2.y);
+
+  return {
+    kind: 'leader',
+    id: id || generateEntityId('ldr'),
+    name: typeof name === 'string' && name ? name : (text || 'Leader'),
+    p1: { x: actualP1.x, y: actualP1.y },
+    knee: { x: actualKnee.x, y: actualKnee.y },
+    p2: { x: actualP2.x, y: actualP2.y },
+    x: minX,
+    y: minY,
+    width: Math.max(0.2, maxX - minX),
+    depth: Math.max(0.2, maxY - minY),
+    text: String(text || 'Note'),
+    arrowStyle: arrowStyle === 'dot' ? 'dot' : 'arrow',
+    layerId,
+    floorId
+  };
+}
+
+/**
+ * Factory for a CAD North Arrow symbol.
+ */
+export function createNorthArrow({
+  id,
+  name,
+  x = 0,
+  y = 0,
+  rotation = 0,
+  size = 1.0,
+  layerId = 'A-ANNO-TAGS',
+  floorId = 'floor-1'
+} = {}) {
+  requireFiniteNumber(x, 'northArrow.x');
+  requireFiniteNumber(y, 'northArrow.y');
+
+  return {
+    kind: 'north_arrow',
+    id: id || generateEntityId('na'),
+    name: typeof name === 'string' && name ? name : 'North Arrow',
+    x,
+    y,
+    width: size,
+    depth: size,
+    rotation: typeof rotation === 'number' && !isNaN(rotation) ? rotation : 0,
+    size: typeof size === 'number' && size > 0 ? size : 1.0,
+    layerId,
+    floorId
+  };
+}
+
+/**
+ * Automatically inspects a document's entities and generates tags for all
+ * un-tagged rooms, doors, and windows.
+ * @param {Array<Object>} entities
+ * @returns {Array<Object>} Array of newly created tag entities
+ */
+export function autoTagDocument(entities = []) {
+  if (!Array.isArray(entities)) return [];
+  const tags = [];
+  const existingTags = entities.filter(e => e.kind === 'room_tag' || e.kind === 'door_tag' || e.kind === 'window_tag');
+  const taggedRoomIds = new Set(existingTags.map(t => t.roomId).filter(Boolean));
+  const taggedDoorIds = new Set(existingTags.map(t => t.doorId).filter(Boolean));
+  const taggedWindowIds = new Set(existingTags.map(t => t.windowId).filter(Boolean));
+
+  let roomNum = 101;
+  let doorNum = 1;
+  let winNum = 1;
+
+  for (const e of entities) {
+    if (!e) continue;
+    if (e.kind === 'room' && !taggedRoomIds.has(e.id)) {
+      let cx = e.x + (e.width || 0) / 2;
+      let cy = e.y + (e.depth || 0) / 2;
+      if (Array.isArray(e.boundary) && e.boundary.length >= 3) {
+        cx = e.boundary.reduce((s, p) => s + p.x, 0) / e.boundary.length;
+        cy = e.boundary.reduce((s, p) => s + p.y, 0) / e.boundary.length;
+      }
+      tags.push(
+        createRoomTag({
+          name: `${e.name || 'Room'} Tag`,
+          roomId: e.id,
+          x: cx,
+          y: cy,
+          roomNumber: String(roomNum++),
+          area: roomArea(e)
+        })
+      );
+    } else if (e.kind === 'door' && !taggedDoorIds.has(e.id)) {
+      const host = entities.find(w => w.id === e.wallId);
+      if (host && typeof host.x1 === 'number') {
+        const dx = host.x2 - host.x1;
+        const dy = host.y2 - host.y1;
+        const len = Math.hypot(dx, dy);
+        if (len > 1e-4) {
+          const ux = dx / len;
+          const uy = dy / len;
+          const nx = -uy;
+          const ny = ux;
+          const midPos = (e.position || 0) + (e.width || 0.9) / 2;
+          const tagX = host.x1 + ux * midPos + nx * 0.5;
+          const tagY = host.y1 + uy * midPos + ny * 0.5;
+          tags.push(
+            createDoorTag({
+              name: `Tag D${String(doorNum).padStart(2, '0')}`,
+              doorId: e.id,
+              x: tagX,
+              y: tagY,
+              tagText: `D${String(doorNum++).padStart(2, '0')}`
+            })
+          );
+        }
+      }
+    } else if (e.kind === 'window' && !taggedWindowIds.has(e.id)) {
+      const host = entities.find(w => w.id === e.wallId);
+      if (host && typeof host.x1 === 'number') {
+        const dx = host.x2 - host.x1;
+        const dy = host.y2 - host.y1;
+        const len = Math.hypot(dx, dy);
+        if (len > 1e-4) {
+          const ux = dx / len;
+          const uy = dy / len;
+          const nx = -uy;
+          const ny = ux;
+          const midPos = (e.position || 0) + (e.width || 1.2) / 2;
+          const tagX = host.x1 + ux * midPos - nx * 0.5;
+          const tagY = host.y1 + uy * midPos - ny * 0.5;
+          tags.push(
+            createWindowTag({
+              name: `Tag W${String(winNum).padStart(2, '0')}`,
+              windowId: e.id,
+              x: tagX,
+              y: tagY,
+              tagText: `W${String(winNum++).padStart(2, '0')}`
+            })
+          );
+        }
+      }
+    }
+  }
+
+  return tags;
+}
+
+// ---------------------------------------------------------------------------
 // ID helper
 // ---------------------------------------------------------------------------
 
 export function generateEntityId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
+
 
 
