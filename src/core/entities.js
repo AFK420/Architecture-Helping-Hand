@@ -15,27 +15,79 @@
  */
 
 import { requireFiniteNumber } from './calculator.js';
+import { calcPolygon, pointInPolygon } from './geometry.js';
 
 // ---------------------------------------------------------------------------
-// Rooms (rectilinear scope: axis-aligned rectangles)
+// Rooms (rectilinear & generalized polygonal boundaries)
 // ---------------------------------------------------------------------------
 
-/** Validates and creates a room entity. Area/perimeter are derived. */
-export function createRoom({ id, name, x, y, width, depth, floorId = 'floor-1', height = null, metadata = {} }) {
-  requireFiniteNumber(x, 'room.x');
-  requireFiniteNumber(y, 'room.y');
-  if (width === undefined || width === null) throw new TypeError('Room width is required');
-  requireFiniteNumber(width, 'room.width');
-  if (width <= 0) throw new Error('Room width must be greater than zero');
-  if (depth === undefined || depth === null) throw new TypeError('Room depth is required');
-  requireFiniteNumber(depth, 'room.depth');
-  if (depth <= 0) throw new Error('Room depth must be greater than zero');
+/** Validates and creates a room entity. Area/perimeter are derived via Shoelace when polygonal. */
+export function createRoom({
+  id,
+  name,
+  x,
+  y,
+  width,
+  depth,
+  boundary = null,
+  floorId = 'floor-1',
+  height = null,
+  metadata = {}
+}) {
+  let finalBoundary = null;
+  let finalX = x;
+  let finalY = y;
+  let finalWidth = width;
+  let finalDepth = depth;
+
+  if (Array.isArray(boundary) && boundary.length >= 3) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    finalBoundary = boundary.map((pt, i) => {
+      if (!pt || typeof pt !== 'object') throw new TypeError(`Boundary vertex at index ${i} is invalid`);
+      requireFiniteNumber(pt.x, `boundary[${i}].x`);
+      requireFiniteNumber(pt.y, `boundary[${i}].y`);
+      if (pt.x < minX) minX = pt.x;
+      if (pt.y < minY) minY = pt.y;
+      if (pt.x > maxX) maxX = pt.x;
+      if (pt.y > maxY) maxY = pt.y;
+      return { x: pt.x, y: pt.y };
+    });
+    finalX = minX;
+    finalY = minY;
+    finalWidth = Math.max(0.01, maxX - minX);
+    finalDepth = Math.max(0.01, maxY - minY);
+  } else {
+    requireFiniteNumber(x, 'room.x');
+    requireFiniteNumber(y, 'room.y');
+    if (width === undefined || width === null) throw new TypeError('Room width is required');
+    requireFiniteNumber(width, 'room.width');
+    if (width <= 0) throw new Error('Room width must be greater than zero');
+    if (depth === undefined || depth === null) throw new TypeError('Room depth is required');
+    requireFiniteNumber(depth, 'room.depth');
+    if (depth <= 0) throw new Error('Room depth must be greater than zero');
+    finalBoundary = [
+      { x, y },
+      { x: x + width, y },
+      { x: x + width, y: y + depth },
+      { x, y: y + depth }
+    ];
+  }
 
   return {
     kind: 'room',
     id: id || generateEntityId('room'),
     name: typeof name === 'string' && name ? name : 'Room',
-    x, y, width, depth,
+    x: finalX,
+    y: finalY,
+    width: finalWidth,
+    depth: finalDepth,
+    boundary: finalBoundary,
+    area: Array.isArray(finalBoundary) && finalBoundary.length >= 3
+      ? calcPolygon({ vertices: finalBoundary }).area
+      : finalWidth * finalDepth,
+    perimeter: Array.isArray(finalBoundary) && finalBoundary.length >= 3
+      ? calcPolygon({ vertices: finalBoundary }).perimeter
+      : 2 * (finalWidth + finalDepth),
     floorId,
     height,
     metadata,
@@ -44,10 +96,28 @@ export function createRoom({ id, name, x, y, width, depth, floorId = 'floor-1', 
 }
 
 export function roomArea(room) {
+  if (typeof room.area === 'number') return room.area;
+  if (Array.isArray(room.boundary) && room.boundary.length >= 3) {
+    try {
+      const res = calcPolygon({ vertices: room.boundary });
+      return res.area;
+    } catch (e) {
+      return room.width * room.depth;
+    }
+  }
   return room.width * room.depth;
 }
 
 export function roomPerimeter(room) {
+  if (typeof room.perimeter === 'number') return room.perimeter;
+  if (Array.isArray(room.boundary) && room.boundary.length >= 3) {
+    try {
+      const res = calcPolygon({ vertices: room.boundary });
+      return res.perimeter;
+    } catch (e) {
+      return 2 * (room.width + room.depth);
+    }
+  }
   return 2 * (room.width + room.depth);
 }
 
@@ -56,9 +126,14 @@ export function roomAspectRatio(room) {
   return short > 0 ? Math.max(room.width, room.depth) / short : Infinity;
 }
 
-/** True if a world point lies inside the room rectangle. */
+/** True if a world point lies inside the room rectangle or polygon. */
 export function roomContainsPoint(room, px, py) {
-  return px >= room.x && px <= room.x + room.width && py >= room.y && py <= room.y + room.depth;
+  const actualX = typeof px === 'object' && px !== null ? px.x : px;
+  const actualY = typeof px === 'object' && px !== null ? px.y : py;
+  if (Array.isArray(room.boundary) && room.boundary.length >= 3) {
+    return pointInPolygon({ x: actualX, y: actualY }, room.boundary);
+  }
+  return actualX >= room.x && actualX <= room.x + room.width && actualY >= room.y && actualY <= room.y + room.depth;
 }
 
 /** Axis-aligned rectangle intersection (shared overlap check). */
@@ -68,33 +143,63 @@ export function rectsIntersect(a, b) {
 }
 
 // ---------------------------------------------------------------------------
-// Walls (rectilinear scope: axis-aligned segments with thickness)
+// Walls (unconstrained vector segments with thickness & curved arcs)
 // ---------------------------------------------------------------------------
 
-/** Wall: start/end points in world meters (axis-aligned for initial scope). */
-export function createWall({ id, name, x1, y1, x2, y2, thickness = 0.2, height = 2.7, floorId = 'floor-1', material = 'generic' }) {
-  requireFiniteNumber(x1, 'wall.x1');
-  requireFiniteNumber(y1, 'wall.y1');
-  requireFiniteNumber(x2, 'wall.x2');
-  requireFiniteNumber(y2, 'wall.y2');
+/** Wall: start/end points in world meters (supports arbitrary angles and curved arcs). */
+export function createWall({
+  id,
+  name,
+  x1,
+  y1,
+  x2,
+  y2,
+  start,
+  end,
+  thickness = 0.2,
+  height = 2.7,
+  floorId = 'floor-1',
+  material = 'generic',
+  isArc = false,
+  bulge = 0
+}) {
+  const actualX1 = typeof x1 === 'number' ? x1 : start?.x;
+  const actualY1 = typeof y1 === 'number' ? y1 : start?.y;
+  const actualX2 = typeof x2 === 'number' ? x2 : end?.x;
+  const actualY2 = typeof y2 === 'number' ? y2 : end?.y;
+
+  requireFiniteNumber(actualX1, 'wall.x1');
+  requireFiniteNumber(actualY1, 'wall.y1');
+  requireFiniteNumber(actualX2, 'wall.x2');
+  requireFiniteNumber(actualY2, 'wall.y2');
   if (thickness <= 0) throw new Error('Wall thickness must be greater than zero');
 
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const axisAligned = (dx === 0 || dy === 0);
-  if (!axisAligned) {
-    throw new Error('Wall is not axis-aligned — the initial scope supports rectilinear walls only.');
+  const dx = actualX2 - actualX1;
+  const dy = actualY2 - actualY1;
+  if (dx === 0 && dy === 0) {
+    throw new Error('Wall start and end points cannot be identical (length must be > 0)');
   }
+
+  const angleRad = Math.atan2(dy, dx);
+  let angleDeg = (angleRad * 180 / Math.PI);
+  if (angleDeg < 0) angleDeg += 360;
 
   return {
     kind: 'wall',
     id: id || generateEntityId('wall'),
     name: typeof name === 'string' && name ? name : 'Wall',
-    x1, y1, x2, y2,
+    x1: actualX1,
+    y1: actualY1,
+    x2: actualX2,
+    y2: actualY2,
     thickness,
     height,
     floorId,
     material,
+    isArc: Boolean(isArc),
+    bulge: typeof bulge === 'number' ? bulge : 0,
+    angle: angleDeg,
+    length: Math.hypot(dx, dy),
     openingIds: []
   };
 }
@@ -103,12 +208,21 @@ export function wallLength(wall) {
   return Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
 }
 
-/** 0°/90°/180°/270° normalized direction label. */
+/** 0°/90°/180°/270° or 8-point compass normalized direction label. */
 export function wallDirection(wall) {
   const dx = wall.x2 - wall.x1;
   const dy = wall.y2 - wall.y1;
   if (dy === 0) return dx > 0 ? 'east' : 'west';
-  return dy > 0 ? 'north' : 'south';
+  if (dx === 0) return dy > 0 ? 'north' : 'south';
+  const deg = ((Math.atan2(dy, dx) * 180 / Math.PI) + 360) % 360;
+  if (deg >= 22.5 && deg < 67.5) return 'northeast';
+  if (deg >= 67.5 && deg < 112.5) return 'north';
+  if (deg >= 112.5 && deg < 157.5) return 'northwest';
+  if (deg >= 157.5 && deg < 202.5) return 'west';
+  if (deg >= 202.5 && deg < 247.5) return 'southwest';
+  if (deg >= 247.5 && deg < 292.5) return 'south';
+  if (deg >= 292.5 && deg < 337.5) return 'southeast';
+  return 'east';
 }
 
 // ---------------------------------------------------------------------------

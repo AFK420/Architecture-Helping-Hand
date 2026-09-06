@@ -913,6 +913,203 @@ function calcPolygon({ vertices, unitKey = 'm' } = {}) {
   };
 }
 
+/**
+ * Euclidean distance between two 2D points
+ * @param {{ x: number, y: number }} p1
+ * @param {{ x: number, y: number }} p2
+ * @returns {number}
+ */
+function calcDistance(p1, p2) {
+  if (!p1 || !p2) throw new TypeError('calcDistance expects two points {x, y}');
+  requireFiniteNumber(p1.x, 'p1.x');
+  requireFiniteNumber(p1.y, 'p1.y');
+  requireFiniteNumber(p2.x, 'p2.x');
+  requireFiniteNumber(p2.y, 'p2.y');
+  return Math.hypot(p2.x - p1.x, p2.y - p1.y);
+}
+
+/**
+ * Angle from p1 to p2 in radians and normalized degrees (0° - 360°)
+ * @param {{ x: number, y: number }} p1
+ * @param {{ x: number, y: number }} p2
+ * @returns {{ rad: number, deg: number }}
+ */
+function calcAngle(p1, p2) {
+  if (!p1 || !p2) throw new TypeError('calcAngle expects two points {x, y}');
+  requireFiniteNumber(p1.x, 'p1.x');
+  requireFiniteNumber(p1.y, 'p1.y');
+  requireFiniteNumber(p2.x, 'p2.x');
+  requireFiniteNumber(p2.y, 'p2.y');
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const rad = Math.atan2(dy, dx);
+  let deg = (rad * 180) / Math.PI;
+  if (deg < 0) deg += 360;
+  return { rad, deg };
+}
+
+/**
+ * Calculates a parallel offset line segment shifted perpendicularly by `offset` meters.
+ * Positive offset shifts along normal vector (-dy, dx).
+ * @param {{ x: number, y: number }} p1
+ * @param {{ x: number, y: number }} p2
+ * @param {number} offset
+ * @returns {{ p1: { x: number, y: number }, p2: { x: number, y: number } }}
+ */
+function offsetSegment(p1, p2, offset) {
+  if (!p1 || !p2) throw new TypeError('offsetSegment expects two points {x, y}');
+  requireFiniteNumber(p1.x, 'p1.x');
+  requireFiniteNumber(p1.y, 'p1.y');
+  requireFiniteNumber(p2.x, 'p2.x');
+  requireFiniteNumber(p2.y, 'p2.y');
+  requireFiniteNumber(offset, 'offset');
+
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const len = Math.hypot(dx, dy);
+  if (len === 0) {
+    return { p1: { x: p1.x, y: p1.y }, p2: { x: p2.x, y: p2.y } };
+  }
+  const nx = -dy / len;
+  const ny = dx / len;
+
+  return {
+    p1: { x: p1.x + nx * offset, y: p1.y + ny * offset },
+    p2: { x: p2.x + nx * offset, y: p2.y + ny * offset }
+  };
+}
+
+/**
+ * Ray-casting algorithm to test whether a 2D point lies inside a polygon
+ * @param {{ x: number, y: number }} point
+ * @param {Array<{ x: number, y: number }>} polygonVertices
+ * @returns {boolean}
+ */
+function pointInPolygon(point, polygonVertices) {
+  if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') {
+    throw new TypeError('pointInPolygon expects point {x, y}');
+  }
+  if (!Array.isArray(polygonVertices) || polygonVertices.length < 3) {
+    return false;
+  }
+  let inside = false;
+  const px = point.x;
+  const py = point.y;
+  const n = polygonVertices.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = polygonVertices[i].x;
+    const yi = polygonVertices[i].y;
+    const xj = polygonVertices[j].x;
+    const yj = polygonVertices[j].y;
+
+    const intersect = ((yi > py) !== (yj > py)) &&
+      (px < ((xj - xi) * (py - yi)) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Calculates arc geometric properties from two endpoints and standard CAD/DXF bulge
+ * (bulge = tan(includedAngle / 4))
+ * @param {{ x: number, y: number }} p1
+ * @param {{ x: number, y: number }} p2
+ * @param {number} bulge
+ * @returns {{ center: { x: number, y: number }, radius: number, includedAngleRad: number, includedAngleDeg: number, arcLength: number, sagitta: number }}
+ */
+function calcArcBulge(p1, p2, bulge) {
+  if (!p1 || !p2) throw new TypeError('calcArcBulge expects endpoints p1 and p2');
+  requireFiniteNumber(p1.x, 'p1.x');
+  requireFiniteNumber(p1.y, 'p1.y');
+  requireFiniteNumber(p2.x, 'p2.x');
+  requireFiniteNumber(p2.y, 'p2.y');
+  requireFiniteNumber(bulge, 'bulge');
+
+  const chord = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+  if (chord === 0 || bulge === 0) {
+    return {
+      center: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 },
+      radius: chord / 2,
+      includedAngleRad: 0,
+      includedAngleDeg: 0,
+      arcLength: chord,
+      sagitta: 0
+    };
+  }
+
+  const theta = 4 * Math.atan(bulge);
+  const sinHalf = Math.sin(theta / 2);
+  const radius = chord / (2 * Math.abs(sinHalf));
+  const sagitta = (chord / 2) * Math.abs(bulge);
+
+  const mx = (p1.x + p2.x) / 2;
+  const my = (p1.y + p2.y) / 2;
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+
+  // Center offset distance along perpendicular to chord
+  const dCenter = (chord * (1 - bulge * bulge)) / (4 * bulge);
+  const nx = -dy / chord;
+  const ny = dx / chord;
+
+  const center = {
+    x: mx + nx * dCenter,
+    y: my + ny * dCenter
+  };
+
+  return {
+    center,
+    radius,
+    includedAngleRad: theta,
+    includedAngleDeg: (theta * 180) / Math.PI,
+    arcLength: radius * Math.abs(theta),
+    sagitta
+  };
+}
+
+/**
+ * Computes the 4-corner footprint polygon of a wall at any angle with thickness
+ * @param {{ x1: number, y1: number, x2: number, y2: number, thickness?: number }} wall
+ * @returns {Array<{ x: number, y: number }>}
+ */
+function calcWallPolygon(wall) {
+  if (!wall || typeof wall !== 'object') throw new TypeError('calcWallPolygon expects a wall object');
+  const x1 = typeof wall.x1 === 'number' ? wall.x1 : wall.start?.x;
+  const y1 = typeof wall.y1 === 'number' ? wall.y1 : wall.start?.y;
+  const x2 = typeof wall.x2 === 'number' ? wall.x2 : wall.end?.x;
+  const y2 = typeof wall.y2 === 'number' ? wall.y2 : wall.end?.y;
+  requireFiniteNumber(x1, 'wall.x1');
+  requireFiniteNumber(y1, 'wall.y1');
+  requireFiniteNumber(x2, 'wall.x2');
+  requireFiniteNumber(y2, 'wall.y2');
+
+  const t = typeof wall.thickness === 'number' && wall.thickness > 0 ? wall.thickness : 0.2;
+  const h = t / 2;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+
+  if (len === 0) {
+    return [
+      { x: x1 - h, y: y1 - h },
+      { x: x1 + h, y: y1 - h },
+      { x: x1 + h, y: y1 + h },
+      { x: x1 - h, y: y1 + h }
+    ];
+  }
+
+  const nx = (-dy / len) * h;
+  const ny = (dx / len) * h;
+
+  return [
+    { x: x1 - nx, y: y1 - ny },
+    { x: x2 - nx, y: y2 - ny },
+    { x: x2 + nx, y: y2 + ny },
+    { x: x1 + nx, y: y1 + ny }
+  ];
+}
+
+
 
   // =========================================================================
   // MODULE: Furniture
@@ -9238,7 +9435,27 @@ function createProject(options = {}) {
     snapshots: [],
     decisions: [],
     exports: [],
-    scratchpad: []
+    scratchpad: [],
+    documents: Array.isArray(options.documents) ? options.documents : [
+      {
+        id: 'doc-1',
+        name: 'Ground Floor',
+        type: '2d',
+        entities: [],
+        layers: {
+          walls: true,
+          doors: true,
+          windows: true,
+          rooms: true,
+          columns: true,
+          furniture: true,
+          dimensions: true,
+          textNotes: true,
+          grid: true
+        },
+        viewport: { zoom: 40, offsetX: 60, offsetY: 420 }
+      }
+    ]
   };
 }
 
@@ -9298,7 +9515,7 @@ function validateProject(doc) {
     errors.push('site must be an object when present');
   }
 
-  for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad']) {
+  for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad', 'documents']) {
     if (doc[key] !== undefined && !Array.isArray(doc[key])) {
       errors.push(`${key} must be an array when present`);
     }
@@ -9339,8 +9556,37 @@ function normalizeProject(doc) {
 
   normalized.site = normalizeSite(src.site);
 
-  for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad']) {
+  for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad', 'documents']) {
     if (!Array.isArray(normalized[key])) normalized[key] = [];
+  }
+  if (normalized.documents.length === 0) {
+    let defaultEntities = [];
+    if (Array.isArray(src.entities)) {
+      defaultEntities = src.entities;
+    } else if (src.entities && typeof src.entities === 'object') {
+      defaultEntities = Object.values(src.entities).flat().filter(Boolean);
+    }
+
+    normalized.documents = [
+      {
+        id: 'doc-1',
+        name: 'Ground Floor',
+        type: '2d',
+        entities: defaultEntities,
+        layers: {
+          walls: true,
+          doors: true,
+          windows: true,
+          rooms: true,
+          columns: true,
+          furniture: true,
+          dimensions: true,
+          textNotes: true,
+          grid: true
+        },
+        viewport: { zoom: 40, offsetX: 60, offsetY: 420 }
+      }
+    ];
   }
 
   return normalized;
@@ -9439,26 +9685,78 @@ function parseProject(json) {
 
 
 
+
 // ---------------------------------------------------------------------------
-// Rooms (rectilinear scope: axis-aligned rectangles)
+// Rooms (rectilinear & generalized polygonal boundaries)
 // ---------------------------------------------------------------------------
 
-/** Validates and creates a room entity. Area/perimeter are derived. */
-function createRoom({ id, name, x, y, width, depth, floorId = 'floor-1', height = null, metadata = {} }) {
-  requireFiniteNumber(x, 'room.x');
-  requireFiniteNumber(y, 'room.y');
-  if (width === undefined || width === null) throw new TypeError('Room width is required');
-  requireFiniteNumber(width, 'room.width');
-  if (width <= 0) throw new Error('Room width must be greater than zero');
-  if (depth === undefined || depth === null) throw new TypeError('Room depth is required');
-  requireFiniteNumber(depth, 'room.depth');
-  if (depth <= 0) throw new Error('Room depth must be greater than zero');
+/** Validates and creates a room entity. Area/perimeter are derived via Shoelace when polygonal. */
+function createRoom({
+  id,
+  name,
+  x,
+  y,
+  width,
+  depth,
+  boundary = null,
+  floorId = 'floor-1',
+  height = null,
+  metadata = {}
+}) {
+  let finalBoundary = null;
+  let finalX = x;
+  let finalY = y;
+  let finalWidth = width;
+  let finalDepth = depth;
+
+  if (Array.isArray(boundary) && boundary.length >= 3) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    finalBoundary = boundary.map((pt, i) => {
+      if (!pt || typeof pt !== 'object') throw new TypeError(`Boundary vertex at index ${i} is invalid`);
+      requireFiniteNumber(pt.x, `boundary[${i}].x`);
+      requireFiniteNumber(pt.y, `boundary[${i}].y`);
+      if (pt.x < minX) minX = pt.x;
+      if (pt.y < minY) minY = pt.y;
+      if (pt.x > maxX) maxX = pt.x;
+      if (pt.y > maxY) maxY = pt.y;
+      return { x: pt.x, y: pt.y };
+    });
+    finalX = minX;
+    finalY = minY;
+    finalWidth = Math.max(0.01, maxX - minX);
+    finalDepth = Math.max(0.01, maxY - minY);
+  } else {
+    requireFiniteNumber(x, 'room.x');
+    requireFiniteNumber(y, 'room.y');
+    if (width === undefined || width === null) throw new TypeError('Room width is required');
+    requireFiniteNumber(width, 'room.width');
+    if (width <= 0) throw new Error('Room width must be greater than zero');
+    if (depth === undefined || depth === null) throw new TypeError('Room depth is required');
+    requireFiniteNumber(depth, 'room.depth');
+    if (depth <= 0) throw new Error('Room depth must be greater than zero');
+    finalBoundary = [
+      { x, y },
+      { x: x + width, y },
+      { x: x + width, y: y + depth },
+      { x, y: y + depth }
+    ];
+  }
 
   return {
     kind: 'room',
     id: id || generateEntityId('room'),
     name: typeof name === 'string' && name ? name : 'Room',
-    x, y, width, depth,
+    x: finalX,
+    y: finalY,
+    width: finalWidth,
+    depth: finalDepth,
+    boundary: finalBoundary,
+    area: Array.isArray(finalBoundary) && finalBoundary.length >= 3
+      ? calcPolygon({ vertices: finalBoundary }).area
+      : finalWidth * finalDepth,
+    perimeter: Array.isArray(finalBoundary) && finalBoundary.length >= 3
+      ? calcPolygon({ vertices: finalBoundary }).perimeter
+      : 2 * (finalWidth + finalDepth),
     floorId,
     height,
     metadata,
@@ -9467,10 +9765,28 @@ function createRoom({ id, name, x, y, width, depth, floorId = 'floor-1', height 
 }
 
 function roomArea(room) {
+  if (typeof room.area === 'number') return room.area;
+  if (Array.isArray(room.boundary) && room.boundary.length >= 3) {
+    try {
+      const res = calcPolygon({ vertices: room.boundary });
+      return res.area;
+    } catch (e) {
+      return room.width * room.depth;
+    }
+  }
   return room.width * room.depth;
 }
 
 function roomPerimeter(room) {
+  if (typeof room.perimeter === 'number') return room.perimeter;
+  if (Array.isArray(room.boundary) && room.boundary.length >= 3) {
+    try {
+      const res = calcPolygon({ vertices: room.boundary });
+      return res.perimeter;
+    } catch (e) {
+      return 2 * (room.width + room.depth);
+    }
+  }
   return 2 * (room.width + room.depth);
 }
 
@@ -9479,9 +9795,14 @@ function roomAspectRatio(room) {
   return short > 0 ? Math.max(room.width, room.depth) / short : Infinity;
 }
 
-/** True if a world point lies inside the room rectangle. */
+/** True if a world point lies inside the room rectangle or polygon. */
 function roomContainsPoint(room, px, py) {
-  return px >= room.x && px <= room.x + room.width && py >= room.y && py <= room.y + room.depth;
+  const actualX = typeof px === 'object' && px !== null ? px.x : px;
+  const actualY = typeof px === 'object' && px !== null ? px.y : py;
+  if (Array.isArray(room.boundary) && room.boundary.length >= 3) {
+    return pointInPolygon({ x: actualX, y: actualY }, room.boundary);
+  }
+  return actualX >= room.x && actualX <= room.x + room.width && actualY >= room.y && actualY <= room.y + room.depth;
 }
 
 /** Axis-aligned rectangle intersection (shared overlap check). */
@@ -9491,33 +9812,63 @@ function rectsIntersect(a, b) {
 }
 
 // ---------------------------------------------------------------------------
-// Walls (rectilinear scope: axis-aligned segments with thickness)
+// Walls (unconstrained vector segments with thickness & curved arcs)
 // ---------------------------------------------------------------------------
 
-/** Wall: start/end points in world meters (axis-aligned for initial scope). */
-function createWall({ id, name, x1, y1, x2, y2, thickness = 0.2, height = 2.7, floorId = 'floor-1', material = 'generic' }) {
-  requireFiniteNumber(x1, 'wall.x1');
-  requireFiniteNumber(y1, 'wall.y1');
-  requireFiniteNumber(x2, 'wall.x2');
-  requireFiniteNumber(y2, 'wall.y2');
+/** Wall: start/end points in world meters (supports arbitrary angles and curved arcs). */
+function createWall({
+  id,
+  name,
+  x1,
+  y1,
+  x2,
+  y2,
+  start,
+  end,
+  thickness = 0.2,
+  height = 2.7,
+  floorId = 'floor-1',
+  material = 'generic',
+  isArc = false,
+  bulge = 0
+}) {
+  const actualX1 = typeof x1 === 'number' ? x1 : start?.x;
+  const actualY1 = typeof y1 === 'number' ? y1 : start?.y;
+  const actualX2 = typeof x2 === 'number' ? x2 : end?.x;
+  const actualY2 = typeof y2 === 'number' ? y2 : end?.y;
+
+  requireFiniteNumber(actualX1, 'wall.x1');
+  requireFiniteNumber(actualY1, 'wall.y1');
+  requireFiniteNumber(actualX2, 'wall.x2');
+  requireFiniteNumber(actualY2, 'wall.y2');
   if (thickness <= 0) throw new Error('Wall thickness must be greater than zero');
 
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const axisAligned = (dx === 0 || dy === 0);
-  if (!axisAligned) {
-    throw new Error('Wall is not axis-aligned — the initial scope supports rectilinear walls only.');
+  const dx = actualX2 - actualX1;
+  const dy = actualY2 - actualY1;
+  if (dx === 0 && dy === 0) {
+    throw new Error('Wall start and end points cannot be identical (length must be > 0)');
   }
+
+  const angleRad = Math.atan2(dy, dx);
+  let angleDeg = (angleRad * 180 / Math.PI);
+  if (angleDeg < 0) angleDeg += 360;
 
   return {
     kind: 'wall',
     id: id || generateEntityId('wall'),
     name: typeof name === 'string' && name ? name : 'Wall',
-    x1, y1, x2, y2,
+    x1: actualX1,
+    y1: actualY1,
+    x2: actualX2,
+    y2: actualY2,
     thickness,
     height,
     floorId,
     material,
+    isArc: Boolean(isArc),
+    bulge: typeof bulge === 'number' ? bulge : 0,
+    angle: angleDeg,
+    length: Math.hypot(dx, dy),
     openingIds: []
   };
 }
@@ -9526,12 +9877,21 @@ function wallLength(wall) {
   return Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
 }
 
-/** 0°/90°/180°/270° normalized direction label. */
+/** 0°/90°/180°/270° or 8-point compass normalized direction label. */
 function wallDirection(wall) {
   const dx = wall.x2 - wall.x1;
   const dy = wall.y2 - wall.y1;
   if (dy === 0) return dx > 0 ? 'east' : 'west';
-  return dy > 0 ? 'north' : 'south';
+  if (dx === 0) return dy > 0 ? 'north' : 'south';
+  const deg = ((Math.atan2(dy, dx) * 180 / Math.PI) + 360) % 360;
+  if (deg >= 22.5 && deg < 67.5) return 'northeast';
+  if (deg >= 67.5 && deg < 112.5) return 'north';
+  if (deg >= 112.5 && deg < 157.5) return 'northwest';
+  if (deg >= 157.5 && deg < 202.5) return 'west';
+  if (deg >= 202.5 && deg < 247.5) return 'southwest';
+  if (deg >= 247.5 && deg < 292.5) return 'south';
+  if (deg >= 292.5 && deg < 337.5) return 'southeast';
+  return 'east';
 }
 
 // ---------------------------------------------------------------------------
@@ -9759,6 +10119,7 @@ function generateEntityId(prefix) {
  * and a lightweight undo/redo command stack. Rendering lives in the UI
  * view; persistence in the project document via the store.
  */
+
 
 
 
@@ -10077,10 +10438,23 @@ function duplicateEntity(entity, offset = 0.5) {
 // Selection geometry
 // ---------------------------------------------------------------------------
 
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const l2 = dx * dx + dy * dy;
+  if (l2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * dx + (py - y1) * dy) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
 /** Returns ids of entities whose rect intersects the selection point/rect. */
 function pickEntities(entities, worldRect) {
   const hits = [];
-  for (const e of entities) {
+  const list = Array.isArray(entities)
+    ? entities
+    : (entities && typeof entities === 'object' ? Object.values(entities).flat().filter(Boolean) : []);
+  for (const e of list) {
     if (!e) continue;
     // Walls are point-pair entities without x/y — map to their bounding rect
     const r = e.kind === 'wall'
@@ -10089,7 +10463,16 @@ function pickEntities(entities, worldRect) {
     if (!r) continue;
     if (worldRect.width === 0 && worldRect.depth === 0) {
       // point pick
-      if (worldRect.x >= r.x && worldRect.x <= r.x + r.width && worldRect.y >= r.y && worldRect.y <= r.y + r.depth) {
+      if (e.kind === 'room' && Array.isArray(e.boundary) && e.boundary.length >= 3) {
+        if (pointInPolygon({ x: worldRect.x, y: worldRect.y }, e.boundary)) {
+          hits.push(e.id);
+        }
+      } else if (e.kind === 'wall' && typeof e.x1 === 'number' && typeof e.x2 === 'number') {
+        const d = distToSegment(worldRect.x, worldRect.y, e.x1, e.y1, e.x2, e.y2);
+        if (d <= (e.thickness || 0.2) / 2 + 0.15) {
+          hits.push(e.id);
+        }
+      } else if (worldRect.x >= r.x && worldRect.x <= r.x + r.width && worldRect.y >= r.y && worldRect.y <= r.y + r.depth) {
         hits.push(e.id);
       }
     } else if (rectsIntersect(worldRect, r)) {
@@ -10200,29 +10583,56 @@ function entityMoveCommand(entity, dx, dy, label) {
 function planToExportGeometry(entities, options = {}) {
   const includeLabels = options.includeLabels !== false;
   const out = { lines: [], polygons: [], texts: [] };
-  for (const e of entities || []) {
+  const list = Array.isArray(entities)
+    ? entities
+    : (entities && typeof entities === 'object' ? Object.values(entities).flat().filter(Boolean) : []);
+  for (const e of list) {
     if (!e || typeof e !== 'object') continue;
-    if (e.kind === 'room' && typeof e.x === 'number' && typeof e.width === 'number' &&
-        typeof e.y === 'number' && typeof e.depth === 'number') {
-      out.polygons.push({
-        closed: true,
-        points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
-        label: e.name || 'Room'
-      });
-      if (includeLabels) {
-        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: e.name || 'Room' });
+    if (e.kind === 'room') {
+      if (Array.isArray(e.boundary) && e.boundary.length >= 3) {
+        out.polygons.push({
+          closed: true,
+          points: e.boundary.map(pt => [pt.x, pt.y]),
+          label: e.name || 'Room'
+        });
+        if (includeLabels) {
+          const cx = e.boundary.reduce((sum, p) => sum + p.x, 0) / e.boundary.length;
+          const cy = e.boundary.reduce((sum, p) => sum + p.y, 0) / e.boundary.length;
+          out.texts.push({ x: cx, y: cy, text: e.name || 'Room' });
+        }
+      } else if (typeof e.x === 'number' && typeof e.width === 'number' &&
+                 typeof e.y === 'number' && typeof e.depth === 'number') {
+        out.polygons.push({
+          closed: true,
+          points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
+          label: e.name || 'Room'
+        });
+        if (includeLabels) {
+          out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: e.name || 'Room' });
+        }
       }
     } else if (e.kind === 'wall' && typeof e.x1 === 'number') {
-      // Wall footprint as a closed rectangle (thickness honored)
-      const minX = Math.min(e.x1, e.x2) - (e.thickness || 0) / 2;
-      const minY = Math.min(e.y1, e.y2) - (e.thickness || 0) / 2;
-      const w = Math.abs(e.x2 - e.x1) + (e.thickness || 0);
-      const d = Math.abs(e.y2 - e.y1) + (e.thickness || 0);
-      out.polygons.push({
-        closed: true,
-        points: [[minX, minY], [minX + w, minY], [minX + w, minY + d], [minX, minY + d]],
-        label: e.name || 'Wall'
-      });
+      const dx = (e.x2 || 0) - e.x1;
+      const dy = (e.y2 || 0) - e.y1;
+      if (dx === 0 || dy === 0) {
+        // Exact axis-aligned footprint preserves bounding box contract
+        const minX = Math.min(e.x1, e.x2) - (e.thickness || 0) / 2;
+        const minY = Math.min(e.y1, e.y2) - (e.thickness || 0) / 2;
+        const w = Math.abs(e.x2 - e.x1) + (e.thickness || 0);
+        const d = Math.abs(e.y2 - e.y1) + (e.thickness || 0);
+        out.polygons.push({
+          closed: true,
+          points: [[minX, minY], [minX + w, minY], [minX + w, minY + d], [minX, minY + d]],
+          label: e.name || 'Wall'
+        });
+      } else {
+        const wallCorners = calcWallPolygon(e);
+        out.polygons.push({
+          closed: true,
+          points: wallCorners.map(pt => [pt.x, pt.y]),
+          label: e.name || 'Wall'
+        });
+      }
     } else if (e.kind === 'furniture' && typeof e.x === 'number' && typeof e.width === 'number') {
       out.polygons.push({
         closed: true,
@@ -23856,6 +24266,301 @@ function createPlanView(context) {
   let furnitureCatalog = [];
   let catalogById = new Map(); // catalog id -> item (footprint symbols)
   let resizeObserver = null;
+  let polyRoomVertices = []; // [{x, y}, ...]
+  let currentMouseWorld = { x: 0, y: 0 };
+
+  function initDocuments() {
+    if (!state.plan) state.plan = {};
+    if (!Array.isArray(state.plan.documents) || state.plan.documents.length === 0) {
+      const initialDoc = {
+        id: 'doc-1',
+        name: 'Ground Floor',
+        type: '2d',
+        entities: Array.isArray(state.plan.entities) ? state.plan.entities : [],
+        viewport: { zoom: transform.zoom, offsetX: transform.offsetX, offsetY: transform.offsetY }
+      };
+      state.plan.documents = [initialDoc];
+      state.plan.activeDocId = initialDoc.id;
+    }
+    if (!state.plan.activeDocId || !state.plan.documents.some(d => d.id === state.plan.activeDocId)) {
+      state.plan.activeDocId = state.plan.documents[0].id;
+    }
+    const active = getActiveDocument();
+    state.plan.entities = active.entities;
+  }
+
+  function getActiveDocument() {
+    if (!state.plan || !Array.isArray(state.plan.documents) || state.plan.documents.length === 0) {
+      initDocuments();
+    }
+    return state.plan.documents.find(d => d.id === state.plan.activeDocId) || state.plan.documents[0];
+  }
+
+  function switchDocument(docId) {
+    if (!state.plan || state.plan.activeDocId === docId) return;
+    const prevDoc = getActiveDocument();
+    if (prevDoc) {
+      prevDoc.viewport = { zoom: transform.zoom, offsetX: transform.offsetX, offsetY: transform.offsetY };
+    }
+    const target = state.plan.documents.find(d => d.id === docId);
+    if (!target) return;
+    state.plan.activeDocId = target.id;
+    state.plan.entities = target.entities;
+    state.plan.selectedIds = new Set();
+    if (target.viewport && typeof target.viewport.zoom === 'number') {
+      transform = {
+        zoom: target.viewport.zoom,
+        offsetX: target.viewport.offsetX,
+        offsetY: target.viewport.offsetY
+      };
+    }
+    renderTabs();
+    render();
+    renderEntityList();
+    renderPropertiesInspector();
+    showToast(`Switched to sheet "${target.name}"`);
+    AudioService.playTick();
+  }
+
+  function createDocument(name) {
+    initDocuments();
+    const count = state.plan.documents.length + 1;
+    const docName = typeof name === 'string' && name.trim() ? name.trim() : `Level ${count}`;
+    const newDoc = {
+      id: `doc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      name: docName,
+      type: '2d',
+      entities: [],
+      viewport: { zoom: 40, offsetX: 60, offsetY: 420 }
+    };
+    state.plan.documents.push(newDoc);
+    switchDocument(newDoc.id);
+  }
+
+  function closeDocument(docId) {
+    initDocuments();
+    if (state.plan.documents.length <= 1) {
+      showToast('Cannot close the last drawing tab', 'warning');
+      return;
+    }
+    const idx = state.plan.documents.findIndex(d => d.id === docId);
+    if (idx === -1) return;
+    const docToClose = state.plan.documents[idx];
+    state.plan.documents.splice(idx, 1);
+    if (state.plan.activeDocId === docId) {
+      const nextDoc = state.plan.documents[Math.max(0, idx - 1)];
+      switchDocument(nextDoc.id);
+    } else {
+      renderTabs();
+    }
+    showToast(`Closed tab "${docToClose.name}"`);
+  }
+
+  function renameDocument(docId, newName) {
+    initDocuments();
+    const doc = state.plan.documents.find(d => d.id === docId);
+    if (!doc) return;
+    const trimmed = typeof newName === 'string' ? newName.trim() : '';
+    if (!trimmed) return;
+    doc.name = trimmed;
+    renderTabs();
+    showToast(`Renamed tab to "${doc.name}"`);
+  }
+
+  function renderTabs() {
+    const listEl = dom.planDocTabsList || document.getElementById('plan-doc-tabs-list');
+    if (!listEl) return;
+    initDocuments();
+    listEl.innerHTML = '';
+    state.plan.documents.forEach(doc => {
+      const isActive = doc.id === state.plan.activeDocId;
+      const tab = document.createElement('div');
+      tab.className = `plan-doc-tab ${isActive ? 'active' : ''}`;
+      tab.dataset.docId = doc.id;
+
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'plan-doc-tab-title';
+      titleSpan.textContent = doc.name;
+      titleSpan.title = 'Double click to rename tab';
+
+      titleSpan.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        const currentName = doc.name;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentName;
+        input.className = 'calc-input';
+        input.style.cssText = 'height: 22px; padding: 0 4px; font-size: 0.72rem; width: 110px;';
+        tab.replaceChild(input, titleSpan);
+        input.focus();
+        input.select();
+        const commit = () => {
+          const val = input.value.trim() || currentName;
+          renameDocument(doc.id, val);
+        };
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
+          if (ev.key === 'Escape') { input.value = currentName; input.blur(); }
+        });
+      });
+
+      tab.appendChild(titleSpan);
+
+      if (state.plan.documents.length > 1) {
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'plan-doc-tab-close';
+        closeBtn.textContent = '✕';
+        closeBtn.title = `Close ${doc.name}`;
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          closeDocument(doc.id);
+        });
+        tab.appendChild(closeBtn);
+      }
+
+      tab.addEventListener('click', () => {
+        switchDocument(doc.id);
+      });
+
+      listEl.appendChild(tab);
+    });
+  }
+
+  function showHud(lengthVal, angleVal) {
+    const hudEl = dom.planNumericHud || document.getElementById('plan-numeric-hud');
+    const hudLenInput = dom.hudInputLength || document.getElementById('hud-input-length');
+    const hudAngInput = dom.hudInputAngle || document.getElementById('hud-input-angle');
+    if (!hudEl || !hudLenInput || !hudAngInput) return;
+    hudEl.style.display = 'flex';
+    if (document.activeElement !== hudLenInput && document.activeElement !== hudAngInput) {
+      if (typeof lengthVal === 'number' && isFinite(lengthVal)) {
+        hudLenInput.value = `${lengthVal.toFixed(2)}m`;
+      }
+      if (typeof angleVal === 'number' && isFinite(angleVal)) {
+        hudAngInput.value = `${angleVal.toFixed(0)}°`;
+      }
+    }
+  }
+
+  function hideHud() {
+    const hudEl = dom.planNumericHud || document.getElementById('plan-numeric-hud');
+    const hudLenInput = dom.hudInputLength || document.getElementById('hud-input-length');
+    const hudAngInput = dom.hudInputAngle || document.getElementById('hud-input-angle');
+    if (!hudEl) return;
+    hudEl.style.display = 'none';
+    if (document.activeElement === hudLenInput || document.activeElement === hudAngInput) {
+      document.activeElement.blur();
+    }
+  }
+
+  function applyHud() {
+    const hudLenInput = dom.hudInputLength || document.getElementById('hud-input-length');
+    const hudAngInput = dom.hudInputAngle || document.getElementById('hud-input-angle');
+    if (!dragState || dragState.mode !== 'create') {
+      hideHud();
+      return;
+    }
+    const lenStr = hudLenInput?.value || '';
+    const angStr = hudAngInput?.value || '';
+    let parsedLen = parseFloat(lenStr);
+    if (isNaN(parsedLen) || parsedLen <= 0) return;
+    if (lenStr.toLowerCase().includes('mm')) parsedLen /= 1000;
+    else if (lenStr.toLowerCase().includes('cm')) parsedLen /= 100;
+
+    let parsedAng = parseFloat(angStr.replace('°', ''));
+    if (isNaN(parsedAng)) parsedAng = 0;
+    const rad = (parsedAng * Math.PI) / 180;
+
+    const start = dragState.start;
+    const end = {
+      x: start.x + parsedLen * Math.cos(rad),
+      y: start.y + parsedLen * Math.sin(rad)
+    };
+    dragState.current = end;
+    if (dragState.tool === 'wall') {
+      createWallEntity(start, end);
+    } else if (dragState.tool === 'room') {
+      createRoomEntity(start, end);
+    } else if (dragState.tool === 'dimension') {
+      createDimensionEntity(start, end);
+    }
+    dragState = null;
+    hideHud();
+    render();
+  }
+
+  function setupHudListeners() {
+    const hudLenInput = dom.hudInputLength || document.getElementById('hud-input-length');
+    const hudAngInput = dom.hudInputAngle || document.getElementById('hud-input-angle');
+    if (hudLenInput) {
+      hudLenInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          applyHud();
+        } else if (e.key === 'Tab') {
+          e.preventDefault();
+          hudAngInput?.focus();
+          hudAngInput?.select();
+        } else if (e.key === 'Escape') {
+          hideHud();
+        }
+      });
+    }
+    if (hudAngInput) {
+      hudAngInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          applyHud();
+        } else if (e.key === 'Tab') {
+          e.preventDefault();
+          hudLenInput?.focus();
+          hudLenInput?.select();
+        } else if (e.key === 'Escape') {
+          hideHud();
+        }
+      });
+    }
+  }
+
+  function finishPolyRoom() {
+    if (polyRoomVertices.length < 3) {
+      polyRoomVertices = [];
+      render();
+      renderContextualToolbar();
+      return;
+    }
+    const boundary = polyRoomVertices.map(p => ({ x: p.x, y: p.y }));
+    polyRoomVertices = [];
+    let room;
+    try {
+      room = createRoom({
+        name: `Room ${entities().filter(e => e.kind === 'room').length + 1}`,
+        boundary
+      });
+    } catch (e) {
+      showToast(e.message, 'warning');
+      render();
+      renderContextualToolbar();
+      return;
+    }
+    const cmd = entityAddRemoveCommand(entities(), room, `add room ${room.name}`);
+    cmd.redo();
+    history.push(cmd);
+    state.plan.selectedIds = new Set([room.id]);
+    showToast(`Polygonal Room added: ${boundary.length} vertices (${roomArea(room).toFixed(1)} m²)`);
+    AudioService.playTick();
+    render();
+    renderContextualToolbar();
+  }
+
+  function cancelPolyRoom() {
+    polyRoomVertices = [];
+    render();
+    renderContextualToolbar();
+    showToast('Polygonal room cancelled');
+  }
 
   /** Keeps svg.width/height synced to the element's real box so the
    * viewBox always equals the pixel box — pointer mapping then never
@@ -23913,7 +24618,13 @@ function createPlanView(context) {
     setZoomPercent(transform.zoom * factor);
   }
 
-  function entities() { return state.plan.entities; }
+  function entities() {
+    if (!Array.isArray(state.plan?.entities)) {
+      if (state.plan) state.plan.entities = [];
+      return [];
+    }
+    return state.plan.entities;
+  }
 
   function savePrefs() {
     try {
@@ -24041,16 +24752,39 @@ function createPlanView(context) {
     const sel = selectedId ? entities().find(e => e.id === selectedId) : null;
 
     if (!sel || selCount === 0) {
+      if (polyRoomVertices.length > 0) {
+        bar.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="context-tag-badge" style="background: rgba(56, 189, 248, 0.2); color: var(--accent-primary, #38bdf8); border-color: var(--accent-primary, #38bdf8);">POLYGON ROOM</span>
+            <span style="font-size: 0.75rem; color: var(--text-primary); font-weight: 600;">${polyRoomVertices.length} points placed</span>
+            ${polyRoomVertices.length >= 3 ? '<button type="button" class="context-action-btn" id="ctx-close-poly" style="background: rgba(74, 222, 128, 0.18); color: #4ade80; border-color: rgba(74, 222, 128, 0.4);"><span>✓ Complete & Close</span></button>' : '<span style="font-size: 0.70rem; color: var(--text-muted);">(Click 3+ corners, then click start point or Complete)</span>'}
+            <button type="button" class="context-action-btn danger" id="ctx-cancel-poly"><span>✕ Cancel</span></button>
+          </div>
+        `;
+        bar.querySelector('#ctx-close-poly')?.addEventListener('click', finishPolyRoom);
+        bar.querySelector('#ctx-cancel-poly')?.addEventListener('click', cancelPolyRoom);
+        return;
+      }
+
+      const isRoomTool = state.plan.tool === 'room' || state.plan.tool === 'polyroom';
       bar.innerHTML = `
         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
           <span class="context-tag-badge">READY</span>
-          <span style="font-size: 0.72rem; color: var(--text-muted);">Active: <strong style="color: var(--accent-primary);">${(state.plan.tool || 'select').toUpperCase()}</strong> · Quick Add:</span>
-          <button type="button" class="context-action-btn" id="ctx-quick-room"><span>+ 4×3m Room</span></button>
-          <button type="button" class="context-action-btn" id="ctx-quick-wall"><span>+ 5m Wall</span></button>
-          <button type="button" class="context-action-btn" id="ctx-quick-desk"><span>+ Desk</span></button>
-          <button type="button" class="context-action-btn" id="ctx-quick-stair"><span>+ Stair</span></button>
+          <span style="font-size: 0.72rem; color: var(--text-muted);">Active: <strong style="color: var(--accent-primary);">${(state.plan.tool || 'select').toUpperCase()}</strong></span>
+          ${isRoomTool ? `
+            <button type="button" class="context-action-btn ${state.plan.tool === 'room' ? 'active' : ''}" id="ctx-mode-rect"><span>▭ Rectangle</span></button>
+            <button type="button" class="context-action-btn ${state.plan.tool === 'polyroom' ? 'active' : ''}" id="ctx-mode-poly"><span>⬡ Polygonal / L-Shape</span></button>
+          ` : `
+            <span style="font-size: 0.72rem; color: var(--text-muted);">· Quick Add:</span>
+            <button type="button" class="context-action-btn" id="ctx-quick-room"><span>+ 4×3m Room</span></button>
+            <button type="button" class="context-action-btn" id="ctx-quick-wall"><span>+ 5m Wall</span></button>
+            <button type="button" class="context-action-btn" id="ctx-quick-desk"><span>+ Desk</span></button>
+            <button type="button" class="context-action-btn" id="ctx-quick-stair"><span>+ Stair</span></button>
+          `}
         </div>
       `;
+      bar.querySelector('#ctx-mode-rect')?.addEventListener('click', () => setTool('room'));
+      bar.querySelector('#ctx-mode-poly')?.addEventListener('click', () => setTool('polyroom'));
       bar.querySelector('#ctx-quick-room')?.addEventListener('click', () => {
         createRoomEntity({ x: 2, y: 2 }, { x: 6, y: 5 });
       });
@@ -24327,15 +25061,30 @@ function createPlanView(context) {
       const isNum = v => typeof v === 'number' && isFinite(v);
       const hasRect = isNum(e.x) && isNum(e.y) && isNum(e.width) && isNum(e.depth);
 
-      if (e.kind === 'room' && hasRect) {
-        const p1 = worldToSvg(transform, e.x, e.y + e.depth);   // bottom-left
-        const p2 = worldToSvg(transform, e.x + e.width, e.y);   // top-right
-        const labelPos = worldToSvg(transform, e.x + e.width / 2, e.y + e.depth / 2);
-        return `<g>
-          <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${((p2.x - p1.x)).toFixed(1)}" height="${((p1.y - p2.y)).toFixed(1)}"
-            fill="var(--bg-chip, rgba(122,162,255,0.08))" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.6}" data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>
-          <text x="${labelPos.x.toFixed(1)}" y="${labelPos.y.toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--text-secondary,#9aa)" font-family="var(--font-mono)">${escapeHtml(e.name)} · ${roomArea(e).toFixed(1)}m²</text>
-        </g>`;
+      if (e.kind === 'room') {
+        if (Array.isArray(e.boundary) && e.boundary.length >= 3) {
+          const ptsStr = e.boundary.map(pt => {
+            const sp = worldToSvg(transform, pt.x, pt.y);
+            return `${sp.x.toFixed(1)},${sp.y.toFixed(1)}`;
+          }).join(' ');
+          const cx = e.boundary.reduce((sum, p) => sum + p.x, 0) / e.boundary.length;
+          const cy = e.boundary.reduce((sum, p) => sum + p.y, 0) / e.boundary.length;
+          const labelPos = worldToSvg(transform, cx, cy);
+          return `<g>
+            <polygon points="${ptsStr}"
+              fill="var(--bg-chip, rgba(122,162,255,0.08))" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.6}" data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>
+            <text x="${labelPos.x.toFixed(1)}" y="${labelPos.y.toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--text-secondary,#9aa)" font-family="var(--font-mono)">${escapeHtml(e.name)} · ${roomArea(e).toFixed(1)}m²</text>
+          </g>`;
+        } else if (hasRect) {
+          const p1 = worldToSvg(transform, e.x, e.y + e.depth);   // bottom-left
+          const p2 = worldToSvg(transform, e.x + e.width, e.y);   // top-right
+          const labelPos = worldToSvg(transform, e.x + e.width / 2, e.y + e.depth / 2);
+          return `<g>
+            <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${((p2.x - p1.x)).toFixed(1)}" height="${((p1.y - p2.y)).toFixed(1)}"
+              fill="var(--bg-chip, rgba(122,162,255,0.08))" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.6}" data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>
+            <text x="${labelPos.x.toFixed(1)}" y="${labelPos.y.toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--text-secondary,#9aa)" font-family="var(--font-mono)">${escapeHtml(e.name)} · ${roomArea(e).toFixed(1)}m²</text>
+          </g>`;
+        }
       }
       if (e.kind === 'wall' && isNum(e.x1) && isNum(e.y1) && isNum(e.x2) && isNum(e.y2)) {
         const a = worldToSvg(transform, e.x1, e.y1);
@@ -24507,13 +25256,14 @@ function createPlanView(context) {
         const b = worldToSvg(transform, dragState.current.x, dragState.current.y);
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         const dM = Math.hypot(dragState.current.x - dragState.start.x, dragState.current.y - dragState.start.y);
+        const deg = ((Math.atan2(dragState.current.y - dragState.start.y, dragState.current.x - dragState.start.x) * 180 / Math.PI) + 360) % 360;
         const col = 'var(--color-warning, #fbbf24)';
         dragMarkup = `
           <line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${col}" stroke-width="2" stroke-dasharray="5 3"/>
           <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="3.5" fill="${col}"/>
           <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="3.5" fill="${col}"/>
-          <rect x="${(mid.x - 30).toFixed(1)}" y="${(mid.y - 18).toFixed(1)}" width="60" height="18" rx="3" fill="var(--bg-surface-raised, #29292e)" stroke="${col}" stroke-width="1"/>
-          <text x="${mid.x.toFixed(1)}" y="${(mid.y - 5).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" fill="#ffffff" font-weight="700">${dM.toFixed(2)}m</text>`;
+          <rect x="${(mid.x - 45).toFixed(1)}" y="${(mid.y - 18).toFixed(1)}" width="90" height="18" rx="3" fill="var(--bg-surface-raised, #29292e)" stroke="${col}" stroke-width="1"/>
+          <text x="${mid.x.toFixed(1)}" y="${(mid.y - 5).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" fill="#ffffff" font-weight="700">${dM.toFixed(2)}m · ${deg.toFixed(0)}°</text>`;
       } else if (dragState.tool === 'room') {
         const a = worldToSvg(transform, Math.min(dragState.start.x, dragState.current.x), Math.max(dragState.start.y, dragState.current.y));
         const b = worldToSvg(transform, Math.max(dragState.start.x, dragState.current.x), Math.min(dragState.start.y, dragState.current.y));
@@ -24539,6 +25289,27 @@ function createPlanView(context) {
         dragMarkup = `<rect x="${a.x.toFixed(1)}" y="${a.y.toFixed(1)}" width="${(b.x - a.x).toFixed(1)}" height="${(a.y - b.y).toFixed(1)}"
           fill="none" stroke="var(--color-warning,#fbbf24)" stroke-width="1.5" stroke-dasharray="5 3"/>`;
       }
+    }
+
+    // Render in-progress polygonal room
+    if (polyRoomVertices.length > 0) {
+      const ptsSvg = polyRoomVertices.map(pt => worldToSvg(transform, pt.x, pt.y));
+      const curSvg = worldToSvg(transform, currentMouseWorld.x, currentMouseWorld.y);
+      const polylineStr = [...ptsSvg, curSvg].map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+      const dotsStr = ptsSvg.map((p, idx) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" fill="var(--accent-primary, #38bdf8)" stroke="#ffffff" stroke-width="1.5"/><text x="${(p.x + 6).toFixed(1)}" y="${(p.y - 6).toFixed(1)}" font-size="9" fill="var(--text-secondary,#9aa)" font-family="var(--font-mono)">P${idx + 1}</text>`).join('');
+
+      const first = polyRoomVertices[0];
+      const distToFirst = Math.hypot(currentMouseWorld.x - first.x, currentMouseWorld.y - first.y);
+      const isClosing = polyRoomVertices.length >= 3 && distToFirst <= Math.max(0.4, state.plan.grid);
+      const closeIndicator = isClosing
+        ? `<circle cx="${ptsSvg[0].x.toFixed(1)}" cy="${ptsSvg[0].y.toFixed(1)}" r="10" fill="none" stroke="var(--color-success, #4ade80)" stroke-width="2.5" stroke-dasharray="3 2"/><text x="${ptsSvg[0].x.toFixed(1)}" y="${(ptsSvg[0].y - 14).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" fill="var(--color-success, #4ade80)" font-weight="700">CLICK TO CLOSE</text>`
+        : '';
+
+      dragMarkup += `
+        <polyline points="${polylineStr}" fill="rgba(56, 189, 248, 0.12)" stroke="var(--accent-primary, #38bdf8)" stroke-width="2" stroke-dasharray="5 3"/>
+        ${dotsStr}
+        ${closeIndicator}
+      `;
     }
 
     let guidesMarkup = '';
@@ -25476,6 +26247,27 @@ function createPlanView(context) {
         dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
       }
       render();
+    } else if (tool === 'polyroom') {
+      let targetPt = initialPt;
+      if (snapOn) {
+        const snapRes = findSnapPoint(world, entities(), { threshold: 0.35, snapGrid: true, gridSize: state.plan.grid });
+        if (snapRes.snapped) {
+          targetPt = { x: snapRes.x, y: snapRes.y };
+        }
+      }
+      if (polyRoomVertices.length >= 3) {
+        const first = polyRoomVertices[0];
+        const distToFirst = Math.hypot(targetPt.x - first.x, targetPt.y - first.y);
+        if (distToFirst <= Math.max(0.4, state.plan.grid)) {
+          finishPolyRoom();
+          return;
+        }
+      }
+      polyRoomVertices.push(targetPt);
+      AudioService.playTick();
+      render();
+      renderContextualToolbar();
+      return;
     } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'measure') {
       if (snapOn) {
         const snapRes = findSnapPoint(world, entities(), { threshold: 0.35, snapGrid: true, gridSize: state.plan.grid });
@@ -25502,7 +26294,11 @@ function createPlanView(context) {
 
   function onPointerMove(event) {
     const world = svgPoint(event);
+    currentMouseWorld = world;
     updateStatusBar(world);
+    if (polyRoomVertices.length > 0) {
+      render();
+    }
     if (!dragState) return;
     if (dragState.mode === 'pan') {
       const dx = event.clientX - dragState.startClient.x;
@@ -25612,6 +26408,11 @@ function createPlanView(context) {
         };
         activeGuides = computeAlignmentGuides(curRect, entities(), 0.15);
       }
+      if (dragState.tool === 'wall' || dragState.tool === 'dimension' || dragState.tool === 'measure' || dragState.tool === 'room') {
+        const dM = Math.hypot(targetPt.x - dragState.start.x, targetPt.y - dragState.start.y);
+        const deg = ((Math.atan2(targetPt.y - dragState.start.y, targetPt.x - dragState.start.x) * 180 / Math.PI) + 360) % 360;
+        showHud(dM, deg);
+      }
       render();
     } else if (dragState.mode === 'move' && dragState.entity) {
       const dx = snapped.x - dragState.last.x;
@@ -25647,6 +26448,13 @@ function createPlanView(context) {
     if (!dragState) return;
     activeSnap = null;
     activeGuides = { guidesX: [], guidesY: [] };
+
+    const hudEl = dom.planNumericHud || document.getElementById('plan-numeric-hud');
+    const hudLenInput = dom.hudInputLength || document.getElementById('hud-input-length');
+    const hudAngInput = dom.hudInputAngle || document.getElementById('hud-input-angle');
+    if (hudEl && document.activeElement !== hudLenInput && document.activeElement !== hudAngInput) {
+      hideHud();
+    }
 
     if (dragState.mode === 'resize' && dragState.entity) {
       const e = dragState.entity;
@@ -25981,14 +26789,19 @@ function createPlanView(context) {
       showToast('Project store unavailable', 'warning');
       return;
     }
-    // Deep-copy entities into the project document (plain data, ids preserved)
+    const curDoc = getActiveDocument();
+    if (curDoc) {
+      curDoc.viewport = { zoom: transform.zoom, offsetX: transform.offsetX, offsetY: transform.offsetY };
+    }
     const copy = JSON.parse(JSON.stringify(entities()));
+    const docsCopy = JSON.parse(JSON.stringify(state.plan.documents || []));
     const res = projectStore.updateProject(draft => {
       draft.plan = { entities: copy, savedAt: new Date().toISOString() };
+      draft.documents = docsCopy;
       return draft;
     });
     if (res.ok) {
-      showToast(`Plan saved to project (${copy.length} entities)`);
+      showToast(`Plan saved to project (${copy.length} entities across ${docsCopy.length} sheets)`);
       AudioService.playSuccess();
     } else {
       showToast(`Save failed: ${res.errors[0]}`, 'warning');
@@ -25997,12 +26810,24 @@ function createPlanView(context) {
 
   function loadFromProject() {
     const p = projectStore?.getProject();
-    if (p && p.plan && Array.isArray(p.plan.entities)) {
-      entities().length = 0;
-      entities().push(...JSON.parse(JSON.stringify(p.plan.entities)));
+    if (p) {
+      if (Array.isArray(p.documents) && p.documents.length > 0) {
+        state.plan.documents = JSON.parse(JSON.stringify(p.documents));
+        state.plan.activeDocId = state.plan.documents[0].id;
+        const active = getActiveDocument();
+        state.plan.entities = active.entities;
+        if (active.viewport && typeof active.viewport.zoom === 'number') {
+          transform = { ...active.viewport };
+        }
+        renderTabs();
+      } else if (p.plan && Array.isArray(p.plan.entities)) {
+        entities().length = 0;
+        entities().push(...JSON.parse(JSON.stringify(p.plan.entities)));
+      }
       history.clear();
-      showToast(`Plan restored from project (${entities().length} entities)`);
       render();
+      renderEntityList();
+      renderPropertiesInspector();
     }
   }
 
@@ -26084,6 +26909,17 @@ function createPlanView(context) {
       return;
     }
 
+    if (dragState && dragState.mode === 'create' && /^[0-9]$/.test(event.key)) {
+      showHud();
+      const hudLenInput = dom.hudInputLength || document.getElementById('hud-input-length');
+      if (hudLenInput) {
+        hudLenInput.value = event.key;
+        hudLenInput.focus();
+        event.preventDefault();
+        return;
+      }
+    }
+
     // Rebindable shortcuts via ShortcutsManager
     if (typeof ShortcutsManager !== 'undefined') {
       if (ShortcutsManager.matchesEvent('plan_undo', event)) {
@@ -26108,7 +26944,12 @@ function createPlanView(context) {
         }
         return;
       }
-      if (ShortcutsManager.matchesEvent('plan_cancel', event)) {
+      if (ShortcutsManager.matchesEvent('plan_cancel', event) || event.key === 'Escape') {
+        if (polyRoomVertices.length > 0) {
+          cancelPolyRoom();
+          return;
+        }
+        hideHud();
         state.plan.selectedIds = new Set();
         setTool('select');
         render();
@@ -26224,6 +27065,16 @@ function createPlanView(context) {
       populateFurniture();
       syncToolVisibility();
       loadFromProject();
+      initDocuments();
+      renderTabs();
+
+      const newDocBtn = dom.btnPlanNewDoc || document.getElementById('btn-plan-new-doc');
+      if (newDocBtn) {
+        newDocBtn.addEventListener('click', () => {
+          createDocument();
+        });
+      }
+      setupHudListeners();
 
       // Tool palette buttons
       const palette = dom.planToolPalette || document.getElementById('plan-tool-palette');
@@ -26268,6 +27119,11 @@ function createPlanView(context) {
           const world = svgPoint(e);
           updateStatusBar(world);
         });
+        dom.planSvg.addEventListener('dblclick', () => {
+          if (polyRoomVertices.length >= 3) {
+            finishPolyRoom();
+          }
+        });
         window.addEventListener('pointermove', onPointerMove);
         window.addEventListener('pointerup', onPointerUp);
         dom.planSvg.addEventListener('wheel', (e) => {
@@ -26289,7 +27145,9 @@ function createPlanView(context) {
         render, undo, redo, deleteSelected, clearPlan, saveToProject, exportPlan,
         syncToolVisibility, fitToContent, setZoomPercent, zoomStep, syncSvgSize,
         triggerAiCritique, setTool, cycleGrid, toggleSnap, duplicateSelected,
-        renderContextualToolbar, updateStatusBar
+        renderContextualToolbar, updateStatusBar,
+        switchDocument, createDocument, closeDocument, renameDocument,
+        finishPolyRoom, cancelPolyRoom, renderTabs
       };
     }
   };
@@ -28304,15 +29162,20 @@ function initializeApp() {
     sidebarCollapsedSections: new Set(),
 
     // Mode 19: Plan Canvas
-    plan: {
-      tool: 'select',
-      grid: 0.5,
-      snap: true,
-      selectedIds: new Set(),
-      furnitureIndex: 0,
-      furnitureRotated: false,
-      entities: []
-    },
+    plan: (() => {
+      const initialDoc = { id: 'doc-1', name: 'Ground Floor', type: '2d', entities: [], viewport: { zoom: 40, offsetX: 60, offsetY: 420 } };
+      return {
+        tool: 'select',
+        grid: 0.5,
+        snap: true,
+        selectedIds: new Set(),
+        furnitureIndex: 0,
+        furnitureRotated: false,
+        activeDocId: 'doc-1',
+        documents: [initialDoc],
+        entities: initialDoc.entities
+      };
+    })(),
 
     // Modes 20-21: AI Studio + AI Control Center (services attached at boot)
     ai: null,
@@ -28964,6 +29827,12 @@ function initializeApp() {
     planStatusBadge: document.getElementById('plan-status-badge'),
     planSvg: document.getElementById('plan-svg'),
     planSvgWrap: document.getElementById('plan-svg-wrap'),
+    planDocTabBar: document.getElementById('plan-doc-tab-bar'),
+    planDocTabsList: document.getElementById('plan-doc-tabs-list'),
+    btnPlanNewDoc: document.getElementById('btn-plan-new-doc'),
+    planNumericHud: document.getElementById('plan-numeric-hud'),
+    hudInputLength: document.getElementById('hud-input-length'),
+    hudInputAngle: document.getElementById('hud-input-angle'),
     btnPlanZoomIn: document.getElementById('btn-plan-zoom-in'),
     btnPlanZoomOut: document.getElementById('btn-plan-zoom-out'),
     btnPlanFit: document.getElementById('btn-plan-fit'),

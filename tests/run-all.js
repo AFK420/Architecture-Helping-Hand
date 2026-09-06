@@ -50,7 +50,8 @@ const testFiles = [
   'ui-contracts.test.js',
   'custom-shortcuts.test.js',
   'contextual-studio.test.js',
-  'responsive.test.js'
+  'responsive.test.js',
+  'studio-phase1.test.js'
 ];
 
 console.log('=================================================================');

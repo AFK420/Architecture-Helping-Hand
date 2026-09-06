@@ -76,7 +76,27 @@ export function createProject(options = {}) {
     snapshots: [],
     decisions: [],
     exports: [],
-    scratchpad: []
+    scratchpad: [],
+    documents: Array.isArray(options.documents) ? options.documents : [
+      {
+        id: 'doc-1',
+        name: 'Ground Floor',
+        type: '2d',
+        entities: [],
+        layers: {
+          walls: true,
+          doors: true,
+          windows: true,
+          rooms: true,
+          columns: true,
+          furniture: true,
+          dimensions: true,
+          textNotes: true,
+          grid: true
+        },
+        viewport: { zoom: 40, offsetX: 60, offsetY: 420 }
+      }
+    ]
   };
 }
 
@@ -136,7 +156,7 @@ export function validateProject(doc) {
     errors.push('site must be an object when present');
   }
 
-  for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad']) {
+  for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad', 'documents']) {
     if (doc[key] !== undefined && !Array.isArray(doc[key])) {
       errors.push(`${key} must be an array when present`);
     }
@@ -177,8 +197,37 @@ export function normalizeProject(doc) {
 
   normalized.site = normalizeSite(src.site);
 
-  for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad']) {
+  for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad', 'documents']) {
     if (!Array.isArray(normalized[key])) normalized[key] = [];
+  }
+  if (normalized.documents.length === 0) {
+    let defaultEntities = [];
+    if (Array.isArray(src.entities)) {
+      defaultEntities = src.entities;
+    } else if (src.entities && typeof src.entities === 'object') {
+      defaultEntities = Object.values(src.entities).flat().filter(Boolean);
+    }
+
+    normalized.documents = [
+      {
+        id: 'doc-1',
+        name: 'Ground Floor',
+        type: '2d',
+        entities: defaultEntities,
+        layers: {
+          walls: true,
+          doors: true,
+          windows: true,
+          rooms: true,
+          columns: true,
+          furniture: true,
+          dimensions: true,
+          textNotes: true,
+          grid: true
+        },
+        viewport: { zoom: 40, offsetX: 60, offsetY: 420 }
+      }
+    ];
   }
 
   return normalized;

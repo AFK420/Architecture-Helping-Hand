@@ -10,6 +10,7 @@
  */
 
 import { rectsIntersect, generateEntityId } from './entities.js';
+import { pointInPolygon, calcWallPolygon } from './geometry.js';
 
 /**
  * Creates a view transform for the plan canvas.
@@ -326,10 +327,23 @@ export function duplicateEntity(entity, offset = 0.5) {
 // Selection geometry
 // ---------------------------------------------------------------------------
 
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const l2 = dx * dx + dy * dy;
+  if (l2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * dx + (py - y1) * dy) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
 /** Returns ids of entities whose rect intersects the selection point/rect. */
 export function pickEntities(entities, worldRect) {
   const hits = [];
-  for (const e of entities) {
+  const list = Array.isArray(entities)
+    ? entities
+    : (entities && typeof entities === 'object' ? Object.values(entities).flat().filter(Boolean) : []);
+  for (const e of list) {
     if (!e) continue;
     // Walls are point-pair entities without x/y — map to their bounding rect
     const r = e.kind === 'wall'
@@ -338,7 +352,16 @@ export function pickEntities(entities, worldRect) {
     if (!r) continue;
     if (worldRect.width === 0 && worldRect.depth === 0) {
       // point pick
-      if (worldRect.x >= r.x && worldRect.x <= r.x + r.width && worldRect.y >= r.y && worldRect.y <= r.y + r.depth) {
+      if (e.kind === 'room' && Array.isArray(e.boundary) && e.boundary.length >= 3) {
+        if (pointInPolygon({ x: worldRect.x, y: worldRect.y }, e.boundary)) {
+          hits.push(e.id);
+        }
+      } else if (e.kind === 'wall' && typeof e.x1 === 'number' && typeof e.x2 === 'number') {
+        const d = distToSegment(worldRect.x, worldRect.y, e.x1, e.y1, e.x2, e.y2);
+        if (d <= (e.thickness || 0.2) / 2 + 0.15) {
+          hits.push(e.id);
+        }
+      } else if (worldRect.x >= r.x && worldRect.x <= r.x + r.width && worldRect.y >= r.y && worldRect.y <= r.y + r.depth) {
         hits.push(e.id);
       }
     } else if (rectsIntersect(worldRect, r)) {
@@ -449,29 +472,56 @@ export function entityMoveCommand(entity, dx, dy, label) {
 export function planToExportGeometry(entities, options = {}) {
   const includeLabels = options.includeLabels !== false;
   const out = { lines: [], polygons: [], texts: [] };
-  for (const e of entities || []) {
+  const list = Array.isArray(entities)
+    ? entities
+    : (entities && typeof entities === 'object' ? Object.values(entities).flat().filter(Boolean) : []);
+  for (const e of list) {
     if (!e || typeof e !== 'object') continue;
-    if (e.kind === 'room' && typeof e.x === 'number' && typeof e.width === 'number' &&
-        typeof e.y === 'number' && typeof e.depth === 'number') {
-      out.polygons.push({
-        closed: true,
-        points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
-        label: e.name || 'Room'
-      });
-      if (includeLabels) {
-        out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: e.name || 'Room' });
+    if (e.kind === 'room') {
+      if (Array.isArray(e.boundary) && e.boundary.length >= 3) {
+        out.polygons.push({
+          closed: true,
+          points: e.boundary.map(pt => [pt.x, pt.y]),
+          label: e.name || 'Room'
+        });
+        if (includeLabels) {
+          const cx = e.boundary.reduce((sum, p) => sum + p.x, 0) / e.boundary.length;
+          const cy = e.boundary.reduce((sum, p) => sum + p.y, 0) / e.boundary.length;
+          out.texts.push({ x: cx, y: cy, text: e.name || 'Room' });
+        }
+      } else if (typeof e.x === 'number' && typeof e.width === 'number' &&
+                 typeof e.y === 'number' && typeof e.depth === 'number') {
+        out.polygons.push({
+          closed: true,
+          points: [[e.x, e.y], [e.x + e.width, e.y], [e.x + e.width, e.y + e.depth], [e.x, e.y + e.depth]],
+          label: e.name || 'Room'
+        });
+        if (includeLabels) {
+          out.texts.push({ x: e.x + e.width / 2, y: e.y + e.depth / 2, text: e.name || 'Room' });
+        }
       }
     } else if (e.kind === 'wall' && typeof e.x1 === 'number') {
-      // Wall footprint as a closed rectangle (thickness honored)
-      const minX = Math.min(e.x1, e.x2) - (e.thickness || 0) / 2;
-      const minY = Math.min(e.y1, e.y2) - (e.thickness || 0) / 2;
-      const w = Math.abs(e.x2 - e.x1) + (e.thickness || 0);
-      const d = Math.abs(e.y2 - e.y1) + (e.thickness || 0);
-      out.polygons.push({
-        closed: true,
-        points: [[minX, minY], [minX + w, minY], [minX + w, minY + d], [minX, minY + d]],
-        label: e.name || 'Wall'
-      });
+      const dx = (e.x2 || 0) - e.x1;
+      const dy = (e.y2 || 0) - e.y1;
+      if (dx === 0 || dy === 0) {
+        // Exact axis-aligned footprint preserves bounding box contract
+        const minX = Math.min(e.x1, e.x2) - (e.thickness || 0) / 2;
+        const minY = Math.min(e.y1, e.y2) - (e.thickness || 0) / 2;
+        const w = Math.abs(e.x2 - e.x1) + (e.thickness || 0);
+        const d = Math.abs(e.y2 - e.y1) + (e.thickness || 0);
+        out.polygons.push({
+          closed: true,
+          points: [[minX, minY], [minX + w, minY], [minX + w, minY + d], [minX, minY + d]],
+          label: e.name || 'Wall'
+        });
+      } else {
+        const wallCorners = calcWallPolygon(e);
+        out.polygons.push({
+          closed: true,
+          points: wallCorners.map(pt => [pt.x, pt.y]),
+          label: e.name || 'Wall'
+        });
+      }
     } else if (e.kind === 'furniture' && typeof e.x === 'number' && typeof e.width === 'number') {
       out.polygons.push({
         closed: true,

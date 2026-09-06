@@ -3828,6 +3828,10 @@
                 <span class="tool-name">Room</span>
                 <kbd class="tool-kbd">R</kbd>
               </button>
+              <button type="button" class="tool-palette-btn" data-tool="polyroom" title="Polygonal Room (Click corners to form any shape)">
+                <span class="tool-icon">⬡</span>
+                <span class="tool-name">Poly Room</span>
+              </button>
               <button type="button" class="tool-palette-btn" data-tool="wall" title="Wall Segment (W)">
                 <span class="tool-icon">─</span>
                 <span class="tool-name">Wall</span>
@@ -3862,6 +3866,7 @@
               <option value="select" selected>➤ Select / Move</option>
               <option value="wall">─ Wall (drag segment)</option>
               <option value="room">▭ Room (drag rectangle)</option>
+              <option value="polyroom">⬡ Poly Room (custom polygon)</option>
               <option value="door">🚪 Door (place on wall)</option>
               <option value="window">🪟 Window (place on wall)</option>
               <option value="furniture">🛋️ Furniture (catalog footprint)</option>
@@ -3934,6 +3939,14 @@
             <span id="plan-status-badge" class="unit-system-tag" style="font-size: 0.7rem;">zoom 40 px/m</span>
           </div>
 
+          <!-- Multi-Document Drawing Tabs (Studio Tabs) -->
+          <div id="plan-doc-tab-bar" class="plan-doc-tab-bar" role="tablist" aria-label="Drawing Tabs">
+            <div id="plan-doc-tabs-list" class="plan-doc-tabs-list">
+              <!-- Dynamically populated tab items -->
+            </div>
+            <button type="button" id="btn-plan-new-doc" class="plan-doc-new-btn" title="Create new drawing tab / sheet (+)">+ New Tab</button>
+          </div>
+
           <!-- Zoom / view controls -->
           <div class="plan-canvas-toolbar" role="toolbar" aria-label="Canvas zoom controls">
             <button type="button" id="btn-plan-zoom-out" class="result-action-btn plan-zoom-btn" title="Zoom out">−</button>
@@ -3952,6 +3965,20 @@
           </div>
 
           <div id="plan-svg-wrap" class="plan-svg-wrap" style="cursor: crosshair;">
+            <!-- Floating CAD Numeric Typing HUD -->
+            <div id="plan-numeric-hud" class="plan-numeric-hud" style="display: none;" aria-label="CAD Numeric Input HUD">
+              <div class="hud-field">
+                <label for="hud-input-length" class="hud-label">LEN:</label>
+                <input type="text" id="hud-input-length" class="hud-input" placeholder="4.2m" autocomplete="off" spellcheck="false" />
+              </div>
+              <div class="hud-divider"></div>
+              <div class="hud-field">
+                <label for="hud-input-angle" class="hud-label">ANG:</label>
+                <input type="text" id="hud-input-angle" class="hud-input" placeholder="0°" autocomplete="off" spellcheck="false" />
+              </div>
+              <div class="hud-tip"><span><kbd>Tab</kbd> toggle</span> · <span><kbd>Enter</kbd> apply</span> · <span><kbd>Esc</kbd> cancel</span></div>
+            </div>
+
             <svg id="plan-svg" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" role="application" aria-label="Architectural plan canvas — scroll zooms, space+drag pans, arrow keys pan, plus/minus zoom"></svg>
           </div>
 

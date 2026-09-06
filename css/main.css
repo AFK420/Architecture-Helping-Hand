@@ -940,6 +940,191 @@ body.sidebar-hidden .app-sidebar {
   margin-left: auto;
 }
 
+/* Document Tab Bar (Studio Multi-Sheet Tabs) */
+.plan-doc-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--bg-card-header, rgba(24, 24, 27, 0.75));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-md, 8px);
+  padding: 0.25rem 0.4rem;
+  margin-top: 0.4rem;
+  overflow-x: auto;
+}
+
+.plan-doc-tabs-list {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.plan-doc-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary, #a1a1aa);
+  background: var(--bg-surface, #27272a);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.plan-doc-tab:hover {
+  color: var(--text-primary, #f4f4f5);
+  border-color: var(--border-hover, rgba(255, 255, 255, 0.18));
+  background: var(--bg-surface-elevated, #3f3f46);
+}
+
+.plan-doc-tab.active {
+  color: var(--accent-primary, #38bdf8);
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.4);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.plan-doc-tab-title {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plan-doc-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #71717a);
+  font-size: 0.65rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+
+.plan-doc-tab-close:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.plan-doc-new-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted, #71717a);
+  background: transparent;
+  border: 1px dashed var(--border-subtle, rgba(255, 255, 255, 0.15));
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.plan-doc-new-btn:hover {
+  color: var(--accent-primary, #38bdf8);
+  border-color: var(--accent-primary, #38bdf8);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+/* CAD On-Canvas Numeric Input HUD */
+.plan-numeric-hud {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(18, 18, 22, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--accent-primary, #38bdf8);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 12px rgba(56, 189, 248, 0.25);
+  border-radius: 24px;
+  padding: 0.35rem 0.85rem;
+  z-index: 40;
+  pointer-events: auto;
+  font-family: var(--font-mono, monospace);
+  animation: hudFadeIn 0.15s ease-out;
+}
+
+@keyframes hudFadeIn {
+  from { opacity: 0; transform: translate(-50%, -6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.plan-numeric-hud .hud-field {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.plan-numeric-hud .hud-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--accent-primary, #38bdf8);
+  letter-spacing: 0.05em;
+}
+
+.plan-numeric-hud .hud-input {
+  width: 75px;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.plan-numeric-hud .hud-input:focus {
+  border-color: var(--accent-primary, #38bdf8);
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.plan-numeric-hud .hud-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.plan-numeric-hud .hud-tip {
+  font-size: 0.64rem;
+  color: var(--text-muted, #9ca3af);
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  margin-left: 0.2rem;
+}
+
+.plan-numeric-hud .hud-tip kbd {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.1rem 0.25rem;
+  border-radius: 3px;
+  font-size: 0.62rem;
+  color: var(--text-secondary, #d1d5db);
+}
+
 /* Properties & Verification Inspector */
 .plan-properties-panel {
   position: sticky;

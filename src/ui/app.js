@@ -395,15 +395,20 @@ export function initializeApp() {
     sidebarCollapsedSections: new Set(),
 
     // Mode 19: Plan Canvas
-    plan: {
-      tool: 'select',
-      grid: 0.5,
-      snap: true,
-      selectedIds: new Set(),
-      furnitureIndex: 0,
-      furnitureRotated: false,
-      entities: []
-    },
+    plan: (() => {
+      const initialDoc = { id: 'doc-1', name: 'Ground Floor', type: '2d', entities: [], viewport: { zoom: 40, offsetX: 60, offsetY: 420 } };
+      return {
+        tool: 'select',
+        grid: 0.5,
+        snap: true,
+        selectedIds: new Set(),
+        furnitureIndex: 0,
+        furnitureRotated: false,
+        activeDocId: 'doc-1',
+        documents: [initialDoc],
+        entities: initialDoc.entities
+      };
+    })(),
 
     // Modes 20-21: AI Studio + AI Control Center (services attached at boot)
     ai: null,
@@ -1055,6 +1060,12 @@ export function initializeApp() {
     planStatusBadge: document.getElementById('plan-status-badge'),
     planSvg: document.getElementById('plan-svg'),
     planSvgWrap: document.getElementById('plan-svg-wrap'),
+    planDocTabBar: document.getElementById('plan-doc-tab-bar'),
+    planDocTabsList: document.getElementById('plan-doc-tabs-list'),
+    btnPlanNewDoc: document.getElementById('btn-plan-new-doc'),
+    planNumericHud: document.getElementById('plan-numeric-hud'),
+    hudInputLength: document.getElementById('hud-input-length'),
+    hudInputAngle: document.getElementById('hud-input-angle'),
     btnPlanZoomIn: document.getElementById('btn-plan-zoom-in'),
     btnPlanZoomOut: document.getElementById('btn-plan-zoom-out'),
     btnPlanFit: document.getElementById('btn-plan-fit'),

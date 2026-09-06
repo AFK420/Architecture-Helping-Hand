@@ -166,9 +166,13 @@ console.log('\n--- 4. Walls & openings ---');
   assertEqual(wallDirection(wall), 'east', 'Direction east');
   assert(wall.id.startsWith('wall-'), 'Wall id prefix');
 
+  const diagWall = createWall({ x1: 0, y1: 0, x2: 3, y2: 4, thickness: 0.2 });
+  assertClose(wallLength(diagWall), 5.0, 'Diagonal wall supported with exact length (hypot 3,4 = 5.0m)');
+  assertEqual(wallDirection(diagWall), 'northeast', 'Diagonal wall direction calculated');
+
   let threw = false;
-  try { createWall({ x1: 0, y1: 0, x2: 3, y2: 4 }); } catch (e) { threw = true; }
-  assert(threw, 'Diagonal wall rejected (rectilinear scope, documented)');
+  try { createWall({ x1: 2, y1: 2, x2: 2, y2: 2 }); } catch (e) { threw = true; }
+  assert(threw, 'Zero-length wall rejected');
   threw = false;
   try { createWall({ x1: 0, y1: 0, x2: 3, y2: 0, thickness: 0 }); } catch (e) { threw = true; }
   assert(threw, 'Zero thickness rejected');

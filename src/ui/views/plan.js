@@ -53,6 +53,301 @@ export function createPlanView(context) {
   let furnitureCatalog = [];
   let catalogById = new Map(); // catalog id -> item (footprint symbols)
   let resizeObserver = null;
+  let polyRoomVertices = []; // [{x, y}, ...]
+  let currentMouseWorld = { x: 0, y: 0 };
+
+  function initDocuments() {
+    if (!state.plan) state.plan = {};
+    if (!Array.isArray(state.plan.documents) || state.plan.documents.length === 0) {
+      const initialDoc = {
+        id: 'doc-1',
+        name: 'Ground Floor',
+        type: '2d',
+        entities: Array.isArray(state.plan.entities) ? state.plan.entities : [],
+        viewport: { zoom: transform.zoom, offsetX: transform.offsetX, offsetY: transform.offsetY }
+      };
+      state.plan.documents = [initialDoc];
+      state.plan.activeDocId = initialDoc.id;
+    }
+    if (!state.plan.activeDocId || !state.plan.documents.some(d => d.id === state.plan.activeDocId)) {
+      state.plan.activeDocId = state.plan.documents[0].id;
+    }
+    const active = getActiveDocument();
+    state.plan.entities = active.entities;
+  }
+
+  function getActiveDocument() {
+    if (!state.plan || !Array.isArray(state.plan.documents) || state.plan.documents.length === 0) {
+      initDocuments();
+    }
+    return state.plan.documents.find(d => d.id === state.plan.activeDocId) || state.plan.documents[0];
+  }
+
+  function switchDocument(docId) {
+    if (!state.plan || state.plan.activeDocId === docId) return;
+    const prevDoc = getActiveDocument();
+    if (prevDoc) {
+      prevDoc.viewport = { zoom: transform.zoom, offsetX: transform.offsetX, offsetY: transform.offsetY };
+    }
+    const target = state.plan.documents.find(d => d.id === docId);
+    if (!target) return;
+    state.plan.activeDocId = target.id;
+    state.plan.entities = target.entities;
+    state.plan.selectedIds = new Set();
+    if (target.viewport && typeof target.viewport.zoom === 'number') {
+      transform = {
+        zoom: target.viewport.zoom,
+        offsetX: target.viewport.offsetX,
+        offsetY: target.viewport.offsetY
+      };
+    }
+    renderTabs();
+    render();
+    renderEntityList();
+    renderPropertiesInspector();
+    showToast(`Switched to sheet "${target.name}"`);
+    AudioService.playTick();
+  }
+
+  function createDocument(name) {
+    initDocuments();
+    const count = state.plan.documents.length + 1;
+    const docName = typeof name === 'string' && name.trim() ? name.trim() : `Level ${count}`;
+    const newDoc = {
+      id: `doc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      name: docName,
+      type: '2d',
+      entities: [],
+      viewport: { zoom: 40, offsetX: 60, offsetY: 420 }
+    };
+    state.plan.documents.push(newDoc);
+    switchDocument(newDoc.id);
+  }
+
+  function closeDocument(docId) {
+    initDocuments();
+    if (state.plan.documents.length <= 1) {
+      showToast('Cannot close the last drawing tab', 'warning');
+      return;
+    }
+    const idx = state.plan.documents.findIndex(d => d.id === docId);
+    if (idx === -1) return;
+    const docToClose = state.plan.documents[idx];
+    state.plan.documents.splice(idx, 1);
+    if (state.plan.activeDocId === docId) {
+      const nextDoc = state.plan.documents[Math.max(0, idx - 1)];
+      switchDocument(nextDoc.id);
+    } else {
+      renderTabs();
+    }
+    showToast(`Closed tab "${docToClose.name}"`);
+  }
+
+  function renameDocument(docId, newName) {
+    initDocuments();
+    const doc = state.plan.documents.find(d => d.id === docId);
+    if (!doc) return;
+    const trimmed = typeof newName === 'string' ? newName.trim() : '';
+    if (!trimmed) return;
+    doc.name = trimmed;
+    renderTabs();
+    showToast(`Renamed tab to "${doc.name}"`);
+  }
+
+  function renderTabs() {
+    const listEl = dom.planDocTabsList || document.getElementById('plan-doc-tabs-list');
+    if (!listEl) return;
+    initDocuments();
+    listEl.innerHTML = '';
+    state.plan.documents.forEach(doc => {
+      const isActive = doc.id === state.plan.activeDocId;
+      const tab = document.createElement('div');
+      tab.className = `plan-doc-tab ${isActive ? 'active' : ''}`;
+      tab.dataset.docId = doc.id;
+
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'plan-doc-tab-title';
+      titleSpan.textContent = doc.name;
+      titleSpan.title = 'Double click to rename tab';
+
+      titleSpan.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        const currentName = doc.name;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentName;
+        input.className = 'calc-input';
+        input.style.cssText = 'height: 22px; padding: 0 4px; font-size: 0.72rem; width: 110px;';
+        tab.replaceChild(input, titleSpan);
+        input.focus();
+        input.select();
+        const commit = () => {
+          const val = input.value.trim() || currentName;
+          renameDocument(doc.id, val);
+        };
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
+          if (ev.key === 'Escape') { input.value = currentName; input.blur(); }
+        });
+      });
+
+      tab.appendChild(titleSpan);
+
+      if (state.plan.documents.length > 1) {
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'plan-doc-tab-close';
+        closeBtn.textContent = '✕';
+        closeBtn.title = `Close ${doc.name}`;
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          closeDocument(doc.id);
+        });
+        tab.appendChild(closeBtn);
+      }
+
+      tab.addEventListener('click', () => {
+        switchDocument(doc.id);
+      });
+
+      listEl.appendChild(tab);
+    });
+  }
+
+  function showHud(lengthVal, angleVal) {
+    const hudEl = dom.planNumericHud || document.getElementById('plan-numeric-hud');
+    const hudLenInput = dom.hudInputLength || document.getElementById('hud-input-length');
+    const hudAngInput = dom.hudInputAngle || document.getElementById('hud-input-angle');
+    if (!hudEl || !hudLenInput || !hudAngInput) return;
+    hudEl.style.display = 'flex';
+    if (document.activeElement !== hudLenInput && document.activeElement !== hudAngInput) {
+      if (typeof lengthVal === 'number' && isFinite(lengthVal)) {
+        hudLenInput.value = `${lengthVal.toFixed(2)}m`;
+      }
+      if (typeof angleVal === 'number' && isFinite(angleVal)) {
+        hudAngInput.value = `${angleVal.toFixed(0)}°`;
+      }
+    }
+  }
+
+  function hideHud() {
+    const hudEl = dom.planNumericHud || document.getElementById('plan-numeric-hud');
+    const hudLenInput = dom.hudInputLength || document.getElementById('hud-input-length');
+    const hudAngInput = dom.hudInputAngle || document.getElementById('hud-input-angle');
+    if (!hudEl) return;
+    hudEl.style.display = 'none';
+    if (document.activeElement === hudLenInput || document.activeElement === hudAngInput) {
+      document.activeElement.blur();
+    }
+  }
+
+  function applyHud() {
+    const hudLenInput = dom.hudInputLength || document.getElementById('hud-input-length');
+    const hudAngInput = dom.hudInputAngle || document.getElementById('hud-input-angle');
+    if (!dragState || dragState.mode !== 'create') {
+      hideHud();
+      return;
+    }
+    const lenStr = hudLenInput?.value || '';
+    const angStr = hudAngInput?.value || '';
+    let parsedLen = parseFloat(lenStr);
+    if (isNaN(parsedLen) || parsedLen <= 0) return;
+    if (lenStr.toLowerCase().includes('mm')) parsedLen /= 1000;
+    else if (lenStr.toLowerCase().includes('cm')) parsedLen /= 100;
+
+    let parsedAng = parseFloat(angStr.replace('°', ''));
+    if (isNaN(parsedAng)) parsedAng = 0;
+    const rad = (parsedAng * Math.PI) / 180;
+
+    const start = dragState.start;
+    const end = {
+      x: start.x + parsedLen * Math.cos(rad),
+      y: start.y + parsedLen * Math.sin(rad)
+    };
+    dragState.current = end;
+    if (dragState.tool === 'wall') {
+      createWallEntity(start, end);
+    } else if (dragState.tool === 'room') {
+      createRoomEntity(start, end);
+    } else if (dragState.tool === 'dimension') {
+      createDimensionEntity(start, end);
+    }
+    dragState = null;
+    hideHud();
+    render();
+  }
+
+  function setupHudListeners() {
+    const hudLenInput = dom.hudInputLength || document.getElementById('hud-input-length');
+    const hudAngInput = dom.hudInputAngle || document.getElementById('hud-input-angle');
+    if (hudLenInput) {
+      hudLenInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          applyHud();
+        } else if (e.key === 'Tab') {
+          e.preventDefault();
+          hudAngInput?.focus();
+          hudAngInput?.select();
+        } else if (e.key === 'Escape') {
+          hideHud();
+        }
+      });
+    }
+    if (hudAngInput) {
+      hudAngInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          applyHud();
+        } else if (e.key === 'Tab') {
+          e.preventDefault();
+          hudLenInput?.focus();
+          hudLenInput?.select();
+        } else if (e.key === 'Escape') {
+          hideHud();
+        }
+      });
+    }
+  }
+
+  function finishPolyRoom() {
+    if (polyRoomVertices.length < 3) {
+      polyRoomVertices = [];
+      render();
+      renderContextualToolbar();
+      return;
+    }
+    const boundary = polyRoomVertices.map(p => ({ x: p.x, y: p.y }));
+    polyRoomVertices = [];
+    let room;
+    try {
+      room = createRoom({
+        name: `Room ${entities().filter(e => e.kind === 'room').length + 1}`,
+        boundary
+      });
+    } catch (e) {
+      showToast(e.message, 'warning');
+      render();
+      renderContextualToolbar();
+      return;
+    }
+    const cmd = entityAddRemoveCommand(entities(), room, `add room ${room.name}`);
+    cmd.redo();
+    history.push(cmd);
+    state.plan.selectedIds = new Set([room.id]);
+    showToast(`Polygonal Room added: ${boundary.length} vertices (${roomArea(room).toFixed(1)} m²)`);
+    AudioService.playTick();
+    render();
+    renderContextualToolbar();
+  }
+
+  function cancelPolyRoom() {
+    polyRoomVertices = [];
+    render();
+    renderContextualToolbar();
+    showToast('Polygonal room cancelled');
+  }
 
   /** Keeps svg.width/height synced to the element's real box so the
    * viewBox always equals the pixel box — pointer mapping then never
@@ -110,7 +405,13 @@ export function createPlanView(context) {
     setZoomPercent(transform.zoom * factor);
   }
 
-  function entities() { return state.plan.entities; }
+  function entities() {
+    if (!Array.isArray(state.plan?.entities)) {
+      if (state.plan) state.plan.entities = [];
+      return [];
+    }
+    return state.plan.entities;
+  }
 
   function savePrefs() {
     try {
@@ -238,16 +539,39 @@ export function createPlanView(context) {
     const sel = selectedId ? entities().find(e => e.id === selectedId) : null;
 
     if (!sel || selCount === 0) {
+      if (polyRoomVertices.length > 0) {
+        bar.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="context-tag-badge" style="background: rgba(56, 189, 248, 0.2); color: var(--accent-primary, #38bdf8); border-color: var(--accent-primary, #38bdf8);">POLYGON ROOM</span>
+            <span style="font-size: 0.75rem; color: var(--text-primary); font-weight: 600;">${polyRoomVertices.length} points placed</span>
+            ${polyRoomVertices.length >= 3 ? '<button type="button" class="context-action-btn" id="ctx-close-poly" style="background: rgba(74, 222, 128, 0.18); color: #4ade80; border-color: rgba(74, 222, 128, 0.4);"><span>✓ Complete & Close</span></button>' : '<span style="font-size: 0.70rem; color: var(--text-muted);">(Click 3+ corners, then click start point or Complete)</span>'}
+            <button type="button" class="context-action-btn danger" id="ctx-cancel-poly"><span>✕ Cancel</span></button>
+          </div>
+        `;
+        bar.querySelector('#ctx-close-poly')?.addEventListener('click', finishPolyRoom);
+        bar.querySelector('#ctx-cancel-poly')?.addEventListener('click', cancelPolyRoom);
+        return;
+      }
+
+      const isRoomTool = state.plan.tool === 'room' || state.plan.tool === 'polyroom';
       bar.innerHTML = `
         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
           <span class="context-tag-badge">READY</span>
-          <span style="font-size: 0.72rem; color: var(--text-muted);">Active: <strong style="color: var(--accent-primary);">${(state.plan.tool || 'select').toUpperCase()}</strong> · Quick Add:</span>
-          <button type="button" class="context-action-btn" id="ctx-quick-room"><span>+ 4×3m Room</span></button>
-          <button type="button" class="context-action-btn" id="ctx-quick-wall"><span>+ 5m Wall</span></button>
-          <button type="button" class="context-action-btn" id="ctx-quick-desk"><span>+ Desk</span></button>
-          <button type="button" class="context-action-btn" id="ctx-quick-stair"><span>+ Stair</span></button>
+          <span style="font-size: 0.72rem; color: var(--text-muted);">Active: <strong style="color: var(--accent-primary);">${(state.plan.tool || 'select').toUpperCase()}</strong></span>
+          ${isRoomTool ? `
+            <button type="button" class="context-action-btn ${state.plan.tool === 'room' ? 'active' : ''}" id="ctx-mode-rect"><span>▭ Rectangle</span></button>
+            <button type="button" class="context-action-btn ${state.plan.tool === 'polyroom' ? 'active' : ''}" id="ctx-mode-poly"><span>⬡ Polygonal / L-Shape</span></button>
+          ` : `
+            <span style="font-size: 0.72rem; color: var(--text-muted);">· Quick Add:</span>
+            <button type="button" class="context-action-btn" id="ctx-quick-room"><span>+ 4×3m Room</span></button>
+            <button type="button" class="context-action-btn" id="ctx-quick-wall"><span>+ 5m Wall</span></button>
+            <button type="button" class="context-action-btn" id="ctx-quick-desk"><span>+ Desk</span></button>
+            <button type="button" class="context-action-btn" id="ctx-quick-stair"><span>+ Stair</span></button>
+          `}
         </div>
       `;
+      bar.querySelector('#ctx-mode-rect')?.addEventListener('click', () => setTool('room'));
+      bar.querySelector('#ctx-mode-poly')?.addEventListener('click', () => setTool('polyroom'));
       bar.querySelector('#ctx-quick-room')?.addEventListener('click', () => {
         createRoomEntity({ x: 2, y: 2 }, { x: 6, y: 5 });
       });
@@ -524,15 +848,30 @@ export function createPlanView(context) {
       const isNum = v => typeof v === 'number' && isFinite(v);
       const hasRect = isNum(e.x) && isNum(e.y) && isNum(e.width) && isNum(e.depth);
 
-      if (e.kind === 'room' && hasRect) {
-        const p1 = worldToSvg(transform, e.x, e.y + e.depth);   // bottom-left
-        const p2 = worldToSvg(transform, e.x + e.width, e.y);   // top-right
-        const labelPos = worldToSvg(transform, e.x + e.width / 2, e.y + e.depth / 2);
-        return `<g>
-          <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${((p2.x - p1.x)).toFixed(1)}" height="${((p1.y - p2.y)).toFixed(1)}"
-            fill="var(--bg-chip, rgba(122,162,255,0.08))" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.6}" data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>
-          <text x="${labelPos.x.toFixed(1)}" y="${labelPos.y.toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--text-secondary,#9aa)" font-family="var(--font-mono)">${escapeHtml(e.name)} · ${roomArea(e).toFixed(1)}m²</text>
-        </g>`;
+      if (e.kind === 'room') {
+        if (Array.isArray(e.boundary) && e.boundary.length >= 3) {
+          const ptsStr = e.boundary.map(pt => {
+            const sp = worldToSvg(transform, pt.x, pt.y);
+            return `${sp.x.toFixed(1)},${sp.y.toFixed(1)}`;
+          }).join(' ');
+          const cx = e.boundary.reduce((sum, p) => sum + p.x, 0) / e.boundary.length;
+          const cy = e.boundary.reduce((sum, p) => sum + p.y, 0) / e.boundary.length;
+          const labelPos = worldToSvg(transform, cx, cy);
+          return `<g>
+            <polygon points="${ptsStr}"
+              fill="var(--bg-chip, rgba(122,162,255,0.08))" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.6}" data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>
+            <text x="${labelPos.x.toFixed(1)}" y="${labelPos.y.toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--text-secondary,#9aa)" font-family="var(--font-mono)">${escapeHtml(e.name)} · ${roomArea(e).toFixed(1)}m²</text>
+          </g>`;
+        } else if (hasRect) {
+          const p1 = worldToSvg(transform, e.x, e.y + e.depth);   // bottom-left
+          const p2 = worldToSvg(transform, e.x + e.width, e.y);   // top-right
+          const labelPos = worldToSvg(transform, e.x + e.width / 2, e.y + e.depth / 2);
+          return `<g>
+            <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${((p2.x - p1.x)).toFixed(1)}" height="${((p1.y - p2.y)).toFixed(1)}"
+              fill="var(--bg-chip, rgba(122,162,255,0.08))" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.6}" data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>
+            <text x="${labelPos.x.toFixed(1)}" y="${labelPos.y.toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--text-secondary,#9aa)" font-family="var(--font-mono)">${escapeHtml(e.name)} · ${roomArea(e).toFixed(1)}m²</text>
+          </g>`;
+        }
       }
       if (e.kind === 'wall' && isNum(e.x1) && isNum(e.y1) && isNum(e.x2) && isNum(e.y2)) {
         const a = worldToSvg(transform, e.x1, e.y1);
@@ -704,13 +1043,14 @@ export function createPlanView(context) {
         const b = worldToSvg(transform, dragState.current.x, dragState.current.y);
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         const dM = Math.hypot(dragState.current.x - dragState.start.x, dragState.current.y - dragState.start.y);
+        const deg = ((Math.atan2(dragState.current.y - dragState.start.y, dragState.current.x - dragState.start.x) * 180 / Math.PI) + 360) % 360;
         const col = 'var(--color-warning, #fbbf24)';
         dragMarkup = `
           <line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${col}" stroke-width="2" stroke-dasharray="5 3"/>
           <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="3.5" fill="${col}"/>
           <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="3.5" fill="${col}"/>
-          <rect x="${(mid.x - 30).toFixed(1)}" y="${(mid.y - 18).toFixed(1)}" width="60" height="18" rx="3" fill="var(--bg-surface-raised, #29292e)" stroke="${col}" stroke-width="1"/>
-          <text x="${mid.x.toFixed(1)}" y="${(mid.y - 5).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" fill="#ffffff" font-weight="700">${dM.toFixed(2)}m</text>`;
+          <rect x="${(mid.x - 45).toFixed(1)}" y="${(mid.y - 18).toFixed(1)}" width="90" height="18" rx="3" fill="var(--bg-surface-raised, #29292e)" stroke="${col}" stroke-width="1"/>
+          <text x="${mid.x.toFixed(1)}" y="${(mid.y - 5).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" fill="#ffffff" font-weight="700">${dM.toFixed(2)}m · ${deg.toFixed(0)}°</text>`;
       } else if (dragState.tool === 'room') {
         const a = worldToSvg(transform, Math.min(dragState.start.x, dragState.current.x), Math.max(dragState.start.y, dragState.current.y));
         const b = worldToSvg(transform, Math.max(dragState.start.x, dragState.current.x), Math.min(dragState.start.y, dragState.current.y));
@@ -736,6 +1076,27 @@ export function createPlanView(context) {
         dragMarkup = `<rect x="${a.x.toFixed(1)}" y="${a.y.toFixed(1)}" width="${(b.x - a.x).toFixed(1)}" height="${(a.y - b.y).toFixed(1)}"
           fill="none" stroke="var(--color-warning,#fbbf24)" stroke-width="1.5" stroke-dasharray="5 3"/>`;
       }
+    }
+
+    // Render in-progress polygonal room
+    if (polyRoomVertices.length > 0) {
+      const ptsSvg = polyRoomVertices.map(pt => worldToSvg(transform, pt.x, pt.y));
+      const curSvg = worldToSvg(transform, currentMouseWorld.x, currentMouseWorld.y);
+      const polylineStr = [...ptsSvg, curSvg].map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+      const dotsStr = ptsSvg.map((p, idx) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" fill="var(--accent-primary, #38bdf8)" stroke="#ffffff" stroke-width="1.5"/><text x="${(p.x + 6).toFixed(1)}" y="${(p.y - 6).toFixed(1)}" font-size="9" fill="var(--text-secondary,#9aa)" font-family="var(--font-mono)">P${idx + 1}</text>`).join('');
+
+      const first = polyRoomVertices[0];
+      const distToFirst = Math.hypot(currentMouseWorld.x - first.x, currentMouseWorld.y - first.y);
+      const isClosing = polyRoomVertices.length >= 3 && distToFirst <= Math.max(0.4, state.plan.grid);
+      const closeIndicator = isClosing
+        ? `<circle cx="${ptsSvg[0].x.toFixed(1)}" cy="${ptsSvg[0].y.toFixed(1)}" r="10" fill="none" stroke="var(--color-success, #4ade80)" stroke-width="2.5" stroke-dasharray="3 2"/><text x="${ptsSvg[0].x.toFixed(1)}" y="${(ptsSvg[0].y - 14).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" fill="var(--color-success, #4ade80)" font-weight="700">CLICK TO CLOSE</text>`
+        : '';
+
+      dragMarkup += `
+        <polyline points="${polylineStr}" fill="rgba(56, 189, 248, 0.12)" stroke="var(--accent-primary, #38bdf8)" stroke-width="2" stroke-dasharray="5 3"/>
+        ${dotsStr}
+        ${closeIndicator}
+      `;
     }
 
     let guidesMarkup = '';
@@ -1673,6 +2034,27 @@ export function createPlanView(context) {
         dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
       }
       render();
+    } else if (tool === 'polyroom') {
+      let targetPt = initialPt;
+      if (snapOn) {
+        const snapRes = findSnapPoint(world, entities(), { threshold: 0.35, snapGrid: true, gridSize: state.plan.grid });
+        if (snapRes.snapped) {
+          targetPt = { x: snapRes.x, y: snapRes.y };
+        }
+      }
+      if (polyRoomVertices.length >= 3) {
+        const first = polyRoomVertices[0];
+        const distToFirst = Math.hypot(targetPt.x - first.x, targetPt.y - first.y);
+        if (distToFirst <= Math.max(0.4, state.plan.grid)) {
+          finishPolyRoom();
+          return;
+        }
+      }
+      polyRoomVertices.push(targetPt);
+      AudioService.playTick();
+      render();
+      renderContextualToolbar();
+      return;
     } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'measure') {
       if (snapOn) {
         const snapRes = findSnapPoint(world, entities(), { threshold: 0.35, snapGrid: true, gridSize: state.plan.grid });
@@ -1699,7 +2081,11 @@ export function createPlanView(context) {
 
   function onPointerMove(event) {
     const world = svgPoint(event);
+    currentMouseWorld = world;
     updateStatusBar(world);
+    if (polyRoomVertices.length > 0) {
+      render();
+    }
     if (!dragState) return;
     if (dragState.mode === 'pan') {
       const dx = event.clientX - dragState.startClient.x;
@@ -1809,6 +2195,11 @@ export function createPlanView(context) {
         };
         activeGuides = computeAlignmentGuides(curRect, entities(), 0.15);
       }
+      if (dragState.tool === 'wall' || dragState.tool === 'dimension' || dragState.tool === 'measure' || dragState.tool === 'room') {
+        const dM = Math.hypot(targetPt.x - dragState.start.x, targetPt.y - dragState.start.y);
+        const deg = ((Math.atan2(targetPt.y - dragState.start.y, targetPt.x - dragState.start.x) * 180 / Math.PI) + 360) % 360;
+        showHud(dM, deg);
+      }
       render();
     } else if (dragState.mode === 'move' && dragState.entity) {
       const dx = snapped.x - dragState.last.x;
@@ -1844,6 +2235,13 @@ export function createPlanView(context) {
     if (!dragState) return;
     activeSnap = null;
     activeGuides = { guidesX: [], guidesY: [] };
+
+    const hudEl = dom.planNumericHud || document.getElementById('plan-numeric-hud');
+    const hudLenInput = dom.hudInputLength || document.getElementById('hud-input-length');
+    const hudAngInput = dom.hudInputAngle || document.getElementById('hud-input-angle');
+    if (hudEl && document.activeElement !== hudLenInput && document.activeElement !== hudAngInput) {
+      hideHud();
+    }
 
     if (dragState.mode === 'resize' && dragState.entity) {
       const e = dragState.entity;
@@ -2178,14 +2576,19 @@ export function createPlanView(context) {
       showToast('Project store unavailable', 'warning');
       return;
     }
-    // Deep-copy entities into the project document (plain data, ids preserved)
+    const curDoc = getActiveDocument();
+    if (curDoc) {
+      curDoc.viewport = { zoom: transform.zoom, offsetX: transform.offsetX, offsetY: transform.offsetY };
+    }
     const copy = JSON.parse(JSON.stringify(entities()));
+    const docsCopy = JSON.parse(JSON.stringify(state.plan.documents || []));
     const res = projectStore.updateProject(draft => {
       draft.plan = { entities: copy, savedAt: new Date().toISOString() };
+      draft.documents = docsCopy;
       return draft;
     });
     if (res.ok) {
-      showToast(`Plan saved to project (${copy.length} entities)`);
+      showToast(`Plan saved to project (${copy.length} entities across ${docsCopy.length} sheets)`);
       AudioService.playSuccess();
     } else {
       showToast(`Save failed: ${res.errors[0]}`, 'warning');
@@ -2194,12 +2597,24 @@ export function createPlanView(context) {
 
   function loadFromProject() {
     const p = projectStore?.getProject();
-    if (p && p.plan && Array.isArray(p.plan.entities)) {
-      entities().length = 0;
-      entities().push(...JSON.parse(JSON.stringify(p.plan.entities)));
+    if (p) {
+      if (Array.isArray(p.documents) && p.documents.length > 0) {
+        state.plan.documents = JSON.parse(JSON.stringify(p.documents));
+        state.plan.activeDocId = state.plan.documents[0].id;
+        const active = getActiveDocument();
+        state.plan.entities = active.entities;
+        if (active.viewport && typeof active.viewport.zoom === 'number') {
+          transform = { ...active.viewport };
+        }
+        renderTabs();
+      } else if (p.plan && Array.isArray(p.plan.entities)) {
+        entities().length = 0;
+        entities().push(...JSON.parse(JSON.stringify(p.plan.entities)));
+      }
       history.clear();
-      showToast(`Plan restored from project (${entities().length} entities)`);
       render();
+      renderEntityList();
+      renderPropertiesInspector();
     }
   }
 
@@ -2281,6 +2696,17 @@ export function createPlanView(context) {
       return;
     }
 
+    if (dragState && dragState.mode === 'create' && /^[0-9]$/.test(event.key)) {
+      showHud();
+      const hudLenInput = dom.hudInputLength || document.getElementById('hud-input-length');
+      if (hudLenInput) {
+        hudLenInput.value = event.key;
+        hudLenInput.focus();
+        event.preventDefault();
+        return;
+      }
+    }
+
     // Rebindable shortcuts via ShortcutsManager
     if (typeof ShortcutsManager !== 'undefined') {
       if (ShortcutsManager.matchesEvent('plan_undo', event)) {
@@ -2305,7 +2731,12 @@ export function createPlanView(context) {
         }
         return;
       }
-      if (ShortcutsManager.matchesEvent('plan_cancel', event)) {
+      if (ShortcutsManager.matchesEvent('plan_cancel', event) || event.key === 'Escape') {
+        if (polyRoomVertices.length > 0) {
+          cancelPolyRoom();
+          return;
+        }
+        hideHud();
         state.plan.selectedIds = new Set();
         setTool('select');
         render();
@@ -2421,6 +2852,16 @@ export function createPlanView(context) {
       populateFurniture();
       syncToolVisibility();
       loadFromProject();
+      initDocuments();
+      renderTabs();
+
+      const newDocBtn = dom.btnPlanNewDoc || document.getElementById('btn-plan-new-doc');
+      if (newDocBtn) {
+        newDocBtn.addEventListener('click', () => {
+          createDocument();
+        });
+      }
+      setupHudListeners();
 
       // Tool palette buttons
       const palette = dom.planToolPalette || document.getElementById('plan-tool-palette');
@@ -2465,6 +2906,11 @@ export function createPlanView(context) {
           const world = svgPoint(e);
           updateStatusBar(world);
         });
+        dom.planSvg.addEventListener('dblclick', () => {
+          if (polyRoomVertices.length >= 3) {
+            finishPolyRoom();
+          }
+        });
         window.addEventListener('pointermove', onPointerMove);
         window.addEventListener('pointerup', onPointerUp);
         dom.planSvg.addEventListener('wheel', (e) => {
@@ -2486,7 +2932,9 @@ export function createPlanView(context) {
         render, undo, redo, deleteSelected, clearPlan, saveToProject, exportPlan,
         syncToolVisibility, fitToContent, setZoomPercent, zoomStep, syncSvgSize,
         triggerAiCritique, setTool, cycleGrid, toggleSnap, duplicateSelected,
-        renderContextualToolbar, updateStatusBar
+        renderContextualToolbar, updateStatusBar,
+        switchDocument, createDocument, closeDocument, renameDocument,
+        finishPolyRoom, cancelPolyRoom, renderTabs
       };
     }
   };
