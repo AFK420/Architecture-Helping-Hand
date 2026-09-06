@@ -812,4 +812,261 @@ export function calcWindowCADGeometry(wall, window) {
   };
 }
 
+/**
+ * Calculates precision CAD dimension drafting geometry:
+ * offset dimension line, witness/extension lines with standoff & overshoot,
+ * terminations (architectural ticks, arrowheads, dots), and text placement.
+ *
+ * @param {{x: number, y: number}} p1 - First anchor point
+ * @param {{x: number, y: number}} p2 - Second anchor point
+ * @param {Object} [options]
+ * @param {number} [options.offset=0.6] - Perpendicular offset distance (m). Positive = normal side, negative = opposite.
+ * @param {string} [options.style='tick'] - 'tick' | 'arrow' | 'dot'
+ * @param {string} [options.orientation='aligned'] - 'aligned' | 'horizontal' | 'vertical'
+ * @param {number} [options.standoff=0.08] - Gap between anchor point and witness line start (m)
+ * @param {number} [options.overshoot=0.12] - Extension of witness line past dimension line (m)
+ * @param {number} [options.tickSize=0.15] - Length of 45-degree architectural slash tick (m)
+ * @param {number} [options.arrowLength=0.20] - Length of engineering arrowhead (m)
+ * @param {number} [options.arrowWidth=0.08] - Half-width of engineering arrowhead (m)
+ * @returns {Object}
+ */
+export function calcDimensionGeometry(p1, p2, options = {}) {
+  if (!p1 || !p2 || typeof p1.x !== 'number' || typeof p2.x !== 'number') {
+    throw new TypeError('calcDimensionGeometry expects valid p1 and p2 coordinate objects');
+  }
+
+  const offset = typeof options.offset === 'number' ? options.offset : 0.6;
+  const style = options.style === 'arrow' || options.style === 'dot' ? options.style : 'tick';
+  const orientation = options.orientation === 'horizontal' || options.orientation === 'vertical' ? options.orientation : 'aligned';
+  const standoff = typeof options.standoff === 'number' ? options.standoff : 0.08;
+  const overshoot = typeof options.overshoot === 'number' ? options.overshoot : 0.12;
+  const tickSize = typeof options.tickSize === 'number' ? options.tickSize : 0.15;
+  const arrowLength = typeof options.arrowLength === 'number' ? options.arrowLength : 0.20;
+  const arrowWidth = typeof options.arrowWidth === 'number' ? options.arrowWidth : 0.08;
+
+  let measuredDistance;
+  let u, n;
+
+  if (orientation === 'horizontal') {
+    measuredDistance = Math.abs(p2.x - p1.x);
+    const dirX = p2.x >= p1.x ? 1 : -1;
+    u = { x: dirX, y: 0 };
+    const signY = offset >= 0 ? 1 : -1;
+    n = { x: 0, y: signY };
+  } else if (orientation === 'vertical') {
+    measuredDistance = Math.abs(p2.y - p1.y);
+    const dirY = p2.y >= p1.y ? 1 : -1;
+    u = { x: 0, y: dirY };
+    const signX = offset >= 0 ? 1 : -1;
+    n = { x: signX, y: 0 };
+  } else {
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    measuredDistance = Math.hypot(dx, dy);
+    if (measuredDistance < 1e-6) {
+      u = { x: 1, y: 0 };
+      n = { x: 0, y: 1 };
+    } else {
+      u = { x: dx / measuredDistance, y: dy / measuredDistance };
+      n = { x: -u.y, y: u.x };
+    }
+  }
+
+  const absOffset = Math.abs(offset);
+  const offsetSign = offset >= 0 ? 1 : -1;
+  const offVector = { x: n.x * offsetSign * absOffset, y: n.y * offsetSign * absOffset };
+  const offDist = offsetSign * absOffset;
+
+  // Dimension line endpoints
+  const dimP1 = { x: p1.x + offVector.x, y: p1.y + offVector.y };
+  const dimP2 = {
+    x: orientation === 'horizontal' ? p2.x + offVector.x : (orientation === 'vertical' ? p1.x + offVector.x : p2.x + offVector.x),
+    y: orientation === 'horizontal' ? p1.y + offVector.y : (orientation === 'vertical' ? p2.y + offVector.y : p2.y + offVector.y)
+  };
+
+  const wDir = {
+    x: offDist !== 0 ? offVector.x / Math.hypot(offVector.x, offVector.y) : n.x,
+    y: offDist !== 0 ? offVector.y / Math.hypot(offVector.x, offVector.y) : n.y
+  };
+
+  const w1Start = { x: p1.x + wDir.x * standoff, y: p1.y + wDir.y * standoff };
+  const w1End = { x: dimP1.x + wDir.x * overshoot, y: dimP1.y + wDir.y * overshoot };
+
+  const p2Anchor = {
+    x: orientation === 'vertical' ? p1.x : p2.x,
+    y: orientation === 'horizontal' ? p1.y : p2.y
+  };
+  const w2Start = { x: p2Anchor.x + wDir.x * standoff, y: p2Anchor.y + wDir.y * standoff };
+  const w2End = { x: dimP2.x + wDir.x * overshoot, y: dimP2.y + wDir.y * overshoot };
+
+  const textMid = {
+    x: (dimP1.x + dimP2.x) / 2,
+    y: (dimP1.y + dimP2.y) / 2
+  };
+
+  let angleDeg = (Math.atan2(dimP2.y - dimP1.y, dimP2.x - dimP1.x) * 180 / Math.PI);
+  if (angleDeg > 90) angleDeg -= 180;
+  else if (angleDeg < -90) angleDeg += 180;
+
+  let ticks = [];
+  let arrows = [];
+  let dots = [];
+
+  if (style === 'tick') {
+    const halfT = tickSize / 2;
+    const tickVec = {
+      x: (u.x - u.y) * 0.7071 * halfT,
+      y: (u.x + u.y) * 0.7071 * halfT
+    };
+    ticks = [
+      [
+        { x: dimP1.x - tickVec.x, y: dimP1.y - tickVec.y },
+        { x: dimP1.x + tickVec.x, y: dimP1.y + tickVec.y }
+      ],
+      [
+        { x: dimP2.x - tickVec.x, y: dimP2.y - tickVec.y },
+        { x: dimP2.x + tickVec.x, y: dimP2.y + tickVec.y }
+      ]
+    ];
+  } else if (style === 'arrow') {
+    const arrow1 = [
+      { x: dimP1.x, y: dimP1.y },
+      { x: dimP1.x + u.x * arrowLength + n.x * arrowWidth, y: dimP1.y + u.y * arrowLength + n.y * arrowWidth },
+      { x: dimP1.x + u.x * arrowLength - n.x * arrowWidth, y: dimP1.y + u.y * arrowLength - n.y * arrowWidth }
+    ];
+    const arrow2 = [
+      { x: dimP2.x, y: dimP2.y },
+      { x: dimP2.x - u.x * arrowLength + n.x * arrowWidth, y: dimP2.y - u.y * arrowLength + n.y * arrowWidth },
+      { x: dimP2.x - u.x * arrowLength - n.x * arrowWidth, y: dimP2.y - u.y * arrowLength - n.y * arrowWidth }
+    ];
+    arrows = [arrow1, arrow2];
+  } else if (style === 'dot') {
+    dots = [
+      { x: dimP1.x, y: dimP1.y, radius: 0.05 },
+      { x: dimP2.x, y: dimP2.y, radius: 0.05 }
+    ];
+  }
+
+  return {
+    distance: measuredDistance,
+    dimLine: [dimP1, dimP2],
+    witness1: [w1Start, w1End],
+    witness2: [w2Start, w2End],
+    textMid,
+    textAngle: angleDeg,
+    style,
+    orientation,
+    ticks,
+    arrows,
+    dots
+  };
+}
+
+/**
+ * Projects a cursor point perpendicularly onto a segment.
+ * Returns projection object if the orthogonal foot lands on the segment.
+ * @param {{x: number, y: number}} point
+ * @param {{x: number, y: number}} lineStart
+ * @param {{x: number, y: number}} lineEnd
+ * @param {number} [maxDistance=0.35]
+ * @returns {Object|null}
+ */
+export function findPerpendicularProjection(point, lineStart, lineEnd, maxDistance = 0.35) {
+  if (!point || !lineStart || !lineEnd) return null;
+  const proj = projectPointOnSegment(point, lineStart, lineEnd);
+  if (proj.t >= 0.02 && proj.t <= 0.98 && proj.distance <= maxDistance) {
+    return {
+      x: proj.point.x,
+      y: proj.point.y,
+      distance: proj.distance,
+      t: proj.t,
+      type: 'perpendicular'
+    };
+  }
+  return null;
+}
+
+/**
+ * Detects if a cursor point is tracking the collinear extension ray beyond a segment's endpoints.
+ * @param {{x: number, y: number}} point
+ * @param {{x: number, y: number}} lineStart
+ * @param {{x: number, y: number}} lineEnd
+ * @param {number} [maxDistance=3.0]
+ * @param {number} [tolerance=0.20]
+ * @returns {Object|null}
+ */
+export function findExtensionSnap(point, lineStart, lineEnd, maxDistance = 3.0, tolerance = 0.20) {
+  if (!point || !lineStart || !lineEnd) return null;
+  const dx = lineEnd.x - lineStart.x;
+  const dy = lineEnd.y - lineStart.y;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 1e-4) return null;
+
+  const len = Math.sqrt(lenSq);
+  // Unclamped t parameter along the infinite line
+  const t = ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lenSq;
+
+  // Check if point is outside the segment
+  let anchor = null;
+  let distFromEndpoint = 0;
+  if (t < -0.01) {
+    anchor = lineStart;
+    distFromEndpoint = Math.abs(t) * len;
+  } else if (t > 1.01) {
+    anchor = lineEnd;
+    distFromEndpoint = (t - 1.0) * len;
+  } else {
+    return null; // Inside segment body
+  }
+
+  if (distFromEndpoint > maxDistance) return null;
+
+  // Perpendicular distance to the line
+  const projX = lineStart.x + t * dx;
+  const projY = lineStart.y + t * dy;
+  const perpDist = Math.hypot(point.x - projX, point.y - projY);
+
+  if (perpDist <= tolerance) {
+    return {
+      x: projX,
+      y: projY,
+      distance: perpDist,
+      distFromEndpoint,
+      anchor,
+      guideRay: [anchor, { x: projX, y: projY }],
+      type: 'extension'
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Finds all finite segment intersection points among a collection of segments.
+ * @param {Array<{p1: {x:number, y:number}, p2: {x:number, y:number}, id?: string}>} segments
+ * @returns {Array<{x: number, y: number, segId1?: string, segId2?: string}>}
+ */
+export function findSegmentIntersections(segments = []) {
+  const hits = [];
+  const n = segments.length;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const s1 = segments[i];
+      const s2 = segments[j];
+      if (!s1 || !s2) continue;
+      const pt = intersectSegments(s1.p1, s1.p2, s2.p1, s2.p2);
+      if (pt) {
+        hits.push({
+          x: pt.x,
+          y: pt.y,
+          segId1: s1.id,
+          segId2: s2.id,
+          type: 'intersection'
+        });
+      }
+    }
+  }
+  return hits;
+}
+
 

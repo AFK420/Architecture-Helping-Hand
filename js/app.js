@@ -1572,6 +1572,263 @@ function calcWindowCADGeometry(wall, window) {
   };
 }
 
+/**
+ * Calculates precision CAD dimension drafting geometry:
+ * offset dimension line, witness/extension lines with standoff & overshoot,
+ * terminations (architectural ticks, arrowheads, dots), and text placement.
+ *
+ * @param {{x: number, y: number}} p1 - First anchor point
+ * @param {{x: number, y: number}} p2 - Second anchor point
+ * @param {Object} [options]
+ * @param {number} [options.offset=0.6] - Perpendicular offset distance (m). Positive = normal side, negative = opposite.
+ * @param {string} [options.style='tick'] - 'tick' | 'arrow' | 'dot'
+ * @param {string} [options.orientation='aligned'] - 'aligned' | 'horizontal' | 'vertical'
+ * @param {number} [options.standoff=0.08] - Gap between anchor point and witness line start (m)
+ * @param {number} [options.overshoot=0.12] - Extension of witness line past dimension line (m)
+ * @param {number} [options.tickSize=0.15] - Length of 45-degree architectural slash tick (m)
+ * @param {number} [options.arrowLength=0.20] - Length of engineering arrowhead (m)
+ * @param {number} [options.arrowWidth=0.08] - Half-width of engineering arrowhead (m)
+ * @returns {Object}
+ */
+function calcDimensionGeometry(p1, p2, options = {}) {
+  if (!p1 || !p2 || typeof p1.x !== 'number' || typeof p2.x !== 'number') {
+    throw new TypeError('calcDimensionGeometry expects valid p1 and p2 coordinate objects');
+  }
+
+  const offset = typeof options.offset === 'number' ? options.offset : 0.6;
+  const style = options.style === 'arrow' || options.style === 'dot' ? options.style : 'tick';
+  const orientation = options.orientation === 'horizontal' || options.orientation === 'vertical' ? options.orientation : 'aligned';
+  const standoff = typeof options.standoff === 'number' ? options.standoff : 0.08;
+  const overshoot = typeof options.overshoot === 'number' ? options.overshoot : 0.12;
+  const tickSize = typeof options.tickSize === 'number' ? options.tickSize : 0.15;
+  const arrowLength = typeof options.arrowLength === 'number' ? options.arrowLength : 0.20;
+  const arrowWidth = typeof options.arrowWidth === 'number' ? options.arrowWidth : 0.08;
+
+  let measuredDistance;
+  let u, n;
+
+  if (orientation === 'horizontal') {
+    measuredDistance = Math.abs(p2.x - p1.x);
+    const dirX = p2.x >= p1.x ? 1 : -1;
+    u = { x: dirX, y: 0 };
+    const signY = offset >= 0 ? 1 : -1;
+    n = { x: 0, y: signY };
+  } else if (orientation === 'vertical') {
+    measuredDistance = Math.abs(p2.y - p1.y);
+    const dirY = p2.y >= p1.y ? 1 : -1;
+    u = { x: 0, y: dirY };
+    const signX = offset >= 0 ? 1 : -1;
+    n = { x: signX, y: 0 };
+  } else {
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    measuredDistance = Math.hypot(dx, dy);
+    if (measuredDistance < 1e-6) {
+      u = { x: 1, y: 0 };
+      n = { x: 0, y: 1 };
+    } else {
+      u = { x: dx / measuredDistance, y: dy / measuredDistance };
+      n = { x: -u.y, y: u.x };
+    }
+  }
+
+  const absOffset = Math.abs(offset);
+  const offsetSign = offset >= 0 ? 1 : -1;
+  const offVector = { x: n.x * offsetSign * absOffset, y: n.y * offsetSign * absOffset };
+  const offDist = offsetSign * absOffset;
+
+  // Dimension line endpoints
+  const dimP1 = { x: p1.x + offVector.x, y: p1.y + offVector.y };
+  const dimP2 = {
+    x: orientation === 'horizontal' ? p2.x + offVector.x : (orientation === 'vertical' ? p1.x + offVector.x : p2.x + offVector.x),
+    y: orientation === 'horizontal' ? p1.y + offVector.y : (orientation === 'vertical' ? p2.y + offVector.y : p2.y + offVector.y)
+  };
+
+  const wDir = {
+    x: offDist !== 0 ? offVector.x / Math.hypot(offVector.x, offVector.y) : n.x,
+    y: offDist !== 0 ? offVector.y / Math.hypot(offVector.x, offVector.y) : n.y
+  };
+
+  const w1Start = { x: p1.x + wDir.x * standoff, y: p1.y + wDir.y * standoff };
+  const w1End = { x: dimP1.x + wDir.x * overshoot, y: dimP1.y + wDir.y * overshoot };
+
+  const p2Anchor = {
+    x: orientation === 'vertical' ? p1.x : p2.x,
+    y: orientation === 'horizontal' ? p1.y : p2.y
+  };
+  const w2Start = { x: p2Anchor.x + wDir.x * standoff, y: p2Anchor.y + wDir.y * standoff };
+  const w2End = { x: dimP2.x + wDir.x * overshoot, y: dimP2.y + wDir.y * overshoot };
+
+  const textMid = {
+    x: (dimP1.x + dimP2.x) / 2,
+    y: (dimP1.y + dimP2.y) / 2
+  };
+
+  let angleDeg = (Math.atan2(dimP2.y - dimP1.y, dimP2.x - dimP1.x) * 180 / Math.PI);
+  if (angleDeg > 90) angleDeg -= 180;
+  else if (angleDeg < -90) angleDeg += 180;
+
+  let ticks = [];
+  let arrows = [];
+  let dots = [];
+
+  if (style === 'tick') {
+    const halfT = tickSize / 2;
+    const tickVec = {
+      x: (u.x - u.y) * 0.7071 * halfT,
+      y: (u.x + u.y) * 0.7071 * halfT
+    };
+    ticks = [
+      [
+        { x: dimP1.x - tickVec.x, y: dimP1.y - tickVec.y },
+        { x: dimP1.x + tickVec.x, y: dimP1.y + tickVec.y }
+      ],
+      [
+        { x: dimP2.x - tickVec.x, y: dimP2.y - tickVec.y },
+        { x: dimP2.x + tickVec.x, y: dimP2.y + tickVec.y }
+      ]
+    ];
+  } else if (style === 'arrow') {
+    const arrow1 = [
+      { x: dimP1.x, y: dimP1.y },
+      { x: dimP1.x + u.x * arrowLength + n.x * arrowWidth, y: dimP1.y + u.y * arrowLength + n.y * arrowWidth },
+      { x: dimP1.x + u.x * arrowLength - n.x * arrowWidth, y: dimP1.y + u.y * arrowLength - n.y * arrowWidth }
+    ];
+    const arrow2 = [
+      { x: dimP2.x, y: dimP2.y },
+      { x: dimP2.x - u.x * arrowLength + n.x * arrowWidth, y: dimP2.y - u.y * arrowLength + n.y * arrowWidth },
+      { x: dimP2.x - u.x * arrowLength - n.x * arrowWidth, y: dimP2.y - u.y * arrowLength - n.y * arrowWidth }
+    ];
+    arrows = [arrow1, arrow2];
+  } else if (style === 'dot') {
+    dots = [
+      { x: dimP1.x, y: dimP1.y, radius: 0.05 },
+      { x: dimP2.x, y: dimP2.y, radius: 0.05 }
+    ];
+  }
+
+  return {
+    distance: measuredDistance,
+    dimLine: [dimP1, dimP2],
+    witness1: [w1Start, w1End],
+    witness2: [w2Start, w2End],
+    textMid,
+    textAngle: angleDeg,
+    style,
+    orientation,
+    ticks,
+    arrows,
+    dots
+  };
+}
+
+/**
+ * Projects a cursor point perpendicularly onto a segment.
+ * Returns projection object if the orthogonal foot lands on the segment.
+ * @param {{x: number, y: number}} point
+ * @param {{x: number, y: number}} lineStart
+ * @param {{x: number, y: number}} lineEnd
+ * @param {number} [maxDistance=0.35]
+ * @returns {Object|null}
+ */
+function findPerpendicularProjection(point, lineStart, lineEnd, maxDistance = 0.35) {
+  if (!point || !lineStart || !lineEnd) return null;
+  const proj = projectPointOnSegment(point, lineStart, lineEnd);
+  if (proj.t >= 0.02 && proj.t <= 0.98 && proj.distance <= maxDistance) {
+    return {
+      x: proj.point.x,
+      y: proj.point.y,
+      distance: proj.distance,
+      t: proj.t,
+      type: 'perpendicular'
+    };
+  }
+  return null;
+}
+
+/**
+ * Detects if a cursor point is tracking the collinear extension ray beyond a segment's endpoints.
+ * @param {{x: number, y: number}} point
+ * @param {{x: number, y: number}} lineStart
+ * @param {{x: number, y: number}} lineEnd
+ * @param {number} [maxDistance=3.0]
+ * @param {number} [tolerance=0.20]
+ * @returns {Object|null}
+ */
+function findExtensionSnap(point, lineStart, lineEnd, maxDistance = 3.0, tolerance = 0.20) {
+  if (!point || !lineStart || !lineEnd) return null;
+  const dx = lineEnd.x - lineStart.x;
+  const dy = lineEnd.y - lineStart.y;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 1e-4) return null;
+
+  const len = Math.sqrt(lenSq);
+  // Unclamped t parameter along the infinite line
+  const t = ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lenSq;
+
+  // Check if point is outside the segment
+  let anchor = null;
+  let distFromEndpoint = 0;
+  if (t < -0.01) {
+    anchor = lineStart;
+    distFromEndpoint = Math.abs(t) * len;
+  } else if (t > 1.01) {
+    anchor = lineEnd;
+    distFromEndpoint = (t - 1.0) * len;
+  } else {
+    return null; // Inside segment body
+  }
+
+  if (distFromEndpoint > maxDistance) return null;
+
+  // Perpendicular distance to the line
+  const projX = lineStart.x + t * dx;
+  const projY = lineStart.y + t * dy;
+  const perpDist = Math.hypot(point.x - projX, point.y - projY);
+
+  if (perpDist <= tolerance) {
+    return {
+      x: projX,
+      y: projY,
+      distance: perpDist,
+      distFromEndpoint,
+      anchor,
+      guideRay: [anchor, { x: projX, y: projY }],
+      type: 'extension'
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Finds all finite segment intersection points among a collection of segments.
+ * @param {Array<{p1: {x:number, y:number}, p2: {x:number, y:number}, id?: string}>} segments
+ * @returns {Array<{x: number, y: number, segId1?: string, segId2?: string}>}
+ */
+function findSegmentIntersections(segments = []) {
+  const hits = [];
+  const n = segments.length;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const s1 = segments[i];
+      const s2 = segments[j];
+      if (!s1 || !s2) continue;
+      const pt = intersectSegments(s1.p1, s1.p2, s2.p1, s2.p2);
+      if (pt) {
+        hits.push({
+          x: pt.x,
+          y: pt.y,
+          segId1: s1.id,
+          segId2: s2.id,
+          type: 'intersection'
+        });
+      }
+    }
+  }
+  return hits;
+}
+
 
 
 
@@ -10670,12 +10927,218 @@ function createRampEntity({
 }
 
 // ---------------------------------------------------------------------------
+// Dimensions & Annotations (CAD Aligned/Linear with Witness Lines)
+// ---------------------------------------------------------------------------
+
+const DIMENSION_STYLES = Object.freeze(['tick', 'arrow', 'dot']);
+const DIMENSION_ORIENTATIONS = Object.freeze(['aligned', 'horizontal', 'vertical']);
+const DIMENSION_UNITS = Object.freeze(['m', 'mm', 'ft_in']);
+
+/**
+ * Validates and creates a precision dimension entity.
+ * @param {Object} options
+ * @returns {Object} Dimension entity
+ */
+function createDimension({
+  id,
+  name,
+  x1,
+  y1,
+  x2,
+  y2,
+  p1,
+  p2,
+  offset = 0.6,
+  style = 'tick',
+  orientation = 'aligned',
+  unit = 'm',
+  dualUnit = false,
+  textOverride = null,
+  floorId = 'floor-1',
+  metadata = {}
+} = {}) {
+  const actualP1 = p1 || { x: x1, y: y1 };
+  const actualP2 = p2 || { x: x2, y: y2 };
+
+  if (!actualP1 || typeof actualP1 !== 'object') throw new TypeError('Dimension p1 is required');
+  if (!actualP2 || typeof actualP2 !== 'object') throw new TypeError('Dimension p2 is required');
+
+  requireFiniteNumber(actualP1.x, 'dimension.p1.x');
+  requireFiniteNumber(actualP1.y, 'dimension.p1.y');
+  requireFiniteNumber(actualP2.x, 'dimension.p2.x');
+  requireFiniteNumber(actualP2.y, 'dimension.p2.y');
+
+  const dx = actualP2.x - actualP1.x;
+  const dy = actualP2.y - actualP1.y;
+  if (Math.hypot(dx, dy) < 1e-4) {
+    throw new Error('Dimension start and end points cannot be identical (length must be > 0)');
+  }
+
+  const validatedStyle = DIMENSION_STYLES.includes(style) ? style : 'tick';
+  const validatedOrientation = DIMENSION_ORIENTATIONS.includes(orientation) ? orientation : 'aligned';
+
+  return {
+    kind: 'dimension',
+    id: id || generateEntityId('dim'),
+    name: typeof name === 'string' && name ? name : 'Dimension',
+    p1: { x: actualP1.x, y: actualP1.y },
+    p2: { x: actualP2.x, y: actualP2.y },
+    x1: actualP1.x,
+    y1: actualP1.y,
+    x2: actualP2.x,
+    y2: actualP2.y,
+    x: Math.min(actualP1.x, actualP2.x),
+    y: Math.min(actualP1.y, actualP2.y),
+    width: Math.abs(actualP2.x - actualP1.x),
+    depth: Math.abs(actualP2.y - actualP1.y),
+    offset: typeof offset === 'number' && !isNaN(offset) ? offset : 0.6,
+    style: validatedStyle,
+    orientation: validatedOrientation,
+    unit: typeof unit === 'string' ? unit : 'm',
+    dualUnit: Boolean(dualUnit),
+    textOverride: typeof textOverride === 'string' && textOverride ? textOverride : null,
+    floorId,
+    metadata
+  };
+}
+
+/**
+ * Automatically inspects a wall and any hosted openings to generate
+ * an aligned dimension string (sub-segments across openings plus an overall dimension).
+ * @param {Object} wall
+ * @param {Array<Object>} [allEntities=[]]
+ * @param {Object} [options={}]
+ * @returns {Array<Object>} Array of Dimension entities
+ */
+function autoDimensionWall(wall, allEntities = [], options = {}) {
+  if (!wall || typeof wall.x1 !== 'number' || typeof wall.x2 !== 'number') return [];
+  const dx = wall.x2 - wall.x1;
+  const dy = wall.y2 - wall.y1;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-4) return [];
+
+  const u = { x: dx / len, y: dy / len };
+  const offset = typeof options.offset === 'number' ? options.offset : 0.6;
+  const overallSpacing = typeof options.overallSpacing === 'number' ? options.overallSpacing : 0.45;
+  const style = options.style || 'tick';
+  const orientation = options.orientation || 'aligned';
+  const unit = options.unit || 'm';
+  const dualUnit = Boolean(options.dualUnit);
+  const floorId = wall.floorId || 'floor-1';
+
+  // Find openings hosted on this wall
+  const openings = (allEntities || []).filter(e =>
+    e && (e.kind === 'door' || e.kind === 'window') && e.wallId === wall.id
+  );
+
+  // If no openings, return single overall dimension
+  if (openings.length === 0) {
+    return [
+      createDimension({
+        name: `${wall.name || 'Wall'} Dim`,
+        p1: { x: wall.x1, y: wall.y1 },
+        p2: { x: wall.x2, y: wall.y2 },
+        offset,
+        style,
+        orientation,
+        unit,
+        dualUnit,
+        floorId
+      })
+    ];
+  }
+
+  // Collect opening intervals clamped to [0, len]
+  const intervals = [];
+  for (const op of openings) {
+    if (typeof op.position !== 'number' || typeof op.width !== 'number') continue;
+    const s = Math.max(0, Math.min(len, op.position));
+    const e = Math.max(0, Math.min(len, op.position + Math.max(0, op.width)));
+    if (e > s) {
+      intervals.push({ start: s, end: e });
+    }
+  }
+
+  intervals.sort((a, b) => a.start - b.start);
+
+  // Merge overlapping intervals
+  const merged = [];
+  for (const item of intervals) {
+    if (merged.length === 0) {
+      merged.push(item);
+    } else {
+      const prev = merged[merged.length - 1];
+      if (item.start <= prev.end) {
+        prev.end = Math.max(prev.end, item.end);
+      } else {
+        merged.push(item);
+      }
+    }
+  }
+
+  // Extract split cut positions along wall
+  const cuts = [0];
+  for (const item of merged) {
+    if (item.start > cuts[cuts.length - 1] + 1e-4) {
+      cuts.push(item.start);
+    }
+    if (item.end > cuts[cuts.length - 1] + 1e-4) {
+      cuts.push(item.end);
+    }
+  }
+  if (len > cuts[cuts.length - 1] + 1e-4) {
+    cuts.push(len);
+  }
+
+  const dimensions = [];
+  // Segment chain dimensions along first offset line
+  for (let i = 0; i < cuts.length - 1; i++) {
+    const s1 = cuts[i];
+    const s2 = cuts[i + 1];
+    if (s2 - s1 < 1e-4) continue;
+    const pt1 = { x: wall.x1 + u.x * s1, y: wall.y1 + u.y * s1 };
+    const pt2 = { x: wall.x1 + u.x * s2, y: wall.y1 + u.y * s2 };
+    dimensions.push(
+      createDimension({
+        name: `${wall.name || 'Wall'} Seg ${i + 1}`,
+        p1: pt1,
+        p2: pt2,
+        offset,
+        style,
+        orientation,
+        unit,
+        dualUnit,
+        floorId
+      })
+    );
+  }
+
+  // Overall outer dimension
+  dimensions.push(
+    createDimension({
+      name: `${wall.name || 'Wall'} Overall`,
+      p1: { x: wall.x1, y: wall.y1 },
+      p2: { x: wall.x2, y: wall.y2 },
+      offset: offset + (offset >= 0 ? overallSpacing : -overallSpacing),
+      style,
+      orientation,
+      unit,
+      dualUnit,
+      floorId
+    })
+  );
+
+  return dimensions;
+}
+
+// ---------------------------------------------------------------------------
 // ID helper
 // ---------------------------------------------------------------------------
 
 function generateEntityId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
+
 
 
 
@@ -10789,7 +11252,8 @@ function snapRect(rect, gridMeters) {
 }
 
 /**
- * Detects nearby object snap targets (corners, midpoints, endpoints) or falls back to grid.
+ * Detects nearby object snap targets (corners, midpoints, endpoints, intersections,
+ * perpendiculars, centers, extensions) or falls back to grid.
  *
  * @param {{x: number, y: number}} point - Candidate world coordinate
  * @param {Array<Object>} entities - Project entities list
@@ -10798,53 +11262,154 @@ function snapRect(rect, gridMeters) {
  * @param {boolean} [options.snapGrid=true] - Whether to snap to grid when no object is nearby
  * @param {number} [options.gridMeters=0.5] - Grid increment in meters
  * @param {string} [options.excludeId] - Optional ID of entity being moved/modified
- * @returns {{ x: number, y: number, type: 'corner'|'midpoint'|'endpoint'|'grid'|'none', snapped: boolean, targetId?: string }}
+ * @param {{x: number, y: number}} [options.startPoint] - Start point when drafting a vector (enables perpendicular foot snap)
+ * @param {Object} [options.osnaps] - Optional boolean toggle map for specific snap types
+ * @returns {{ x: number, y: number, type: 'corner'|'midpoint'|'endpoint'|'intersection'|'perpendicular'|'center'|'extension'|'grid'|'none', snapped: boolean, targetId?: string, guideRay?: Array<{x: number, y: number}>|null }}
  */
 function findSnapPoint(point, entities = [], options = {}) {
   const snapDist = typeof options.snapDistance === 'number' ? options.snapDistance : 0.20;
   const snapGrid = options.snapGrid !== false;
   const gridMeters = options.gridMeters || 0.5;
   const excludeId = options.excludeId || null;
+  const startPoint = options.startPoint || options.draftStart || null;
+  const osnaps = options.osnaps || {};
+
+  const isEnabled = (type) => osnaps[type] !== false;
 
   let bestHit = null;
   let bestDist = snapDist;
 
+  const PRIORITY = { endpoint: 5, corner: 5, intersection: 5, midpoint: 3, center: 2, perpendicular: 2, extension: 1 };
+
+  const testCandidate = (cand) => {
+    if (!isEnabled(cand.type)) return;
+    const d = Math.hypot(cand.x - point.x, cand.y - point.y);
+    const candPrio = PRIORITY[cand.type] || 0;
+    const bestPrio = bestHit ? (PRIORITY[bestHit.type] || 0) : -1;
+
+    if (d < bestDist - 1e-4) {
+      bestDist = d;
+      bestHit = cand;
+    } else if (Math.abs(d - bestDist) <= 1e-4 && candPrio > bestPrio) {
+      bestHit = cand;
+    }
+  };
+
+  const walls = [];
+  const otherEntities = [];
+
   for (const e of entities) {
     if (!e || e.id === excludeId) continue;
-
-    // Walls
     if (e.kind === 'wall' && typeof e.x1 === 'number') {
-      const p1 = { x: e.x1, y: e.y1, type: 'endpoint', targetId: e.id };
-      const p2 = { x: e.x2, y: e.y2, type: 'endpoint', targetId: e.id };
-      const mid = { x: (e.x1 + e.x2) / 2, y: (e.y1 + e.y2) / 2, type: 'midpoint', targetId: e.id };
-      for (const cand of [p1, p2, mid]) {
-        const d = Math.hypot(cand.x - point.x, cand.y - point.y);
-        if (d < bestDist) {
-          bestDist = d;
-          bestHit = cand;
+      walls.push(e);
+    } else if (typeof e.x === 'number' && typeof e.width === 'number') {
+      otherEntities.push(e);
+    }
+  }
+
+  // 1. Wall endpoints & midpoints
+  for (const w of walls) {
+    if (isEnabled('endpoint')) {
+      testCandidate({ x: w.x1, y: w.y1, type: 'endpoint', targetId: w.id });
+      testCandidate({ x: w.x2, y: w.y2, type: 'endpoint', targetId: w.id });
+    }
+    if (isEnabled('midpoint')) {
+      testCandidate({ x: (w.x1 + w.x2) / 2, y: (w.y1 + w.y2) / 2, type: 'midpoint', targetId: w.id });
+    }
+  }
+
+  // 2. Wall-wall Intersections
+  if (isEnabled('intersection') && walls.length >= 2) {
+    const segments = walls.map(w => ({
+      p1: { x: w.x1, y: w.y1 },
+      p2: { x: w.x2, y: w.y2 },
+      id: w.id
+    }));
+    const intersections = findSegmentIntersections(segments);
+    for (const hit of intersections) {
+      testCandidate({
+        x: hit.x,
+        y: hit.y,
+        type: 'intersection',
+        targetId: hit.segId1
+      });
+    }
+  }
+
+  // 3. Rooms, Furniture, and other rectilinear entities (discrete corners, midpoints, center)
+  for (const e of otherEntities) {
+    const w = e.width;
+    const d = e.depth || e.run || 0;
+
+    if (isEnabled('corner')) {
+      testCandidate({ x: e.x, y: e.y, type: 'corner', targetId: e.id });
+      testCandidate({ x: e.x + w, y: e.y, type: 'corner', targetId: e.id });
+      testCandidate({ x: e.x + w, y: e.y + d, type: 'corner', targetId: e.id });
+      testCandidate({ x: e.x, y: e.y + d, type: 'corner', targetId: e.id });
+    }
+
+    if (isEnabled('midpoint')) {
+      testCandidate({ x: e.x + w / 2, y: e.y, type: 'midpoint', targetId: e.id });
+      testCandidate({ x: e.x + w, y: e.y + d / 2, type: 'midpoint', targetId: e.id });
+      testCandidate({ x: e.x + w / 2, y: e.y + d, type: 'midpoint', targetId: e.id });
+      testCandidate({ x: e.x, y: e.y + d / 2, type: 'midpoint', targetId: e.id });
+    }
+
+    if (isEnabled('center')) {
+      testCandidate({ x: e.x + w / 2, y: e.y + d / 2, type: 'center', targetId: e.id });
+    }
+  }
+
+  // 4. Perpendicular projection onto walls
+  if (isEnabled('perpendicular')) {
+    for (const w of walls) {
+      const w1 = { x: w.x1, y: w.y1 };
+      const w2 = { x: w.x2, y: w.y2 };
+
+      if (startPoint && typeof startPoint.x === 'number') {
+        // Orthogonal foot projection of the drafting start point onto target wall segment
+        const proj = projectPointOnSegment(startPoint, w1, w2);
+        if (proj.t >= 0.01 && proj.t <= 0.99) {
+          testCandidate({
+            x: proj.point.x,
+            y: proj.point.y,
+            type: 'perpendicular',
+            targetId: w.id
+          });
+        }
+      } else if (!bestHit) {
+        // Cursor proximity perpendicular projection onto target wall segment (only when no discrete keypoint hit)
+        const proj = findPerpendicularProjection(point, w1, w2, snapDist);
+        if (proj) {
+          testCandidate({
+            x: proj.x,
+            y: proj.y,
+            type: 'perpendicular',
+            targetId: w.id
+          });
         }
       }
-    } else if (typeof e.x === 'number' && typeof e.width === 'number') {
-      const w = e.width;
-      const d = e.depth || e.run || 0;
-      const corners = [
-        { x: e.x, y: e.y, type: 'corner', targetId: e.id },
-        { x: e.x + w, y: e.y, type: 'corner', targetId: e.id },
-        { x: e.x + w, y: e.y + d, type: 'corner', targetId: e.id },
-        { x: e.x, y: e.y + d, type: 'corner', targetId: e.id }
-      ];
-      const midpoints = [
-        { x: e.x + w / 2, y: e.y, type: 'midpoint', targetId: e.id },
-        { x: e.x + w, y: e.y + d / 2, type: 'midpoint', targetId: e.id },
-        { x: e.x + w / 2, y: e.y + d, type: 'midpoint', targetId: e.id },
-        { x: e.x, y: e.y + d / 2, type: 'midpoint', targetId: e.id }
-      ];
-      for (const cand of [...corners, ...midpoints]) {
-        const dist = Math.hypot(cand.x - point.x, cand.y - point.y);
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestHit = cand;
-        }
+    }
+  }
+
+  // 5. Collinear Extension rays beyond wall endpoints
+  if (isEnabled('extension')) {
+    for (const w of walls) {
+      const ext = findExtensionSnap(
+        point,
+        { x: w.x1, y: w.y1 },
+        { x: w.x2, y: w.y2 },
+        3.0,
+        snapDist
+      );
+      if (ext) {
+        testCandidate({
+          x: ext.x,
+          y: ext.y,
+          type: 'extension',
+          targetId: w.id,
+          guideRay: ext.guideRay
+        });
       }
     }
   }
@@ -10855,7 +11420,8 @@ function findSnapPoint(point, entities = [], options = {}) {
       y: bestHit.y,
       type: bestHit.type,
       snapped: true,
-      targetId: bestHit.targetId
+      targetId: bestHit.targetId,
+      guideRay: bestHit.guideRay || null
     };
   }
 
@@ -10864,7 +11430,8 @@ function findSnapPoint(point, entities = [], options = {}) {
       x: snapToGrid(point.x, gridMeters),
       y: snapToGrid(point.y, gridMeters),
       type: 'grid',
-      snapped: true
+      snapped: true,
+      guideRay: null
     };
   }
 
@@ -10872,7 +11439,8 @@ function findSnapPoint(point, entities = [], options = {}) {
     x: point.x,
     y: point.y,
     type: 'none',
-    snapped: false
+    snapped: false,
+    guideRay: null
   };
 }
 
@@ -24866,6 +25434,7 @@ function createProjectsView(context) {
 
 
 
+
 const PLAN_STATE_KEY = 'archiscale_plan_prefs'; // user preferences only
 
 function createPlanView(context) {
@@ -25201,26 +25770,69 @@ function createPlanView(context) {
       transform = createViewTransform({ zoom: Math.max(20, Math.min(svg.width / 14, 200)) });
       transform.offsetX = svg.width / 2 - 6 * transform.zoom;
       transform.offsetY = svg.height / 2 + 5 * transform.zoom;
+      savePrefs();
+      render();
       return;
     }
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const e of es) {
+      if (!e) continue;
+      if (e.kind === 'door' || e.kind === 'window') continue; // hosted on wall, bounds covered by host wall
+      if (e.kind === 'dimension') {
+        const p1 = e.p1 || (typeof e.x1 === 'number' ? { x: e.x1, y: e.y1 } : (typeof e.x === 'number' ? { x: e.x, y: e.y } : null));
+        const p2 = e.p2 || (typeof e.x2 === 'number' ? { x: e.x2, y: e.y2 } : (p1 ? { x: p1.x + (e.width ?? 0), y: p1.y + (e.depth ?? 0) } : null));
+        if (!p1 || !p2) continue;
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = Math.hypot(dx, dy);
+        const offset = Number(e.offset ?? 0.6);
+        minX = Math.min(minX, p1.x, p2.x);
+        minY = Math.min(minY, p1.y, p2.y);
+        maxX = Math.max(maxX, p1.x, p2.x);
+        maxY = Math.max(maxY, p1.y, p2.y);
+        if (len > 1e-4) {
+          const nx = -dy / len;
+          const ny = dx / len;
+          const totalOff = offset + Math.sign(offset || 1) * 0.25;
+          const dp1x = p1.x + nx * totalOff;
+          const dp1y = p1.y + ny * totalOff;
+          const dp2x = p2.x + nx * totalOff;
+          const dp2y = p2.y + ny * totalOff;
+          minX = Math.min(minX, dp1x, dp2x);
+          minY = Math.min(minY, dp1y, dp2y);
+          maxX = Math.max(maxX, dp1x, dp2x);
+          maxY = Math.max(maxY, dp1y, dp2y);
+        }
+        continue;
+      }
       const r = e.kind === 'wall' ? wallRect(e)
-        : { x: e.x, y: e.y, width: e.width ?? 0, depth: e.depth ?? 0 };
+        : (typeof e.x === 'number' ? { x: e.x, y: e.y, width: e.width ?? 0, depth: e.depth ?? 0 } : null);
+      if (!r || !Number.isFinite(r.x) || !Number.isFinite(r.y)) continue;
       minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
-      maxX = Math.max(maxX, r.x + r.width); maxY = Math.max(maxY, r.y + r.depth);
+      maxX = Math.max(maxX, r.x + (r.width || 0)); maxY = Math.max(maxY, r.y + (r.depth || 0));
+    }
+    if (!Number.isFinite(minX) || !Number.isFinite(maxX) || !Number.isFinite(minY) || !Number.isFinite(maxY)) {
+      transform = createViewTransform({ zoom: Math.max(20, Math.min(svg.width / 14, 200)) });
+      transform.offsetX = svg.width / 2 - 6 * transform.zoom;
+      transform.offsetY = svg.height / 2 + 5 * transform.zoom;
+      savePrefs();
+      render();
+      return;
     }
     const wM = Math.max(maxX - minX, 0.5);
     const dM = Math.max(maxY - minY, 0.5);
-    const padFactor = 1.25;
+    const padFactor = 1.35;
     const zoom = Math.min((svg.width / (wM * padFactor)), (svg.height / (dM * padFactor)));
+    const finalZoom = Number.isFinite(zoom) ? Math.max(10, Math.min(160, zoom)) : 40;
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
     transform = {
-      zoom,
-      offsetX: svg.width / 2 - cx * zoom,
-      offsetY: svg.height / 2 + cy * zoom
+      zoom: finalZoom,
+      offsetX: svg.width / 2 - cx * finalZoom,
+      offsetY: svg.height / 2 + cy * finalZoom
     };
+    savePrefs();
+    render();
   }
 
   function setZoomPercent(targetZoom) {
@@ -25511,6 +26123,7 @@ function createPlanView(context) {
           </select>
           <button type="button" class="context-action-btn" id="ctx-wall-door"><span>🚪 + Door</span></button>
           <button type="button" class="context-action-btn" id="ctx-wall-win"><span>🪟 + Window</span></button>
+          <button type="button" class="context-action-btn" id="ctx-wall-autodim" title="Generate CAD Dimension Chain"><span>📏 Auto-Dimension</span></button>
           <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate (Ctrl+D)</span></button>
           <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete (Del)</span></button>
         </div>
@@ -25556,6 +26169,28 @@ function createPlanView(context) {
           renderContextualToolbar();
           renderPropertiesInspector();
         } catch (e) { showToast(e.message, 'warning'); }
+      });
+      bar.querySelector('#ctx-wall-autodim')?.addEventListener('click', () => {
+        try {
+          const dims = autoDimensionWall(sel, entities(), { offset: 0.6, style: 'tick', orientation: 'aligned' });
+          if (dims.length > 0) {
+            for (const d of dims) {
+              const cmd = entityAddRemoveCommand(entities(), d, `auto-dimension ${sel.name}`);
+              cmd.redo();
+              history.push(cmd);
+            }
+            state.plan.selectedIds = new Set(dims.map(d => d.id));
+            showToast(`Auto-dimensioned ${sel.name} (${dims.length} chains)`);
+            AudioService.playTick();
+            render();
+            renderContextualToolbar();
+            renderPropertiesInspector();
+          } else {
+            showToast('No dimensions could be generated for wall', 'warning');
+          }
+        } catch (e) {
+          showToast(e.message, 'warning');
+        }
       });
       bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
       bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
@@ -25664,6 +26299,95 @@ function createPlanView(context) {
       return;
     }
 
+    if (sel.kind === 'dimension') {
+      const p1World = sel.p1 || { x: sel.x1, y: sel.y1 };
+      const p2World = sel.p2 || { x: sel.x2, y: sel.y2 };
+      const dist = Math.hypot(p2World.x - p1World.x, p2World.y - p1World.y);
+      const currentStyle = sel.style || 'tick';
+      const currentOrient = sel.orientation || 'aligned';
+      const currentUnit = sel.unit || 'm';
+
+      bar.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+          <span class="context-tag-badge" style="background: rgba(73,137,217,0.18); color: var(--note-number, #4989D9); border-color: rgba(73,137,217,0.4);">DIMENSION</span>
+          <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${dist.toFixed(2)}m</span>
+          
+          <div style="display: inline-flex; align-items: center; border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden;">
+            <button type="button" class="context-action-btn ${currentStyle === 'tick' ? 'active' : ''}" id="ctx-dim-tick" title="Architectural 45° Tick" style="border: none; border-radius: 0; padding: 2px 7px;">Tick</button>
+            <button type="button" class="context-action-btn ${currentStyle === 'arrow' ? 'active' : ''}" id="ctx-dim-arrow" title="Engineering Arrow" style="border: none; border-radius: 0; padding: 2px 7px;">Arrow</button>
+            <button type="button" class="context-action-btn ${currentStyle === 'dot' ? 'active' : ''}" id="ctx-dim-dot" title="Circle Dot" style="border: none; border-radius: 0; padding: 2px 7px;">Dot</button>
+          </div>
+
+          <div style="display: inline-flex; align-items: center; border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden;">
+            <button type="button" class="context-action-btn ${currentOrient === 'aligned' ? 'active' : ''}" id="ctx-dim-aligned" title="Aligned" style="border: none; border-radius: 0; padding: 2px 7px;">Aligned</button>
+            <button type="button" class="context-action-btn ${currentOrient === 'horizontal' ? 'active' : ''}" id="ctx-dim-horiz" title="Horizontal (ΔX)" style="border: none; border-radius: 0; padding: 2px 7px;">Horiz</button>
+            <button type="button" class="context-action-btn ${currentOrient === 'vertical' ? 'active' : ''}" id="ctx-dim-vert" title="Vertical (ΔY)" style="border: none; border-radius: 0; padding: 2px 7px;">Vert</button>
+          </div>
+
+          <button type="button" class="context-action-btn" id="ctx-dim-unit" title="Cycle Unit"><span>Unit: ${currentUnit.toUpperCase()}</span></button>
+          <button type="button" class="context-action-btn ${sel.dualUnit ? 'active' : ''}" id="ctx-dim-dual" title="Toggle Dual Unit"><span>${sel.dualUnit ? 'Dual [ON]' : 'Dual [OFF]'}</span></button>
+          <button type="button" class="context-action-btn" id="ctx-dim-flip-offset" title="Flip offset side"><span>⇄ Flip Side</span></button>
+
+          <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate</span></button>
+          <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete</span></button>
+        </div>
+      `;
+
+      const setDimStyle = (st) => {
+        sel.style = st;
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        AudioService.playTick();
+      };
+      bar.querySelector('#ctx-dim-tick')?.addEventListener('click', () => setDimStyle('tick'));
+      bar.querySelector('#ctx-dim-arrow')?.addEventListener('click', () => setDimStyle('arrow'));
+      bar.querySelector('#ctx-dim-dot')?.addEventListener('click', () => setDimStyle('dot'));
+
+      const setDimOrient = (ori) => {
+        sel.orientation = ori;
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        AudioService.playTick();
+      };
+      bar.querySelector('#ctx-dim-aligned')?.addEventListener('click', () => setDimOrient('aligned'));
+      bar.querySelector('#ctx-dim-horiz')?.addEventListener('click', () => setDimOrient('horizontal'));
+      bar.querySelector('#ctx-dim-vert')?.addEventListener('click', () => setDimOrient('vertical'));
+
+      bar.querySelector('#ctx-dim-unit')?.addEventListener('click', () => {
+        const next = sel.unit === 'm' ? 'mm' : (sel.unit === 'mm' ? 'ft_in' : 'm');
+        sel.unit = next;
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        showToast(`Dimension unit: ${next}`);
+        AudioService.playTick();
+      });
+
+      bar.querySelector('#ctx-dim-dual')?.addEventListener('click', () => {
+        sel.dualUnit = !sel.dualUnit;
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        showToast(`Dual unit: ${sel.dualUnit ? 'Enabled' : 'Disabled'}`);
+        AudioService.playTick();
+      });
+
+      bar.querySelector('#ctx-dim-flip-offset')?.addEventListener('click', () => {
+        sel.offset = -(typeof sel.offset === 'number' ? sel.offset : 0.6);
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        showToast('Flipped dimension offset side');
+        AudioService.playTick();
+      });
+
+      bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
+      bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
+      return;
+    }
+
     bar.innerHTML = `
       <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
         <span class="context-tag-badge">${selCount > 1 ? 'MULTI-SELECT' : (sel.kind || 'ITEM').toUpperCase()}</span>
@@ -25679,6 +26403,33 @@ function createPlanView(context) {
   function escapeHtml(str) {
     if (str === null || str === undefined) return '';
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function formatDimensionText(distanceMeters, unit = 'm', dualUnit = false, textOverride = null) {
+    if (typeof textOverride === 'string' && textOverride.trim()) {
+      return textOverride.trim();
+    }
+    const d = Math.max(0, distanceMeters);
+    let primary = '';
+    if (unit === 'mm') {
+      primary = `${Math.round(d * 1000)} mm`;
+    } else if (unit === 'ft_in') {
+      primary = formatFeetInches(d / 0.0254);
+    } else {
+      primary = `${d.toFixed(2)} m`;
+    }
+
+    if (dualUnit) {
+      let secondary = '';
+      if (unit === 'ft_in') {
+        secondary = `${d.toFixed(2)} m`;
+      } else {
+        secondary = formatFeetInches(d / 0.0254);
+      }
+      return `${primary} [${secondary}]`;
+    }
+
+    return primary;
   }
 
   function renderHandles() {
@@ -25712,19 +26463,20 @@ function createPlanView(context) {
           style="cursor: ${cursor}; pointer-events: all;"/>`;
 
       let handles = `
-        ${mkSq(nw, 'nw', 'nwse-resize')}
-        ${mkSq(n,  'n',  'ns-resize')}
-        ${mkSq(ne, 'ne', 'nesw-resize')}
-        ${mkSq(ePt,'e',  'ew-resize')}
-        ${mkSq(se, 'se', 'nwse-resize')}
-        ${mkSq(s,  's',  'ns-resize')}
-        ${mkSq(sw, 'sw', 'nesw-resize')}
-        ${mkSq(wPt,'w',  'ew-resize')}`;
+        ${mkSq(sw, 'sw', 'sw-resize')}
+        ${mkSq(se, 'se', 'se-resize')}
+        ${mkSq(ne, 'ne', 'ne-resize')}
+        ${mkSq(nw, 'nw', 'nw-resize')}
+        ${mkSq(s, 's', 's-resize')}
+        ${mkSq(n, 'n', 'n-resize')}
+        ${mkSq(ePt, 'e', 'e-resize')}
+        ${mkSq(wPt, 'w', 'w-resize')}
+      `;
 
       if (e.kind === 'furniture') {
-        const rotY = n.y - 20;
+        const rotY = n.y - 18;
         handles += `
-          <line x1="${n.x.toFixed(1)}" y1="${n.y.toFixed(1)}" x2="${n.x.toFixed(1)}" y2="${rotY.toFixed(1)}" stroke="${stroke}" stroke-width="1.5" stroke-dasharray="2 2"/>
+          <line x1="${n.x.toFixed(1)}" y1="${n.y.toFixed(1)}" x2="${n.x.toFixed(1)}" y2="${rotY.toFixed(1)}" stroke="${stroke}" stroke-width="1.4" stroke-dasharray="2 2"/>
           <circle cx="${n.x.toFixed(1)}" cy="${rotY.toFixed(1)}" r="5.5" fill="var(--accent-action, #D32F2F)" stroke="#ffffff" stroke-width="1.5"
             class="plan-handle" data-handle="rotate" data-entity-id="${escapeHtml(e.id)}" style="cursor: grab; pointer-events: all;">
             <title>Click to rotate 90°</title>
@@ -25748,19 +26500,23 @@ function createPlanView(context) {
       </g>`;
     }
 
-    if (e.kind === 'dimension' && isNum(e.x1) && isNum(e.y1) && isNum(e.x2) && isNum(e.y2)) {
-      const p1 = worldToSvg(transform, e.x1, e.y1);
-      const p2 = worldToSvg(transform, e.x2, e.y2);
-      return `<g class="plan-handles">
-        <circle cx="${p1.x.toFixed(1)}" cy="${p1.y.toFixed(1)}" r="5.5" fill="${fill}" stroke="var(--note-number, #4989D9)" stroke-width="2"
-          class="plan-handle" data-handle="p1" data-entity-id="${escapeHtml(e.id)}" style="cursor: crosshair; pointer-events: all;">
-          <title>Drag dimension anchor 1</title>
-        </circle>
-        <circle cx="${p2.x.toFixed(1)}" cy="${p2.y.toFixed(1)}" r="5.5" fill="${fill}" stroke="var(--note-number, #4989D9)" stroke-width="2"
-          class="plan-handle" data-handle="p2" data-entity-id="${escapeHtml(e.id)}" style="cursor: crosshair; pointer-events: all;">
-          <title>Drag dimension anchor 2</title>
-        </circle>
-      </g>`;
+    if (e.kind === 'dimension') {
+      const p1W = e.p1 || { x: e.x1, y: e.y1 };
+      const p2W = e.p2 || { x: e.x2, y: e.y2 };
+      if (isNum(p1W.x) && isNum(p1W.y) && isNum(p2W.x) && isNum(p2W.y)) {
+        const p1 = worldToSvg(transform, p1W.x, p1W.y);
+        const p2 = worldToSvg(transform, p2W.x, p2W.y);
+        return `<g class="plan-handles">
+          <circle cx="${p1.x.toFixed(1)}" cy="${p1.y.toFixed(1)}" r="5.5" fill="${fill}" stroke="var(--note-number, #4989D9)" stroke-width="2"
+            class="plan-handle" data-handle="p1" data-entity-id="${escapeHtml(e.id)}" style="cursor: crosshair; pointer-events: all;">
+            <title>Drag dimension anchor 1</title>
+          </circle>
+          <circle cx="${p2.x.toFixed(1)}" cy="${p2.y.toFixed(1)}" r="5.5" fill="${fill}" stroke="var(--note-number, #4989D9)" stroke-width="2"
+            class="plan-handle" data-handle="p2" data-entity-id="${escapeHtml(e.id)}" style="cursor: crosshair; pointer-events: all;">
+            <title>Drag dimension anchor 2</title>
+          </circle>
+        </g>`;
+      }
     }
 
     return '';
@@ -26076,18 +26832,68 @@ function createPlanView(context) {
           }
         }
       }
-      if (e.kind === 'dimension' && typeof e.x1 === 'number' && typeof e.x2 === 'number') {
-        const p1 = worldToSvg(transform, e.x1, e.y1);
-        const p2 = worldToSvg(transform, e.x2, e.y2);
-        const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-        const dist = Math.hypot(e.x2 - e.x1, e.y2 - e.y1);
-        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
-          <line x1="${p1.x.toFixed(1)}" y1="${p1.y.toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${p2.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2 : 1.2}"/>
-          <circle cx="${p1.x.toFixed(1)}" cy="${p1.y.toFixed(1)}" r="2.5" fill="${stroke}"/>
-          <circle cx="${p2.x.toFixed(1)}" cy="${p2.y.toFixed(1)}" r="2.5" fill="${stroke}"/>
-          <rect x="${(mid.x - 22).toFixed(1)}" y="${(mid.y - 14).toFixed(1)}" width="44" height="15" rx="3" fill="var(--bg-surface-elevated, #28292e)" stroke="${stroke}" stroke-width="0.8"/>
-          <text x="${mid.x.toFixed(1)}" y="${(mid.y - 3).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="var(--note-number, #4989D9)" font-weight="700">${dist.toFixed(2)}m</text>
-        </g>`;
+      if (e.kind === 'dimension') {
+        const p1World = e.p1 || { x: e.x1, y: e.y1 };
+        const p2World = e.p2 || { x: e.x2, y: e.y2 };
+        if (isNum(p1World.x) && isNum(p1World.y) && isNum(p2World.x) && isNum(p2World.y)) {
+          const dimGeom = calcDimensionGeometry(p1World, p2World, {
+            offset: typeof e.offset === 'number' ? e.offset : 0.6,
+            style: e.style || 'tick',
+            orientation: e.orientation || 'aligned',
+            standoff: 0.08,
+            overshoot: 0.12,
+            tickSize: 0.18,
+            arrowLength: 0.22,
+            arrowWidth: 0.07
+          });
+
+          const dl1 = worldToSvg(transform, dimGeom.dimLine[0].x, dimGeom.dimLine[0].y);
+          const dl2 = worldToSvg(transform, dimGeom.dimLine[1].x, dimGeom.dimLine[1].y);
+          const w1a = worldToSvg(transform, dimGeom.witness1[0].x, dimGeom.witness1[0].y);
+          const w1b = worldToSvg(transform, dimGeom.witness1[1].x, dimGeom.witness1[1].y);
+          const w2a = worldToSvg(transform, dimGeom.witness2[0].x, dimGeom.witness2[0].y);
+          const w2b = worldToSvg(transform, dimGeom.witness2[1].x, dimGeom.witness2[1].y);
+          const textSvg = worldToSvg(transform, dimGeom.textMid.x, dimGeom.textMid.y);
+
+          const displayText = formatDimensionText(dimGeom.distance, e.unit, e.dualUnit, e.textOverride);
+          const badgeWidth = Math.max(38, displayText.length * 6.5 + 14);
+
+          let markersSvg = '';
+          if (dimGeom.style === 'tick') {
+            for (const tick of dimGeom.ticks) {
+              const t1 = worldToSvg(transform, tick[0].x, tick[0].y);
+              const t2 = worldToSvg(transform, tick[1].x, tick[1].y);
+              markersSvg += `<line x1="${t1.x.toFixed(1)}" y1="${t1.y.toFixed(1)}" x2="${t2.x.toFixed(1)}" y2="${t2.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.6 : 1.8}" stroke-linecap="round"/>`;
+            }
+          } else if (dimGeom.style === 'arrow') {
+            for (const arrow of dimGeom.arrows) {
+              const pts = arrow.map(p => {
+                const sp = worldToSvg(transform, p.x, p.y);
+                return `${sp.x.toFixed(1)},${sp.y.toFixed(1)}`;
+              }).join(' ');
+              markersSvg += `<polygon points="${pts}" fill="${stroke}"/>`;
+            }
+          } else if (dimGeom.style === 'dot') {
+            for (const dot of dimGeom.dots) {
+              const dp = worldToSvg(transform, dot.x, dot.y);
+              markersSvg += `<circle cx="${dp.x.toFixed(1)}" cy="${dp.y.toFixed(1)}" r="${Math.max(2.5, dot.radius * transform.zoom)}" fill="${stroke}"/>`;
+            }
+          }
+
+          const svgAngle = -dimGeom.textAngle;
+
+          return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+            <line x1="${w1a.x.toFixed(1)}" y1="${w1a.y.toFixed(1)}" x2="${w1b.x.toFixed(1)}" y2="${w1b.y.toFixed(1)}" stroke="${stroke}" stroke-width="1.0" opacity="0.7"/>
+            <line x1="${w2a.x.toFixed(1)}" y1="${w2a.y.toFixed(1)}" x2="${w2b.x.toFixed(1)}" y2="${w2b.y.toFixed(1)}" stroke="${stroke}" stroke-width="1.0" opacity="0.7"/>
+            <line x1="${dl1.x.toFixed(1)}" y1="${dl1.y.toFixed(1)}" x2="${dl2.x.toFixed(1)}" y2="${dl2.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.0 : 1.3}"/>
+            ${markersSvg}
+            <line x1="${dl1.x.toFixed(1)}" y1="${dl1.y.toFixed(1)}" x2="${dl2.x.toFixed(1)}" y2="${dl2.y.toFixed(1)}" stroke="transparent" stroke-width="14" style="cursor: pointer;"/>
+            <g transform="rotate(${svgAngle.toFixed(1)} ${textSvg.x.toFixed(1)} ${textSvg.y.toFixed(1)})" pointer-events="none">
+              <rect x="${(textSvg.x - badgeWidth / 2).toFixed(1)}" y="${(textSvg.y - 9).toFixed(1)}" width="${badgeWidth.toFixed(1)}" height="18" rx="3" fill="var(--bg-surface-elevated, #28292e)" stroke="${stroke}" stroke-width="${selected ? 1.4 : 0.8}"/>
+              <text x="${textSvg.x.toFixed(1)}" y="${(textSvg.y + 4).toFixed(1)}" text-anchor="middle" font-size="9.5" font-family="var(--font-mono)" fill="var(--note-number, #4989D9)" font-weight="700">${escapeHtml(displayText)}</text>
+            </g>
+          </g>`;
+        }
       }
       if (e.kind === 'stair' && hasRect) {
         const p1 = worldToSvg(transform, e.x, e.y + e.depth);
@@ -26256,13 +27062,56 @@ function createPlanView(context) {
     let snapMarkup = '';
     if (activeSnap && activeSnap.snapped && activeSnap.type !== 'grid' && activeSnap.type !== 'none') {
       const sp = worldToSvg(transform, activeSnap.x, activeSnap.y);
-      const snapCol = activeSnap.type === 'corner' ? 'var(--cyan-glow, #38bdf8)' : activeSnap.type === 'midpoint' ? 'var(--color-warning, #fbbf24)' : 'var(--color-success, #4ade80)';
+      const snapType = activeSnap.type;
+      let snapCol = 'var(--cyan-glow, #38bdf8)';
+      let glyphSvg = '';
+
+      if (snapType === 'endpoint' || snapType === 'corner') {
+        snapCol = 'var(--cyan-glow, #38bdf8)';
+        glyphSvg = `<rect x="${(sp.x - 5).toFixed(1)}" y="${(sp.y - 5).toFixed(1)}" width="10" height="10" fill="none" stroke="${snapCol}" stroke-width="2"/>`;
+      } else if (snapType === 'midpoint') {
+        snapCol = 'var(--color-warning, #fbbf24)';
+        glyphSvg = `<polygon points="${sp.x.toFixed(1)},${(sp.y - 6).toFixed(1)} ${(sp.x - 6).toFixed(1)},${(sp.y + 5).toFixed(1)} ${(sp.x + 6).toFixed(1)},${(sp.y + 5).toFixed(1)}" fill="none" stroke="${snapCol}" stroke-width="2"/>`;
+      } else if (snapType === 'intersection') {
+        snapCol = 'var(--accent-action, #f43f5e)';
+        glyphSvg = `
+          <line x1="${(sp.x - 5).toFixed(1)}" y1="${(sp.y - 5).toFixed(1)}" x2="${(sp.x + 5).toFixed(1)}" y2="${(sp.y + 5).toFixed(1)}" stroke="${snapCol}" stroke-width="2.2"/>
+          <line x1="${(sp.x - 5).toFixed(1)}" y1="${(sp.y + 5).toFixed(1)}" x2="${(sp.x + 5).toFixed(1)}" y2="${(sp.y - 5).toFixed(1)}" stroke="${snapCol}" stroke-width="2.2"/>
+        `;
+      } else if (snapType === 'perpendicular') {
+        snapCol = 'var(--color-success, #4ade80)';
+        glyphSvg = `
+          <path d="M ${(sp.x - 6).toFixed(1)} ${(sp.y - 6).toFixed(1)} L ${(sp.x - 6).toFixed(1)} ${(sp.y + 6).toFixed(1)} L ${(sp.x + 6).toFixed(1)} ${(sp.y + 6).toFixed(1)}" fill="none" stroke="${snapCol}" stroke-width="2"/>
+          <path d="M ${(sp.x - 6).toFixed(1)} ${sp.y.toFixed(1)} L ${sp.x.toFixed(1)} ${sp.y.toFixed(1)} L ${sp.x.toFixed(1)} ${(sp.y + 6).toFixed(1)}" fill="none" stroke="${snapCol}" stroke-width="1.4"/>
+        `;
+      } else if (snapType === 'center') {
+        snapCol = 'var(--note-number, #818cf8)';
+        glyphSvg = `
+          <circle cx="${sp.x.toFixed(1)}" cy="${sp.y.toFixed(1)}" r="6" fill="none" stroke="${snapCol}" stroke-width="1.8"/>
+          <line x1="${(sp.x - 4).toFixed(1)}" y1="${sp.y.toFixed(1)}" x2="${(sp.x + 4).toFixed(1)}" y2="${sp.y.toFixed(1)}" stroke="${snapCol}" stroke-width="1.4"/>
+          <line x1="${sp.x.toFixed(1)}" y1="${(sp.y - 4).toFixed(1)}" x2="${sp.x.toFixed(1)}" y2="${(sp.y + 4).toFixed(1)}" stroke="${snapCol}" stroke-width="1.4"/>
+        `;
+      } else if (snapType === 'extension') {
+        snapCol = 'var(--color-warning, #f59e0b)';
+        let raySvg = '';
+        if (Array.isArray(activeSnap.guideRay) && activeSnap.guideRay.length === 2) {
+          const r1 = worldToSvg(transform, activeSnap.guideRay[0].x, activeSnap.guideRay[0].y);
+          raySvg = `<line x1="${r1.x.toFixed(1)}" y1="${r1.y.toFixed(1)}" x2="${sp.x.toFixed(1)}" y2="${sp.y.toFixed(1)}" stroke="${snapCol}" stroke-width="1.4" stroke-dasharray="4 3"/>`;
+        }
+        glyphSvg = `
+          ${raySvg}
+          <line x1="${(sp.x - 4).toFixed(1)}" y1="${(sp.y - 4).toFixed(1)}" x2="${(sp.x + 4).toFixed(1)}" y2="${(sp.y + 4).toFixed(1)}" stroke="${snapCol}" stroke-width="2"/>
+          <line x1="${(sp.x - 4).toFixed(1)}" y1="${(sp.y + 4).toFixed(1)}" x2="${(sp.x + 4).toFixed(1)}" y2="${(sp.y - 4).toFixed(1)}" stroke="${snapCol}" stroke-width="2"/>
+        `;
+      } else {
+        glyphSvg = `<circle cx="${sp.x.toFixed(1)}" cy="${sp.y.toFixed(1)}" r="4.5" fill="none" stroke="${snapCol}" stroke-width="2"/>`;
+      }
+
       snapMarkup = `
         <g class="smart-snap-point" pointer-events="none">
-          <circle cx="${sp.x.toFixed(1)}" cy="${sp.y.toFixed(1)}" r="5" fill="none" stroke="${snapCol}" stroke-width="2"/>
-          <line x1="${(sp.x - 7).toFixed(1)}" y1="${sp.y.toFixed(1)}" x2="${(sp.x + 7).toFixed(1)}" y2="${sp.y.toFixed(1)}" stroke="${snapCol}" stroke-width="1.2"/>
-          <line x1="${sp.x.toFixed(1)}" y1="${(sp.y - 7).toFixed(1)}" x2="${(sp.x + 7).toFixed(1)}" y2="${(sp.y + 7).toFixed(1)}" stroke="${snapCol}" stroke-width="1.2"/>
-          <text x="${(sp.x + 8).toFixed(1)}" y="${(sp.y - 6).toFixed(1)}" fill="${snapCol}" font-size="9" font-family="var(--font-mono)" font-weight="700">${activeSnap.type.toUpperCase()}</text>
+          ${glyphSvg}
+          <rect x="${(sp.x + 8).toFixed(1)}" y="${(sp.y - 18).toFixed(1)}" width="${(snapType.length * 7 + 10)}" height="15" rx="3" fill="var(--bg-surface-elevated, #222327)" stroke="${snapCol}" stroke-width="0.8"/>
+          <text x="${(sp.x + 12).toFixed(1)}" y="${(sp.y - 7).toFixed(1)}" fill="${snapCol}" font-size="8.5" font-family="var(--font-mono)" font-weight="700">${snapType.toUpperCase()}</text>
         </g>`;
     }
 
@@ -26301,7 +27150,12 @@ function createPlanView(context) {
       else if (e.kind === 'window') desc = `Window · ${num(e.width)} m width`;
       else if (e.kind === 'stair') desc = `${num(e.width)} × ${num(e.depth)} m · ${e.risers || 16} risers · Blondel ${Math.round((e.blondel || 0.63) * 1000)} mm`;
       else if (e.kind === 'ramp') desc = `${num(e.width)} × ${num(e.depth)} m · 1:${(e.slopeRatio || 12).toFixed(1)} (${(e.slopePercent || 8.33).toFixed(1)}%)`;
-      else if (e.kind === 'dimension') desc = `Dim · ${typeof e.x1 === 'number' ? Math.hypot(e.x2 - e.x1, e.y2 - e.y1).toFixed(2) : '?'} m`;
+      else if (e.kind === 'dimension') {
+        const p1 = e.p1 || { x: e.x1, y: e.y1 };
+        const p2 = e.p2 || { x: e.x2, y: e.y2 };
+        const d = (typeof p1?.x === 'number' && typeof p2?.x === 'number') ? Math.hypot(p2.x - p1.x, p2.y - p1.y) : null;
+        desc = `Dim · ${d !== null ? d.toFixed(2) : '?'} m`;
+      }
       else if (e.kind === 'text') desc = `"${escapeHtml(e.text || e.name)}"`;
       else desc = e.kind;
 
@@ -27113,23 +27967,132 @@ function createPlanView(context) {
       }
 
     } else if (selected.kind === 'dimension') {
-      const dist = Math.hypot(selected.x2 - selected.x1, selected.y2 - selected.y1);
+      const p1World = selected.p1 || { x: selected.x1, y: selected.y1 };
+      const p2World = selected.p2 || { x: selected.x2, y: selected.y2 };
+      const dist = Math.hypot(p2World.x - p1World.x, p2World.y - p1World.y);
+      const curStyle = selected.style || 'tick';
+      const curOrient = selected.orientation || 'aligned';
+      const curUnit = selected.unit || 'm';
+      const offsetVal = typeof selected.offset === 'number' ? selected.offset : 0.6;
+
       dom.planPropContent.innerHTML = `
         <div class="plan-prop-section">
-          <div class="plan-prop-title">Dimension Annotation</div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Distance (m)</span><span class="plan-prop-value note-number">${dist.toFixed(3)} m</span></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Distance (cm)</span><span class="plan-prop-value">${(dist * 100).toFixed(1)} cm</span></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Distance (mm)</span><span class="plan-prop-value">${(dist * 1000).toFixed(0)} mm</span></div>
+          <div class="plan-prop-title">Architectural Dimension</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name || 'Dimension')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Measured Span</span>
+            <span class="plan-prop-value note-number">${dist.toFixed(3)} m</span>
+          </div>
+
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Style</span>
+            <select class="calc-input" id="prop-dim-style" style="height: 24px; font-size: 0.72rem; padding: 0 4px; max-width: 150px;">
+              <option value="tick" ${curStyle === 'tick' ? 'selected' : ''}>45° Architectural Tick</option>
+              <option value="arrow" ${curStyle === 'arrow' ? 'selected' : ''}>Engineering Arrow</option>
+              <option value="dot" ${curStyle === 'dot' ? 'selected' : ''}>Circle Dot</option>
+            </select>
+          </div>
+
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Orientation</span>
+            <select class="calc-input" id="prop-dim-orient" style="height: 24px; font-size: 0.72rem; padding: 0 4px; max-width: 150px;">
+              <option value="aligned" ${curOrient === 'aligned' ? 'selected' : ''}>Aligned (Parallel)</option>
+              <option value="horizontal" ${curOrient === 'horizontal' ? 'selected' : ''}>Horizontal (ΔX)</option>
+              <option value="vertical" ${curOrient === 'vertical' ? 'selected' : ''}>Vertical (ΔY)</option>
+            </select>
+          </div>
+
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Unit</span>
+            <select class="calc-input" id="prop-dim-unit" style="height: 24px; font-size: 0.72rem; padding: 0 4px; max-width: 150px;">
+              <option value="m" ${curUnit === 'm' ? 'selected' : ''}>Meters (m)</option>
+              <option value="mm" ${curUnit === 'mm' ? 'selected' : ''}>Millimeters (mm)</option>
+              <option value="ft_in" ${curUnit === 'ft_in' ? 'selected' : ''}>Feet & Inches (ft-in)</option>
+            </select>
+          </div>
+
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Dual Unit</span>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; cursor: pointer;">
+              <input type="checkbox" id="prop-dim-dual" ${selected.dualUnit ? 'checked' : ''} />
+              <span>Show Imperial [ft-in]</span>
+            </label>
+          </div>
+
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Standoff Offset</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-dim-offset" class="text-input" value="${offsetVal.toFixed(2)}" step="0.1" min="-5" max="5" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Text Override</span>
+            <input type="text" id="prop-dim-override" class="text-input" value="${escapeHtml(selected.textOverride || '')}" placeholder="Auto (Calculated)" style="width: 130px; padding: 0.2rem 0.35rem; font-size: 0.75rem;" />
+          </div>
+
+          <div class="plan-prop-row"><span class="plan-prop-label">Endpoints</span><span class="plan-prop-value" style="font-size: 0.70rem;">(${p1World.x.toFixed(2)}, ${p1World.y.toFixed(2)}) ➔ (${p2World.x.toFixed(2)}, ${p2World.y.toFixed(2)})</span></div>
         </div>
         <div class="plan-prop-actions">
           <button type="button" id="btn-prop-scratch-dim" class="plan-prop-btn"><span>📋 Send to Scratchpad</span></button>
           <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Dimension</span></button>
         </div>`;
 
+      dom.planPropContent.querySelector('#prop-entity-name')?.addEventListener('change', (e) => {
+        selected.name = e.target.value.trim() || 'Dimension';
+        render();
+      });
+
+      dom.planPropContent.querySelector('#prop-dim-style')?.addEventListener('change', (e) => {
+        selected.style = e.target.value;
+        render();
+        renderContextualToolbar();
+      });
+
+      dom.planPropContent.querySelector('#prop-dim-orient')?.addEventListener('change', (e) => {
+        selected.orientation = e.target.value;
+        render();
+        renderContextualToolbar();
+      });
+
+      dom.planPropContent.querySelector('#prop-dim-unit')?.addEventListener('change', (e) => {
+        selected.unit = e.target.value;
+        render();
+        renderContextualToolbar();
+      });
+
+      dom.planPropContent.querySelector('#prop-dim-dual')?.addEventListener('change', (e) => {
+        selected.dualUnit = e.target.checked;
+        render();
+        renderContextualToolbar();
+      });
+
+      const offsetInput = dom.planPropContent.querySelector('#prop-dim-offset');
+      if (offsetInput) {
+        attachNumericScrubber(offsetInput, {
+          step: 0.1, min: -5, max: 5, precision: 2,
+          onChange: (val) => { selected.offset = val; render(); },
+          onCommit: (val) => { selected.offset = val; render(); renderContextualToolbar(); }
+        });
+        offsetInput.addEventListener('change', (e) => {
+          selected.offset = parseFloat(e.target.value) || 0.6;
+          render();
+          renderContextualToolbar();
+        });
+      }
+
+      dom.planPropContent.querySelector('#prop-dim-override')?.addEventListener('change', (e) => {
+        selected.textOverride = e.target.value.trim() || null;
+        render();
+        renderContextualToolbar();
+      });
+
       dom.planPropContent.querySelector('#btn-prop-scratch-dim')?.addEventListener('click', () => {
         sendToScratchpad({
           value: dist,
-          formatted: `${dist.toFixed(3)} m (${(dist * 1000).toFixed(0)} mm)`,
+          formatted: `${dist.toFixed(3)} m`,
           label: `${selected.name || 'Dimension'}`,
           unit: 'm',
           source: 'Plan Dimension'
@@ -27247,24 +28210,37 @@ function createPlanView(context) {
 
   function createDimensionEntity(start, end) {
     const dist = Math.hypot(end.x - start.x, end.y - start.y);
-    if (dist < state.plan.grid) return;
-    const dim = {
-      kind: 'dimension',
-      id: generateEntityId('dim'),
+    if (dist < 0.05) return;
+    const dim = createDimension({
       name: `${dist.toFixed(2)}m`,
-      x1: start.x, y1: start.y,
-      x2: end.x, y2: end.y,
-      x: Math.min(start.x, end.x),
-      y: Math.min(start.y, end.y),
-      width: Math.abs(end.x - start.x),
-      depth: Math.abs(end.y - start.y)
-    };
+      p1: { x: start.x, y: start.y },
+      p2: { x: end.x, y: end.y },
+      x1: start.x,
+      y1: start.y,
+      x2: end.x,
+      y2: end.y,
+      offset: 0.6,
+      style: 'tick',
+      orientation: 'aligned',
+      unit: 'm',
+      dualUnit: false
+    });
+    dim.x = Math.min(start.x, end.x);
+    dim.y = Math.min(start.y, end.y);
+    dim.width = Math.abs(end.x - start.x);
+    dim.depth = Math.abs(end.y - start.y);
+    dim.x1 = start.x;
+    dim.y1 = start.y;
+    dim.x2 = end.x;
+    dim.y2 = end.y;
+
     const cmd = entityAddRemoveCommand(entities(), dim, `add dimension ${dim.name}`);
     cmd.redo();
     history.push(cmd);
     state.plan.selectedIds = new Set([dim.id]);
     showToast(`Dimension added: ${dist.toFixed(2)} m`);
     AudioService.playTick();
+    render();
   }
 
   // ------------------------------------------------------------------
@@ -27369,7 +28345,7 @@ function createPlanView(context) {
       return;
     } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'measure') {
       if (snapOn) {
-        const snapRes = findSnapPoint(world, entities(), { threshold: 0.35, snapGrid: true, gridSize: state.plan.grid });
+        const snapRes = findSnapPoint(world, entities(), { snapDistance: 0.25, snapGrid: true, gridMeters: state.plan.grid });
         if (snapRes.snapped) {
           initialPt = { x: snapRes.x, y: snapRes.y };
           activeSnap = snapRes;
@@ -27398,7 +28374,28 @@ function createPlanView(context) {
     if (polyRoomVertices.length > 0) {
       render();
     }
-    if (!dragState) return;
+    const snapOn = state.plan.snap !== false;
+
+    if (!dragState) {
+      if (snapOn && (state.plan.tool === 'wall' || state.plan.tool === 'dimension' || state.plan.tool === 'measure' || state.plan.tool === 'room' || state.plan.tool === 'polyroom')) {
+        const snapRes = findSnapPoint(world, entities(), {
+          snapDistance: 0.25,
+          snapGrid: false,
+          gridMeters: state.plan.grid
+        });
+        if (snapRes.snapped && snapRes.type !== 'grid') {
+          if (!activeSnap || activeSnap.x !== snapRes.x || activeSnap.y !== snapRes.y || activeSnap.type !== snapRes.type) {
+            activeSnap = snapRes;
+            render();
+          }
+        } else if (activeSnap) {
+          activeSnap = null;
+          render();
+        }
+      }
+      return;
+    }
+
     if (dragState.mode === 'pan') {
       const dx = event.clientX - dragState.startClient.x;
       const dy = event.clientY - dragState.startClient.y;
@@ -27406,7 +28403,7 @@ function createPlanView(context) {
       render();
       return;
     }
-    const snapOn = state.plan.snap !== false;
+
     const snapped = { x: snapToGrid(world.x, state.plan.grid), y: snapToGrid(world.y, state.plan.grid) };
 
     if (dragState.mode === 'resize' && dragState.entity) {
@@ -27428,6 +28425,8 @@ function createPlanView(context) {
           e.y2 = snapped.y;
         }
         if (e.kind === 'dimension') {
+          e.p1 = { x: e.x1, y: e.y1 };
+          e.p2 = { x: e.x2, y: e.y2 };
           e.x = Math.min(e.x1, e.x2);
           e.y = Math.min(e.y1, e.y2);
           e.width = Math.abs(e.x2 - e.x1);
@@ -27481,7 +28480,12 @@ function createPlanView(context) {
     if (dragState.mode === 'create') {
       let targetPt = snapped;
       if (snapOn) {
-        const snapRes = findSnapPoint(world, entities(), { threshold: 0.35, snapGrid: true, gridSize: state.plan.grid });
+        const snapRes = findSnapPoint(world, entities(), {
+          snapDistance: 0.25,
+          snapGrid: true,
+          gridMeters: state.plan.grid,
+          startPoint: dragState.start
+        });
         if (snapRes.snapped) {
           targetPt = { x: snapRes.x, y: snapRes.y };
           activeSnap = snapRes;
@@ -27523,6 +28527,8 @@ function createPlanView(context) {
           dragState.entity.x2 += dx;
           dragState.entity.y2 += dy;
           if (dragState.entity.kind === 'dimension') {
+            dragState.entity.p1 = { x: dragState.entity.x1, y: dragState.entity.y1 };
+            dragState.entity.p2 = { x: dragState.entity.x2, y: dragState.entity.y2 };
             dragState.entity.x = Math.min(dragState.entity.x1, dragState.entity.x2);
             dragState.entity.y = Math.min(dragState.entity.y1, dragState.entity.y2);
           }

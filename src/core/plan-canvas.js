@@ -10,7 +10,14 @@
  */
 
 import { rectsIntersect, generateEntityId } from './entities.js';
-import { pointInPolygon, calcWallPolygon } from './geometry.js';
+import {
+  pointInPolygon,
+  calcWallPolygon,
+  projectPointOnSegment,
+  findPerpendicularProjection,
+  findExtensionSnap,
+  findSegmentIntersections
+} from './geometry.js';
 
 /**
  * Creates a view transform for the plan canvas.
@@ -104,7 +111,8 @@ export function snapRect(rect, gridMeters) {
 }
 
 /**
- * Detects nearby object snap targets (corners, midpoints, endpoints) or falls back to grid.
+ * Detects nearby object snap targets (corners, midpoints, endpoints, intersections,
+ * perpendiculars, centers, extensions) or falls back to grid.
  *
  * @param {{x: number, y: number}} point - Candidate world coordinate
  * @param {Array<Object>} entities - Project entities list
@@ -113,53 +121,154 @@ export function snapRect(rect, gridMeters) {
  * @param {boolean} [options.snapGrid=true] - Whether to snap to grid when no object is nearby
  * @param {number} [options.gridMeters=0.5] - Grid increment in meters
  * @param {string} [options.excludeId] - Optional ID of entity being moved/modified
- * @returns {{ x: number, y: number, type: 'corner'|'midpoint'|'endpoint'|'grid'|'none', snapped: boolean, targetId?: string }}
+ * @param {{x: number, y: number}} [options.startPoint] - Start point when drafting a vector (enables perpendicular foot snap)
+ * @param {Object} [options.osnaps] - Optional boolean toggle map for specific snap types
+ * @returns {{ x: number, y: number, type: 'corner'|'midpoint'|'endpoint'|'intersection'|'perpendicular'|'center'|'extension'|'grid'|'none', snapped: boolean, targetId?: string, guideRay?: Array<{x: number, y: number}>|null }}
  */
 export function findSnapPoint(point, entities = [], options = {}) {
   const snapDist = typeof options.snapDistance === 'number' ? options.snapDistance : 0.20;
   const snapGrid = options.snapGrid !== false;
   const gridMeters = options.gridMeters || 0.5;
   const excludeId = options.excludeId || null;
+  const startPoint = options.startPoint || options.draftStart || null;
+  const osnaps = options.osnaps || {};
+
+  const isEnabled = (type) => osnaps[type] !== false;
 
   let bestHit = null;
   let bestDist = snapDist;
 
+  const PRIORITY = { endpoint: 5, corner: 5, intersection: 5, midpoint: 3, center: 2, perpendicular: 2, extension: 1 };
+
+  const testCandidate = (cand) => {
+    if (!isEnabled(cand.type)) return;
+    const d = Math.hypot(cand.x - point.x, cand.y - point.y);
+    const candPrio = PRIORITY[cand.type] || 0;
+    const bestPrio = bestHit ? (PRIORITY[bestHit.type] || 0) : -1;
+
+    if (d < bestDist - 1e-4) {
+      bestDist = d;
+      bestHit = cand;
+    } else if (Math.abs(d - bestDist) <= 1e-4 && candPrio > bestPrio) {
+      bestHit = cand;
+    }
+  };
+
+  const walls = [];
+  const otherEntities = [];
+
   for (const e of entities) {
     if (!e || e.id === excludeId) continue;
-
-    // Walls
     if (e.kind === 'wall' && typeof e.x1 === 'number') {
-      const p1 = { x: e.x1, y: e.y1, type: 'endpoint', targetId: e.id };
-      const p2 = { x: e.x2, y: e.y2, type: 'endpoint', targetId: e.id };
-      const mid = { x: (e.x1 + e.x2) / 2, y: (e.y1 + e.y2) / 2, type: 'midpoint', targetId: e.id };
-      for (const cand of [p1, p2, mid]) {
-        const d = Math.hypot(cand.x - point.x, cand.y - point.y);
-        if (d < bestDist) {
-          bestDist = d;
-          bestHit = cand;
+      walls.push(e);
+    } else if (typeof e.x === 'number' && typeof e.width === 'number') {
+      otherEntities.push(e);
+    }
+  }
+
+  // 1. Wall endpoints & midpoints
+  for (const w of walls) {
+    if (isEnabled('endpoint')) {
+      testCandidate({ x: w.x1, y: w.y1, type: 'endpoint', targetId: w.id });
+      testCandidate({ x: w.x2, y: w.y2, type: 'endpoint', targetId: w.id });
+    }
+    if (isEnabled('midpoint')) {
+      testCandidate({ x: (w.x1 + w.x2) / 2, y: (w.y1 + w.y2) / 2, type: 'midpoint', targetId: w.id });
+    }
+  }
+
+  // 2. Wall-wall Intersections
+  if (isEnabled('intersection') && walls.length >= 2) {
+    const segments = walls.map(w => ({
+      p1: { x: w.x1, y: w.y1 },
+      p2: { x: w.x2, y: w.y2 },
+      id: w.id
+    }));
+    const intersections = findSegmentIntersections(segments);
+    for (const hit of intersections) {
+      testCandidate({
+        x: hit.x,
+        y: hit.y,
+        type: 'intersection',
+        targetId: hit.segId1
+      });
+    }
+  }
+
+  // 3. Rooms, Furniture, and other rectilinear entities (discrete corners, midpoints, center)
+  for (const e of otherEntities) {
+    const w = e.width;
+    const d = e.depth || e.run || 0;
+
+    if (isEnabled('corner')) {
+      testCandidate({ x: e.x, y: e.y, type: 'corner', targetId: e.id });
+      testCandidate({ x: e.x + w, y: e.y, type: 'corner', targetId: e.id });
+      testCandidate({ x: e.x + w, y: e.y + d, type: 'corner', targetId: e.id });
+      testCandidate({ x: e.x, y: e.y + d, type: 'corner', targetId: e.id });
+    }
+
+    if (isEnabled('midpoint')) {
+      testCandidate({ x: e.x + w / 2, y: e.y, type: 'midpoint', targetId: e.id });
+      testCandidate({ x: e.x + w, y: e.y + d / 2, type: 'midpoint', targetId: e.id });
+      testCandidate({ x: e.x + w / 2, y: e.y + d, type: 'midpoint', targetId: e.id });
+      testCandidate({ x: e.x, y: e.y + d / 2, type: 'midpoint', targetId: e.id });
+    }
+
+    if (isEnabled('center')) {
+      testCandidate({ x: e.x + w / 2, y: e.y + d / 2, type: 'center', targetId: e.id });
+    }
+  }
+
+  // 4. Perpendicular projection onto walls
+  if (isEnabled('perpendicular')) {
+    for (const w of walls) {
+      const w1 = { x: w.x1, y: w.y1 };
+      const w2 = { x: w.x2, y: w.y2 };
+
+      if (startPoint && typeof startPoint.x === 'number') {
+        // Orthogonal foot projection of the drafting start point onto target wall segment
+        const proj = projectPointOnSegment(startPoint, w1, w2);
+        if (proj.t >= 0.01 && proj.t <= 0.99) {
+          testCandidate({
+            x: proj.point.x,
+            y: proj.point.y,
+            type: 'perpendicular',
+            targetId: w.id
+          });
+        }
+      } else if (!bestHit) {
+        // Cursor proximity perpendicular projection onto target wall segment (only when no discrete keypoint hit)
+        const proj = findPerpendicularProjection(point, w1, w2, snapDist);
+        if (proj) {
+          testCandidate({
+            x: proj.x,
+            y: proj.y,
+            type: 'perpendicular',
+            targetId: w.id
+          });
         }
       }
-    } else if (typeof e.x === 'number' && typeof e.width === 'number') {
-      const w = e.width;
-      const d = e.depth || e.run || 0;
-      const corners = [
-        { x: e.x, y: e.y, type: 'corner', targetId: e.id },
-        { x: e.x + w, y: e.y, type: 'corner', targetId: e.id },
-        { x: e.x + w, y: e.y + d, type: 'corner', targetId: e.id },
-        { x: e.x, y: e.y + d, type: 'corner', targetId: e.id }
-      ];
-      const midpoints = [
-        { x: e.x + w / 2, y: e.y, type: 'midpoint', targetId: e.id },
-        { x: e.x + w, y: e.y + d / 2, type: 'midpoint', targetId: e.id },
-        { x: e.x + w / 2, y: e.y + d, type: 'midpoint', targetId: e.id },
-        { x: e.x, y: e.y + d / 2, type: 'midpoint', targetId: e.id }
-      ];
-      for (const cand of [...corners, ...midpoints]) {
-        const dist = Math.hypot(cand.x - point.x, cand.y - point.y);
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestHit = cand;
-        }
+    }
+  }
+
+  // 5. Collinear Extension rays beyond wall endpoints
+  if (isEnabled('extension')) {
+    for (const w of walls) {
+      const ext = findExtensionSnap(
+        point,
+        { x: w.x1, y: w.y1 },
+        { x: w.x2, y: w.y2 },
+        3.0,
+        snapDist
+      );
+      if (ext) {
+        testCandidate({
+          x: ext.x,
+          y: ext.y,
+          type: 'extension',
+          targetId: w.id,
+          guideRay: ext.guideRay
+        });
       }
     }
   }
@@ -170,7 +279,8 @@ export function findSnapPoint(point, entities = [], options = {}) {
       y: bestHit.y,
       type: bestHit.type,
       snapped: true,
-      targetId: bestHit.targetId
+      targetId: bestHit.targetId,
+      guideRay: bestHit.guideRay || null
     };
   }
 
@@ -179,7 +289,8 @@ export function findSnapPoint(point, entities = [], options = {}) {
       x: snapToGrid(point.x, gridMeters),
       y: snapToGrid(point.y, gridMeters),
       type: 'grid',
-      snapped: true
+      snapped: true,
+      guideRay: null
     };
   }
 
@@ -187,7 +298,8 @@ export function findSnapPoint(point, entities = [], options = {}) {
     x: point.x,
     y: point.y,
     type: 'none',
-    snapped: false
+    snapped: false,
+    guideRay: null
   };
 }
 

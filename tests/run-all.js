@@ -52,7 +52,8 @@ const testFiles = [
   'contextual-studio.test.js',
   'responsive.test.js',
   'studio-phase1.test.js',
-  'studio-phase2.test.js'
+  'studio-phase2.test.js',
+  'studio-phase3.test.js'
 ];
 
 console.log('=================================================================');

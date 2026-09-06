@@ -537,10 +537,216 @@ export function createRampEntity({
 }
 
 // ---------------------------------------------------------------------------
+// Dimensions & Annotations (CAD Aligned/Linear with Witness Lines)
+// ---------------------------------------------------------------------------
+
+export const DIMENSION_STYLES = Object.freeze(['tick', 'arrow', 'dot']);
+export const DIMENSION_ORIENTATIONS = Object.freeze(['aligned', 'horizontal', 'vertical']);
+export const DIMENSION_UNITS = Object.freeze(['m', 'mm', 'ft_in']);
+
+/**
+ * Validates and creates a precision dimension entity.
+ * @param {Object} options
+ * @returns {Object} Dimension entity
+ */
+export function createDimension({
+  id,
+  name,
+  x1,
+  y1,
+  x2,
+  y2,
+  p1,
+  p2,
+  offset = 0.6,
+  style = 'tick',
+  orientation = 'aligned',
+  unit = 'm',
+  dualUnit = false,
+  textOverride = null,
+  floorId = 'floor-1',
+  metadata = {}
+} = {}) {
+  const actualP1 = p1 || { x: x1, y: y1 };
+  const actualP2 = p2 || { x: x2, y: y2 };
+
+  if (!actualP1 || typeof actualP1 !== 'object') throw new TypeError('Dimension p1 is required');
+  if (!actualP2 || typeof actualP2 !== 'object') throw new TypeError('Dimension p2 is required');
+
+  requireFiniteNumber(actualP1.x, 'dimension.p1.x');
+  requireFiniteNumber(actualP1.y, 'dimension.p1.y');
+  requireFiniteNumber(actualP2.x, 'dimension.p2.x');
+  requireFiniteNumber(actualP2.y, 'dimension.p2.y');
+
+  const dx = actualP2.x - actualP1.x;
+  const dy = actualP2.y - actualP1.y;
+  if (Math.hypot(dx, dy) < 1e-4) {
+    throw new Error('Dimension start and end points cannot be identical (length must be > 0)');
+  }
+
+  const validatedStyle = DIMENSION_STYLES.includes(style) ? style : 'tick';
+  const validatedOrientation = DIMENSION_ORIENTATIONS.includes(orientation) ? orientation : 'aligned';
+
+  return {
+    kind: 'dimension',
+    id: id || generateEntityId('dim'),
+    name: typeof name === 'string' && name ? name : 'Dimension',
+    p1: { x: actualP1.x, y: actualP1.y },
+    p2: { x: actualP2.x, y: actualP2.y },
+    x1: actualP1.x,
+    y1: actualP1.y,
+    x2: actualP2.x,
+    y2: actualP2.y,
+    x: Math.min(actualP1.x, actualP2.x),
+    y: Math.min(actualP1.y, actualP2.y),
+    width: Math.abs(actualP2.x - actualP1.x),
+    depth: Math.abs(actualP2.y - actualP1.y),
+    offset: typeof offset === 'number' && !isNaN(offset) ? offset : 0.6,
+    style: validatedStyle,
+    orientation: validatedOrientation,
+    unit: typeof unit === 'string' ? unit : 'm',
+    dualUnit: Boolean(dualUnit),
+    textOverride: typeof textOverride === 'string' && textOverride ? textOverride : null,
+    floorId,
+    metadata
+  };
+}
+
+/**
+ * Automatically inspects a wall and any hosted openings to generate
+ * an aligned dimension string (sub-segments across openings plus an overall dimension).
+ * @param {Object} wall
+ * @param {Array<Object>} [allEntities=[]]
+ * @param {Object} [options={}]
+ * @returns {Array<Object>} Array of Dimension entities
+ */
+export function autoDimensionWall(wall, allEntities = [], options = {}) {
+  if (!wall || typeof wall.x1 !== 'number' || typeof wall.x2 !== 'number') return [];
+  const dx = wall.x2 - wall.x1;
+  const dy = wall.y2 - wall.y1;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-4) return [];
+
+  const u = { x: dx / len, y: dy / len };
+  const offset = typeof options.offset === 'number' ? options.offset : 0.6;
+  const overallSpacing = typeof options.overallSpacing === 'number' ? options.overallSpacing : 0.45;
+  const style = options.style || 'tick';
+  const orientation = options.orientation || 'aligned';
+  const unit = options.unit || 'm';
+  const dualUnit = Boolean(options.dualUnit);
+  const floorId = wall.floorId || 'floor-1';
+
+  // Find openings hosted on this wall
+  const openings = (allEntities || []).filter(e =>
+    e && (e.kind === 'door' || e.kind === 'window') && e.wallId === wall.id
+  );
+
+  // If no openings, return single overall dimension
+  if (openings.length === 0) {
+    return [
+      createDimension({
+        name: `${wall.name || 'Wall'} Dim`,
+        p1: { x: wall.x1, y: wall.y1 },
+        p2: { x: wall.x2, y: wall.y2 },
+        offset,
+        style,
+        orientation,
+        unit,
+        dualUnit,
+        floorId
+      })
+    ];
+  }
+
+  // Collect opening intervals clamped to [0, len]
+  const intervals = [];
+  for (const op of openings) {
+    if (typeof op.position !== 'number' || typeof op.width !== 'number') continue;
+    const s = Math.max(0, Math.min(len, op.position));
+    const e = Math.max(0, Math.min(len, op.position + Math.max(0, op.width)));
+    if (e > s) {
+      intervals.push({ start: s, end: e });
+    }
+  }
+
+  intervals.sort((a, b) => a.start - b.start);
+
+  // Merge overlapping intervals
+  const merged = [];
+  for (const item of intervals) {
+    if (merged.length === 0) {
+      merged.push(item);
+    } else {
+      const prev = merged[merged.length - 1];
+      if (item.start <= prev.end) {
+        prev.end = Math.max(prev.end, item.end);
+      } else {
+        merged.push(item);
+      }
+    }
+  }
+
+  // Extract split cut positions along wall
+  const cuts = [0];
+  for (const item of merged) {
+    if (item.start > cuts[cuts.length - 1] + 1e-4) {
+      cuts.push(item.start);
+    }
+    if (item.end > cuts[cuts.length - 1] + 1e-4) {
+      cuts.push(item.end);
+    }
+  }
+  if (len > cuts[cuts.length - 1] + 1e-4) {
+    cuts.push(len);
+  }
+
+  const dimensions = [];
+  // Segment chain dimensions along first offset line
+  for (let i = 0; i < cuts.length - 1; i++) {
+    const s1 = cuts[i];
+    const s2 = cuts[i + 1];
+    if (s2 - s1 < 1e-4) continue;
+    const pt1 = { x: wall.x1 + u.x * s1, y: wall.y1 + u.y * s1 };
+    const pt2 = { x: wall.x1 + u.x * s2, y: wall.y1 + u.y * s2 };
+    dimensions.push(
+      createDimension({
+        name: `${wall.name || 'Wall'} Seg ${i + 1}`,
+        p1: pt1,
+        p2: pt2,
+        offset,
+        style,
+        orientation,
+        unit,
+        dualUnit,
+        floorId
+      })
+    );
+  }
+
+  // Overall outer dimension
+  dimensions.push(
+    createDimension({
+      name: `${wall.name || 'Wall'} Overall`,
+      p1: { x: wall.x1, y: wall.y1 },
+      p2: { x: wall.x2, y: wall.y2 },
+      offset: offset + (offset >= 0 ? overallSpacing : -overallSpacing),
+      style,
+      orientation,
+      unit,
+      dualUnit,
+      floorId
+    })
+  );
+
+  return dimensions;
+}
+
+// ---------------------------------------------------------------------------
 // ID helper
 // ---------------------------------------------------------------------------
 
 export function generateEntityId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
+
 

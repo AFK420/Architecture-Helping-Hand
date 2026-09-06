@@ -21,14 +21,17 @@ import {
 import {
   createRoom, createWall, createDoor, createWindow,
   placeFurniture, createStairEntity, createRampEntity,
+  createDimension, autoDimensionWall,
+  DIMENSION_STYLES, DIMENSION_ORIENTATIONS, DIMENSION_UNITS,
   roomArea, wallLength, roomPerimeter, roomAspectRatio,
   wallDirection, openingFitsWall, generateEntityId,
   WALL_ASSEMBLIES, wallOpenings
 } from '../../core/entities.js';
 import {
   calcWallJunctions, punchWallSpans, calcDoorCADGeometry,
-  calcWindowCADGeometry, calcWallPolygon
+  calcWindowCADGeometry, calcWallPolygon, calcDimensionGeometry
 } from '../../core/geometry.js';
+import { formatFeetInches } from '../../core/formatter.js';
 import { checkFurnitureFit, checkClearance, checkOverlaps } from '../../core/space-planning.js';
 import { FURNITURE_DATABASE } from '../../core/furniture.js';
 import { getFurniturePlanSVG } from '../visualizer.js';
@@ -373,26 +376,69 @@ export function createPlanView(context) {
       transform = createViewTransform({ zoom: Math.max(20, Math.min(svg.width / 14, 200)) });
       transform.offsetX = svg.width / 2 - 6 * transform.zoom;
       transform.offsetY = svg.height / 2 + 5 * transform.zoom;
+      savePrefs();
+      render();
       return;
     }
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const e of es) {
+      if (!e) continue;
+      if (e.kind === 'door' || e.kind === 'window') continue; // hosted on wall, bounds covered by host wall
+      if (e.kind === 'dimension') {
+        const p1 = e.p1 || (typeof e.x1 === 'number' ? { x: e.x1, y: e.y1 } : (typeof e.x === 'number' ? { x: e.x, y: e.y } : null));
+        const p2 = e.p2 || (typeof e.x2 === 'number' ? { x: e.x2, y: e.y2 } : (p1 ? { x: p1.x + (e.width ?? 0), y: p1.y + (e.depth ?? 0) } : null));
+        if (!p1 || !p2) continue;
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = Math.hypot(dx, dy);
+        const offset = Number(e.offset ?? 0.6);
+        minX = Math.min(minX, p1.x, p2.x);
+        minY = Math.min(minY, p1.y, p2.y);
+        maxX = Math.max(maxX, p1.x, p2.x);
+        maxY = Math.max(maxY, p1.y, p2.y);
+        if (len > 1e-4) {
+          const nx = -dy / len;
+          const ny = dx / len;
+          const totalOff = offset + Math.sign(offset || 1) * 0.25;
+          const dp1x = p1.x + nx * totalOff;
+          const dp1y = p1.y + ny * totalOff;
+          const dp2x = p2.x + nx * totalOff;
+          const dp2y = p2.y + ny * totalOff;
+          minX = Math.min(minX, dp1x, dp2x);
+          minY = Math.min(minY, dp1y, dp2y);
+          maxX = Math.max(maxX, dp1x, dp2x);
+          maxY = Math.max(maxY, dp1y, dp2y);
+        }
+        continue;
+      }
       const r = e.kind === 'wall' ? wallRect(e)
-        : { x: e.x, y: e.y, width: e.width ?? 0, depth: e.depth ?? 0 };
+        : (typeof e.x === 'number' ? { x: e.x, y: e.y, width: e.width ?? 0, depth: e.depth ?? 0 } : null);
+      if (!r || !Number.isFinite(r.x) || !Number.isFinite(r.y)) continue;
       minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
-      maxX = Math.max(maxX, r.x + r.width); maxY = Math.max(maxY, r.y + r.depth);
+      maxX = Math.max(maxX, r.x + (r.width || 0)); maxY = Math.max(maxY, r.y + (r.depth || 0));
+    }
+    if (!Number.isFinite(minX) || !Number.isFinite(maxX) || !Number.isFinite(minY) || !Number.isFinite(maxY)) {
+      transform = createViewTransform({ zoom: Math.max(20, Math.min(svg.width / 14, 200)) });
+      transform.offsetX = svg.width / 2 - 6 * transform.zoom;
+      transform.offsetY = svg.height / 2 + 5 * transform.zoom;
+      savePrefs();
+      render();
+      return;
     }
     const wM = Math.max(maxX - minX, 0.5);
     const dM = Math.max(maxY - minY, 0.5);
-    const padFactor = 1.25;
+    const padFactor = 1.35;
     const zoom = Math.min((svg.width / (wM * padFactor)), (svg.height / (dM * padFactor)));
+    const finalZoom = Number.isFinite(zoom) ? Math.max(10, Math.min(160, zoom)) : 40;
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
     transform = {
-      zoom,
-      offsetX: svg.width / 2 - cx * zoom,
-      offsetY: svg.height / 2 + cy * zoom
+      zoom: finalZoom,
+      offsetX: svg.width / 2 - cx * finalZoom,
+      offsetY: svg.height / 2 + cy * finalZoom
     };
+    savePrefs();
+    render();
   }
 
   function setZoomPercent(targetZoom) {
@@ -683,6 +729,7 @@ export function createPlanView(context) {
           </select>
           <button type="button" class="context-action-btn" id="ctx-wall-door"><span>🚪 + Door</span></button>
           <button type="button" class="context-action-btn" id="ctx-wall-win"><span>🪟 + Window</span></button>
+          <button type="button" class="context-action-btn" id="ctx-wall-autodim" title="Generate CAD Dimension Chain"><span>📏 Auto-Dimension</span></button>
           <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate (Ctrl+D)</span></button>
           <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete (Del)</span></button>
         </div>
@@ -728,6 +775,28 @@ export function createPlanView(context) {
           renderContextualToolbar();
           renderPropertiesInspector();
         } catch (e) { showToast(e.message, 'warning'); }
+      });
+      bar.querySelector('#ctx-wall-autodim')?.addEventListener('click', () => {
+        try {
+          const dims = autoDimensionWall(sel, entities(), { offset: 0.6, style: 'tick', orientation: 'aligned' });
+          if (dims.length > 0) {
+            for (const d of dims) {
+              const cmd = entityAddRemoveCommand(entities(), d, `auto-dimension ${sel.name}`);
+              cmd.redo();
+              history.push(cmd);
+            }
+            state.plan.selectedIds = new Set(dims.map(d => d.id));
+            showToast(`Auto-dimensioned ${sel.name} (${dims.length} chains)`);
+            AudioService.playTick();
+            render();
+            renderContextualToolbar();
+            renderPropertiesInspector();
+          } else {
+            showToast('No dimensions could be generated for wall', 'warning');
+          }
+        } catch (e) {
+          showToast(e.message, 'warning');
+        }
       });
       bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
       bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
@@ -836,6 +905,95 @@ export function createPlanView(context) {
       return;
     }
 
+    if (sel.kind === 'dimension') {
+      const p1World = sel.p1 || { x: sel.x1, y: sel.y1 };
+      const p2World = sel.p2 || { x: sel.x2, y: sel.y2 };
+      const dist = Math.hypot(p2World.x - p1World.x, p2World.y - p1World.y);
+      const currentStyle = sel.style || 'tick';
+      const currentOrient = sel.orientation || 'aligned';
+      const currentUnit = sel.unit || 'm';
+
+      bar.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+          <span class="context-tag-badge" style="background: rgba(73,137,217,0.18); color: var(--note-number, #4989D9); border-color: rgba(73,137,217,0.4);">DIMENSION</span>
+          <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${dist.toFixed(2)}m</span>
+          
+          <div style="display: inline-flex; align-items: center; border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden;">
+            <button type="button" class="context-action-btn ${currentStyle === 'tick' ? 'active' : ''}" id="ctx-dim-tick" title="Architectural 45° Tick" style="border: none; border-radius: 0; padding: 2px 7px;">Tick</button>
+            <button type="button" class="context-action-btn ${currentStyle === 'arrow' ? 'active' : ''}" id="ctx-dim-arrow" title="Engineering Arrow" style="border: none; border-radius: 0; padding: 2px 7px;">Arrow</button>
+            <button type="button" class="context-action-btn ${currentStyle === 'dot' ? 'active' : ''}" id="ctx-dim-dot" title="Circle Dot" style="border: none; border-radius: 0; padding: 2px 7px;">Dot</button>
+          </div>
+
+          <div style="display: inline-flex; align-items: center; border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden;">
+            <button type="button" class="context-action-btn ${currentOrient === 'aligned' ? 'active' : ''}" id="ctx-dim-aligned" title="Aligned" style="border: none; border-radius: 0; padding: 2px 7px;">Aligned</button>
+            <button type="button" class="context-action-btn ${currentOrient === 'horizontal' ? 'active' : ''}" id="ctx-dim-horiz" title="Horizontal (ΔX)" style="border: none; border-radius: 0; padding: 2px 7px;">Horiz</button>
+            <button type="button" class="context-action-btn ${currentOrient === 'vertical' ? 'active' : ''}" id="ctx-dim-vert" title="Vertical (ΔY)" style="border: none; border-radius: 0; padding: 2px 7px;">Vert</button>
+          </div>
+
+          <button type="button" class="context-action-btn" id="ctx-dim-unit" title="Cycle Unit"><span>Unit: ${currentUnit.toUpperCase()}</span></button>
+          <button type="button" class="context-action-btn ${sel.dualUnit ? 'active' : ''}" id="ctx-dim-dual" title="Toggle Dual Unit"><span>${sel.dualUnit ? 'Dual [ON]' : 'Dual [OFF]'}</span></button>
+          <button type="button" class="context-action-btn" id="ctx-dim-flip-offset" title="Flip offset side"><span>⇄ Flip Side</span></button>
+
+          <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate</span></button>
+          <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete</span></button>
+        </div>
+      `;
+
+      const setDimStyle = (st) => {
+        sel.style = st;
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        AudioService.playTick();
+      };
+      bar.querySelector('#ctx-dim-tick')?.addEventListener('click', () => setDimStyle('tick'));
+      bar.querySelector('#ctx-dim-arrow')?.addEventListener('click', () => setDimStyle('arrow'));
+      bar.querySelector('#ctx-dim-dot')?.addEventListener('click', () => setDimStyle('dot'));
+
+      const setDimOrient = (ori) => {
+        sel.orientation = ori;
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        AudioService.playTick();
+      };
+      bar.querySelector('#ctx-dim-aligned')?.addEventListener('click', () => setDimOrient('aligned'));
+      bar.querySelector('#ctx-dim-horiz')?.addEventListener('click', () => setDimOrient('horizontal'));
+      bar.querySelector('#ctx-dim-vert')?.addEventListener('click', () => setDimOrient('vertical'));
+
+      bar.querySelector('#ctx-dim-unit')?.addEventListener('click', () => {
+        const next = sel.unit === 'm' ? 'mm' : (sel.unit === 'mm' ? 'ft_in' : 'm');
+        sel.unit = next;
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        showToast(`Dimension unit: ${next}`);
+        AudioService.playTick();
+      });
+
+      bar.querySelector('#ctx-dim-dual')?.addEventListener('click', () => {
+        sel.dualUnit = !sel.dualUnit;
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        showToast(`Dual unit: ${sel.dualUnit ? 'Enabled' : 'Disabled'}`);
+        AudioService.playTick();
+      });
+
+      bar.querySelector('#ctx-dim-flip-offset')?.addEventListener('click', () => {
+        sel.offset = -(typeof sel.offset === 'number' ? sel.offset : 0.6);
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        showToast('Flipped dimension offset side');
+        AudioService.playTick();
+      });
+
+      bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
+      bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
+      return;
+    }
+
     bar.innerHTML = `
       <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
         <span class="context-tag-badge">${selCount > 1 ? 'MULTI-SELECT' : (sel.kind || 'ITEM').toUpperCase()}</span>
@@ -851,6 +1009,33 @@ export function createPlanView(context) {
   function escapeHtml(str) {
     if (str === null || str === undefined) return '';
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function formatDimensionText(distanceMeters, unit = 'm', dualUnit = false, textOverride = null) {
+    if (typeof textOverride === 'string' && textOverride.trim()) {
+      return textOverride.trim();
+    }
+    const d = Math.max(0, distanceMeters);
+    let primary = '';
+    if (unit === 'mm') {
+      primary = `${Math.round(d * 1000)} mm`;
+    } else if (unit === 'ft_in') {
+      primary = formatFeetInches(d / 0.0254);
+    } else {
+      primary = `${d.toFixed(2)} m`;
+    }
+
+    if (dualUnit) {
+      let secondary = '';
+      if (unit === 'ft_in') {
+        secondary = `${d.toFixed(2)} m`;
+      } else {
+        secondary = formatFeetInches(d / 0.0254);
+      }
+      return `${primary} [${secondary}]`;
+    }
+
+    return primary;
   }
 
   function renderHandles() {
@@ -884,19 +1069,20 @@ export function createPlanView(context) {
           style="cursor: ${cursor}; pointer-events: all;"/>`;
 
       let handles = `
-        ${mkSq(nw, 'nw', 'nwse-resize')}
-        ${mkSq(n,  'n',  'ns-resize')}
-        ${mkSq(ne, 'ne', 'nesw-resize')}
-        ${mkSq(ePt,'e',  'ew-resize')}
-        ${mkSq(se, 'se', 'nwse-resize')}
-        ${mkSq(s,  's',  'ns-resize')}
-        ${mkSq(sw, 'sw', 'nesw-resize')}
-        ${mkSq(wPt,'w',  'ew-resize')}`;
+        ${mkSq(sw, 'sw', 'sw-resize')}
+        ${mkSq(se, 'se', 'se-resize')}
+        ${mkSq(ne, 'ne', 'ne-resize')}
+        ${mkSq(nw, 'nw', 'nw-resize')}
+        ${mkSq(s, 's', 's-resize')}
+        ${mkSq(n, 'n', 'n-resize')}
+        ${mkSq(ePt, 'e', 'e-resize')}
+        ${mkSq(wPt, 'w', 'w-resize')}
+      `;
 
       if (e.kind === 'furniture') {
-        const rotY = n.y - 20;
+        const rotY = n.y - 18;
         handles += `
-          <line x1="${n.x.toFixed(1)}" y1="${n.y.toFixed(1)}" x2="${n.x.toFixed(1)}" y2="${rotY.toFixed(1)}" stroke="${stroke}" stroke-width="1.5" stroke-dasharray="2 2"/>
+          <line x1="${n.x.toFixed(1)}" y1="${n.y.toFixed(1)}" x2="${n.x.toFixed(1)}" y2="${rotY.toFixed(1)}" stroke="${stroke}" stroke-width="1.4" stroke-dasharray="2 2"/>
           <circle cx="${n.x.toFixed(1)}" cy="${rotY.toFixed(1)}" r="5.5" fill="var(--accent-action, #D32F2F)" stroke="#ffffff" stroke-width="1.5"
             class="plan-handle" data-handle="rotate" data-entity-id="${escapeHtml(e.id)}" style="cursor: grab; pointer-events: all;">
             <title>Click to rotate 90°</title>
@@ -920,19 +1106,23 @@ export function createPlanView(context) {
       </g>`;
     }
 
-    if (e.kind === 'dimension' && isNum(e.x1) && isNum(e.y1) && isNum(e.x2) && isNum(e.y2)) {
-      const p1 = worldToSvg(transform, e.x1, e.y1);
-      const p2 = worldToSvg(transform, e.x2, e.y2);
-      return `<g class="plan-handles">
-        <circle cx="${p1.x.toFixed(1)}" cy="${p1.y.toFixed(1)}" r="5.5" fill="${fill}" stroke="var(--note-number, #4989D9)" stroke-width="2"
-          class="plan-handle" data-handle="p1" data-entity-id="${escapeHtml(e.id)}" style="cursor: crosshair; pointer-events: all;">
-          <title>Drag dimension anchor 1</title>
-        </circle>
-        <circle cx="${p2.x.toFixed(1)}" cy="${p2.y.toFixed(1)}" r="5.5" fill="${fill}" stroke="var(--note-number, #4989D9)" stroke-width="2"
-          class="plan-handle" data-handle="p2" data-entity-id="${escapeHtml(e.id)}" style="cursor: crosshair; pointer-events: all;">
-          <title>Drag dimension anchor 2</title>
-        </circle>
-      </g>`;
+    if (e.kind === 'dimension') {
+      const p1W = e.p1 || { x: e.x1, y: e.y1 };
+      const p2W = e.p2 || { x: e.x2, y: e.y2 };
+      if (isNum(p1W.x) && isNum(p1W.y) && isNum(p2W.x) && isNum(p2W.y)) {
+        const p1 = worldToSvg(transform, p1W.x, p1W.y);
+        const p2 = worldToSvg(transform, p2W.x, p2W.y);
+        return `<g class="plan-handles">
+          <circle cx="${p1.x.toFixed(1)}" cy="${p1.y.toFixed(1)}" r="5.5" fill="${fill}" stroke="var(--note-number, #4989D9)" stroke-width="2"
+            class="plan-handle" data-handle="p1" data-entity-id="${escapeHtml(e.id)}" style="cursor: crosshair; pointer-events: all;">
+            <title>Drag dimension anchor 1</title>
+          </circle>
+          <circle cx="${p2.x.toFixed(1)}" cy="${p2.y.toFixed(1)}" r="5.5" fill="${fill}" stroke="var(--note-number, #4989D9)" stroke-width="2"
+            class="plan-handle" data-handle="p2" data-entity-id="${escapeHtml(e.id)}" style="cursor: crosshair; pointer-events: all;">
+            <title>Drag dimension anchor 2</title>
+          </circle>
+        </g>`;
+      }
     }
 
     return '';
@@ -1248,18 +1438,68 @@ export function createPlanView(context) {
           }
         }
       }
-      if (e.kind === 'dimension' && typeof e.x1 === 'number' && typeof e.x2 === 'number') {
-        const p1 = worldToSvg(transform, e.x1, e.y1);
-        const p2 = worldToSvg(transform, e.x2, e.y2);
-        const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-        const dist = Math.hypot(e.x2 - e.x1, e.y2 - e.y1);
-        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
-          <line x1="${p1.x.toFixed(1)}" y1="${p1.y.toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${p2.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2 : 1.2}"/>
-          <circle cx="${p1.x.toFixed(1)}" cy="${p1.y.toFixed(1)}" r="2.5" fill="${stroke}"/>
-          <circle cx="${p2.x.toFixed(1)}" cy="${p2.y.toFixed(1)}" r="2.5" fill="${stroke}"/>
-          <rect x="${(mid.x - 22).toFixed(1)}" y="${(mid.y - 14).toFixed(1)}" width="44" height="15" rx="3" fill="var(--bg-surface-elevated, #28292e)" stroke="${stroke}" stroke-width="0.8"/>
-          <text x="${mid.x.toFixed(1)}" y="${(mid.y - 3).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="var(--note-number, #4989D9)" font-weight="700">${dist.toFixed(2)}m</text>
-        </g>`;
+      if (e.kind === 'dimension') {
+        const p1World = e.p1 || { x: e.x1, y: e.y1 };
+        const p2World = e.p2 || { x: e.x2, y: e.y2 };
+        if (isNum(p1World.x) && isNum(p1World.y) && isNum(p2World.x) && isNum(p2World.y)) {
+          const dimGeom = calcDimensionGeometry(p1World, p2World, {
+            offset: typeof e.offset === 'number' ? e.offset : 0.6,
+            style: e.style || 'tick',
+            orientation: e.orientation || 'aligned',
+            standoff: 0.08,
+            overshoot: 0.12,
+            tickSize: 0.18,
+            arrowLength: 0.22,
+            arrowWidth: 0.07
+          });
+
+          const dl1 = worldToSvg(transform, dimGeom.dimLine[0].x, dimGeom.dimLine[0].y);
+          const dl2 = worldToSvg(transform, dimGeom.dimLine[1].x, dimGeom.dimLine[1].y);
+          const w1a = worldToSvg(transform, dimGeom.witness1[0].x, dimGeom.witness1[0].y);
+          const w1b = worldToSvg(transform, dimGeom.witness1[1].x, dimGeom.witness1[1].y);
+          const w2a = worldToSvg(transform, dimGeom.witness2[0].x, dimGeom.witness2[0].y);
+          const w2b = worldToSvg(transform, dimGeom.witness2[1].x, dimGeom.witness2[1].y);
+          const textSvg = worldToSvg(transform, dimGeom.textMid.x, dimGeom.textMid.y);
+
+          const displayText = formatDimensionText(dimGeom.distance, e.unit, e.dualUnit, e.textOverride);
+          const badgeWidth = Math.max(38, displayText.length * 6.5 + 14);
+
+          let markersSvg = '';
+          if (dimGeom.style === 'tick') {
+            for (const tick of dimGeom.ticks) {
+              const t1 = worldToSvg(transform, tick[0].x, tick[0].y);
+              const t2 = worldToSvg(transform, tick[1].x, tick[1].y);
+              markersSvg += `<line x1="${t1.x.toFixed(1)}" y1="${t1.y.toFixed(1)}" x2="${t2.x.toFixed(1)}" y2="${t2.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.6 : 1.8}" stroke-linecap="round"/>`;
+            }
+          } else if (dimGeom.style === 'arrow') {
+            for (const arrow of dimGeom.arrows) {
+              const pts = arrow.map(p => {
+                const sp = worldToSvg(transform, p.x, p.y);
+                return `${sp.x.toFixed(1)},${sp.y.toFixed(1)}`;
+              }).join(' ');
+              markersSvg += `<polygon points="${pts}" fill="${stroke}"/>`;
+            }
+          } else if (dimGeom.style === 'dot') {
+            for (const dot of dimGeom.dots) {
+              const dp = worldToSvg(transform, dot.x, dot.y);
+              markersSvg += `<circle cx="${dp.x.toFixed(1)}" cy="${dp.y.toFixed(1)}" r="${Math.max(2.5, dot.radius * transform.zoom)}" fill="${stroke}"/>`;
+            }
+          }
+
+          const svgAngle = -dimGeom.textAngle;
+
+          return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+            <line x1="${w1a.x.toFixed(1)}" y1="${w1a.y.toFixed(1)}" x2="${w1b.x.toFixed(1)}" y2="${w1b.y.toFixed(1)}" stroke="${stroke}" stroke-width="1.0" opacity="0.7"/>
+            <line x1="${w2a.x.toFixed(1)}" y1="${w2a.y.toFixed(1)}" x2="${w2b.x.toFixed(1)}" y2="${w2b.y.toFixed(1)}" stroke="${stroke}" stroke-width="1.0" opacity="0.7"/>
+            <line x1="${dl1.x.toFixed(1)}" y1="${dl1.y.toFixed(1)}" x2="${dl2.x.toFixed(1)}" y2="${dl2.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.0 : 1.3}"/>
+            ${markersSvg}
+            <line x1="${dl1.x.toFixed(1)}" y1="${dl1.y.toFixed(1)}" x2="${dl2.x.toFixed(1)}" y2="${dl2.y.toFixed(1)}" stroke="transparent" stroke-width="14" style="cursor: pointer;"/>
+            <g transform="rotate(${svgAngle.toFixed(1)} ${textSvg.x.toFixed(1)} ${textSvg.y.toFixed(1)})" pointer-events="none">
+              <rect x="${(textSvg.x - badgeWidth / 2).toFixed(1)}" y="${(textSvg.y - 9).toFixed(1)}" width="${badgeWidth.toFixed(1)}" height="18" rx="3" fill="var(--bg-surface-elevated, #28292e)" stroke="${stroke}" stroke-width="${selected ? 1.4 : 0.8}"/>
+              <text x="${textSvg.x.toFixed(1)}" y="${(textSvg.y + 4).toFixed(1)}" text-anchor="middle" font-size="9.5" font-family="var(--font-mono)" fill="var(--note-number, #4989D9)" font-weight="700">${escapeHtml(displayText)}</text>
+            </g>
+          </g>`;
+        }
       }
       if (e.kind === 'stair' && hasRect) {
         const p1 = worldToSvg(transform, e.x, e.y + e.depth);
@@ -1428,13 +1668,56 @@ export function createPlanView(context) {
     let snapMarkup = '';
     if (activeSnap && activeSnap.snapped && activeSnap.type !== 'grid' && activeSnap.type !== 'none') {
       const sp = worldToSvg(transform, activeSnap.x, activeSnap.y);
-      const snapCol = activeSnap.type === 'corner' ? 'var(--cyan-glow, #38bdf8)' : activeSnap.type === 'midpoint' ? 'var(--color-warning, #fbbf24)' : 'var(--color-success, #4ade80)';
+      const snapType = activeSnap.type;
+      let snapCol = 'var(--cyan-glow, #38bdf8)';
+      let glyphSvg = '';
+
+      if (snapType === 'endpoint' || snapType === 'corner') {
+        snapCol = 'var(--cyan-glow, #38bdf8)';
+        glyphSvg = `<rect x="${(sp.x - 5).toFixed(1)}" y="${(sp.y - 5).toFixed(1)}" width="10" height="10" fill="none" stroke="${snapCol}" stroke-width="2"/>`;
+      } else if (snapType === 'midpoint') {
+        snapCol = 'var(--color-warning, #fbbf24)';
+        glyphSvg = `<polygon points="${sp.x.toFixed(1)},${(sp.y - 6).toFixed(1)} ${(sp.x - 6).toFixed(1)},${(sp.y + 5).toFixed(1)} ${(sp.x + 6).toFixed(1)},${(sp.y + 5).toFixed(1)}" fill="none" stroke="${snapCol}" stroke-width="2"/>`;
+      } else if (snapType === 'intersection') {
+        snapCol = 'var(--accent-action, #f43f5e)';
+        glyphSvg = `
+          <line x1="${(sp.x - 5).toFixed(1)}" y1="${(sp.y - 5).toFixed(1)}" x2="${(sp.x + 5).toFixed(1)}" y2="${(sp.y + 5).toFixed(1)}" stroke="${snapCol}" stroke-width="2.2"/>
+          <line x1="${(sp.x - 5).toFixed(1)}" y1="${(sp.y + 5).toFixed(1)}" x2="${(sp.x + 5).toFixed(1)}" y2="${(sp.y - 5).toFixed(1)}" stroke="${snapCol}" stroke-width="2.2"/>
+        `;
+      } else if (snapType === 'perpendicular') {
+        snapCol = 'var(--color-success, #4ade80)';
+        glyphSvg = `
+          <path d="M ${(sp.x - 6).toFixed(1)} ${(sp.y - 6).toFixed(1)} L ${(sp.x - 6).toFixed(1)} ${(sp.y + 6).toFixed(1)} L ${(sp.x + 6).toFixed(1)} ${(sp.y + 6).toFixed(1)}" fill="none" stroke="${snapCol}" stroke-width="2"/>
+          <path d="M ${(sp.x - 6).toFixed(1)} ${sp.y.toFixed(1)} L ${sp.x.toFixed(1)} ${sp.y.toFixed(1)} L ${sp.x.toFixed(1)} ${(sp.y + 6).toFixed(1)}" fill="none" stroke="${snapCol}" stroke-width="1.4"/>
+        `;
+      } else if (snapType === 'center') {
+        snapCol = 'var(--note-number, #818cf8)';
+        glyphSvg = `
+          <circle cx="${sp.x.toFixed(1)}" cy="${sp.y.toFixed(1)}" r="6" fill="none" stroke="${snapCol}" stroke-width="1.8"/>
+          <line x1="${(sp.x - 4).toFixed(1)}" y1="${sp.y.toFixed(1)}" x2="${(sp.x + 4).toFixed(1)}" y2="${sp.y.toFixed(1)}" stroke="${snapCol}" stroke-width="1.4"/>
+          <line x1="${sp.x.toFixed(1)}" y1="${(sp.y - 4).toFixed(1)}" x2="${sp.x.toFixed(1)}" y2="${(sp.y + 4).toFixed(1)}" stroke="${snapCol}" stroke-width="1.4"/>
+        `;
+      } else if (snapType === 'extension') {
+        snapCol = 'var(--color-warning, #f59e0b)';
+        let raySvg = '';
+        if (Array.isArray(activeSnap.guideRay) && activeSnap.guideRay.length === 2) {
+          const r1 = worldToSvg(transform, activeSnap.guideRay[0].x, activeSnap.guideRay[0].y);
+          raySvg = `<line x1="${r1.x.toFixed(1)}" y1="${r1.y.toFixed(1)}" x2="${sp.x.toFixed(1)}" y2="${sp.y.toFixed(1)}" stroke="${snapCol}" stroke-width="1.4" stroke-dasharray="4 3"/>`;
+        }
+        glyphSvg = `
+          ${raySvg}
+          <line x1="${(sp.x - 4).toFixed(1)}" y1="${(sp.y - 4).toFixed(1)}" x2="${(sp.x + 4).toFixed(1)}" y2="${(sp.y + 4).toFixed(1)}" stroke="${snapCol}" stroke-width="2"/>
+          <line x1="${(sp.x - 4).toFixed(1)}" y1="${(sp.y + 4).toFixed(1)}" x2="${(sp.x + 4).toFixed(1)}" y2="${(sp.y - 4).toFixed(1)}" stroke="${snapCol}" stroke-width="2"/>
+        `;
+      } else {
+        glyphSvg = `<circle cx="${sp.x.toFixed(1)}" cy="${sp.y.toFixed(1)}" r="4.5" fill="none" stroke="${snapCol}" stroke-width="2"/>`;
+      }
+
       snapMarkup = `
         <g class="smart-snap-point" pointer-events="none">
-          <circle cx="${sp.x.toFixed(1)}" cy="${sp.y.toFixed(1)}" r="5" fill="none" stroke="${snapCol}" stroke-width="2"/>
-          <line x1="${(sp.x - 7).toFixed(1)}" y1="${sp.y.toFixed(1)}" x2="${(sp.x + 7).toFixed(1)}" y2="${sp.y.toFixed(1)}" stroke="${snapCol}" stroke-width="1.2"/>
-          <line x1="${sp.x.toFixed(1)}" y1="${(sp.y - 7).toFixed(1)}" x2="${(sp.x + 7).toFixed(1)}" y2="${(sp.y + 7).toFixed(1)}" stroke="${snapCol}" stroke-width="1.2"/>
-          <text x="${(sp.x + 8).toFixed(1)}" y="${(sp.y - 6).toFixed(1)}" fill="${snapCol}" font-size="9" font-family="var(--font-mono)" font-weight="700">${activeSnap.type.toUpperCase()}</text>
+          ${glyphSvg}
+          <rect x="${(sp.x + 8).toFixed(1)}" y="${(sp.y - 18).toFixed(1)}" width="${(snapType.length * 7 + 10)}" height="15" rx="3" fill="var(--bg-surface-elevated, #222327)" stroke="${snapCol}" stroke-width="0.8"/>
+          <text x="${(sp.x + 12).toFixed(1)}" y="${(sp.y - 7).toFixed(1)}" fill="${snapCol}" font-size="8.5" font-family="var(--font-mono)" font-weight="700">${snapType.toUpperCase()}</text>
         </g>`;
     }
 
@@ -1473,7 +1756,12 @@ export function createPlanView(context) {
       else if (e.kind === 'window') desc = `Window · ${num(e.width)} m width`;
       else if (e.kind === 'stair') desc = `${num(e.width)} × ${num(e.depth)} m · ${e.risers || 16} risers · Blondel ${Math.round((e.blondel || 0.63) * 1000)} mm`;
       else if (e.kind === 'ramp') desc = `${num(e.width)} × ${num(e.depth)} m · 1:${(e.slopeRatio || 12).toFixed(1)} (${(e.slopePercent || 8.33).toFixed(1)}%)`;
-      else if (e.kind === 'dimension') desc = `Dim · ${typeof e.x1 === 'number' ? Math.hypot(e.x2 - e.x1, e.y2 - e.y1).toFixed(2) : '?'} m`;
+      else if (e.kind === 'dimension') {
+        const p1 = e.p1 || { x: e.x1, y: e.y1 };
+        const p2 = e.p2 || { x: e.x2, y: e.y2 };
+        const d = (typeof p1?.x === 'number' && typeof p2?.x === 'number') ? Math.hypot(p2.x - p1.x, p2.y - p1.y) : null;
+        desc = `Dim · ${d !== null ? d.toFixed(2) : '?'} m`;
+      }
       else if (e.kind === 'text') desc = `"${escapeHtml(e.text || e.name)}"`;
       else desc = e.kind;
 
@@ -2285,23 +2573,132 @@ export function createPlanView(context) {
       }
 
     } else if (selected.kind === 'dimension') {
-      const dist = Math.hypot(selected.x2 - selected.x1, selected.y2 - selected.y1);
+      const p1World = selected.p1 || { x: selected.x1, y: selected.y1 };
+      const p2World = selected.p2 || { x: selected.x2, y: selected.y2 };
+      const dist = Math.hypot(p2World.x - p1World.x, p2World.y - p1World.y);
+      const curStyle = selected.style || 'tick';
+      const curOrient = selected.orientation || 'aligned';
+      const curUnit = selected.unit || 'm';
+      const offsetVal = typeof selected.offset === 'number' ? selected.offset : 0.6;
+
       dom.planPropContent.innerHTML = `
         <div class="plan-prop-section">
-          <div class="plan-prop-title">Dimension Annotation</div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Distance (m)</span><span class="plan-prop-value note-number">${dist.toFixed(3)} m</span></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Distance (cm)</span><span class="plan-prop-value">${(dist * 100).toFixed(1)} cm</span></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Distance (mm)</span><span class="plan-prop-value">${(dist * 1000).toFixed(0)} mm</span></div>
+          <div class="plan-prop-title">Architectural Dimension</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name || 'Dimension')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Measured Span</span>
+            <span class="plan-prop-value note-number">${dist.toFixed(3)} m</span>
+          </div>
+
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Style</span>
+            <select class="calc-input" id="prop-dim-style" style="height: 24px; font-size: 0.72rem; padding: 0 4px; max-width: 150px;">
+              <option value="tick" ${curStyle === 'tick' ? 'selected' : ''}>45° Architectural Tick</option>
+              <option value="arrow" ${curStyle === 'arrow' ? 'selected' : ''}>Engineering Arrow</option>
+              <option value="dot" ${curStyle === 'dot' ? 'selected' : ''}>Circle Dot</option>
+            </select>
+          </div>
+
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Orientation</span>
+            <select class="calc-input" id="prop-dim-orient" style="height: 24px; font-size: 0.72rem; padding: 0 4px; max-width: 150px;">
+              <option value="aligned" ${curOrient === 'aligned' ? 'selected' : ''}>Aligned (Parallel)</option>
+              <option value="horizontal" ${curOrient === 'horizontal' ? 'selected' : ''}>Horizontal (ΔX)</option>
+              <option value="vertical" ${curOrient === 'vertical' ? 'selected' : ''}>Vertical (ΔY)</option>
+            </select>
+          </div>
+
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Unit</span>
+            <select class="calc-input" id="prop-dim-unit" style="height: 24px; font-size: 0.72rem; padding: 0 4px; max-width: 150px;">
+              <option value="m" ${curUnit === 'm' ? 'selected' : ''}>Meters (m)</option>
+              <option value="mm" ${curUnit === 'mm' ? 'selected' : ''}>Millimeters (mm)</option>
+              <option value="ft_in" ${curUnit === 'ft_in' ? 'selected' : ''}>Feet & Inches (ft-in)</option>
+            </select>
+          </div>
+
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Dual Unit</span>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; cursor: pointer;">
+              <input type="checkbox" id="prop-dim-dual" ${selected.dualUnit ? 'checked' : ''} />
+              <span>Show Imperial [ft-in]</span>
+            </label>
+          </div>
+
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Standoff Offset</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-dim-offset" class="text-input" value="${offsetVal.toFixed(2)}" step="0.1" min="-5" max="5" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Text Override</span>
+            <input type="text" id="prop-dim-override" class="text-input" value="${escapeHtml(selected.textOverride || '')}" placeholder="Auto (Calculated)" style="width: 130px; padding: 0.2rem 0.35rem; font-size: 0.75rem;" />
+          </div>
+
+          <div class="plan-prop-row"><span class="plan-prop-label">Endpoints</span><span class="plan-prop-value" style="font-size: 0.70rem;">(${p1World.x.toFixed(2)}, ${p1World.y.toFixed(2)}) ➔ (${p2World.x.toFixed(2)}, ${p2World.y.toFixed(2)})</span></div>
         </div>
         <div class="plan-prop-actions">
           <button type="button" id="btn-prop-scratch-dim" class="plan-prop-btn"><span>📋 Send to Scratchpad</span></button>
           <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Dimension</span></button>
         </div>`;
 
+      dom.planPropContent.querySelector('#prop-entity-name')?.addEventListener('change', (e) => {
+        selected.name = e.target.value.trim() || 'Dimension';
+        render();
+      });
+
+      dom.planPropContent.querySelector('#prop-dim-style')?.addEventListener('change', (e) => {
+        selected.style = e.target.value;
+        render();
+        renderContextualToolbar();
+      });
+
+      dom.planPropContent.querySelector('#prop-dim-orient')?.addEventListener('change', (e) => {
+        selected.orientation = e.target.value;
+        render();
+        renderContextualToolbar();
+      });
+
+      dom.planPropContent.querySelector('#prop-dim-unit')?.addEventListener('change', (e) => {
+        selected.unit = e.target.value;
+        render();
+        renderContextualToolbar();
+      });
+
+      dom.planPropContent.querySelector('#prop-dim-dual')?.addEventListener('change', (e) => {
+        selected.dualUnit = e.target.checked;
+        render();
+        renderContextualToolbar();
+      });
+
+      const offsetInput = dom.planPropContent.querySelector('#prop-dim-offset');
+      if (offsetInput) {
+        attachNumericScrubber(offsetInput, {
+          step: 0.1, min: -5, max: 5, precision: 2,
+          onChange: (val) => { selected.offset = val; render(); },
+          onCommit: (val) => { selected.offset = val; render(); renderContextualToolbar(); }
+        });
+        offsetInput.addEventListener('change', (e) => {
+          selected.offset = parseFloat(e.target.value) || 0.6;
+          render();
+          renderContextualToolbar();
+        });
+      }
+
+      dom.planPropContent.querySelector('#prop-dim-override')?.addEventListener('change', (e) => {
+        selected.textOverride = e.target.value.trim() || null;
+        render();
+        renderContextualToolbar();
+      });
+
       dom.planPropContent.querySelector('#btn-prop-scratch-dim')?.addEventListener('click', () => {
         sendToScratchpad({
           value: dist,
-          formatted: `${dist.toFixed(3)} m (${(dist * 1000).toFixed(0)} mm)`,
+          formatted: `${dist.toFixed(3)} m`,
           label: `${selected.name || 'Dimension'}`,
           unit: 'm',
           source: 'Plan Dimension'
@@ -2419,24 +2816,37 @@ export function createPlanView(context) {
 
   function createDimensionEntity(start, end) {
     const dist = Math.hypot(end.x - start.x, end.y - start.y);
-    if (dist < state.plan.grid) return;
-    const dim = {
-      kind: 'dimension',
-      id: generateEntityId('dim'),
+    if (dist < 0.05) return;
+    const dim = createDimension({
       name: `${dist.toFixed(2)}m`,
-      x1: start.x, y1: start.y,
-      x2: end.x, y2: end.y,
-      x: Math.min(start.x, end.x),
-      y: Math.min(start.y, end.y),
-      width: Math.abs(end.x - start.x),
-      depth: Math.abs(end.y - start.y)
-    };
+      p1: { x: start.x, y: start.y },
+      p2: { x: end.x, y: end.y },
+      x1: start.x,
+      y1: start.y,
+      x2: end.x,
+      y2: end.y,
+      offset: 0.6,
+      style: 'tick',
+      orientation: 'aligned',
+      unit: 'm',
+      dualUnit: false
+    });
+    dim.x = Math.min(start.x, end.x);
+    dim.y = Math.min(start.y, end.y);
+    dim.width = Math.abs(end.x - start.x);
+    dim.depth = Math.abs(end.y - start.y);
+    dim.x1 = start.x;
+    dim.y1 = start.y;
+    dim.x2 = end.x;
+    dim.y2 = end.y;
+
     const cmd = entityAddRemoveCommand(entities(), dim, `add dimension ${dim.name}`);
     cmd.redo();
     history.push(cmd);
     state.plan.selectedIds = new Set([dim.id]);
     showToast(`Dimension added: ${dist.toFixed(2)} m`);
     AudioService.playTick();
+    render();
   }
 
   // ------------------------------------------------------------------
@@ -2541,7 +2951,7 @@ export function createPlanView(context) {
       return;
     } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'measure') {
       if (snapOn) {
-        const snapRes = findSnapPoint(world, entities(), { threshold: 0.35, snapGrid: true, gridSize: state.plan.grid });
+        const snapRes = findSnapPoint(world, entities(), { snapDistance: 0.25, snapGrid: true, gridMeters: state.plan.grid });
         if (snapRes.snapped) {
           initialPt = { x: snapRes.x, y: snapRes.y };
           activeSnap = snapRes;
@@ -2570,7 +2980,28 @@ export function createPlanView(context) {
     if (polyRoomVertices.length > 0) {
       render();
     }
-    if (!dragState) return;
+    const snapOn = state.plan.snap !== false;
+
+    if (!dragState) {
+      if (snapOn && (state.plan.tool === 'wall' || state.plan.tool === 'dimension' || state.plan.tool === 'measure' || state.plan.tool === 'room' || state.plan.tool === 'polyroom')) {
+        const snapRes = findSnapPoint(world, entities(), {
+          snapDistance: 0.25,
+          snapGrid: false,
+          gridMeters: state.plan.grid
+        });
+        if (snapRes.snapped && snapRes.type !== 'grid') {
+          if (!activeSnap || activeSnap.x !== snapRes.x || activeSnap.y !== snapRes.y || activeSnap.type !== snapRes.type) {
+            activeSnap = snapRes;
+            render();
+          }
+        } else if (activeSnap) {
+          activeSnap = null;
+          render();
+        }
+      }
+      return;
+    }
+
     if (dragState.mode === 'pan') {
       const dx = event.clientX - dragState.startClient.x;
       const dy = event.clientY - dragState.startClient.y;
@@ -2578,7 +3009,7 @@ export function createPlanView(context) {
       render();
       return;
     }
-    const snapOn = state.plan.snap !== false;
+
     const snapped = { x: snapToGrid(world.x, state.plan.grid), y: snapToGrid(world.y, state.plan.grid) };
 
     if (dragState.mode === 'resize' && dragState.entity) {
@@ -2600,6 +3031,8 @@ export function createPlanView(context) {
           e.y2 = snapped.y;
         }
         if (e.kind === 'dimension') {
+          e.p1 = { x: e.x1, y: e.y1 };
+          e.p2 = { x: e.x2, y: e.y2 };
           e.x = Math.min(e.x1, e.x2);
           e.y = Math.min(e.y1, e.y2);
           e.width = Math.abs(e.x2 - e.x1);
@@ -2653,7 +3086,12 @@ export function createPlanView(context) {
     if (dragState.mode === 'create') {
       let targetPt = snapped;
       if (snapOn) {
-        const snapRes = findSnapPoint(world, entities(), { threshold: 0.35, snapGrid: true, gridSize: state.plan.grid });
+        const snapRes = findSnapPoint(world, entities(), {
+          snapDistance: 0.25,
+          snapGrid: true,
+          gridMeters: state.plan.grid,
+          startPoint: dragState.start
+        });
         if (snapRes.snapped) {
           targetPt = { x: snapRes.x, y: snapRes.y };
           activeSnap = snapRes;
@@ -2695,6 +3133,8 @@ export function createPlanView(context) {
           dragState.entity.x2 += dx;
           dragState.entity.y2 += dy;
           if (dragState.entity.kind === 'dimension') {
+            dragState.entity.p1 = { x: dragState.entity.x1, y: dragState.entity.y1 };
+            dragState.entity.p2 = { x: dragState.entity.x2, y: dragState.entity.y2 };
             dragState.entity.x = Math.min(dragState.entity.x1, dragState.entity.x2);
             dragState.entity.y = Math.min(dragState.entity.y1, dragState.entity.y2);
           }
