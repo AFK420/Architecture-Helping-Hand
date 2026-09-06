@@ -93,15 +93,24 @@ export function createChainsView(context) {
 
   function renderChainSVGView(calc) {
     if (!dom.chainsSvgViewportWrapper) return;
-    // Large drafting viewport: taller canvas with more label headroom. The
-    // SVG keeps its aspect via CSS (.chain-svg-viewport) and scales to fill
-    // the wide chain container.
+    // Large comprehensive drafting viewport with rich architectural poché and datums
     const svgMarkup = generateChainSVG(calc, {
       selectedSegmentId: state.chainSelectedSegmentId,
       svgWidth: 1000,
-      svgHeight: 340
+      svgHeight: 420
     });
     dom.chainsSvgViewportWrapper.innerHTML = svgMarkup;
+
+    // Interactive segment selection from SVG
+    dom.chainsSvgViewportWrapper.querySelectorAll('.chain-segment-block').forEach(el => {
+      el.addEventListener('click', () => {
+        const segId = el.dataset.segmentId;
+        state.chainSelectedSegmentId = (state.chainSelectedSegmentId === segId) ? null : segId;
+        updateSelectedSegmentInspector(calc);
+        renderChainSVGView(calc);
+        renderChainTable(calc);
+      });
+    });
   }
 
   function updateSelectedSegmentInspector(calc) {

@@ -1662,6 +1662,90 @@ body.sidebar-hidden .app-sidebar {
   width: 100%;
 }
 
+/* Universal Dark Textarea & Preview Box Styling */
+textarea,
+.cad-preview-textarea,
+.form-textarea {
+  min-height: 90px;
+  max-width: 100%;
+  min-width: 0;
+  background: var(--bg-input, #121316) !important;
+  border: 1.5px solid var(--border-medium, #3f3f46) !important;
+  color: var(--text-primary, #f4f4f5) !important;
+  padding: 0.65rem 0.85rem !important;
+  border-radius: var(--radius-md, 6px) !important;
+  font-size: var(--font-size-sm, 0.82rem) !important;
+  font-family: var(--font-mono, monospace) !important;
+  line-height: 1.5 !important;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+textarea:hover,
+.cad-preview-textarea:hover,
+.form-textarea:hover {
+  border-color: var(--border-strong, #52525b) !important;
+}
+
+textarea:focus,
+.cad-preview-textarea:focus,
+.form-textarea:focus {
+  border-color: var(--accent-primary, #4989D9) !important;
+  background: var(--bg-input-focus, #18191e) !important;
+  box-shadow: 0 0 0 3px rgba(73, 137, 217, 0.25) !important;
+}
+
+/* Custom Architectural File Picker */
+input[type="file"],
+.file-input-box {
+  background: var(--bg-input, #121316) !important;
+  border: 1.5px dashed var(--border-medium, #3f3f46) !important;
+  color: var(--text-secondary, #a1a1aa) !important;
+  padding: 0.5rem 0.75rem !important;
+  border-radius: var(--radius-md, 6px) !important;
+  font-size: 0.82rem !important;
+  font-family: var(--font-mono, monospace) !important;
+  cursor: pointer !important;
+  width: 100%;
+  height: auto !important;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+}
+
+input[type="file"]:hover,
+.file-input-box:hover {
+  border-color: var(--accent-primary, #4989D9) !important;
+  background: rgba(73, 137, 217, 0.05) !important;
+}
+
+input[type="file"]::file-selector-button {
+  background: var(--bg-surface-2, #27272a);
+  color: var(--text-primary, #f4f4f5);
+  border: 1px solid var(--border-medium, #3f3f46);
+  border-radius: 4px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 0.75rem;
+  transition: all 0.15s ease;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: var(--accent-primary, #4989D9);
+  border-color: var(--accent-primary, #4989D9);
+  color: #ffffff;
+}
+
+/* Dark Select Options */
+select option {
+  background: var(--bg-surface-2, #1f2026);
+  color: var(--text-primary, #f4f4f5);
+  padding: 0.4rem;
+}
+
 .form-input:hover, .form-select:hover, .text-input:hover, .calc-select:hover {
   border-color: var(--border-strong);
 }
@@ -7013,14 +7097,26 @@ body.sidebar-hidden .app-sidebar {
 .chain-svg-viewport {
   width: 100%;
   max-width: 100%;
-  min-height: 320px;
-  height: 340px;
+  min-height: 380px;
+  height: 420px;
   display: block;
+}
+
+.chain-segment-block {
+  transition: all 0.15s ease;
+}
+
+.chain-segment-block:hover rect {
+  filter: brightness(1.25);
+}
+
+.chain-segment-block.selected rect {
+  filter: brightness(1.35) drop-shadow(0 0 6px rgba(56, 189, 248, 0.4));
 }
 
 .chain-svg-empty {
   width: 100%;
-  height: 100px;
+  height: 140px;
   display: block;
 }
 
@@ -9503,7 +9599,11 @@ body.sidebar-hidden .app-sidebar {
     display: none !important;
   }
 
-  #mode-view-plan {
+  #mode-view-plan[hidden] {
+    display: none !important;
+  }
+
+  #mode-view-plan.active:not([hidden]) {
     height: 100% !important;
     max-height: 100% !important;
     display: flex !important;

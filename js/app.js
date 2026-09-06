@@ -5245,56 +5245,211 @@ function calculateChain(chain, options = {}) {
  */
 function generateChainSVG(calculatedChain, options = {}) {
   if (!calculatedChain || !Array.isArray(calculatedChain.segments) || calculatedChain.segments.length === 0) {
-    return `<svg viewBox="0 0 800 120" xmlns="http://www.w3.org/2000/svg" class="chain-svg-empty"><text x="400" y="65" text-anchor="middle" fill="currentColor" opacity="0.4" font-family="monospace" font-size="13">No chain segments entered yet</text></svg>`;
+    return `<svg viewBox="0 0 800 140" xmlns="http://www.w3.org/2000/svg" class="chain-svg-empty"><text x="400" y="75" text-anchor="middle" fill="currentColor" opacity="0.4" font-family="monospace" font-size="14" font-weight="600">No chain segments entered yet — add segments or select a template above</text></svg>`;
   }
 
   const {
     selectedSegmentId = null,
     svgWidth = 1000,
-    svgHeight = 340
+    svgHeight = 420
   } = options;
 
-  const padLeft = 70;
-  const padRight = 70;
+  const padLeft = 80;
+  const padRight = 80;
   const usableWidth = svgWidth - padLeft - padRight;
-
-  // Vertical layout scales with the taller viewport so labels keep clear
-  // headroom at both the default and enlarged drafting sizes.
-  const baselineY = Math.round(svgHeight * 0.52);
-  const dimLineY = Math.round(svgHeight * 0.30);
-  const totalDimLineY = Math.round(svgHeight * 0.85);
-
   const totalExtent = Math.max(calculatedChain.overallExtentMeters, 0.001);
 
   function getX(meters) {
     return padLeft + (meters / totalExtent) * usableWidth;
   }
 
+  // Key vertical layout bands
+  const dimLineY = 85;
+  const bandTopY = 142;
+  const bandHeight = 56;
+  const bandBottomY = bandTopY + bandHeight;
+  const datumLineY = 245;
+  const totalDimLineY = 325;
+  const footerY = 385;
+
   let svgElements = [];
 
-  // 1. Grid Background lines & Ticks
+  // 1. Defs: Grid background & Architectural Poché patterns
   svgElements.push(`<defs>
-    <pattern id="chainGrid" width="20" height="20" patternUnits="userSpaceOnUse">
-      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="currentColor" stroke-width="0.5" opacity="0.05" />
+    <pattern id="chainGrid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M 24 0 L 0 0 0 24" fill="none" stroke="currentColor" stroke-width="0.5" opacity="0.04" />
     </pattern>
+    <pattern id="brickPoche" width="16" height="16" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="16" stroke="rgba(255, 255, 255, 0.15)" stroke-width="1.5" />
+      <line x1="8" y1="0" x2="8" y2="16" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1" />
+    </pattern>
+    <pattern id="concretePoche" width="14" height="14" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="0.8" fill="rgba(255, 255, 255, 0.25)" />
+      <circle cx="10" cy="9" r="0.8" fill="rgba(255, 255, 255, 0.25)" />
+      <polygon points="6,6 8,4 9,7" fill="rgba(255, 255, 255, 0.18)" />
+    </pattern>
+    <pattern id="glassReflect" width="20" height="20" patternTransform="rotate(30 0 0)" patternUnits="userSpaceOnUse">
+      <line x1="4" y1="0" x2="4" y2="20" stroke="rgba(56, 189, 248, 0.25)" stroke-width="2" />
+    </pattern>
+    <pattern id="allowancePoche" width="12" height="12" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="12" stroke="rgba(245, 158, 11, 0.35)" stroke-width="2" />
+    </pattern>
+    <filter id="chainGlow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#4989D9" flood-opacity="0.35" />
+    </filter>
   </defs>`);
-  svgElements.push(`<rect width="${svgWidth}" height="${svgHeight}" fill="url(#chainGrid)" rx="6" />`);
 
-  // 2. Start Offset Indicator
+  // Background card
+  svgElements.push(`<rect width="${svgWidth}" height="${svgHeight}" fill="#111317" rx="8" />`);
+  svgElements.push(`<rect width="${svgWidth}" height="${svgHeight}" fill="url(#chainGrid)" rx="8" />`);
+
+  // 2. Title & Scale Badge Header
+  svgElements.push(`
+    <text x="${padLeft}" y="32" font-family="var(--font-mono, monospace)" font-size="11" font-weight="700" fill="#94a3b8" letter-spacing="0.08em">
+      SEQUENCE: <tspan fill="#f1f5f9" font-weight="800">${(calculatedChain.name || 'DRAFTING SEQUENCE').toUpperCase()}</tspan>
+    </text>
+    <g transform="translate(${svgWidth - 145}, 16)">
+      <rect width="120" height="24" rx="4" fill="rgba(73, 137, 217, 0.15)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.2" />
+      <text x="60" y="16" font-family="var(--font-mono, monospace)" font-size="11" font-weight="800" fill="var(--accent-primary, #4989D9)" text-anchor="middle">SCALE 1:${calculatedChain.scaleRatio}</text>
+    </g>
+  `);
+
+  // 3. Start Offset Indicator (if present)
   if (calculatedChain.startOffsetMeters > 0) {
     const startOffsetEndX = getX(calculatedChain.startOffsetMeters);
     svgElements.push(`
-      <rect x="${padLeft}" y="${baselineY - 12}" width="${startOffsetEndX - padLeft}" height="24" fill="rgba(201, 138, 43, 0.14)" stroke="var(--color-warning, #c98a2b)" stroke-dasharray="3 3" stroke-width="1" />
-      <text x="${(padLeft + startOffsetEndX) / 2}" y="${baselineY + 4}" font-family="monospace" font-size="9" font-weight="600" fill="var(--color-warning, #c98a2b)" text-anchor="middle">OFFSET: ${calculatedChain.startOffsetFormatted}</text>
+      <g class="chain-start-offset">
+        <rect x="${padLeft}" y="${bandTopY}" width="${startOffsetEndX - padLeft}" height="${bandHeight}" fill="rgba(245, 158, 11, 0.10)" stroke="#f59e0b" stroke-dasharray="4 3" stroke-width="1.5" rx="3" />
+        <text x="${(padLeft + startOffsetEndX) / 2}" y="${bandTopY + 32}" font-family="var(--font-mono, monospace)" font-size="11" font-weight="700" fill="#f59e0b" text-anchor="middle">START OFFSET: ${calculatedChain.startOffsetFormatted}</text>
+      </g>
     `);
   }
 
-  // 3. Main Continuous Baseline Axis
   const startX = getX(0);
   const endX = getX(totalExtent);
-  svgElements.push(`<line x1="${startX}" y1="${baselineY}" x2="${endX}" y2="${baselineY}" stroke="currentColor" stroke-width="2" opacity="0.8" />`);
 
-  // 4. Cumulative Position Coordinate Labels & Major Baseline Ticks
+  // 4. Render Architectural Elevation / Poché Band (Centerpiece)
+  // Base background bar for continuous construction
+  svgElements.push(`
+    <!-- Continuous Sub-Base Track -->
+    <rect x="${startX}" y="${bandTopY}" width="${Math.max(endX - startX, 1)}" height="${bandHeight}" fill="#16181e" stroke="#2a2d36" stroke-width="1.5" rx="4" />
+  `);
+
+  // 5. Render Individual Segments: Dimensions, Witness Lines, Poché Blocks, & Text
+  calculatedChain.segments.forEach(seg => {
+    if (!seg.isValid || !seg.enabled) return;
+
+    const x1 = getX(seg.startMeters);
+    const x2 = getX(seg.endMeters);
+    const segWidth = Math.max(x2 - x1, 1);
+    const midX = (x1 + x2) / 2;
+    const isSelected = seg.id === selectedSegmentId;
+    const isRef = seg.dimensionType === 'reference';
+    const isAlw = seg.dimensionType === 'allowance';
+
+    const segNameLower = (seg.name || '').toLowerCase();
+    const isWindow = segNameLower.includes('window') || segNameLower.includes('glaz') || segNameLower.includes('light');
+    const isDoor = segNameLower.includes('door') || segNameLower.includes('entr') || segNameLower.includes('exit') || segNameLower.includes('gate');
+    const isColumn = segNameLower.includes('column') || segNameLower.includes('col') || segNameLower.includes('pier') && segNameLower.includes('center');
+
+    // Architectural styling variables
+    let strokeColor = isSelected ? '#38bdf8' : (isRef ? '#94a3b8' : (isAlw ? '#fbbf24' : '#4989D9'));
+    let blockFill = '#1e2028';
+    let blockPattern = 'url(#brickPoche)';
+    let blockBorder = '#3f4350';
+    let typeIcon = '🧱';
+
+    if (isWindow) {
+      blockFill = '#082f49';
+      blockPattern = 'url(#glassReflect)';
+      blockBorder = '#0284c7';
+      typeIcon = '🪟';
+    } else if (isDoor) {
+      blockFill = '#451a03';
+      blockPattern = '';
+      blockBorder = '#d97706';
+      typeIcon = '🚪';
+    } else if (isColumn) {
+      blockFill = '#3b0764';
+      blockPattern = 'url(#concretePoche)';
+      blockBorder = '#9333ea';
+      typeIcon = '🏛️';
+    } else if (isAlw) {
+      blockFill = '#451a03';
+      blockPattern = 'url(#allowancePoche)';
+      blockBorder = '#f59e0b';
+      typeIcon = '⚠️';
+    } else if (isRef) {
+      blockFill = '#1e222b';
+      blockPattern = '';
+      blockBorder = '#64748b';
+      typeIcon = '📍';
+    }
+
+    // Top Extension Witness Lines
+    svgElements.push(`
+      <line x1="${x1}" y1="${dimLineY - 14}" x2="${x1}" y2="${bandTopY - 4}" stroke="${strokeColor}" stroke-width="1.2" opacity="0.45" stroke-dasharray="3 2" />
+      <line x1="${x2}" y1="${dimLineY - 14}" x2="${x2}" y2="${bandTopY - 4}" stroke="${strokeColor}" stroke-width="1.2" opacity="0.45" stroke-dasharray="3 2" />
+    `);
+
+    // Top Dimension Line Segment with Heavy 45° Architectural Slash Ticks
+    svgElements.push(`
+      <line x1="${x1}" y1="${dimLineY}" x2="${x2}" y2="${dimLineY}" stroke="${strokeColor}" stroke-width="2" />
+      <!-- Left 45° Architectural Slash Tick -->
+      <line x1="${x1 - 6}" y1="${dimLineY + 6}" x2="${x1 + 6}" y2="${dimLineY - 6}" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" />
+      <!-- Right 45° Architectural Slash Tick -->
+      <line x1="${x2 - 6}" y1="${dimLineY + 6}" x2="${x2 + 6}" y2="${dimLineY - 6}" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" />
+    `);
+
+    // Dimension Text Pill Badge
+    const valText = seg.lengthFormatted;
+    const drawText = `@ 1:${calculatedChain.scaleRatio}: ${seg.drawingFormatted}`;
+    const pillWidth = Math.min(Math.max(valText.length * 10 + 16, 75), Math.max(segWidth - 4, 30));
+
+    svgElements.push(`
+      <g class="dim-text-pill">
+        <rect x="${midX - pillWidth / 2}" y="${dimLineY - 30}" width="${pillWidth}" height="24" rx="4" fill="#0f172a" stroke="${strokeColor}" stroke-width="1.2" />
+        <text x="${midX}" y="${dimLineY - 14}" font-family="var(--font-mono, monospace)" font-size="12" font-weight="800" fill="#f8fafc" text-anchor="middle">${valText}</text>
+        ${segWidth >= 80 ? `
+          <text x="${midX}" y="${dimLineY + 18}" font-family="var(--font-mono, monospace)" font-size="9.5" font-weight="600" fill="#94a3b8" text-anchor="middle">${drawText}</text>
+        ` : ''}
+      </g>
+    `);
+
+    // Architectural Elevation Poché Block
+    svgElements.push(`
+      <g class="chain-segment-block ${isSelected ? 'selected' : ''}" data-segment-id="${seg.id}" style="cursor: pointer;">
+        <title>${seg.name}: ${seg.lengthFormatted} (Drawing: ${seg.drawingFormatted}) [${seg.startFormatted} ➔ ${seg.endFormatted}]</title>
+        <!-- Solid background layer -->
+        <rect x="${x1}" y="${bandTopY}" width="${segWidth}" height="${bandHeight}" fill="${blockFill}" rx="3" />
+        ${blockPattern ? `
+          <!-- Architectural Poché Hatch Pattern -->
+          <rect x="${x1}" y="${bandTopY}" width="${segWidth}" height="${bandHeight}" fill="${blockPattern}" rx="3" opacity="0.9" />
+        ` : ''}
+        ${isWindow ? `
+          <!-- Glazed Sill & Mullion Lines -->
+          <line x1="${x1}" y1="${bandBottomY - 6}" x2="${x2}" y2="${bandBottomY - 6}" stroke="#38bdf8" stroke-width="2.5" />
+          <line x1="${midX}" y1="${bandTopY}" x2="${midX}" y2="${bandBottomY - 6}" stroke="#0284c7" stroke-width="1.5" />
+        ` : ''}
+        ${isDoor ? `
+          <!-- Door Frame & Swing Clearance Threshold -->
+          <rect x="${x1}" y="${bandTopY}" width="4" height="${bandHeight}" fill="#d97706" />
+          <rect x="${x2 - 4}" y="${bandTopY}" width="4" height="${bandHeight}" fill="#d97706" />
+          <line x1="${x1 + 6}" y1="${bandBottomY - 4}" x2="${x2 - 6}" y2="${bandBottomY - 4}" stroke="#f59e0b" stroke-dasharray="3 2" stroke-width="1.5" />
+        ` : ''}
+        <!-- Segment Border Frame -->
+        <rect x="${x1}" y="${bandTopY}" width="${segWidth}" height="${bandHeight}" fill="none" stroke="${isSelected ? '#38bdf8' : blockBorder}" stroke-width="${isSelected ? 2.5 : 1.5}" rx="3" ${isSelected ? 'filter="url(#chainGlow)"' : ''} />
+        
+        <!-- Segment Name Label in Center of Poché Band -->
+        <rect x="${midX - Math.min(segWidth * 0.45, 55)}" y="${bandTopY + 16}" width="${Math.min(segWidth * 0.9, 110)}" height="22" rx="3" fill="rgba(15, 23, 42, 0.85)" stroke="rgba(255, 255, 255, 0.1)" stroke-width="0.8" />
+        <text x="${midX}" y="${bandTopY + 31}" font-family="var(--font-mono, monospace)" font-size="${segWidth < 60 ? 9 : 11}" font-weight="700" fill="#f1f5f9" text-anchor="middle">
+          ${segWidth < 50 ? typeIcon : `${typeIcon} ${seg.name}`}
+        </text>
+      </g>
+    `);
+  });
+
+  // 6. Cumulative Position Coordinate Labels & Major Baseline Ticks
   const positionsSet = new Set();
   positionsSet.add(0);
   if (calculatedChain.startOffsetMeters > 0) positionsSet.add(calculatedChain.startOffsetMeters);
@@ -5306,95 +5461,58 @@ function generateChainSVG(calculatedChain, options = {}) {
     }
   });
 
+  // Running Cumulative Axis Line
+  svgElements.push(`
+    <line x1="${startX}" y1="${datumLineY}" x2="${endX}" y2="${datumLineY}" stroke="currentColor" stroke-width="2" opacity="0.75" />
+  `);
+
   const sortedPositions = Array.from(positionsSet).sort((a, b) => a - b);
-  sortedPositions.forEach(posMeters => {
+  sortedPositions.forEach((posMeters, i) => {
     const px = getX(posMeters);
     const posFormatted = formatMeasurementValue(posMeters, calculatedChain.displayUnit, 1);
+    const isFirst = i === 0;
+    const isLast = i === sortedPositions.length - 1;
+
+    // Vertical extension down to cumulative line
     svgElements.push(`
-      <line x1="${px}" y1="${baselineY - 8}" x2="${px}" y2="${baselineY + 8}" stroke="currentColor" stroke-width="1.5" opacity="0.7" />
-      <text x="${px}" y="${baselineY - 14}" font-family="monospace" font-size="10" font-weight="700" fill="currentColor" opacity="0.9" text-anchor="middle">${posFormatted}</text>
+      <line x1="${px}" y1="${bandBottomY + 2}" x2="${px}" y2="${datumLineY + 6}" stroke="currentColor" stroke-width="1.2" opacity="0.4" stroke-dasharray="2 2" />
+      <circle cx="${px}" cy="${datumLineY}" r="4.5" fill="#1e293b" stroke="${isFirst || isLast ? 'var(--accent-primary, #4989D9)' : 'currentColor'}" stroke-width="2" />
+      <!-- Cumulative Position Badge -->
+      <rect x="${px - 36}" y="${datumLineY + 12}" width="72" height="22" rx="4" fill="#0f172a" stroke="currentColor" stroke-width="1" opacity="0.85" />
+      <text x="${px}" y="${datumLineY + 27}" font-family="var(--font-mono, monospace)" font-size="11" font-weight="800" fill="#f1f5f9" text-anchor="middle">${posFormatted}</text>
     `);
   });
 
-  // 5. Render Individual Segments, Extension Lines, Dimension Witness Arrows & Text
-  calculatedChain.segments.forEach(seg => {
-    if (!seg.isValid || !seg.enabled) return;
-
-    const x1 = getX(seg.startMeters);
-    const x2 = getX(seg.endMeters);
-    const segWidth = Math.max(x2 - x1, 1);
-    const isSelected = seg.id === selectedSegmentId;
-    const isRef = seg.dimensionType === 'reference';
-    const isAlw = seg.dimensionType === 'allowance';
-
-    const strokeColor = isSelected
-      ? 'var(--accent-primary, #4989D9)'
-      : isRef
-      ? 'var(--text-muted, #76767C)'
-      : isAlw
-      ? 'var(--color-warning, #c98a2b)'
-      : 'var(--accent-primary, #4989D9)';
-
-    // Highlight background slice if selected
-    if (isSelected) {
-      svgElements.push(`
-        <rect x="${x1}" y="${Math.round(svgHeight * 0.10)}" width="${segWidth}" height="${Math.round(svgHeight * 0.78)}" fill="rgba(73, 137, 217, 0.12)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.5" stroke-dasharray="4 2" rx="4" />
-      `);
-    }
-
-    if (isRef) {
-      // Reference Dimension (Annotation Pin at coordinate)
-      svgElements.push(`
-        <circle cx="${x1}" cy="${baselineY}" r="4" fill="var(--text-muted, #76767C)" />
-        <line x1="${x1}" y1="${baselineY - 20}" x2="${x1}" y2="${baselineY + 20}" stroke="var(--text-muted, #76767C)" stroke-width="1" stroke-dasharray="2 2" />
-        <text x="${x1}" y="${baselineY + 34}" font-family="monospace" font-size="9" fill="var(--text-muted, #76767C)" text-anchor="middle">${seg.name} [REF]</text>
-      `);
-    } else {
-      // Standard or Allowance Dimension Segment
-      // Extension Witness Lines
-      svgElements.push(`
-        <line x1="${x1}" y1="${dimLineY - 4}" x2="${x1}" y2="${baselineY - 4}" stroke="${strokeColor}" stroke-width="1" opacity="0.4" stroke-dasharray="2 2" />
-        <line x1="${x2}" y1="${dimLineY - 4}" x2="${x2}" y2="${baselineY - 4}" stroke="${strokeColor}" stroke-width="1" opacity="0.4" stroke-dasharray="2 2" />
-      `);
-
-      // Dimension Horizontal Line with architectural 45° slash ticks
-      svgElements.push(`
-        <line x1="${x1}" y1="${dimLineY}" x2="${x2}" y2="${dimLineY}" stroke="${strokeColor}" stroke-width="1.5" />
-        <line x1="${x1 - 4}" y1="${dimLineY + 4}" x2="${x1 + 4}" y2="${dimLineY - 4}" stroke="${strokeColor}" stroke-width="1.8" />
-        <line x1="${x2 - 4}" y1="${dimLineY + 4}" x2="${x2 + 4}" y2="${dimLineY - 4}" stroke="${strokeColor}" stroke-width="1.8" />
-      `);
-
-      // Segment Dimension Text (Real & Drawing)
-      const midX = (x1 + x2) / 2;
-      svgElements.push(`
-        <text x="${midX}" y="${dimLineY - 7}" font-family="monospace" font-size="11" font-weight="700" fill="${strokeColor}" text-anchor="middle">${seg.lengthFormatted}</text>
-      `);
-
-      // Segment Name & Markers below baseline
-      const markerText = (seg.startLabel && seg.endLabel)
-        ? `${seg.startLabel} ➔ ${seg.endLabel}`
-        : seg.name;
-
-      svgElements.push(`
-        <text x="${midX}" y="${baselineY + 22}" font-family="sans-serif" font-size="10" font-weight="600" fill="currentColor" opacity="0.85" text-anchor="middle">${markerText}</text>
-      `);
-    }
-  });
-
-  // 6. Bottom Overall Total Dimension Line & Scale Legend
+  // 7. Bottom Overall Total Dimension Line
   if (calculatedChain.overallExtentMeters > 0) {
+    const midTotal = (startX + endX) / 2;
     svgElements.push(`
-      <line x1="${startX}" y1="${totalDimLineY}" x2="${endX}" y2="${totalDimLineY}" stroke="currentColor" stroke-width="1.5" opacity="0.6" />
-      <line x1="${startX - 4}" y1="${totalDimLineY + 4}" x2="${startX + 4}" y2="${totalDimLineY - 4}" stroke="currentColor" stroke-width="2" opacity="0.8" />
-      <line x1="${endX - 4}" y1="${totalDimLineY + 4}" x2="${endX + 4}" y2="${totalDimLineY - 4}" stroke="currentColor" stroke-width="2" opacity="0.8" />
-      <text x="${(startX + endX) / 2}" y="${totalDimLineY - 6}" font-family="monospace" font-size="11" font-weight="800" fill="currentColor" text-anchor="middle">TOTAL: ${calculatedChain.overallExtentFormatted} (Drawing @ 1:${calculatedChain.scaleRatio}: ${calculatedChain.drawingOverallFormatted})</text>
+      <!-- Overall Witness Drop Lines -->
+      <line x1="${startX}" y1="${datumLineY + 36}" x2="${startX}" y2="${totalDimLineY + 10}" stroke="currentColor" stroke-width="1.5" opacity="0.5" />
+      <line x1="${endX}" y1="${datumLineY + 36}" x2="${endX}" y2="${totalDimLineY + 10}" stroke="currentColor" stroke-width="1.5" opacity="0.5" />
+
+      <!-- Overall Continuous Dimension Line -->
+      <line x1="${startX}" y1="${totalDimLineY}" x2="${endX}" y2="${totalDimLineY}" stroke="currentColor" stroke-width="2" opacity="0.8" />
+      <!-- Heavy Architectural End Slash Ticks -->
+      <line x1="${startX - 7}" y1="${totalDimLineY + 7}" x2="${startX + 7}" y2="${totalDimLineY - 7}" stroke="currentColor" stroke-width="3" opacity="0.9" stroke-linecap="round" />
+      <line x1="${endX - 7}" y1="${totalDimLineY + 7}" x2="${endX + 7}" y2="${totalDimLineY - 7}" stroke="currentColor" stroke-width="3" opacity="0.9" stroke-linecap="round" />
+
+      <!-- Prominent Overall Total Badge -->
+      <rect x="${midTotal - 230}" y="${totalDimLineY - 18}" width="460" height="36" rx="6" fill="#0f172a" stroke="var(--accent-primary, #4989D9)" stroke-width="2" />
+      <text x="${midTotal}" y="${totalDimLineY + 5}" font-family="var(--font-mono, monospace)" font-size="13" font-weight="900" fill="#38bdf8" text-anchor="middle">
+        TOTAL: ${calculatedChain.overallExtentFormatted} (Drawing @ 1:${calculatedChain.scaleRatio}: ${calculatedChain.drawingOverallFormatted})
+      </text>
     `);
   }
 
-  // 7. Scale Ratio Stamp Badge (Top Right)
+  // 8. Comprehensive Architectural Run Breakdown Footer Strip
   svgElements.push(`
-    <rect x="${svgWidth - 110}" y="8" width="95" height="20" rx="3" fill="rgba(73, 137, 217, 0.15)" stroke="var(--accent-primary, #4989D9)" stroke-width="1" />
-    <text x="${svgWidth - 62}" y="22" font-family="monospace" font-size="10" font-weight="700" fill="var(--accent-primary, #4989D9)" text-anchor="middle">SCALE 1:${calculatedChain.scaleRatio}</text>
+    <g class="chain-footer-summary">
+      <rect x="${padLeft - 10}" y="${footerY - 16}" width="${usableWidth + 20}" height="32" rx="6" fill="rgba(30, 41, 59, 0.65)" stroke="rgba(255, 255, 255, 0.1)" stroke-width="1" />
+      <text x="${padLeft + 15}" y="${footerY + 5}" font-family="var(--font-mono, monospace)" font-size="11" font-weight="700" fill="#94a3b8">
+        📊 CHAIN SUMMARY: <tspan fill="#f8fafc" font-weight="800">${calculatedChain.segmentCount} Segments</tspan> · <tspan fill="#38bdf8" font-weight="800">Total Run: ${calculatedChain.overallExtentFormatted}</tspan> · <tspan fill="#a78bfa" font-weight="800">Drawing Sheet: ${calculatedChain.drawingOverallFormatted}</tspan> · <tspan fill="#34d399">Scale 1:${calculatedChain.scaleRatio}</tspan>
+      </text>
+    </g>
   `);
 
   return `
@@ -27434,15 +27552,24 @@ function createChainsView(context) {
 
   function renderChainSVGView(calc) {
     if (!dom.chainsSvgViewportWrapper) return;
-    // Large drafting viewport: taller canvas with more label headroom. The
-    // SVG keeps its aspect via CSS (.chain-svg-viewport) and scales to fill
-    // the wide chain container.
+    // Large comprehensive drafting viewport with rich architectural poché and datums
     const svgMarkup = generateChainSVG(calc, {
       selectedSegmentId: state.chainSelectedSegmentId,
       svgWidth: 1000,
-      svgHeight: 340
+      svgHeight: 420
     });
     dom.chainsSvgViewportWrapper.innerHTML = svgMarkup;
+
+    // Interactive segment selection from SVG
+    dom.chainsSvgViewportWrapper.querySelectorAll('.chain-segment-block').forEach(el => {
+      el.addEventListener('click', () => {
+        const segId = el.dataset.segmentId;
+        state.chainSelectedSegmentId = (state.chainSelectedSegmentId === segId) ? null : segId;
+        updateSelectedSegmentInspector(calc);
+        renderChainSVGView(calc);
+        renderChainTable(calc);
+      });
+    });
   }
 
   function updateSelectedSegmentInspector(calc) {
