@@ -25,6 +25,17 @@ import {
   executeAiAction
 } from '../src/core/ai-bridge.js';
 
+import {
+  CAD_BLOCK_LIBRARY,
+  createBlockInstanceEntity
+} from '../src/core/entities.js';
+
+import {
+  evaluateNurbsCurve,
+  evaluateNurbsSurface,
+  tessellateNurbsSurface
+} from '../src/core/massing-3d.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
@@ -351,6 +362,82 @@ test('CSS Integration: css/main.css has Section 20 studio styles', () => {
   assert.ok(css.includes('.studio-cpanels-container'), 'Must define .studio-cpanels-container');
   assert.ok(css.includes('.studio-bottom-commandbar'), 'Must define .studio-bottom-commandbar');
   assert.ok(css.includes('.app-ai-drawer'), 'Must define .app-ai-drawer');
+});
+
+// -----------------------------------------------------------------------------
+// 8. 16 Categories Completeness, Phase 9 NURBS & Phase 12 CAD Blocks
+// -----------------------------------------------------------------------------
+test('Tool Categories: All 16 categories have assigned tools in catalog', () => {
+  for (const cat of TOOL_CATEGORIES) {
+    const hasTools = STUDIO_TOOL_CATALOG.some(t => t.category === cat.id);
+    assert.ok(hasTools, `Category ${cat.id} must have at least one tool in STUDIO_TOOL_CATALOG`);
+  }
+});
+
+test('Phase 9: Rhino NURBS curve & surface evaluator evaluates smooth geometry', () => {
+  // 1. Curve evaluation
+  const controlPoints = [
+    { x: 0, y: 0, z: 0 },
+    { x: 2, y: 4, z: 0 },
+    { x: 6, y: 4, z: 0 },
+    { x: 8, y: 0, z: 0 }
+  ];
+  const startPt = evaluateNurbsCurve(controlPoints, 3, 0);
+  assert.equal(startPt.x, 0);
+  assert.equal(startPt.y, 0);
+
+  const midPt = evaluateNurbsCurve(controlPoints, 3, 0.5);
+  assert.ok(midPt.x > 3 && midPt.x < 5);
+  assert.ok(midPt.y > 2);
+
+  const endPt = evaluateNurbsCurve(controlPoints, 3, 1);
+  assert.equal(endPt.x, 8);
+  assert.equal(endPt.y, 0);
+
+  // 2. Surface evaluation
+  const grid = [
+    [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 2 }, { x: 8, y: 0, z: 0 }],
+    [{ x: 0, y: 4, z: 2 }, { x: 4, y: 4, z: 5 }, { x: 8, y: 4, z: 2 }],
+    [{ x: 0, y: 8, z: 0 }, { x: 4, y: 8, z: 2 }, { x: 8, y: 8, z: 0 }]
+  ];
+  const srfPt = evaluateNurbsSurface(grid, 2, 2, 0.5, 0.5);
+  assert.ok(srfPt.x > 3 && srfPt.x < 5);
+  assert.ok(srfPt.z > 2);
+
+  // 3. Tessellation into 3D quad faces
+  const faces = tessellateNurbsSurface(grid, { samplesU: 4, samplesV: 4 });
+  assert.equal(faces.length, 16);
+  assert.equal(faces[0].vertices.length, 4);
+});
+
+test('Phase 12: CAD Block Library & Dynamic Insertion', () => {
+  assert.ok(CAD_BLOCK_LIBRARY.DOOR_SINGLE_900, 'Must have DOOR_SINGLE_900');
+  assert.ok(CAD_BLOCK_LIBRARY.WC_FIXTURE, 'Must have WC_FIXTURE');
+  assert.ok(CAD_BLOCK_LIBRARY.DESK_EXECUTIVE, 'Must have DESK_EXECUTIVE');
+  assert.ok(CAD_BLOCK_LIBRARY.TREE_DECIDUOUS, 'Must have TREE_DECIDUOUS');
+
+  const blk = createBlockInstanceEntity({
+    blockId: 'DOOR_SINGLE_900',
+    x: 3.5,
+    y: 5.0,
+    rotation: 90,
+    scale: 1.0
+  });
+  assert.equal(blk.kind, 'block_instance');
+  assert.equal(blk.blockId, 'DOOR_SINGLE_900');
+  assert.equal(blk.x, 3.5);
+  assert.equal(blk.y, 5.0);
+  assert.equal(blk.rotation, 90);
+
+  const parsedInsert = parseStudioCommand('INSERT DOOR_SINGLE_900 3 4');
+  assert.equal(parsedInsert.type, 'insert_block');
+  assert.equal(parsedInsert.blockKey, 'DOOR_SINGLE_900');
+  assert.equal(parsedInsert.x, 3);
+  assert.equal(parsedInsert.y, 4);
+
+  const parsedLayer = parseStudioCommand('LA');
+  assert.equal(parsedLayer.type, 'switch_cpanel');
+  assert.equal(parsedLayer.panelTab, 'layers');
 });
 
 // -----------------------------------------------------------------------------

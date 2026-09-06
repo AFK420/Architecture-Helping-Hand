@@ -1175,5 +1175,107 @@ export function generateEntityId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+// ---------------------------------------------------------------------------
+// Phase 12: Architectural CAD Block Library & Dynamic Insertion
+// ---------------------------------------------------------------------------
+
+export const CAD_BLOCK_LIBRARY = {
+  DOOR_SINGLE_900: {
+    id: 'DOOR_SINGLE_900',
+    name: 'Single Swing Door 900mm',
+    category: 'doors',
+    width: 0.9,
+    depth: 0.9,
+    layerId: 'A-DOOR',
+    geometry: [
+      { type: 'line', x1: 0, y1: 0, x2: 0, y2: 0.9, stroke: '#10b981' },
+      { type: 'arc', cx: 0, cy: 0, r: 0.9, startAngle: 0, endAngle: 90, stroke: '#10b981', dash: '3,3' }
+    ]
+  },
+  WC_FIXTURE: {
+    id: 'WC_FIXTURE',
+    name: 'Water Closet (Toilet) 700x450mm',
+    category: 'plumbing',
+    width: 0.45,
+    depth: 0.70,
+    layerId: 'A-FLOR-FIXT',
+    geometry: [
+      { type: 'rect', x: 0, y: 0.45, width: 0.45, depth: 0.25, stroke: '#06b6d4', fill: 'none' },
+      { type: 'ellipse', cx: 0.225, cy: 0.25, rx: 0.18, ry: 0.25, stroke: '#06b6d4', fill: 'none' }
+    ]
+  },
+  DESK_EXECUTIVE: {
+    id: 'DESK_EXECUTIVE',
+    name: 'Executive Workstation 1600x800mm',
+    category: 'furniture',
+    width: 1.6,
+    depth: 0.8,
+    layerId: 'A-FURN',
+    geometry: [
+      { type: 'rect', x: 0, y: 0, width: 1.6, depth: 0.8, stroke: '#f59e0b', fill: 'none' },
+      { type: 'rect', x: 0.1, y: 0.1, width: 0.4, depth: 0.6, stroke: '#f59e0b', fill: 'none' }
+    ]
+  },
+  TREE_DECIDUOUS: {
+    id: 'TREE_DECIDUOUS',
+    name: 'Deciduous Landscape Tree 3m Canopy',
+    category: 'landscape',
+    width: 3.0,
+    depth: 3.0,
+    layerId: 'L-PLNT-TREE',
+    geometry: [
+      { type: 'circle', cx: 1.5, cy: 1.5, r: 1.5, stroke: '#22c55e', fill: 'none' },
+      { type: 'circle', cx: 1.5, cy: 1.5, r: 0.2, stroke: '#15803d', fill: '#15803d' },
+      { type: 'line', x1: 0, y1: 1.5, x2: 3.0, y2: 1.5, stroke: '#22c55e', opacity: 0.5 },
+      { type: 'line', x1: 1.5, y1: 0, x2: 1.5, y2: 3.0, stroke: '#22c55e', opacity: 0.5 }
+    ]
+  }
+};
+
+/**
+ * Creates an instance of a reusable CAD Block Definition.
+ *
+ * @param {Object} props
+ * @param {string} [props.blockId] - Key in CAD_BLOCK_LIBRARY
+ * @param {number} [props.x=0] - World origin X
+ * @param {number} [props.y=0] - World origin Y
+ * @param {number} [props.rotation=0] - Rotation angle in degrees
+ * @param {number} [props.scale=1.0] - Uniform scale factor
+ * @param {string} [props.layerId] - CAD Layer identifier
+ * @returns {Object} Block instance entity
+ */
+export function createBlockInstanceEntity(props = {}) {
+  const blockDef = CAD_BLOCK_LIBRARY[props.blockId] || props.blockDef || {
+    id: props.blockId || 'CUSTOM_BLOCK',
+    name: props.name || 'Block Instance',
+    width: props.width || 1.0,
+    depth: props.depth || 1.0,
+    layerId: props.layerId || 'A-ANNO-SYMB',
+    geometry: []
+  };
+
+  const x = typeof props.x === 'number' ? props.x : 0;
+  const y = typeof props.y === 'number' ? props.y : 0;
+  const rotation = typeof props.rotation === 'number' ? props.rotation : 0;
+  const scale = typeof props.scale === 'number' && props.scale > 0 ? props.scale : 1.0;
+
+  return {
+    kind: 'block_instance',
+    id: props.id || generateEntityId('blk'),
+    name: props.name || blockDef.name,
+    blockId: blockDef.id,
+    x,
+    y,
+    width: blockDef.width * scale,
+    depth: blockDef.depth * scale,
+    rotation,
+    scale,
+    layerId: props.layerId || blockDef.layerId || 'A-ANNO-SYMB',
+    floorId: props.floorId || 'floor-1',
+    blockDef
+  };
+}
+
+
 
 

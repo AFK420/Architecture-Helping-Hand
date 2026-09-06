@@ -627,6 +627,177 @@ export const STUDIO_TOOL_CATALOG = [
     shortcut: 'F',
     commandAlias: 'INSERT',
     description: 'Place parameterized architectural furnishings (desks, beds, sofas, tables) with clearance zones'
+  },
+
+  // 6. Standard C-Panels
+  {
+    id: 'cpanel_properties',
+    name: 'Properties Inspector',
+    category: 'standard_cpanels',
+    personas: ['studio', 'autocad', 'rhino', 'sketchup', 'photoshop'],
+    icon: '📋',
+    shortcut: 'Ctrl+1',
+    commandAlias: 'PROPERTIES',
+    description: 'Dockable object properties inspector for dimensional and spatial parameters'
+  },
+  {
+    id: 'cpanel_layers',
+    name: 'CAD Layers Manager',
+    category: 'standard_cpanels',
+    personas: ['studio', 'autocad', 'rhino', 'photoshop'],
+    icon: '🗂️',
+    shortcut: 'LA',
+    commandAlias: 'LAYER',
+    description: 'Manage CAD layers, line weights, color coding, and layer visibility'
+  },
+  {
+    id: 'cpanel_validation',
+    name: 'Code & Area Metrics',
+    category: 'standard_cpanels',
+    personas: ['studio', 'autocad'],
+    icon: '✓',
+    shortcut: 'CHK',
+    commandAlias: 'VALIDATE',
+    description: 'Live IBC egress, stair Blondel formula checks, and usable floor area calculations'
+  },
+  {
+    id: 'cpanel_details',
+    name: 'Construction Detailing',
+    category: 'standard_cpanels',
+    personas: ['studio', 'autocad'],
+    icon: '🔍',
+    shortcut: 'DET',
+    commandAlias: 'DETAILS',
+    description: 'AIA standard construction detail callout and assembly library'
+  },
+
+  // 14. Cascades / Flyouts
+  {
+    id: 'flyout_stairs',
+    name: 'Stair Flights Cascade',
+    category: 'cascades_flyouts',
+    personas: ['studio', 'autocad', 'sketchup'],
+    icon: '🪜',
+    shortcut: 'ST',
+    commandAlias: 'STAIRTYPES',
+    description: 'Interactive cascade flyout for Straight, L-Shape Landing, and U-Shape Switchback stairs',
+    flyout: [
+      { id: 'stair_straight', name: 'Straight Flight Stair', icon: '🪜' },
+      { id: 'stair_l_shape', name: 'L-Shape Quarter-Turn with Landing', icon: '↰' },
+      { id: 'stair_u_shape', name: 'U-Shape Dog-Leg Switchback Stair', icon: '↺' }
+    ]
+  },
+  {
+    id: 'flyout_hatching',
+    name: 'Architectural Pochè Cascade',
+    category: 'cascades_flyouts',
+    personas: ['studio', 'autocad', 'photoshop'],
+    icon: '🧱',
+    shortcut: 'HA',
+    commandAlias: 'POCHES',
+    description: 'Interactive cascade flyout for Concrete, Brick, Earth, Sand, and Diagonal hatching',
+    flyout: [
+      { id: 'hatch_concrete', name: 'Concrete Stipple Pochè', icon: '🧱' },
+      { id: 'hatch_earth', name: '45° Compacted Earth', icon: '▨' },
+      { id: 'hatch_insulation', name: 'Zigzag Rigid Insulation', icon: '⚡' },
+      { id: 'hatch_brick', name: 'Brick Bond Pattern', icon: '🧱' }
+    ]
+  },
+  {
+    id: 'flyout_marquee',
+    name: 'Selection Marquee Modes',
+    category: 'cascades_flyouts',
+    personas: ['photoshop'],
+    icon: '⬚',
+    shortcut: 'MQ',
+    commandAlias: 'MARQUEES',
+    description: 'Interactive cascade flyout for Rectangular, Elliptical, and Single-row selection marquees',
+    flyout: [
+      { id: 'marquee_rect', name: 'Rectangular Marquee', icon: '⬚', shortcut: 'M' },
+      { id: 'marquee_ellip', name: 'Elliptical Marquee', icon: '◯', shortcut: 'Shift+M' },
+      { id: 'marquee_single_row', name: 'Single Row Marquee', icon: '━' }
+    ]
+  },
+
+  // 15. Ribbon Tabs
+  {
+    id: 'tab_switch_home',
+    name: 'Home Ribbon Suite',
+    category: 'ribbon_tabs',
+    personas: ['studio', 'autocad'],
+    icon: '📑',
+    shortcut: 'TH',
+    commandAlias: 'TABHOME',
+    description: 'Primary 2D drafting, room creation, and annotation ribbon suite'
+  },
+  {
+    id: 'tab_switch_curves',
+    name: 'Curves Ribbon Suite',
+    category: 'ribbon_tabs',
+    personas: ['rhino'],
+    icon: '〰️',
+    shortcut: 'TC',
+    commandAlias: 'TABCURVES',
+    description: 'Rhino NURBS curves, fillets, offsets, and curve editing ribbon suite'
+  },
+  {
+    id: 'tab_switch_surfaces',
+    name: 'Surfaces Ribbon Suite',
+    category: 'ribbon_tabs',
+    personas: ['rhino'],
+    icon: '◫',
+    shortcut: 'TS',
+    commandAlias: 'TABSRF',
+    description: 'Rhino 3D surface generation, lofts, extrusions, and revolutions suite'
+  },
+  {
+    id: 'tab_switch_solids',
+    name: 'Solids Ribbon Suite',
+    category: 'ribbon_tabs',
+    personas: ['rhino'],
+    icon: '🧊',
+    shortcut: 'TB',
+    commandAlias: 'TABSOLID',
+    description: 'Solid geometry primitives, CSG booleans, and 3D volume modeling suite'
+  },
+  {
+    id: 'tab_switch_views',
+    name: 'Camera Views Ribbon Suite',
+    category: 'ribbon_tabs',
+    personas: ['studio', 'rhino', 'autocad', 'sketchup'],
+    icon: '📷',
+    shortcut: 'TV',
+    commandAlias: 'TABVIEW',
+    description: 'Orthographic, axonometric, perspective, and 4-viewport camera setups'
+  },
+
+  // 16. Ribbon Panels
+  {
+    id: 'panel_draw_primitives',
+    name: 'Draw Primitives Panel',
+    category: 'ribbon_panels',
+    personas: ['studio', 'autocad', 'sketchup'],
+    icon: '✏️',
+    commandAlias: 'PANDRAW',
+    description: 'Ribbon panel for fundamental geometric and architectural drafting entities'
+  },
+  {
+    id: 'panel_geometry_modify',
+    name: 'Modify Geometry Panel',
+    category: 'ribbon_panels',
+    personas: ['autocad', 'rhino', 'sketchup'],
+    icon: '✂️',
+    commandAlias: 'PANMOD',
+    description: 'Ribbon panel for fillets, offsets, trim, and geometric booleans'
+  },
+  {
+    id: 'panel_annotations_dims',
+    name: 'Annotations & Dims Panel',
+    category: 'ribbon_panels',
+    personas: ['studio', 'autocad'],
+    icon: '📏',
+    commandAlias: 'PANANNO',
+    description: 'Ribbon panel for dimension chains, callouts, and section cut lines'
   }
 ];
 
@@ -809,7 +980,33 @@ export function parseStudioCommand(cmdLine, context = {}) {
     return { type: 'delete', verb };
   }
 
-  // 15. Default lookup in STUDIO_TOOL_CATALOG
+  // 15. Blocks & Insertion: INSERT [blockName] [x] [y], BLOCK
+  if (verb === 'INSERT' || verb === 'I') {
+    const blockKey = args[0] ? args[0].toUpperCase() : 'DOOR_SINGLE_900';
+    const x = args[1] ? parseFloat(args[1]) : 0;
+    const y = args[2] ? parseFloat(args[2]) : 0;
+    return {
+      type: 'insert_block',
+      verb,
+      blockKey,
+      x: Number.isFinite(x) ? x : 0,
+      y: Number.isFinite(y) ? y : 0,
+      description: `Insert CAD block ${blockKey}`
+    };
+  }
+  if (verb === 'BLOCK' || verb === 'B') {
+    return { type: 'set_tool', toolId: 'block_create', verb, description: 'Create CAD block definition' };
+  }
+
+  // 16. C-Panels & Layers: LAYER, LA, PROPS, PROPERTIES
+  if (verb === 'LAYER' || verb === 'LA' || verb === 'LAYERS') {
+    return { type: 'switch_cpanel', panelTab: 'layers', verb, description: 'Switch to CAD Layers panel' };
+  }
+  if (verb === 'PROPS' || verb === 'PROPERTIES' || verb === 'CH') {
+    return { type: 'switch_cpanel', panelTab: 'properties', verb, description: 'Switch to Properties Inspector' };
+  }
+
+  // 17. Default lookup in STUDIO_TOOL_CATALOG
   const matched = STUDIO_TOOL_CATALOG.find(t =>
     (t.commandAlias && t.commandAlias.toUpperCase() === verb) ||
     (t.shortcut && t.shortcut.toUpperCase() === verb) ||

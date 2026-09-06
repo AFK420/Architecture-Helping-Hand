@@ -28,7 +28,7 @@ import {
   WALL_ASSEMBLIES, wallOpenings,
   createRoomTag, createDoorTag, createWindowTag,
   createLeaderNote, createNorthArrow, autoTagDocument,
-  createDetailCallout
+  createDetailCallout, createBlockInstanceEntity
 } from '../../core/entities.js';
 import {
   normalizeDocumentLayers, resolveEntityLayer, isEntityVisible, isEntityLocked,
@@ -840,6 +840,39 @@ export function createPlanView(context) {
       return;
     }
 
+    // Standard C-Panels
+    if (toolId.startsWith('cpanel_')) {
+      const pTab = toolId.replace('cpanel_', '');
+      state.activeCPanelTab = pTab;
+      updateStudioCPanels();
+      showToast(`C-Panel: ${pTab.charAt(0).toUpperCase() + pTab.slice(1)} active`);
+      return;
+    }
+
+    // Ribbon Tab Suites
+    if (toolId.startsWith('tab_switch_')) {
+      const rTab = toolId.replace('tab_switch_', '');
+      state.activeRibbonTab = rTab;
+      renderStudioComponents();
+      showToast(`Ribbon Suite: ${rTab.charAt(0).toUpperCase() + rTab.slice(1)} active`);
+      return;
+    }
+
+    // Cascades & Flyouts
+    if (toolId.startsWith('flyout_')) {
+      if (toolId === 'flyout_stairs') setTool('stair');
+      else if (toolId === 'flyout_hatching') setTool('hatch');
+      else if (toolId === 'flyout_marquee') setTool('marquee');
+      showToast(`Flyout cascade activated: ${toolId}`);
+      return;
+    }
+
+    // Ribbon Panels
+    if (toolId.startsWith('panel_')) {
+      showToast(`Ribbon panel focused: ${toolId}`);
+      return;
+    }
+
     // Standard drawing/editing tool selection
     setTool(toolId);
   }
@@ -1034,6 +1067,29 @@ export function createPlanView(context) {
             setTool('hatch');
             showToast(`Active Hatch: ${state.activeMaterial}. Click a room to apply.`);
             renderContextualToolbar();
+            return;
+          }
+          if (parsed.type === 'insert_block') {
+            const blockId = parsed.blockKey || 'DOOR_SINGLE_900';
+            const origin = currentMouseWorld || { x: parsed.x || 2, y: parsed.y || 2 };
+            const blk = createBlockInstanceEntity({
+              blockId,
+              x: snapToGrid(origin.x, state.plan.grid),
+              y: snapToGrid(origin.y, state.plan.grid)
+            });
+            const cmd = entityAddRemoveCommand(entities(), blk, `insert ${blk.name}`);
+            cmd.redo();
+            history.push(cmd);
+            state.plan.selectedIds = new Set([blk.id]);
+            showToast(`Inserted Block: ${blk.name}`, 'success');
+            render();
+            updateStudioCPanels();
+            return;
+          }
+          if (parsed.type === 'switch_cpanel') {
+            state.activeCPanelTab = parsed.panelTab;
+            updateStudioCPanels();
+            showToast(`C-Panel: ${parsed.panelTab} active`);
             return;
           }
           if (parsed.type === 'set_view') {
@@ -2679,6 +2735,34 @@ export function createPlanView(context) {
             fill="rgba(74,222,128,0.10)" stroke="${stroke}" stroke-width="${selected ? 2 : 1.2}" data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>
           ${symbol}
           <text x="${labelPos.x.toFixed(1)}" y="${(p1.y + 12).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-muted,#889)" font-family="var(--font-mono)">${escapeHtml(e.name)}</text>
+        </g>`;
+      }
+      if (e.kind === 'block_instance') {
+        const origin = worldToSvg(transform, e.x, e.y);
+        const wPx = Math.max((e.width || 1) * transform.zoom, 8);
+        const hPx = Math.max((e.depth || 1) * transform.zoom, 8);
+        const rot = e.rotation || 0;
+        const bDef = e.blockDef || {};
+        let blockInner = '';
+        if (Array.isArray(bDef.geometry)) {
+          for (const g of bDef.geometry) {
+            if (g.type === 'line') {
+              blockInner += `<line x1="${(g.x1 * transform.zoom).toFixed(1)}" y1="${(g.y1 * transform.zoom).toFixed(1)}" x2="${(g.x2 * transform.zoom).toFixed(1)}" y2="${(g.y2 * transform.zoom).toFixed(1)}" stroke="${g.stroke || '#94a3b8'}" stroke-width="1.4" stroke-dasharray="${g.dash || ''}"/>`;
+            } else if (g.type === 'rect') {
+              blockInner += `<rect x="${(g.x * transform.zoom).toFixed(1)}" y="${(g.y * transform.zoom).toFixed(1)}" width="${(g.width * transform.zoom).toFixed(1)}" height="${(g.depth * transform.zoom).toFixed(1)}" fill="${g.fill || 'none'}" stroke="${g.stroke || '#94a3b8'}" stroke-width="1.4"/>`;
+            } else if (g.type === 'circle') {
+              blockInner += `<circle cx="${(g.cx * transform.zoom).toFixed(1)}" cy="${(g.cy * transform.zoom).toFixed(1)}" r="${(g.r * transform.zoom).toFixed(1)}" fill="${g.fill || 'none'}" stroke="${g.stroke || '#22c55e'}" stroke-width="1.4"/>`;
+            } else if (g.type === 'ellipse') {
+              blockInner += `<ellipse cx="${(g.cx * transform.zoom).toFixed(1)}" cy="${(g.cy * transform.zoom).toFixed(1)}" rx="${(g.rx * transform.zoom).toFixed(1)}" ry="${(g.ry * transform.zoom).toFixed(1)}" fill="${g.fill || 'none'}" stroke="${g.stroke || '#06b6d4'}" stroke-width="1.4"/>`;
+            } else if (g.type === 'arc') {
+              blockInner += `<circle cx="${(g.cx * transform.zoom).toFixed(1)}" cy="${(g.cy * transform.zoom).toFixed(1)}" r="${(g.r * transform.zoom).toFixed(1)}" fill="none" stroke="${g.stroke || '#10b981'}" stroke-dasharray="${g.dash || '3,3'}" stroke-width="1.2"/>`;
+            }
+          }
+        }
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}" transform="translate(${origin.x.toFixed(1)}, ${origin.y.toFixed(1)}) rotate(${rot})">
+          <rect x="0" y="0" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}" fill="rgba(168, 85, 247, 0.08)" stroke="${selected ? 'var(--color-warning, #fbbf24)' : 'rgba(168, 85, 247, 0.5)'}" stroke-width="${selected ? 2 : 1}" stroke-dasharray="3 3"/>
+          ${blockInner}
+          <text x="${(wPx / 2).toFixed(1)}" y="${(hPx + 12).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-muted, #889)" font-family="var(--font-mono)">${escapeHtml(e.name)}</text>
         </g>`;
       }
       if (e.kind === 'door') {

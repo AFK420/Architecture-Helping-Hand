@@ -12237,6 +12237,108 @@ function generateEntityId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+// ---------------------------------------------------------------------------
+// Phase 12: Architectural CAD Block Library & Dynamic Insertion
+// ---------------------------------------------------------------------------
+
+const CAD_BLOCK_LIBRARY = {
+  DOOR_SINGLE_900: {
+    id: 'DOOR_SINGLE_900',
+    name: 'Single Swing Door 900mm',
+    category: 'doors',
+    width: 0.9,
+    depth: 0.9,
+    layerId: 'A-DOOR',
+    geometry: [
+      { type: 'line', x1: 0, y1: 0, x2: 0, y2: 0.9, stroke: '#10b981' },
+      { type: 'arc', cx: 0, cy: 0, r: 0.9, startAngle: 0, endAngle: 90, stroke: '#10b981', dash: '3,3' }
+    ]
+  },
+  WC_FIXTURE: {
+    id: 'WC_FIXTURE',
+    name: 'Water Closet (Toilet) 700x450mm',
+    category: 'plumbing',
+    width: 0.45,
+    depth: 0.70,
+    layerId: 'A-FLOR-FIXT',
+    geometry: [
+      { type: 'rect', x: 0, y: 0.45, width: 0.45, depth: 0.25, stroke: '#06b6d4', fill: 'none' },
+      { type: 'ellipse', cx: 0.225, cy: 0.25, rx: 0.18, ry: 0.25, stroke: '#06b6d4', fill: 'none' }
+    ]
+  },
+  DESK_EXECUTIVE: {
+    id: 'DESK_EXECUTIVE',
+    name: 'Executive Workstation 1600x800mm',
+    category: 'furniture',
+    width: 1.6,
+    depth: 0.8,
+    layerId: 'A-FURN',
+    geometry: [
+      { type: 'rect', x: 0, y: 0, width: 1.6, depth: 0.8, stroke: '#f59e0b', fill: 'none' },
+      { type: 'rect', x: 0.1, y: 0.1, width: 0.4, depth: 0.6, stroke: '#f59e0b', fill: 'none' }
+    ]
+  },
+  TREE_DECIDUOUS: {
+    id: 'TREE_DECIDUOUS',
+    name: 'Deciduous Landscape Tree 3m Canopy',
+    category: 'landscape',
+    width: 3.0,
+    depth: 3.0,
+    layerId: 'L-PLNT-TREE',
+    geometry: [
+      { type: 'circle', cx: 1.5, cy: 1.5, r: 1.5, stroke: '#22c55e', fill: 'none' },
+      { type: 'circle', cx: 1.5, cy: 1.5, r: 0.2, stroke: '#15803d', fill: '#15803d' },
+      { type: 'line', x1: 0, y1: 1.5, x2: 3.0, y2: 1.5, stroke: '#22c55e', opacity: 0.5 },
+      { type: 'line', x1: 1.5, y1: 0, x2: 1.5, y2: 3.0, stroke: '#22c55e', opacity: 0.5 }
+    ]
+  }
+};
+
+/**
+ * Creates an instance of a reusable CAD Block Definition.
+ *
+ * @param {Object} props
+ * @param {string} [props.blockId] - Key in CAD_BLOCK_LIBRARY
+ * @param {number} [props.x=0] - World origin X
+ * @param {number} [props.y=0] - World origin Y
+ * @param {number} [props.rotation=0] - Rotation angle in degrees
+ * @param {number} [props.scale=1.0] - Uniform scale factor
+ * @param {string} [props.layerId] - CAD Layer identifier
+ * @returns {Object} Block instance entity
+ */
+function createBlockInstanceEntity(props = {}) {
+  const blockDef = CAD_BLOCK_LIBRARY[props.blockId] || props.blockDef || {
+    id: props.blockId || 'CUSTOM_BLOCK',
+    name: props.name || 'Block Instance',
+    width: props.width || 1.0,
+    depth: props.depth || 1.0,
+    layerId: props.layerId || 'A-ANNO-SYMB',
+    geometry: []
+  };
+
+  const x = typeof props.x === 'number' ? props.x : 0;
+  const y = typeof props.y === 'number' ? props.y : 0;
+  const rotation = typeof props.rotation === 'number' ? props.rotation : 0;
+  const scale = typeof props.scale === 'number' && props.scale > 0 ? props.scale : 1.0;
+
+  return {
+    kind: 'block_instance',
+    id: props.id || generateEntityId('blk'),
+    name: props.name || blockDef.name,
+    blockId: blockDef.id,
+    x,
+    y,
+    width: blockDef.width * scale,
+    depth: blockDef.depth * scale,
+    rotation,
+    scale,
+    layerId: props.layerId || blockDef.layerId || 'A-ANNO-SYMB',
+    floorId: props.floorId || 'floor-1',
+    blockDef
+  };
+}
+
+
 
 
 
@@ -13064,6 +13166,180 @@ ${polygonsMarkup}
   </g>
 </svg>`;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 9: Rhino Computational NURBS Curve & Surface Evaluator
+// ---------------------------------------------------------------------------
+
+/**
+ * Generates a standard clamped uniform knot vector for n+1 control points and degree p.
+ * Length = n + p + 2.
+ * @param {number} n - Last index of control points (count - 1)
+ * @param {number} p - Degree of the curve
+ * @returns {Array<number>} Knot vector clamped to [0, 1]
+ */
+function generateClampedKnotVector(n, p) {
+  const m = n + p + 1;
+  const knots = new Array(m + 1);
+  for (let i = 0; i <= p; i++) knots[i] = 0;
+  const interior = m - 2 * p;
+  for (let i = 1; i < interior; i++) {
+    knots[p + i] = i / interior;
+  }
+  for (let i = m - p; i <= m; i++) knots[i] = 1;
+  return knots;
+}
+
+/**
+ * Evaluates a 2D or 3D NURBS / B-Spline curve at parameter t in [0, 1] using Cox-de Boor's algorithm.
+ *
+ * @param {Array<Object>} controlPoints - Array of point objects ({x, y} or {x, y, z})
+ * @param {number} [degree=3] - Degree of the spline (default cubic)
+ * @param {number} t - Parameter in [0, 1]
+ * @param {Array<number>} [customKnots=null] - Optional custom knot vector
+ * @returns {Object} Evaluated point {x, y, z}
+ */
+function evaluateNurbsCurve(controlPoints = [], degree = 3, t = 0, customKnots = null) {
+  if (!Array.isArray(controlPoints) || controlPoints.length === 0) {
+    return { x: 0, y: 0, z: 0 };
+  }
+  if (controlPoints.length === 1) {
+    const pt = controlPoints[0];
+    return { x: pt.x || 0, y: pt.y || 0, z: pt.z || 0 };
+  }
+
+  const p = Math.min(degree, controlPoints.length - 1);
+  const n = controlPoints.length - 1;
+  const knots = Array.isArray(customKnots) && customKnots.length === (n + p + 2)
+    ? customKnots
+    : generateClampedKnotVector(n, p);
+
+  // Clamp t to [0, 1]
+  const clampedT = Math.max(0, Math.min(1, t));
+
+  // Find knot span k such that knots[k] <= clampedT < knots[k+1]
+  let k = n;
+  for (let i = p; i <= n; i++) {
+    if (clampedT >= knots[i] && clampedT < knots[i + 1]) {
+      k = i;
+      break;
+    }
+  }
+  if (clampedT >= 1) k = n;
+
+  // Initialize de Boor working array d[0..p]
+  const d = [];
+  for (let j = 0; j <= p; j++) {
+    const cp = controlPoints[k - p + j] || controlPoints[n];
+    d[j] = {
+      x: cp.x || 0,
+      y: cp.y || 0,
+      z: cp.z || 0
+    };
+  }
+
+  // de Boor recursion
+  for (let r = 1; r <= p; r++) {
+    for (let j = p; j >= r; j--) {
+      const idx = k - p + j;
+      const denom = knots[idx + p - r + 1] - knots[idx];
+      const alpha = denom > 1e-9 ? (clampedT - knots[idx]) / denom : 0;
+      d[j] = {
+        x: (1 - alpha) * d[j - 1].x + alpha * d[j].x,
+        y: (1 - alpha) * d[j - 1].y + alpha * d[j].y,
+        z: (1 - alpha) * d[j - 1].z + alpha * d[j].z
+      };
+    }
+  }
+
+  return {
+    x: Number(d[p].x.toFixed(4)),
+    y: Number(d[p].y.toFixed(4)),
+    z: Number(d[p].z.toFixed(4))
+  };
+}
+
+/**
+ * Evaluates a tensor-product NURBS / B-Spline surface at parameters (u, v) in [0, 1] x [0, 1].
+ *
+ * @param {Array<Array<Object>>} controlGrid - 2D grid of control points [row][col]
+ * @param {number} [degreeU=3] - Degree along U axis
+ * @param {number} [degreeV=3] - Degree along V axis
+ * @param {number} u - Parameter along U [0, 1]
+ * @param {number} v - Parameter along V [0, 1]
+ * @returns {Object} Evaluated surface point {x, y, z}
+ */
+function evaluateNurbsSurface(controlGrid = [], degreeU = 3, degreeV = 3, u = 0, v = 0) {
+  if (!Array.isArray(controlGrid) || controlGrid.length === 0 || !Array.isArray(controlGrid[0])) {
+    return { x: 0, y: 0, z: 0 };
+  }
+
+  // Evaluate each row along U to get intermediate column control points
+  const intermediateCol = controlGrid.map(row => evaluateNurbsCurve(row, degreeU, u));
+
+  // Evaluate column along V
+  return evaluateNurbsCurve(intermediateCol, degreeV, v);
+}
+
+/**
+ * Tessellates a NURBS surface into 3D quad faces ready for 3D projection & rendering.
+ *
+ * @param {Array<Array<Object>>} controlGrid - 2D grid of control points
+ * @param {Object} [options]
+ * @param {number} [options.samplesU=8] - Subdivision steps in U
+ * @param {number} [options.samplesV=8] - Subdivision steps in V
+ * @param {string} [options.color='#38bdf8'] - Face fill color
+ * @param {string} [options.stroke='#0284c7'] - Edge wireframe color
+ * @returns {Array<Object>} 3D quad faces array
+ */
+function tessellateNurbsSurface(controlGrid = [], options = {}) {
+  if (!Array.isArray(controlGrid) || controlGrid.length === 0 || !Array.isArray(controlGrid[0])) {
+    return [];
+  }
+
+  const su = options.samplesU || 8;
+  const sv = options.samplesV || 8;
+  const color = options.color || '#38bdf8';
+  const stroke = options.stroke || '#0284c7';
+  const opacity = options.opacity || 0.85;
+
+  const grid = [];
+  for (let i = 0; i <= su; i++) {
+    const row = [];
+    const u = i / su;
+    for (let j = 0; j <= sv; j++) {
+      const v = j / sv;
+      row.push(evaluateNurbsSurface(controlGrid, options.degreeU || 3, options.degreeV || 3, u, v));
+    }
+    grid.push(row);
+  }
+
+  const faces = [];
+  for (let i = 0; i < su; i++) {
+    for (let j = 0; j < sv; j++) {
+      const p0 = grid[i][j];
+      const p1 = grid[i + 1][j];
+      const p2 = grid[i + 1][j + 1];
+      const p3 = grid[i][j + 1];
+
+      faces.push({
+        vertices: [
+          [p0.x, p0.y, p0.z],
+          [p1.x, p1.y, p1.z],
+          [p2.x, p2.y, p2.z],
+          [p3.x, p3.y, p3.z]
+        ],
+        color,
+        stroke,
+        opacity,
+        type: 'nurbs_surface'
+      });
+    }
+  }
+
+  return faces;
+}
+
 
 
   // =========================================================================
@@ -15350,6 +15626,177 @@ const STUDIO_TOOL_CATALOG = [
     shortcut: 'F',
     commandAlias: 'INSERT',
     description: 'Place parameterized architectural furnishings (desks, beds, sofas, tables) with clearance zones'
+  },
+
+  // 6. Standard C-Panels
+  {
+    id: 'cpanel_properties',
+    name: 'Properties Inspector',
+    category: 'standard_cpanels',
+    personas: ['studio', 'autocad', 'rhino', 'sketchup', 'photoshop'],
+    icon: '📋',
+    shortcut: 'Ctrl+1',
+    commandAlias: 'PROPERTIES',
+    description: 'Dockable object properties inspector for dimensional and spatial parameters'
+  },
+  {
+    id: 'cpanel_layers',
+    name: 'CAD Layers Manager',
+    category: 'standard_cpanels',
+    personas: ['studio', 'autocad', 'rhino', 'photoshop'],
+    icon: '🗂️',
+    shortcut: 'LA',
+    commandAlias: 'LAYER',
+    description: 'Manage CAD layers, line weights, color coding, and layer visibility'
+  },
+  {
+    id: 'cpanel_validation',
+    name: 'Code & Area Metrics',
+    category: 'standard_cpanels',
+    personas: ['studio', 'autocad'],
+    icon: '✓',
+    shortcut: 'CHK',
+    commandAlias: 'VALIDATE',
+    description: 'Live IBC egress, stair Blondel formula checks, and usable floor area calculations'
+  },
+  {
+    id: 'cpanel_details',
+    name: 'Construction Detailing',
+    category: 'standard_cpanels',
+    personas: ['studio', 'autocad'],
+    icon: '🔍',
+    shortcut: 'DET',
+    commandAlias: 'DETAILS',
+    description: 'AIA standard construction detail callout and assembly library'
+  },
+
+  // 14. Cascades / Flyouts
+  {
+    id: 'flyout_stairs',
+    name: 'Stair Flights Cascade',
+    category: 'cascades_flyouts',
+    personas: ['studio', 'autocad', 'sketchup'],
+    icon: '🪜',
+    shortcut: 'ST',
+    commandAlias: 'STAIRTYPES',
+    description: 'Interactive cascade flyout for Straight, L-Shape Landing, and U-Shape Switchback stairs',
+    flyout: [
+      { id: 'stair_straight', name: 'Straight Flight Stair', icon: '🪜' },
+      { id: 'stair_l_shape', name: 'L-Shape Quarter-Turn with Landing', icon: '↰' },
+      { id: 'stair_u_shape', name: 'U-Shape Dog-Leg Switchback Stair', icon: '↺' }
+    ]
+  },
+  {
+    id: 'flyout_hatching',
+    name: 'Architectural Pochè Cascade',
+    category: 'cascades_flyouts',
+    personas: ['studio', 'autocad', 'photoshop'],
+    icon: '🧱',
+    shortcut: 'HA',
+    commandAlias: 'POCHES',
+    description: 'Interactive cascade flyout for Concrete, Brick, Earth, Sand, and Diagonal hatching',
+    flyout: [
+      { id: 'hatch_concrete', name: 'Concrete Stipple Pochè', icon: '🧱' },
+      { id: 'hatch_earth', name: '45° Compacted Earth', icon: '▨' },
+      { id: 'hatch_insulation', name: 'Zigzag Rigid Insulation', icon: '⚡' },
+      { id: 'hatch_brick', name: 'Brick Bond Pattern', icon: '🧱' }
+    ]
+  },
+  {
+    id: 'flyout_marquee',
+    name: 'Selection Marquee Modes',
+    category: 'cascades_flyouts',
+    personas: ['photoshop'],
+    icon: '⬚',
+    shortcut: 'MQ',
+    commandAlias: 'MARQUEES',
+    description: 'Interactive cascade flyout for Rectangular, Elliptical, and Single-row selection marquees',
+    flyout: [
+      { id: 'marquee_rect', name: 'Rectangular Marquee', icon: '⬚', shortcut: 'M' },
+      { id: 'marquee_ellip', name: 'Elliptical Marquee', icon: '◯', shortcut: 'Shift+M' },
+      { id: 'marquee_single_row', name: 'Single Row Marquee', icon: '━' }
+    ]
+  },
+
+  // 15. Ribbon Tabs
+  {
+    id: 'tab_switch_home',
+    name: 'Home Ribbon Suite',
+    category: 'ribbon_tabs',
+    personas: ['studio', 'autocad'],
+    icon: '📑',
+    shortcut: 'TH',
+    commandAlias: 'TABHOME',
+    description: 'Primary 2D drafting, room creation, and annotation ribbon suite'
+  },
+  {
+    id: 'tab_switch_curves',
+    name: 'Curves Ribbon Suite',
+    category: 'ribbon_tabs',
+    personas: ['rhino'],
+    icon: '〰️',
+    shortcut: 'TC',
+    commandAlias: 'TABCURVES',
+    description: 'Rhino NURBS curves, fillets, offsets, and curve editing ribbon suite'
+  },
+  {
+    id: 'tab_switch_surfaces',
+    name: 'Surfaces Ribbon Suite',
+    category: 'ribbon_tabs',
+    personas: ['rhino'],
+    icon: '◫',
+    shortcut: 'TS',
+    commandAlias: 'TABSRF',
+    description: 'Rhino 3D surface generation, lofts, extrusions, and revolutions suite'
+  },
+  {
+    id: 'tab_switch_solids',
+    name: 'Solids Ribbon Suite',
+    category: 'ribbon_tabs',
+    personas: ['rhino'],
+    icon: '🧊',
+    shortcut: 'TB',
+    commandAlias: 'TABSOLID',
+    description: 'Solid geometry primitives, CSG booleans, and 3D volume modeling suite'
+  },
+  {
+    id: 'tab_switch_views',
+    name: 'Camera Views Ribbon Suite',
+    category: 'ribbon_tabs',
+    personas: ['studio', 'rhino', 'autocad', 'sketchup'],
+    icon: '📷',
+    shortcut: 'TV',
+    commandAlias: 'TABVIEW',
+    description: 'Orthographic, axonometric, perspective, and 4-viewport camera setups'
+  },
+
+  // 16. Ribbon Panels
+  {
+    id: 'panel_draw_primitives',
+    name: 'Draw Primitives Panel',
+    category: 'ribbon_panels',
+    personas: ['studio', 'autocad', 'sketchup'],
+    icon: '✏️',
+    commandAlias: 'PANDRAW',
+    description: 'Ribbon panel for fundamental geometric and architectural drafting entities'
+  },
+  {
+    id: 'panel_geometry_modify',
+    name: 'Modify Geometry Panel',
+    category: 'ribbon_panels',
+    personas: ['autocad', 'rhino', 'sketchup'],
+    icon: '✂️',
+    commandAlias: 'PANMOD',
+    description: 'Ribbon panel for fillets, offsets, trim, and geometric booleans'
+  },
+  {
+    id: 'panel_annotations_dims',
+    name: 'Annotations & Dims Panel',
+    category: 'ribbon_panels',
+    personas: ['studio', 'autocad'],
+    icon: '📏',
+    commandAlias: 'PANANNO',
+    description: 'Ribbon panel for dimension chains, callouts, and section cut lines'
   }
 ];
 
@@ -15532,7 +15979,33 @@ function parseStudioCommand(cmdLine, context = {}) {
     return { type: 'delete', verb };
   }
 
-  // 15. Default lookup in STUDIO_TOOL_CATALOG
+  // 15. Blocks & Insertion: INSERT [blockName] [x] [y], BLOCK
+  if (verb === 'INSERT' || verb === 'I') {
+    const blockKey = args[0] ? args[0].toUpperCase() : 'DOOR_SINGLE_900';
+    const x = args[1] ? parseFloat(args[1]) : 0;
+    const y = args[2] ? parseFloat(args[2]) : 0;
+    return {
+      type: 'insert_block',
+      verb,
+      blockKey,
+      x: Number.isFinite(x) ? x : 0,
+      y: Number.isFinite(y) ? y : 0,
+      description: `Insert CAD block ${blockKey}`
+    };
+  }
+  if (verb === 'BLOCK' || verb === 'B') {
+    return { type: 'set_tool', toolId: 'block_create', verb, description: 'Create CAD block definition' };
+  }
+
+  // 16. C-Panels & Layers: LAYER, LA, PROPS, PROPERTIES
+  if (verb === 'LAYER' || verb === 'LA' || verb === 'LAYERS') {
+    return { type: 'switch_cpanel', panelTab: 'layers', verb, description: 'Switch to CAD Layers panel' };
+  }
+  if (verb === 'PROPS' || verb === 'PROPERTIES' || verb === 'CH') {
+    return { type: 'switch_cpanel', panelTab: 'properties', verb, description: 'Switch to Properties Inspector' };
+  }
+
+  // 17. Default lookup in STUDIO_TOOL_CATALOG
   const matched = STUDIO_TOOL_CATALOG.find(t =>
     (t.commandAlias && t.commandAlias.toUpperCase() === verb) ||
     (t.shortcut && t.shortcut.toUpperCase() === verb) ||
@@ -32933,6 +33406,39 @@ function createPlanView(context) {
       return;
     }
 
+    // Standard C-Panels
+    if (toolId.startsWith('cpanel_')) {
+      const pTab = toolId.replace('cpanel_', '');
+      state.activeCPanelTab = pTab;
+      updateStudioCPanels();
+      showToast(`C-Panel: ${pTab.charAt(0).toUpperCase() + pTab.slice(1)} active`);
+      return;
+    }
+
+    // Ribbon Tab Suites
+    if (toolId.startsWith('tab_switch_')) {
+      const rTab = toolId.replace('tab_switch_', '');
+      state.activeRibbonTab = rTab;
+      renderStudioComponents();
+      showToast(`Ribbon Suite: ${rTab.charAt(0).toUpperCase() + rTab.slice(1)} active`);
+      return;
+    }
+
+    // Cascades & Flyouts
+    if (toolId.startsWith('flyout_')) {
+      if (toolId === 'flyout_stairs') setTool('stair');
+      else if (toolId === 'flyout_hatching') setTool('hatch');
+      else if (toolId === 'flyout_marquee') setTool('marquee');
+      showToast(`Flyout cascade activated: ${toolId}`);
+      return;
+    }
+
+    // Ribbon Panels
+    if (toolId.startsWith('panel_')) {
+      showToast(`Ribbon panel focused: ${toolId}`);
+      return;
+    }
+
     // Standard drawing/editing tool selection
     setTool(toolId);
   }
@@ -33127,6 +33633,29 @@ function createPlanView(context) {
             setTool('hatch');
             showToast(`Active Hatch: ${state.activeMaterial}. Click a room to apply.`);
             renderContextualToolbar();
+            return;
+          }
+          if (parsed.type === 'insert_block') {
+            const blockId = parsed.blockKey || 'DOOR_SINGLE_900';
+            const origin = currentMouseWorld || { x: parsed.x || 2, y: parsed.y || 2 };
+            const blk = createBlockInstanceEntity({
+              blockId,
+              x: snapToGrid(origin.x, state.plan.grid),
+              y: snapToGrid(origin.y, state.plan.grid)
+            });
+            const cmd = entityAddRemoveCommand(entities(), blk, `insert ${blk.name}`);
+            cmd.redo();
+            history.push(cmd);
+            state.plan.selectedIds = new Set([blk.id]);
+            showToast(`Inserted Block: ${blk.name}`, 'success');
+            render();
+            updateStudioCPanels();
+            return;
+          }
+          if (parsed.type === 'switch_cpanel') {
+            state.activeCPanelTab = parsed.panelTab;
+            updateStudioCPanels();
+            showToast(`C-Panel: ${parsed.panelTab} active`);
             return;
           }
           if (parsed.type === 'set_view') {
@@ -34772,6 +35301,34 @@ function createPlanView(context) {
             fill="rgba(74,222,128,0.10)" stroke="${stroke}" stroke-width="${selected ? 2 : 1.2}" data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>
           ${symbol}
           <text x="${labelPos.x.toFixed(1)}" y="${(p1.y + 12).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-muted,#889)" font-family="var(--font-mono)">${escapeHtml(e.name)}</text>
+        </g>`;
+      }
+      if (e.kind === 'block_instance') {
+        const origin = worldToSvg(transform, e.x, e.y);
+        const wPx = Math.max((e.width || 1) * transform.zoom, 8);
+        const hPx = Math.max((e.depth || 1) * transform.zoom, 8);
+        const rot = e.rotation || 0;
+        const bDef = e.blockDef || {};
+        let blockInner = '';
+        if (Array.isArray(bDef.geometry)) {
+          for (const g of bDef.geometry) {
+            if (g.type === 'line') {
+              blockInner += `<line x1="${(g.x1 * transform.zoom).toFixed(1)}" y1="${(g.y1 * transform.zoom).toFixed(1)}" x2="${(g.x2 * transform.zoom).toFixed(1)}" y2="${(g.y2 * transform.zoom).toFixed(1)}" stroke="${g.stroke || '#94a3b8'}" stroke-width="1.4" stroke-dasharray="${g.dash || ''}"/>`;
+            } else if (g.type === 'rect') {
+              blockInner += `<rect x="${(g.x * transform.zoom).toFixed(1)}" y="${(g.y * transform.zoom).toFixed(1)}" width="${(g.width * transform.zoom).toFixed(1)}" height="${(g.depth * transform.zoom).toFixed(1)}" fill="${g.fill || 'none'}" stroke="${g.stroke || '#94a3b8'}" stroke-width="1.4"/>`;
+            } else if (g.type === 'circle') {
+              blockInner += `<circle cx="${(g.cx * transform.zoom).toFixed(1)}" cy="${(g.cy * transform.zoom).toFixed(1)}" r="${(g.r * transform.zoom).toFixed(1)}" fill="${g.fill || 'none'}" stroke="${g.stroke || '#22c55e'}" stroke-width="1.4"/>`;
+            } else if (g.type === 'ellipse') {
+              blockInner += `<ellipse cx="${(g.cx * transform.zoom).toFixed(1)}" cy="${(g.cy * transform.zoom).toFixed(1)}" rx="${(g.rx * transform.zoom).toFixed(1)}" ry="${(g.ry * transform.zoom).toFixed(1)}" fill="${g.fill || 'none'}" stroke="${g.stroke || '#06b6d4'}" stroke-width="1.4"/>`;
+            } else if (g.type === 'arc') {
+              blockInner += `<circle cx="${(g.cx * transform.zoom).toFixed(1)}" cy="${(g.cy * transform.zoom).toFixed(1)}" r="${(g.r * transform.zoom).toFixed(1)}" fill="none" stroke="${g.stroke || '#10b981'}" stroke-dasharray="${g.dash || '3,3'}" stroke-width="1.2"/>`;
+            }
+          }
+        }
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}" transform="translate(${origin.x.toFixed(1)}, ${origin.y.toFixed(1)}) rotate(${rot})">
+          <rect x="0" y="0" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}" fill="rgba(168, 85, 247, 0.08)" stroke="${selected ? 'var(--color-warning, #fbbf24)' : 'rgba(168, 85, 247, 0.5)'}" stroke-width="${selected ? 2 : 1}" stroke-dasharray="3 3"/>
+          ${blockInner}
+          <text x="${(wPx / 2).toFixed(1)}" y="${(hPx + 12).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-muted, #889)" font-family="var(--font-mono)">${escapeHtml(e.name)}</text>
         </g>`;
       }
       if (e.kind === 'door') {
