@@ -27,7 +27,8 @@ import {
   wallDirection, openingFitsWall, generateEntityId,
   WALL_ASSEMBLIES, wallOpenings,
   createRoomTag, createDoorTag, createWindowTag,
-  createLeaderNote, createNorthArrow, autoTagDocument
+  createLeaderNote, createNorthArrow, autoTagDocument,
+  createDetailCallout
 } from '../../core/entities.js';
 import {
   normalizeDocumentLayers, resolveEntityLayer, isEntityVisible, isEntityLocked,
@@ -49,6 +50,9 @@ import {
   generateBuildingElevation, generateBuildingSection,
   generateElevationSVG, generateSectionSVG
 } from '../../core/sections-elevations.js';
+import {
+  DETAIL_ASSEMBLIES, generateDetailAssembly, generateDetailSVG
+} from '../../core/details.js';
 import {
   calculateRoomSchedule, calculateFloorTotals, formatScheduleCSV, guessZoningFromRoomName
 } from '../../core/zoning-schedule.js';
@@ -194,6 +198,26 @@ export function createPlanView(context) {
         multiStory: true,
         poche: true
       };
+    } else if (type === 'detail') {
+      const count = state.plan.documents.filter(d => d.type === 'detail').length + 1;
+      const detailKeys = ['footing', 'parapet', 'window_sill', 'stair_nosing'];
+      const dKey = detailKeys[(count - 1) % detailKeys.length];
+      const dNames = {
+        footing: 'Strip Footing Detail',
+        parapet: 'Roof Parapet Detail',
+        window_sill: 'Window Sill Detail',
+        stair_nosing: 'Stair Nosing Detail'
+      };
+      const docName = (typeof name === 'string' && name.trim())
+        ? name.trim()
+        : dNames[dKey];
+      newDoc = {
+        id: docId,
+        name: docName,
+        type: 'detail',
+        detailKey: dKey,
+        scale: 10
+      };
     } else if (type === 'sheet') {
       const count = state.plan.documents.filter(d => d.type === 'sheet').length + 1;
       const docName = (typeof name === 'string' && name.trim())
@@ -264,7 +288,7 @@ export function createPlanView(context) {
       tab.className = `plan-doc-tab ${isActive ? 'active' : ''}`;
       tab.dataset.docId = doc.id;
 
-      const typeIcon = doc.type === '3d_massing' ? '🏢 ' : (doc.type === 'sheet' ? '📄 ' : (doc.type === 'elevation' ? '🏛️ ' : (doc.type === 'section' ? '✂️ ' : '📐 ')));
+      const typeIcon = doc.type === '3d_massing' ? '🏢 ' : (doc.type === 'sheet' ? '📄 ' : (doc.type === 'elevation' ? '🏛️ ' : (doc.type === 'section' ? '✂️ ' : (doc.type === 'detail' ? '🔍 ' : '📐 '))));
       const titleSpan = document.createElement('span');
       titleSpan.className = 'plan-doc-tab-title';
       titleSpan.textContent = `${typeIcon}${doc.name}`;
@@ -1440,6 +1464,8 @@ export function createPlanView(context) {
               <option value="plan_schedule" ${doc.sheetConfig.layoutMode === 'plan_schedule' ? 'selected' : ''}>Plan + Schedule</option>
               <option value="plan_elevation" ${doc.sheetConfig.layoutMode === 'plan_elevation' ? 'selected' : ''}>Plan + Elevation</option>
               <option value="plan_section" ${doc.sheetConfig.layoutMode === 'plan_section' ? 'selected' : ''}>Plan + Section</option>
+              <option value="plan_detail" ${doc.sheetConfig.layoutMode === 'plan_detail' ? 'selected' : ''}>Plan + Detail</option>
+              <option value="details_sheet" ${doc.sheetConfig.layoutMode === 'details_sheet' ? 'selected' : ''}>Details Matrix</option>
             </select>
             <select id="sheet-size-select" class="calc-select" style="height: 24px; padding: 0 4px; font-size: 0.7rem; width: 85px;">
               <option value="A4" ${doc.sheetConfig.size === 'A4' ? 'selected' : ''}>A4</option>
@@ -1669,6 +1695,71 @@ export function createPlanView(context) {
     }
   }
 
+  function renderDetailView(doc) {
+    const dKey = doc.detailKey || 'footing';
+    const assembly = generateDetailAssembly(dKey);
+    const detailSvg = generateDetailSVG(assembly, { width: 900, height: 650 });
+
+    const innerMatch = detailSvg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i);
+    const vbMatch = detailSvg.match(/viewBox="([^"]+)"/i);
+    const innerContent = innerMatch ? innerMatch[1] : '';
+    const viewBox = vbMatch ? vbMatch[1] : `0 0 900 650`;
+
+    dom.planSvg.setAttribute('viewBox', viewBox);
+    dom.planSvg.innerHTML = innerContent;
+
+    const ctxBar = dom.planContextualToolbar || document.getElementById('plan-contextual-toolbar');
+    if (ctxBar) {
+      ctxBar.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span class="context-tag-badge">CONSTRUCTION DETAIL</span>
+            <div style="display: flex; gap: 4px;">
+              <button type="button" class="result-action-btn ${dKey === 'footing' ? 'primary' : ''}" data-detail="footing" style="font-size: 0.68rem; padding: 2px 6px;">1 Strip Footing</button>
+              <button type="button" class="result-action-btn ${dKey === 'parapet' ? 'primary' : ''}" data-detail="parapet" style="font-size: 0.68rem; padding: 2px 6px;">2 Roof Parapet</button>
+              <button type="button" class="result-action-btn ${dKey === 'window_sill' ? 'primary' : ''}" data-detail="window_sill" style="font-size: 0.68rem; padding: 2px 6px;">3 Window Sill</button>
+              <button type="button" class="result-action-btn ${dKey === 'stair_nosing' ? 'primary' : ''}" data-detail="stair_nosing" style="font-size: 0.68rem; padding: 2px 6px;">4 Stair Nosing</button>
+            </div>
+            <span class="unit-system-tag" style="font-size: 0.68rem;">SCALE ${assembly.scaleLabel}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" id="btn-detail-export" class="result-action-btn primary" style="font-size: 0.68rem; padding: 2px 8px;">💾 Export Detail SVG</button>
+          </div>
+        </div>
+      `;
+
+      ctxBar.querySelectorAll('button[data-detail]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          doc.detailKey = btn.dataset.detail;
+          const dNames = { footing: 'Strip Footing Detail', parapet: 'Roof Parapet Detail', window_sill: 'Window Sill Detail', stair_nosing: 'Stair Nosing Detail' };
+          doc.name = dNames[doc.detailKey] || 'Construction Detail';
+          renderTabs();
+          render();
+          AudioService.playTick();
+        });
+      });
+
+      ctxBar.querySelector('#btn-detail-export')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const blob = new Blob([detailSvg], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${(doc.name || 'detail').toLowerCase().replace(/\s+/g, '-')}.svg`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`Exported ${doc.name} SVG`);
+        AudioService.playSuccess();
+      });
+    }
+
+    if (dom.planModeLabel) dom.planModeLabel.textContent = 'DETAIL';
+    if (dom.planStatusBadge) {
+      dom.planStatusBadge.textContent = `${assembly.title} · ${assembly.scaleLabel}`;
+    }
+  }
+
   // ------------------------------------------------------------------
   // Rendering
   // ------------------------------------------------------------------
@@ -1691,6 +1782,10 @@ export function createPlanView(context) {
     }
     if (doc && doc.type === 'section') {
       renderSectionView(doc);
+      return;
+    }
+    if (doc && doc.type === 'detail') {
+      renderDetailView(doc);
       return;
     }
 
@@ -2069,33 +2164,59 @@ export function createPlanView(context) {
         const hPx = Math.max(Math.abs(p1.y - p2.y), 6);
         const risers = Math.max(2, e.risers || 16);
         const isVertical = (e.depth || 0) >= (e.width || 0);
+        const cutStep = e.cutStep || Math.min(risers - 1, Math.max(1, Math.round(risers * 0.45)));
+        const showBreak = e.showBreakLine !== false;
+
         let treadLines = '';
         for (let i = 1; i < risers; i++) {
+          const isAboveCut = showBreak && i > cutStep;
+          const lineStroke = isAboveCut ? 'var(--text-muted, #64748b)' : stroke;
+          const dash = isAboveCut ? 'stroke-dasharray="3 2" opacity="0.6"' : 'opacity="0.85"';
+          const sw = isAboveCut ? 0.7 : 1.0;
+
           if (isVertical) {
             const stepY = p2.y + (i / risers) * hPx;
-            treadLines += `<line x1="${p1.x.toFixed(1)}" y1="${stepY.toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${stepY.toFixed(1)}" stroke="${stroke}" stroke-width="0.8" opacity="0.65"/>`;
+            treadLines += `<line x1="${p1.x.toFixed(1)}" y1="${stepY.toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${stepY.toFixed(1)}" stroke="${lineStroke}" stroke-width="${sw}" ${dash}/>`;
           } else {
             const stepX = p1.x + (i / risers) * wPx;
-            treadLines += `<line x1="${stepX.toFixed(1)}" y1="${p2.y.toFixed(1)}" x2="${stepX.toFixed(1)}" y2="${p1.y.toFixed(1)}" stroke="${stroke}" stroke-width="0.8" opacity="0.65"/>`;
+            treadLines += `<line x1="${stepX.toFixed(1)}" y1="${p2.y.toFixed(1)}" x2="${stepX.toFixed(1)}" y2="${p1.y.toFixed(1)}" stroke="${lineStroke}" stroke-width="${sw}" ${dash}/>`;
           }
         }
+
+        // Break line at cutStep
+        let breakLineSvg = '';
+        if (showBreak && cutStep < risers) {
+          if (isVertical) {
+            const by = p2.y + (cutStep / risers) * hPx;
+            const bmidX = (p1.x + p2.x) / 2;
+            breakLineSvg = `<polyline points="${p1.x.toFixed(1)},${(by + 3).toFixed(1)} ${(bmidX - 6).toFixed(1)},${(by + 3).toFixed(1)} ${(bmidX - 2).toFixed(1)},${(by - 6).toFixed(1)} ${(bmidX + 2).toFixed(1)},${(by + 6).toFixed(1)} ${(bmidX + 6).toFixed(1)},${(by - 3).toFixed(1)} ${p2.x.toFixed(1)},${(by - 3).toFixed(1)}" fill="none" stroke="${stroke}" stroke-width="1.8"/>`;
+          } else {
+            const bx = p1.x + (cutStep / risers) * wPx;
+            const bmidY = (p1.y + p2.y) / 2;
+            breakLineSvg = `<polyline points="${(bx - 3).toFixed(1)},${p2.y.toFixed(1)} ${(bx - 3).toFixed(1)},${(bmidY - 6).toFixed(1)} ${(bx + 6).toFixed(1)},${(bmidY - 2).toFixed(1)} ${(bx - 6).toFixed(1)},${(bmidY + 2).toFixed(1)} ${(bx + 3).toFixed(1)},${(bmidY + 6).toFixed(1)} ${(bx + 3).toFixed(1)},${p1.y.toFixed(1)}" fill="none" stroke="${stroke}" stroke-width="1.8"/>`;
+          }
+        }
+
         const midX = (p1.x + p2.x) / 2;
         const midY = (p1.y + p2.y) / 2;
         const arrow = isVertical
           ? `<line x1="${midX.toFixed(1)}" y1="${(p1.y - 4).toFixed(1)}" x2="${midX.toFixed(1)}" y2="${(p2.y + 12).toFixed(1)}" stroke="var(--note-number, #4989D9)" stroke-width="1.8"/>
              <polygon points="${midX.toFixed(1)},${(p2.y + 3).toFixed(1)} ${(midX - 4).toFixed(1)},${(p2.y + 12).toFixed(1)} ${(midX + 4).toFixed(1)},${(p2.y + 12).toFixed(1)}" fill="var(--note-number, #4989D9)"/>
              <circle cx="${midX.toFixed(1)}" cy="${(p1.y - 4).toFixed(1)}" r="2.5" fill="var(--note-number, #4989D9)"/>
-             <text x="${(midX + 8).toFixed(1)}" y="${midY.toFixed(1)}" font-size="9" font-family="var(--font-mono)" fill="var(--note-number, #4989D9)" font-weight="700">UP</text>`
+             <text x="${(midX + 8).toFixed(1)}" y="${midY.toFixed(1)}" font-size="9" font-family="var(--font-mono)" fill="var(--note-number, #4989D9)" font-weight="700">${e.direction === 'down' ? 'DN' : 'UP'}</text>`
           : `<line x1="${(p1.x + 4).toFixed(1)}" y1="${midY.toFixed(1)}" x2="${(p2.x - 12).toFixed(1)}" y2="${midY.toFixed(1)}" stroke="var(--note-number, #4989D9)" stroke-width="1.8"/>
              <polygon points="${(p2.x - 3).toFixed(1)},${midY.toFixed(1)} ${(p2.x - 12).toFixed(1)},${(midY - 4).toFixed(1)} ${(p2.x - 12).toFixed(1)},${(midY + 4).toFixed(1)}" fill="var(--note-number, #4989D9)"/>
              <circle cx="${(p1.x + 4).toFixed(1)}" cy="${midY.toFixed(1)}" r="2.5" fill="var(--note-number, #4989D9)"/>
-             <text x="${midX.toFixed(1)}" y="${(midY - 6).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="var(--note-number, #4989D9)" font-weight="700">UP</text>`;
+             <text x="${midX.toFixed(1)}" y="${(midY - 6).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="var(--note-number, #4989D9)" font-weight="700">${e.direction === 'down' ? 'DN' : 'UP'}</text>`;
+
+        const complianceBadge = e.isCompliant ? ' · ✅ IBC' : '';
         return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
           <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}"
-            fill="rgba(73, 137, 217, 0.10)" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.5}"/>
+            fill="rgba(73, 137, 217, 0.08)" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.5}"/>
           ${treadLines}
+          ${breakLineSvg}
           ${arrow}
-          <text x="${midX.toFixed(1)}" y="${(p1.y + 12).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-secondary,#9aa)" font-family="var(--font-mono)">${escapeHtml(e.name)} · ${risers}R</text>
+          <text x="${midX.toFixed(1)}" y="${(p1.y + 12).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-secondary,#9aa)" font-family="var(--font-mono)">${escapeHtml(e.name)} · ${risers}R${complianceBadge}</text>
         </g>`;
       }
       if (e.kind === 'ramp' && hasRect) {
@@ -2269,6 +2390,29 @@ export function createPlanView(context) {
           <text x="${sp2.x.toFixed(1)}" y="${(sp2.y + 9).toFixed(1)}" text-anchor="middle" font-size="7.5" font-family="var(--font-mono)" fill="#94a3b8">${escapeHtml(sRef)}</text>
         </g>`;
       }
+      if (e.kind === 'detail_callout') {
+        const center = worldToSvg(transform, e.x + (e.width || 1.5) / 2, e.y + (e.depth || 1.5) / 2);
+        const radiusPx = Math.max(16, ((e.width || 1.5) / 2) * transform.zoom);
+        const leaderLen = Math.max(25, (e.leaderLength || 1.2) * transform.zoom);
+        const angRad = ((e.leaderAngle || 45) * Math.PI) / 180;
+        const bubbleX = center.x + Math.cos(angRad) * (radiusPx + leaderLen);
+        const bubbleY = center.y - Math.sin(angRad) * (radiusPx + leaderLen);
+        const rBubble = 14;
+        const detStroke = selected ? 'var(--color-warning, #fbbf24)' : (stroke || '#34d399');
+
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <!-- Callout Boundary -->
+          <circle cx="${center.x.toFixed(1)}" cy="${center.y.toFixed(1)}" r="${radiusPx.toFixed(1)}" fill="rgba(52, 211, 153, 0.08)" stroke="${detStroke}" stroke-width="${selected ? 2.5 : 1.5}" stroke-dasharray="6 3"/>
+          <!-- Leader line -->
+          <line x1="${(center.x + Math.cos(angRad) * radiusPx).toFixed(1)}" y1="${(center.y - Math.sin(angRad) * radiusPx).toFixed(1)}" x2="${(bubbleX - Math.cos(angRad) * rBubble).toFixed(1)}" y2="${(bubbleY + Math.sin(angRad) * rBubble).toFixed(1)}" stroke="${detStroke}" stroke-width="1.8"/>
+          <!-- Callout Bubble -->
+          <circle cx="${bubbleX.toFixed(1)}" cy="${bubbleY.toFixed(1)}" r="${rBubble}" fill="#0f172a" stroke="${detStroke}" stroke-width="2"/>
+          <line x1="${(bubbleX - rBubble).toFixed(1)}" y1="${bubbleY.toFixed(1)}" x2="${(bubbleX + rBubble).toFixed(1)}" y2="${bubbleY.toFixed(1)}" stroke="${detStroke}" stroke-width="1.2"/>
+          <text x="${bubbleX.toFixed(1)}" y="${(bubbleY - 3).toFixed(1)}" text-anchor="middle" font-family="var(--font-mono)" font-size="9.5" font-weight="700" fill="#ffffff">${escapeHtml(e.detailNum || '1')}</text>
+          <text x="${bubbleX.toFixed(1)}" y="${(bubbleY + 9).toFixed(1)}" text-anchor="middle" font-family="var(--font-mono)" font-size="7.5" font-family="var(--font-mono)" fill="#34d399">${escapeHtml(e.sheetRef || 'A-501')}</text>
+          <text x="${bubbleX.toFixed(1)}" y="${(bubbleY + rBubble + 12).toFixed(1)}" text-anchor="middle" font-family="var(--font-sans)" font-size="9" font-weight="600" fill="var(--text-normal,#f8fafc)">${escapeHtml(e.title || 'Detail')}</text>
+        </g>`;
+      }
       if (e.kind === 'grid_line' && e.p1 && e.p2) {
         const sp1 = worldToSvg(transform, e.p1.x, e.p1.y);
         const sp2 = worldToSvg(transform, e.p2.x, e.p2.y);
@@ -2371,6 +2515,17 @@ export function createPlanView(context) {
             <line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="#f87171" stroke-width="2" stroke-dasharray="12 4 3 4"/>
             <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="12" fill="var(--bg-surface-elevated, #1e293b)" stroke="#f87171" stroke-width="1.8"/>
             <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="12" fill="var(--bg-surface-elevated, #1e293b)" stroke="#f87171" stroke-width="1.8"/>
+          </g>
+        `;
+      } else if (dragState.tool === 'detail_callout') {
+        const a = worldToSvg(transform, dragState.start.x, dragState.start.y);
+        const b = worldToSvg(transform, dragState.current.x, dragState.current.y);
+        const r = Math.max(16, Math.hypot(b.x - a.x, b.y - a.y));
+        dragMarkup = `
+          <g class="drag-preview-detail" pointer-events="none">
+            <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="${r.toFixed(1)}" fill="rgba(52, 211, 153, 0.1)" stroke="#34d399" stroke-width="2" stroke-dasharray="6 3"/>
+            <circle cx="${(a.x + r + 20).toFixed(1)}" cy="${(a.y - r - 20).toFixed(1)}" r="14" fill="#0f172a" stroke="#34d399" stroke-width="2"/>
+            <line x1="${(a.x + r).toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${(a.x + r + 20).toFixed(1)}" y2="${(a.y - r - 20).toFixed(1)}" stroke="#34d399" stroke-width="1.8"/>
           </g>
         `;
       } else {
@@ -2507,7 +2662,7 @@ export function createPlanView(context) {
       else if (e.kind === 'furniture') desc = `${num(e.width)} × ${num(e.depth)} m`;
       else if (e.kind === 'door') desc = `Door · ${num(e.width)} m width`;
       else if (e.kind === 'window') desc = `Window · ${num(e.width)} m width`;
-      else if (e.kind === 'stair') desc = `${num(e.width)} × ${num(e.depth)} m · ${e.risers || 16} risers · Blondel ${Math.round((e.blondel || 0.63) * 1000)} mm`;
+      else if (e.kind === 'stair') desc = `${num(e.width)} × ${num(e.depth)} m · ${e.risers || 16}R · Blondel ${Math.round((e.blondel || 0.63) * 1000)} mm${e.isCompliant ? ' ✅' : ''}`;
       else if (e.kind === 'ramp') desc = `${num(e.width)} × ${num(e.depth)} m · 1:${(e.slopeRatio || 12).toFixed(1)} (${(e.slopePercent || 8.33).toFixed(1)}%)`;
       else if (e.kind === 'dimension') {
         const p1 = e.p1 || { x: e.x1, y: e.y1 };
@@ -2523,6 +2678,7 @@ export function createPlanView(context) {
       else if (e.kind === 'column') desc = `Column · ${e.profile || 'rect'} · ${num(e.width)}×${num(e.depth)} m`;
       else if (e.kind === 'grid_line') desc = `Grid · Axis [${escapeHtml(e.name || '')}]`;
       else if (e.kind === 'section_cut') desc = `Section · [${escapeHtml(e.label || 'A')}-${escapeHtml(e.label || 'A')}] · ${escapeHtml(e.sheetRef || 'A-201')}`;
+      else if (e.kind === 'detail_callout') desc = `Detail · [${escapeHtml(e.detailNum || '1')}/${escapeHtml(e.sheetRef || 'A-501')}] · ${escapeHtml(e.title || 'Detail')}`;
       else if (e.kind === 'text') desc = `"${escapeHtml(e.text || e.name)}"`;
       else desc = e.kind;
 
@@ -4015,6 +4171,60 @@ export function createPlanView(context) {
         selected.direction = e.target.value;
         render();
       });
+    } else if (selected.kind === 'detail_callout') {
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Detail Callout</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name)}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Detail #</span><input type="text" id="prop-detail-num" class="text-input" value="${escapeHtml(selected.detailNum || '1')}" style="width: 60px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Sheet Ref</span><input type="text" id="prop-detail-sheet" class="text-input" value="${escapeHtml(selected.sheetRef || 'A-501')}" style="width: 80px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Assembly</span>
+            <select id="prop-detail-key" class="calc-select" style="width: 140px; height: 24px; padding: 0 4px; font-size: 0.72rem;">
+              <option value="footing" ${selected.detailKey === 'footing' ? 'selected' : ''}>1 Strip Footing (1:10)</option>
+              <option value="parapet" ${selected.detailKey === 'parapet' ? 'selected' : ''}>2 Roof Parapet (1:10)</option>
+              <option value="window_sill" ${selected.detailKey === 'window_sill' ? 'selected' : ''}>3 Window Sill (1:5)</option>
+              <option value="stair_nosing" ${selected.detailKey === 'stair_nosing' ? 'selected' : ''}>4 Stair Nosing (1:5)</option>
+            </select>
+          </div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Title</span><input type="text" id="prop-detail-title" class="text-input" value="${escapeHtml(selected.title || 'Detail')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Callout</span></button>
+        </div>
+      `;
+
+      dom.planPropContent.querySelector('#prop-entity-name')?.addEventListener('change', (e) => {
+        selected.name = e.target.value.trim() || 'Detail Callout';
+        render();
+        renderEntityList();
+      });
+      dom.planPropContent.querySelector('#prop-detail-num')?.addEventListener('change', (e) => {
+        selected.detailNum = e.target.value.trim() || '1';
+        selected.name = `Detail ${selected.detailNum}/${selected.sheetRef}`;
+        render();
+        renderEntityList();
+      });
+      dom.planPropContent.querySelector('#prop-detail-sheet')?.addEventListener('change', (e) => {
+        selected.sheetRef = e.target.value.trim() || 'A-501';
+        selected.name = `Detail ${selected.detailNum}/${selected.sheetRef}`;
+        render();
+        renderEntityList();
+      });
+      dom.planPropContent.querySelector('#prop-detail-key')?.addEventListener('change', (e) => {
+        selected.detailKey = e.target.value;
+        const dNames = { footing: 'Foundation Footing Detail', parapet: 'Roof Parapet Detail', window_sill: 'Window Sill Detail', stair_nosing: 'Stair Nosing Detail' };
+        selected.title = dNames[selected.detailKey] || 'Construction Detail';
+        render();
+        renderEntityList();
+        renderPropertiesInspector();
+      });
+      dom.planPropContent.querySelector('#prop-detail-title')?.addEventListener('change', (e) => {
+        selected.title = e.target.value.trim() || 'Detail';
+        render();
+        renderEntityList();
+      });
     }
 
     dom.planPropContent.querySelector('#btn-prop-delete')?.addEventListener('click', () => {
@@ -4315,7 +4525,7 @@ export function createPlanView(context) {
       render();
       renderContextualToolbar();
       return;
-    } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'leader' || tool === 'measure' || tool === 'grid' || tool === 'section_cut') {
+    } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'leader' || tool === 'measure' || tool === 'grid' || tool === 'section_cut' || tool === 'detail_callout') {
       if (snapOn) {
         const snapRes = findSnapPoint(world, visible, { snapDistance: 0.25, snapGrid: true, gridMeters: state.plan.grid });
         if (snapRes.snapped) {
@@ -4666,6 +4876,41 @@ export function createPlanView(context) {
         history.push(cmd);
         state.plan.selectedIds = new Set([sCut.id]);
         showToast(`Placed Section Cut ${sCut.label}-${sCut.label}`);
+        AudioService.playTick();
+        setTool('select');
+        render();
+        renderEntityList();
+        renderPropertiesInspector();
+      } else if (dragState.tool === 'detail_callout') {
+        const dx = Math.abs(end.x - start.x);
+        const dy = Math.abs(end.y - start.y);
+        const size = Math.max(1.0, Math.max(dx, dy));
+        const existingDetails = entities().filter(e => e.kind === 'detail_callout');
+        const detailKeys = ['footing', 'parapet', 'window_sill', 'stair_nosing'];
+        const dKey = detailKeys[existingDetails.length % detailKeys.length];
+        const dNames = {
+          footing: 'Foundation Footing Detail',
+          parapet: 'Roof Parapet Detail',
+          window_sill: 'Window Sill Detail',
+          stair_nosing: 'Stair Nosing Detail'
+        };
+        const nextNum = String(existingDetails.length + 1);
+        const dCallout = createDetailCallout({
+          name: `Detail ${nextNum}/A-501`,
+          detailNum: nextNum,
+          sheetRef: 'A-501',
+          title: dNames[dKey],
+          detailKey: dKey,
+          x: Math.min(start.x, end.x),
+          y: Math.min(start.y, end.y),
+          width: size,
+          depth: size
+        });
+        const cmd = entityAddRemoveCommand(entities(), dCallout, 'add detail callout');
+        cmd.redo();
+        history.push(cmd);
+        state.plan.selectedIds = new Set([dCallout.id]);
+        showToast(`Placed Detail Callout ${dCallout.detailNum}/${dCallout.sheetRef}`);
         AudioService.playTick();
         setTool('select');
         render();

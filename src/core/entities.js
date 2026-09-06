@@ -466,32 +466,60 @@ export function createStairEntity(options = {}) {
     x,
     y,
     width = 1.0,
-    run = 2.8,
+    stairType = 'straight', // 'straight' | 'l_shape' | 'u_shape'
+    direction = 'up',       // 'up' | 'down'
+    showBreakLine = true,
+    handrail = 'both',      // 'both' | 'left' | 'right' | 'none'
+    treadLabels = true,
+    layerId = 'A-FLOR-STRS',
     floorId = 'floor-1'
   } = options;
   const rise = options.rise !== undefined ? options.rise : (options.totalRise !== undefined ? options.totalRise : 2.7);
   const risers = options.risers !== undefined ? options.risers : (options.riserCount !== undefined ? options.riserCount : 16);
-  const tread = options.tread !== undefined ? options.tread : (options.going !== undefined ? options.going : 0.28);
   const riser = options.riser !== undefined ? options.riser : null;
+  const landingDepth = typeof options.landingDepth === 'number' && options.landingDepth > 0 ? options.landingDepth : width;
 
   requireFiniteNumber(x, 'stair.x');
   requireFiniteNumber(y, 'stair.y');
   requireFiniteNumber(width, 'stair.width');
   if (width <= 0) throw new Error('Stair width must be greater than zero');
+
+  const riserCount = Math.max(1, Math.round(risers));
+  const riserHeight = riser !== null ? riser : (rise / riserCount);
+
+  let going;
+  if (options.going !== undefined && typeof options.going === 'number' && options.going > 0) {
+    going = options.going;
+  } else if (options.tread !== undefined && typeof options.tread === 'number' && options.tread > 0) {
+    going = options.tread;
+  } else if (options.run !== undefined && typeof options.run === 'number' && options.run > 0) {
+    going = riserCount > 1 ? options.run / (riserCount - 1) : options.run;
+  } else {
+    going = 0.28;
+  }
+
+  const run = options.run !== undefined && typeof options.run === 'number' && options.run > 0
+    ? options.run
+    : (riserCount > 1 ? (riserCount - 1) * going : 2.8);
+
   requireFiniteNumber(run, 'stair.run');
   if (run <= 0) throw new Error('Stair run must be greater than zero');
   requireFiniteNumber(rise, 'stair.rise');
   if (rise <= 0) throw new Error('Stair rise must be greater than zero');
 
-  const riserCount = Math.max(1, Math.round(risers));
-  const riserHeight = riser !== null ? riser : (rise / riserCount);
-  const going = tread > 0 ? tread : (riserCount > 1 ? run / (riserCount - 1) : run);
   const blondel = (2 * riserHeight) + going;
+  const cutStep = typeof options.cutStep === 'number' && options.cutStep > 0
+    ? options.cutStep
+    : Math.min(riserCount - 1, Math.max(1, Math.round(riserCount * 0.45)));
+
+  // IBC / International building code heuristics:
+  // Blondel: 600 - 640mm, minimum tread: 280mm, maximum riser: 180mm
+  const isCompliant = (blondel >= 0.60 && blondel <= 0.66 && going >= 0.24 && riserHeight <= 0.19);
 
   return {
     kind: 'stair',
     id: id || generateEntityId('stair'),
-    name: typeof name === 'string' && name ? name : 'Straight Stair',
+    name: typeof name === 'string' && name ? name : `${stairType === 'u_shape' ? 'Switchback' : stairType === 'l_shape' ? 'L-Shape' : 'Straight'} Stair`,
     x,
     y,
     width,
@@ -506,9 +534,20 @@ export function createStairEntity(options = {}) {
     tread: going,
     going,
     blondel,
+    stairType: (stairType === 'l_shape' || stairType === 'u_shape') ? stairType : 'straight',
+    direction: direction === 'down' ? 'down' : 'up',
+    showBreakLine: Boolean(showBreakLine),
+    cutStep,
+    handrail,
+    landingDepth,
+    treadLabels: Boolean(treadLabels),
+    isCompliant,
+    layerId,
     floorId
   };
 }
+
+export const createStair = createStairEntity;
 
 // ---------------------------------------------------------------------------
 // Ramps (straight-run rectilinear plan footprint)
@@ -984,6 +1023,52 @@ export function createSectionCut({
     label: String(label || 'A'),
     direction: direction === 'reverse' ? 'reverse' : 'forward',
     sheetRef: String(sheetRef || 'A-201'),
+    layerId,
+    floorId
+  };
+}
+
+/**
+ * Factory for a 2D Plan or Section Detail Callout entity ('detail_callout').
+ * References an enlarged technical construction assembly (e.g. Footing, Parapet, Window Sill, Stair Nosing).
+ */
+export function createDetailCallout({
+  id,
+  name,
+  x = 0,
+  y = 0,
+  width = 1.5,
+  depth = 1.5,
+  detailNum = '1',
+  sheetRef = 'A-501',
+  title = 'Foundation Footing Detail',
+  detailKey = 'footing', // 'footing' | 'parapet' | 'window_sill' | 'stair_nosing'
+  leaderLength = 1.2,
+  leaderAngle = 45, // degrees
+  shape = 'circle', // 'circle' | 'rect'
+  layerId = 'A-ANNO-TAGS',
+  floorId = 'floor-1'
+} = {}) {
+  requireFiniteNumber(x, 'detailCallout.x');
+  requireFiniteNumber(y, 'detailCallout.y');
+  const w = typeof width === 'number' && width > 0 ? width : 1.5;
+  const d = typeof depth === 'number' && depth > 0 ? depth : 1.5;
+
+  return {
+    kind: 'detail_callout',
+    id: id || generateEntityId('det'),
+    name: typeof name === 'string' && name ? name : `Detail ${detailNum}/${sheetRef}`,
+    x,
+    y,
+    width: w,
+    depth: d,
+    detailNum: String(detailNum || '1'),
+    sheetRef: String(sheetRef || 'A-501'),
+    title: String(title || 'Construction Detail'),
+    detailKey: String(detailKey || 'footing'),
+    leaderLength: typeof leaderLength === 'number' ? leaderLength : 1.2,
+    leaderAngle: typeof leaderAngle === 'number' ? leaderAngle : 45,
+    shape: shape === 'rect' ? 'rect' : 'circle',
     layerId,
     floorId
   };

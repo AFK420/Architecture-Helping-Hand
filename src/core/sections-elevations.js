@@ -147,6 +147,7 @@ export function generateBuildingElevation(entitiesOrDocs, direction = 'south', o
   const projectedWalls = [];
   const projectedOpenings = [];
   const projectedColumns = [];
+  const projectedStairs = [];
   const datums = [];
 
   // 1. Build Level Datums
@@ -176,49 +177,39 @@ export function generateBuildingElevation(entitiesOrDocs, direction = 'south', o
 
     const walls = entities.filter(e => e && e.kind === 'wall');
     const columns = entities.filter(e => e && e.kind === 'column');
+    const stairs = entities.filter(e => e && e.kind === 'stair');
 
     for (const w of walls) {
       if (typeof w.x1 !== 'number' || typeof w.x2 !== 'number') continue;
-
+      // Project wall endpoints
       const u1 = mapWorldToElevationU(w.x1, w.y1, dirKey, limits);
       const u2 = mapWorldToElevationU(w.x2, w.y2, dirKey, limits);
       const minU = Math.min(u1, u2);
       const maxU = Math.max(u1, u2);
-      const width = Math.max(0.1, maxU - minU);
-
-      // Determine face orientation visibility
-      // South elevation looks at walls with normal pointing south (dy < 0 or horizontal)
-      const dx = w.x2 - w.x1;
-      const dy = w.y2 - w.y1;
-      const len = Math.hypot(dx, dy);
-      if (len < 0.05) continue;
+      const wSpan = Math.max(0.1, maxU - minU);
 
       projectedWalls.push({
         id: w.id,
-        wallAssembly: w.assembly || 'standard',
         u: minU,
         z: baseZ,
-        width,
+        width: wSpan,
         height: wallH,
-        u1: minU,
-        u2: maxU,
-        z1: baseZ,
-        z2: baseZ + wallH,
+        thickness: w.thickness || 0.20,
         storyIndex: story.index
       });
 
-      // Project hosted openings (doors and windows)
+      // Project openings on this wall
       const openings = wallOpenings(w, entities);
       for (const op of openings) {
-        const opPos = typeof op.position === 'number' ? op.position : (typeof op.offset === 'number' ? op.offset : 0);
-        const offsetRatio = opPos / len;
-        const opWidth = op.width || 0.9;
-        const opWidthRatio = opWidth / len;
+        const p = typeof op.position === 'number' ? op.position : (typeof op.offset === 'number' ? op.offset : 0);
+        const wLen = wallLength(w) || 1;
+        const opFrac = Math.min(1, Math.max(0, p / wLen));
+        const opWidthFrac = Math.min(1, (op.width || 0.9) / wLen);
 
-        const opU1 = minU + offsetRatio * width;
-        const opU2 = opU1 + opWidthRatio * width;
+        const opU1 = minU + opFrac * wSpan;
+        const opU2 = minU + (opFrac + opWidthFrac) * wSpan;
         const opMinU = Math.min(opU1, opU2);
-        const opW = Math.abs(opU2 - opU1);
+        const opW = Math.max(0.2, Math.abs(opU2 - opU1));
 
         if (op.kind === 'door') {
           const doorH = op.height || 2.1;
@@ -264,6 +255,46 @@ export function generateBuildingElevation(entitiesOrDocs, direction = 'south', o
         storyIndex: story.index
       });
     }
+
+    // Project stairs
+    for (const st of stairs) {
+      if (typeof st.x !== 'number' || typeof st.y !== 'number') continue;
+      const stU = mapWorldToElevationU(st.x, st.y, dirKey, limits);
+      const stW = st.width || 1.0;
+      const stD = st.depth || st.run || 2.8;
+      const numRisers = st.riserCount || st.risers || 16;
+      const stRise = st.rise || st.totalRise || wallH;
+      const riserH = stRise / numRisers;
+      const spanU = (dirKey === 'south' || dirKey === 'north') ? stW : stD;
+
+      const steps = [];
+      for (let s = 0; s < numRisers; s++) {
+        steps.push({
+          u1: stU + (s / numRisers) * spanU,
+          u2: stU + ((s + 1) / numRisers) * spanU,
+          z1: baseZ + s * riserH,
+          z2: baseZ + (s + 1) * riserH
+        });
+      }
+
+      projectedStairs.push({
+        id: st.id,
+        name: st.name || 'Stair',
+        u: stU,
+        z: baseZ,
+        width: spanU,
+        height: stRise,
+        numRisers,
+        steps,
+        handrail: {
+          u1: stU,
+          z1: baseZ + 0.90,
+          u2: stU + spanU,
+          z2: baseZ + stRise + 0.90
+        },
+        storyIndex: story.index
+      });
+    }
   });
 
   // 3. Ground line & Earth Grade
@@ -303,6 +334,7 @@ export function generateBuildingElevation(entitiesOrDocs, direction = 'south', o
     walls: projectedWalls,
     openings: projectedOpenings,
     columns: projectedColumns,
+    stairs: projectedStairs,
     datums,
     dimensions,
     groundLine
@@ -351,6 +383,8 @@ export function generateBuildingSection(entitiesOrDocs, sectionCut = {}, options
   const cutSlabs = [];
   const cutOpenings = [];
   const backgroundWalls = [];
+  const cutStairs = [];
+  const backgroundStairs = [];
   const datums = [];
 
   // 1. Build Level Datums
@@ -493,6 +527,88 @@ export function generateBuildingSection(entitiesOrDocs, sectionCut = {}, options
         }
       }
     }
+
+    // Process stairs on this story
+    const stairs = entities.filter(e => e && e.kind === 'stair');
+    for (const st of stairs) {
+      if (typeof st.x !== 'number' || typeof st.y !== 'number') continue;
+      const stW = st.width || 1.0;
+      const stD = st.depth || st.run || 2.8;
+      const stRise = st.rise || st.totalRise || wallH;
+      const numRisers = st.riserCount || st.risers || 16;
+      const riserH = stRise / numRisers;
+
+      const stMinX = st.x;
+      const stMaxX = st.x + stW;
+      const stMinY = st.y;
+      const stMaxY = st.y + stD;
+
+      // Check intersection with cut line
+      const leftEdge = { p1: { x: stMinX, y: stMinY }, p2: { x: stMinX, y: stMaxY } };
+      const rightEdge = { p1: { x: stMaxX, y: stMinY }, p2: { x: stMaxX, y: stMaxY } };
+      const bottomEdge = { p1: { x: stMinX, y: stMinY }, p2: { x: stMaxX, y: stMinY } };
+      const topEdge = { p1: { x: stMinX, y: stMaxY }, p2: { x: stMaxX, y: stMaxY } };
+
+      const hitL = intersectSegments(p1, p2, leftEdge.p1, leftEdge.p2);
+      const hitR = intersectSegments(p1, p2, rightEdge.p1, rightEdge.p2);
+      const hitB = intersectSegments(p1, p2, bottomEdge.p1, bottomEdge.p2);
+      const hitT = intersectSegments(p1, p2, topEdge.p1, topEdge.p2);
+      const isInside = (
+        (p1.x >= stMinX && p1.x <= stMaxX && p1.y >= stMinY && p1.y <= stMaxY) ||
+        (p2.x >= stMinX && p2.x <= stMaxX && p2.y >= stMinY && p2.y <= stMaxY)
+      );
+      const isCut = Boolean(hitL || hitR || hitB || hitT || isInside);
+
+      const u1 = worldToCutU(stMinX, stMinY);
+      const u2 = worldToCutU(stMaxX, stMaxY);
+      const minU = Math.min(u1, u2);
+      const maxU = Math.max(u1, u2);
+      const spanU = Math.max(1.0, maxU - minU);
+
+      const steps = [];
+      for (let s = 0; s < numRisers; s++) {
+        const stepU1 = minU + (s / numRisers) * spanU;
+        const stepU2 = minU + ((s + 1) / numRisers) * spanU;
+        const stepZ = baseZ + s * riserH;
+        const nextZ = baseZ + (s + 1) * riserH;
+        steps.push({ u1: stepU1, u2: stepU2, z: stepZ, zNext: nextZ, stepIndex: s + 1 });
+      }
+
+      const handrail = {
+        u1: minU,
+        z1: baseZ + riserH + 0.90,
+        u2: maxU,
+        z2: baseZ + stRise + 0.90,
+        posts: [
+          { u: minU, z1: baseZ + riserH, z2: baseZ + riserH + 0.90 },
+          { u: minU + spanU * 0.5, z1: baseZ + stRise * 0.5, z2: baseZ + stRise * 0.5 + 0.90 },
+          { u: maxU, z1: baseZ + stRise, z2: baseZ + stRise + 0.90 }
+        ]
+      };
+
+      const stairItem = {
+        id: st.id,
+        name: st.name || 'Stair',
+        isCut,
+        minU,
+        maxU,
+        spanU,
+        baseZ,
+        rise: stRise,
+        numRisers,
+        riserH,
+        steps,
+        waistThickness: 0.15,
+        handrail,
+        storyIndex: story.index
+      };
+
+      if (isCut) {
+        cutStairs.push(stairItem);
+      } else if (maxU >= 0 && minU <= cutLength) {
+        backgroundStairs.push(stairItem);
+      }
+    }
   });
 
   // Top roof slab cap
@@ -543,6 +659,8 @@ export function generateBuildingSection(entitiesOrDocs, sectionCut = {}, options
     cutSlabs,
     cutOpenings,
     backgroundWalls,
+    cutStairs,
+    backgroundStairs,
     datums,
     dimensions,
     groundLine
@@ -626,6 +744,21 @@ export function generateElevationSVG(elevationModelOrEntities, direction = 'sout
       if (opW > 30) {
         parts.push(`<line x1="${(pTop.sx + opW / 2).toFixed(1)}" y1="${pTop.sy.toFixed(1)}" x2="${(pTop.sx + opW / 2).toFixed(1)}" y2="${(pTop.sy + opH).toFixed(1)}" stroke="#38bdf8" stroke-width="1"/>`);
       }
+    }
+  }
+
+  // 4b. Projected Stairs
+  for (const st of (model.stairs || [])) {
+    for (const step of st.steps) {
+      const p1 = toSvg(step.u1, step.z1);
+      const p2 = toSvg(step.u1, step.z2);
+      const p3 = toSvg(step.u2, step.z2);
+      parts.push(`<polyline points="${p1.sx.toFixed(1)},${p1.sy.toFixed(1)} ${p2.sx.toFixed(1)},${p2.sy.toFixed(1)} ${p3.sx.toFixed(1)},${p3.sy.toFixed(1)}" fill="none" stroke="#ec4899" stroke-width="1.5"/>`);
+    }
+    if (st.handrail) {
+      const h1 = toSvg(st.handrail.u1, st.handrail.z1);
+      const h2 = toSvg(st.handrail.u2, st.handrail.z2);
+      parts.push(`<line x1="${h1.sx.toFixed(1)}" y1="${h1.sy.toFixed(1)}" x2="${h2.sx.toFixed(1)}" y2="${h2.sy.toFixed(1)}" stroke="#f472b6" stroke-width="2"/>`);
     }
   }
 
@@ -734,6 +867,47 @@ export function generateSectionSVG(sectionModelOrEntities, sectionCut, options =
       // Cut double-glazing slice
       parts.push(`<rect x="${pTop.sx.toFixed(1)}" y="${pTop.sy.toFixed(1)}" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}" fill="#0284c7" fill-opacity="0.3" stroke="#38bdf8" stroke-width="1.2"/>`);
       parts.push(`<line x1="${(pTop.sx + wPx / 2).toFixed(1)}" y1="${pTop.sy.toFixed(1)}" x2="${(pTop.sx + wPx / 2).toFixed(1)}" y2="${(pTop.sy + hPx).toFixed(1)}" stroke="#38bdf8" stroke-width="1.5"/>`);
+    }
+  }
+
+  // 5b. Cut Stairs (Stepped profile, concrete waist slab, handrail)
+  for (const st of (model.cutStairs || [])) {
+    // Structural waist slab polygon
+    const pStartBottom = toSvg(st.minU, st.baseZ - st.waistThickness);
+    const pEndBottom = toSvg(st.maxU, st.baseZ + st.rise - st.waistThickness);
+    const pEndTop = toSvg(st.maxU, st.baseZ + st.rise);
+    const pStartTop = toSvg(st.minU, st.baseZ);
+    parts.push(`<polygon points="${pStartTop.sx.toFixed(1)},${pStartTop.sy.toFixed(1)} ${pEndTop.sx.toFixed(1)},${pEndTop.sy.toFixed(1)} ${pEndBottom.sx.toFixed(1)},${pEndBottom.sy.toFixed(1)} ${pStartBottom.sx.toFixed(1)},${pStartBottom.sy.toFixed(1)}" fill="#be123c" fill-opacity="0.25" stroke="#f43f5e" stroke-width="2"/>`);
+    parts.push(`<polygon points="${pStartTop.sx.toFixed(1)},${pStartTop.sy.toFixed(1)} ${pEndTop.sx.toFixed(1)},${pEndTop.sy.toFixed(1)} ${pEndBottom.sx.toFixed(1)},${pEndBottom.sy.toFixed(1)} ${pStartBottom.sx.toFixed(1)},${pStartBottom.sy.toFixed(1)}" fill="url(#concrete-slab-hatch)"/>`);
+
+    // Stepped profile
+    for (const step of st.steps) {
+      const p1 = toSvg(step.u1, step.z);
+      const p2 = toSvg(step.u1, step.zNext);
+      const p3 = toSvg(step.u2, step.zNext);
+      parts.push(`<polyline points="${p1.sx.toFixed(1)},${p1.sy.toFixed(1)} ${p2.sx.toFixed(1)},${p2.sy.toFixed(1)} ${p3.sx.toFixed(1)},${p3.sy.toFixed(1)}" fill="none" stroke="#f43f5e" stroke-width="2.5"/>`);
+    }
+
+    // Handrail & posts
+    if (st.handrail) {
+      const h1 = toSvg(st.handrail.u1, st.handrail.z1);
+      const h2 = toSvg(st.handrail.u2, st.handrail.z2);
+      parts.push(`<line x1="${h1.sx.toFixed(1)}" y1="${h1.sy.toFixed(1)}" x2="${h2.sx.toFixed(1)}" y2="${h2.sy.toFixed(1)}" stroke="#fb7185" stroke-width="2.2"/>`);
+      for (const post of st.handrail.posts || []) {
+        const postP1 = toSvg(post.u, post.z1);
+        const postP2 = toSvg(post.u, post.z2);
+        parts.push(`<line x1="${postP1.sx.toFixed(1)}" y1="${postP1.sy.toFixed(1)}" x2="${postP2.sx.toFixed(1)}" y2="${postP2.sy.toFixed(1)}" stroke="#fb7185" stroke-width="1.8"/>`);
+      }
+    }
+  }
+
+  // 5c. Background Stairs (projected in elevation)
+  for (const st of (model.backgroundStairs || [])) {
+    for (const step of st.steps) {
+      const p1 = toSvg(step.u1, step.z);
+      const p2 = toSvg(step.u1, step.zNext);
+      const p3 = toSvg(step.u2, step.zNext);
+      parts.push(`<polyline points="${p1.sx.toFixed(1)},${p1.sy.toFixed(1)} ${p2.sx.toFixed(1)},${p2.sy.toFixed(1)} ${p3.sx.toFixed(1)},${p3.sy.toFixed(1)}" fill="none" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="3 2"/>`);
     }
   }
 

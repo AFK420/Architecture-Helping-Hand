@@ -57,7 +57,8 @@ const testFiles = [
   'studio-phase4.test.js',
   'studio-phase5.test.js',
   'studio-phase6.test.js',
-  'studio-phase7.test.js'
+  'studio-phase7.test.js',
+  'studio-phase8.test.js'
 ];
 
 console.log('=================================================================');

@@ -13,7 +13,7 @@ export const DEFAULT_CAD_LAYERS = [
   { id: 'A-FURN', name: 'Furniture', kinds: ['furniture'], color: '#8B5CF6', lineweight: 0.18, visible: true, locked: false, printable: true },
   { id: 'A-DIMS', name: 'Dimensions', kinds: ['dimension'], color: '#38BDF8', lineweight: 0.18, visible: true, locked: false, printable: true },
   { id: 'A-ANNO-TEXT', name: 'Text & Notes', kinds: ['text', 'leader'], color: '#E5E7EB', lineweight: 0.18, visible: true, locked: false, printable: true },
-  { id: 'A-ANNO-TAGS', name: 'Tags & Callouts', kinds: ['room_tag', 'door_tag', 'window_tag', 'north_arrow', 'section_cut'], color: '#FBBF24', lineweight: 0.18, visible: true, locked: false, printable: true },
+  { id: 'A-ANNO-TAGS', name: 'Tags & Callouts', kinds: ['room_tag', 'door_tag', 'window_tag', 'north_arrow', 'section_cut', 'detail_callout'], color: '#FBBF24', lineweight: 0.18, visible: true, locked: false, printable: true },
   { id: 'A-GRID', name: 'Grid & Guidelines', kinds: ['grid', 'grid_line', 'column'], color: '#6B7280', lineweight: 0.13, visible: true, locked: false, printable: true }
 ];
 
@@ -21,7 +21,8 @@ export const EXTENDED_CAD_LAYERS = [
   ...DEFAULT_CAD_LAYERS,
   { id: 'A-SECT', name: 'Building Sections', kinds: ['section_cut'], color: '#F87171', lineweight: 0.50, visible: true, locked: false, printable: true },
   { id: 'A-ELEV', name: 'Building Elevations', kinds: ['elevation'], color: '#60A5FA', lineweight: 0.25, visible: true, locked: false, printable: true },
-  { id: 'A-LEVL', name: 'Level Datums', kinds: ['datum'], color: '#A78BFA', lineweight: 0.18, visible: true, locked: false, printable: true }
+  { id: 'A-LEVL', name: 'Level Datums', kinds: ['datum'], color: '#A78BFA', lineweight: 0.18, visible: true, locked: false, printable: true },
+  { id: 'A-DETL', name: 'Architectural Details', kinds: ['detail_callout'], color: '#34D399', lineweight: 0.35, visible: true, locked: false, printable: true }
 ];
 
 export function cloneDefaultLayers() {

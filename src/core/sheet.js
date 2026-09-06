@@ -1,6 +1,7 @@
 import { calculateRoomSchedule, calculateFloorTotals } from './zoning-schedule.js';
 import { buildMassing3DModel, generateMassingSVG } from './massing-3d.js';
 import { generateElevationSVG, generateSectionSVG } from './sections-elevations.js';
+import { generateDetailSVG } from './details.js';
 
 
 export const SHEET_SIZES = Object.freeze({
@@ -162,6 +163,8 @@ export function computeViewportLayout(sheetConfig, entities = []) {
   let scheduleTable = null;
   let elevationViewport = null;
   let sectionViewport = null;
+  let detailViewport = null;
+  let detailsSheetMatrix = null;
 
   if (layoutMode === 'plan_3d') {
     // 3D Vignette box in upper right quadrant above title block
@@ -217,6 +220,32 @@ export function computeViewportLayout(sheetConfig, entities = []) {
     const leftRegionW = Math.max(100, tbX - drawAreaX - 10);
     vpCenterX = drawAreaX + leftRegionW / 2;
     vpCenterY = drawAreaY + drawAreaH / 2;
+  } else if (layoutMode === 'plan_detail') {
+    // Enlarged Construction Detail in right region above title block
+    const detH = Math.max(60, tbY - topMargin - 10);
+    detailViewport = {
+      x: tbX,
+      y: topMargin + 5,
+      width: tbW,
+      height: detH,
+      title: 'ENLARGED CONSTRUCTION DETAIL (1:10)'
+    };
+    const leftRegionW = Math.max(100, tbX - drawAreaX - 10);
+    vpCenterX = drawAreaX + leftRegionW / 2;
+    vpCenterY = drawAreaY + drawAreaH / 2;
+  } else if (layoutMode === 'details_sheet') {
+    // Full presentation sheet of 4 standard construction details
+    const totalAvailW = tbX - drawAreaX - 10;
+    const qW = totalAvailW / 2;
+    const qH = (drawAreaH - 10) / 2;
+    detailsSheetMatrix = [
+      { x: drawAreaX, y: topMargin, width: qW - 3, height: qH - 3, detailKey: 'footing', title: '1  STRIP FOOTING DETAIL' },
+      { x: drawAreaX + qW + 3, y: topMargin, width: qW - 3, height: qH - 3, detailKey: 'parapet', title: '2  ROOF PARAPET DETAIL' },
+      { x: drawAreaX, y: topMargin + qH + 5, width: qW - 3, height: qH - 5, detailKey: 'window_sill', title: '3  WINDOW SILL DETAIL' },
+      { x: drawAreaX + qW + 3, y: topMargin + qH + 5, width: qW - 3, height: qH - 5, detailKey: 'stair_nosing', title: '4  STAIR NOSING DETAIL' }
+    ];
+    vpCenterX = drawAreaX + totalAvailW / 2;
+    vpCenterY = drawAreaY + drawAreaH / 2;
   } else {
     // Single viewport centered
     vpCenterX = drawAreaX + drawAreaW / 2;
@@ -231,6 +260,8 @@ export function computeViewportLayout(sheetConfig, entities = []) {
     scheduleTable,
     elevationViewport,
     sectionViewport,
+    detailViewport,
+    detailsSheetMatrix,
     mmPerMeter,
     scaleRatio,
     planBounds: bounds,
@@ -499,6 +530,61 @@ export function generateSheetSVG(arg1, arg2 = [], renderOptions = {}) {
     </g>`;
   }
 
+  let detailMarkup = '';
+  if (layout.layoutMode === 'plan_detail' && layout.detailViewport) {
+    const dv = layout.detailViewport;
+    const detKey = renderOptions.detailKey || 'footing';
+    const detSVG = generateDetailSVG(detKey, { width: 800, height: 600 });
+    let vb = '0 0 800 600';
+    const vbMatch = detSVG.match(/viewBox="([^"]+)"/);
+    if (vbMatch) vb = vbMatch[1];
+    const innerContent = detSVG
+      .replace(/^<svg[^>]*>/i, '')
+      .replace(/<\/svg>$/i, '');
+
+    detailMarkup = `
+    <!-- Construction Detail Viewport -->
+    <g class="sheet-detail-viewport" id="sheet-detail-viewport">
+      <rect x="${dv.x}" y="${dv.y}" width="${dv.width}" height="${dv.height}" fill="#ffffff" stroke="#0f172a" stroke-width="0.7" />
+      <rect x="${dv.x}" y="${dv.y}" width="${dv.width}" height="7" fill="#0f172a" />
+      <text x="${dv.x + 4}" y="${dv.y + 4.8}" font-family="system-ui, sans-serif" font-size="2.6" font-weight="bold" fill="#ffffff">2  ${dv.title}</text>
+      <text x="${dv.x + dv.width - 4}" y="${dv.y + 4.8}" font-family="system-ui, sans-serif" font-size="2" fill="#94a3b8" text-anchor="end">1:10</text>
+      <svg x="${dv.x + 1}" y="${dv.y + 7.5}" width="${dv.width - 2}" height="${dv.height - 9}" viewBox="${vb}" preserveAspectRatio="xMidYMid meet">
+        ${innerContent}
+      </svg>
+    </g>`;
+  }
+
+  let detailsSheetMarkup = '';
+  if (layout.layoutMode === 'details_sheet' && Array.isArray(layout.detailsSheetMatrix)) {
+    const parts = [];
+    layout.detailsSheetMatrix.forEach((cell, idx) => {
+      const cellSVG = generateDetailSVG(cell.detailKey, { width: 800, height: 600 });
+      let vb = '0 0 800 600';
+      const vbMatch = cellSVG.match(/viewBox="([^"]+)"/);
+      if (vbMatch) vb = vbMatch[1];
+      const innerContent = cellSVG
+        .replace(/^<svg[^>]*>/i, '')
+        .replace(/<\/svg>$/i, '');
+
+      parts.push(`
+      <g class="sheet-matrix-detail" id="sheet-matrix-detail-${idx + 1}">
+        <rect x="${cell.x}" y="${cell.y}" width="${cell.width}" height="${cell.height}" fill="#ffffff" stroke="#0f172a" stroke-width="0.6" />
+        <rect x="${cell.x}" y="${cell.y}" width="${cell.width}" height="6.5" fill="#0f172a" />
+        <text x="${cell.x + 4}" y="${cell.y + 4.5}" font-family="system-ui, sans-serif" font-size="2.4" font-weight="bold" fill="#ffffff">${cell.title}</text>
+        <text x="${cell.x + cell.width - 4}" y="${cell.y + 4.5}" font-family="system-ui, sans-serif" font-size="2" fill="#94a3b8" text-anchor="end">1:10</text>
+        <svg x="${cell.x + 1}" y="${cell.y + 7}" width="${cell.width - 2}" height="${cell.height - 8}" viewBox="${vb}" preserveAspectRatio="xMidYMid meet">
+          ${innerContent}
+        </svg>
+      </g>`);
+    });
+    detailsSheetMarkup = `
+    <!-- Construction Details Sheet Matrix -->
+    <g class="sheet-details-matrix" id="sheet-details-matrix">
+      ${parts.join('\n')}
+    </g>`;
+  }
+
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${wMm} ${hMm}" width="${wPx}px" height="${hPx}px">
   <!-- Sheet Background (Paper) -->
   <rect x="0" y="0" width="${wMm}" height="${hMm}" fill="#ffffff" />
@@ -519,6 +605,8 @@ export function generateSheetSVG(arg1, arg2 = [], renderOptions = {}) {
   ${scheduleMarkup}
   ${elevationMarkup}
   ${sectionMarkup}
+  ${detailMarkup}
+  ${detailsSheetMarkup}
 
   <!-- CAD Title Block -->
   <g class="sheet-title-block" id="title-block" transform="translate(${tbX}, ${tbY})">
