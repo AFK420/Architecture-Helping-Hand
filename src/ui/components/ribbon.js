@@ -1,6 +1,7 @@
 /**
  * Architecture Helping Hand - Top Ribbon Bar Component
- * Dynamically renders ribbon tabs, panels, flyouts, and persona switcher.
+ * Unified consolidated header merging Persona Switcher and Ribbon Tabs,
+ * with streamlined panel cards and hover flyouts.
  */
 
 import {
@@ -24,32 +25,33 @@ export function renderStudioRibbon(container, options = {}) {
 
   let html = `
     <div class="studio-ribbon-bar">
-      <!-- Persona Switcher Strip -->
-      <div class="studio-persona-strip" role="tablist" aria-label="Software Persona Switcher">
-        <div class="persona-pill-group">
+      <!-- Unified Header: Persona Switcher (Left) + Ribbon Suite Tabs (Right) -->
+      <div class="studio-ribbon-header">
+        <div class="persona-pill-group" role="tablist" aria-label="Software Persona Switcher">
           ${personaKeys.map(k => {
             const p = STUDIO_PERSONAS[k];
             const isActive = k === currentPersona;
             return `
-              <button type="button" class="persona-pill-btn ${isActive ? 'active' : ''}" data-persona="${p.id}" title="${p.description}">
+              <button type="button" class="persona-pill-btn ${isActive ? 'active' : ''}" data-persona="${p.id}" title="${p.name} — ${p.description}">
                 <span class="persona-icon">${p.icon}</span>
                 <span class="persona-label">${p.shortLabel}</span>
               </button>
             `;
           }).join('')}
         </div>
-      </div>
 
-      <!-- Ribbon Suite Tabs -->
-      <div class="studio-ribbon-tabs" role="tablist" aria-label="Ribbon Tabs">
-        ${tabs.map(tab => {
-          const isTabActive = tab.id === currentTab.id;
-          return `
-            <button type="button" class="ribbon-tab-btn ${isTabActive ? 'active' : ''}" data-ribbon-tab="${tab.id}">
-              ${tab.label}
-            </button>
-          `;
-        }).join('')}
+        <div class="ribbon-header-divider" aria-hidden="true"></div>
+
+        <div class="studio-ribbon-tabs" role="tablist" aria-label="Ribbon Tabs">
+          ${tabs.map(tab => {
+            const isTabActive = tab.id === currentTab.id;
+            return `
+              <button type="button" class="ribbon-tab-btn ${isTabActive ? 'active' : ''}" data-ribbon-tab="${tab.id}">
+                ${tab.label}
+              </button>
+            `;
+          }).join('')}
+        </div>
       </div>
 
       <!-- Ribbon Panels Area -->
@@ -65,7 +67,7 @@ export function renderStudioRibbon(container, options = {}) {
                   const hasFlyout = Array.isArray(tool.flyout) && tool.flyout.length > 0;
                   return `
                     <div class="ribbon-tool-wrap ${hasFlyout ? 'has-flyout' : ''}">
-                      <button type="button" class="ribbon-tool-btn ${isActive ? 'active' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) - ${tool.description}">
+                      <button type="button" class="ribbon-tool-btn ${isActive ? 'active' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}">
                         <span class="ribbon-tool-icon">${tool.icon}</span>
                         <span class="ribbon-tool-name">${tool.name}</span>
                         ${tool.shortcut ? `<kbd class="ribbon-tool-kbd">${tool.shortcut}</kbd>` : ''}

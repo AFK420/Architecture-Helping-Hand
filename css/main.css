@@ -8206,31 +8206,35 @@ body.sidebar-hidden .app-sidebar {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
-.studio-persona-strip {
+.studio-persona-strip,
+.studio-ribbon-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.35rem 0.65rem;
-  background: rgba(0, 0, 0, 0.3);
+  padding: 0.3rem 0.65rem;
+  background: rgba(0, 0, 0, 0.35);
   border-bottom: 1px solid var(--border-subtle, #27272a);
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .persona-pill-group {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.3rem;
+  align-items: center;
   flex-wrap: wrap;
 }
 
 .persona-pill-btn {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.55rem;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
   border-radius: var(--radius-pill, 9999px);
   border: 1px solid var(--border-medium, #3f3f46);
   background: var(--bg-surface, #1e1e24);
   color: var(--text-secondary, #a1a1aa);
-  font-size: 0.72rem;
+  font-size: 0.70rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -8249,20 +8253,25 @@ body.sidebar-hidden .app-sidebar {
   font-weight: 700;
 }
 
+.ribbon-header-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 0.25rem;
+}
+
 .studio-ribbon-tabs {
   display: flex;
   gap: 0.25rem;
-  padding: 0.2rem 0.65rem 0;
-  background: rgba(0, 0, 0, 0.15);
-  border-bottom: 1px solid var(--border-color, #27272a);
+  align-items: center;
 }
 
 .ribbon-tab-btn {
-  padding: 0.35rem 0.8rem;
+  padding: 0.25rem 0.65rem;
   border: none;
   background: transparent;
   color: var(--text-secondary, #a1a1aa);
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   font-weight: 600;
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -8500,68 +8509,122 @@ body.sidebar-hidden .app-sidebar {
   margin-top: 1px;
 }
 
-.palette-categories-scroll {
+.palette-categories-scroll,
+.palette-categories-scroll.iconic-scroll {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  max-height: calc(100vh - 360px);
+  gap: 0.35rem;
+  max-height: calc(100vh - 280px);
   overflow-y: auto;
-  padding-right: 2px;
-}
-
-.palette-category-title {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted, #a1a1aa);
-  margin-bottom: 0.25rem;
-  padding-bottom: 2px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.palette-tools-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.3rem;
-}
-
-.palette-tool-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.35rem 0.45rem;
-  border: 1px solid var(--border-subtle, #27272a);
-  background: var(--bg-surface, #1c1d22);
-  color: var(--text-primary, #f4f4f5);
-  border-radius: 5px;
-  font-size: 0.70rem;
-  cursor: pointer;
-  transition: all 0.15s ease;
+  padding: 2px;
   width: 100%;
 }
 
-.palette-tool-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: var(--border-medium, #3f3f46);
+.palette-category-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.15rem 0;
+  width: 100%;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 0.15rem 0;
 }
 
-.palette-tool-btn.active {
-  background: rgba(73, 137, 217, 0.18);
+.palette-category-divider .divider-icon {
+  font-size: 0.70rem;
+  opacity: 0.65;
+}
+
+.palette-tools-grid,
+.palette-tools-grid.iconic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem;
+  width: 100%;
+}
+
+.palette-tool-wrapper,
+.palette-tool-wrapper.iconic-wrapper {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.palette-tool-btn,
+.palette-tool-btn.iconic-tool-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border-radius: 5px;
+  border: 1px solid var(--border-subtle, #27272a);
+  background: var(--bg-surface, #1b1c20);
+  color: var(--text-primary, #f4f4f5);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+
+.palette-tool-btn:hover,
+.palette-tool-btn.iconic-tool-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-medium, #4b5563);
+}
+
+.palette-tool-btn.active,
+.palette-tool-btn.iconic-tool-btn.active {
+  background: rgba(73, 137, 217, 0.22);
   border-color: var(--accent-primary, #4989D9);
   color: var(--accent-primary, #4989D9);
-  font-weight: 700;
+  box-shadow: 0 0 6px rgba(73, 137, 217, 0.3);
 }
 
-.palette-tool-btn .tool-label {
-  flex: 1;
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.palette-tool-btn .tool-icon,
+.palette-tool-btn.iconic-tool-btn .tool-icon {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.palette-tool-btn .tool-badge,
+.palette-tool-btn.iconic-tool-btn .tool-badge {
+  position: absolute;
+  bottom: 1px;
+  right: 2px;
+  font-size: 0.48rem;
+  font-family: var(--font-mono);
+  color: var(--text-muted, #9ca3af);
+  pointer-events: none;
+  line-height: 1;
+}
+
+.palette-tool-btn .tool-flyout-indicator,
+.palette-tool-btn.iconic-tool-btn .tool-flyout-indicator {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  font-size: 0.50rem;
+  color: var(--text-muted, #71717a);
+  pointer-events: auto;
+}
+
+.palette-flyout-menu,
+.palette-flyout-menu.iconic-flyout-menu {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  z-index: 1000;
+  background: var(--bg-surface-2, #18181b);
+  border: 1px solid var(--border-medium, #3f3f46);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  padding: 4px;
+  margin-left: 4px;
 }
 
 /* Right C-Panels */
@@ -8575,15 +8638,17 @@ body.sidebar-hidden .app-sidebar {
   display: flex;
   border-bottom: 1px solid var(--border-color, #27272a);
   margin-bottom: 0.5rem;
+  gap: 0.15rem;
 }
 
 .cpanel-tab-btn {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
-  padding: 0.35rem 0.25rem;
+  gap: 0.2rem;
+  padding: 0.35rem 0.15rem;
   border: none;
   background: transparent;
   color: var(--text-muted, #71717a);
@@ -8592,6 +8657,16 @@ body.sidebar-hidden .app-sidebar {
   cursor: pointer;
   border-bottom: 2px solid transparent;
   transition: all 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cpanel-tab-btn .cpanel-tab-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.68rem;
 }
 
 .cpanel-tab-btn:hover {
@@ -9076,13 +9151,337 @@ body.sidebar-hidden .app-sidebar {
 /* Studio Workstation Clean Layout Integration */
 .plan-tools-card > .card-header,
 .plan-tools-card > .tool-description,
-.plan-tools-card > .input-row-group {
+.plan-tools-card > .input-row-group,
+.plan-tools-card > .calc-actions-row,
+.plan-tools-card > div[style*="margin-top: 0.75rem"],
+.plan-tools-card > div[style*="margin-top: 0.8rem"],
+.plan-tools-card > .plan-sidebar-tabs,
+.plan-tools-card > #plan-entities-view,
+.plan-tools-card > #plan-layers-view,
+.plan-tools-card > #plan-schedule-view {
   display: none !important;
 }
 
 #plan-properties-panel > .card-header,
 #plan-properties-panel > .plan-prop-content {
   display: none !important;
+}
+
+/* Center Viewport Chrome Removal & Height Optimization */
+#plan-result-panel .result-header,
+#plan-result-panel .plan-canvas-toolbar,
+#plan-result-panel .result-actions-strip,
+#plan-result-panel #plan-status-bar {
+  display: none !important;
+}
+
+#plan-result-panel {
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 0.5rem !important;
+  height: calc(100vh - 240px) !important;
+  min-height: 500px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+}
+
+#plan-doc-tab-bar {
+  margin-bottom: 0.35rem !important;
+}
+
+#plan-contextual-toolbar {
+  margin-bottom: 0.35rem !important;
+}
+
+#plan-svg-wrap {
+  flex: 1 !important;
+  width: 100% !important;
+  min-height: 380px !important;
+  position: relative !important;
+  border: 1px solid var(--border-subtle, #27272a) !important;
+  border-radius: 6px !important;
+  overflow: hidden !important;
+  background: radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px), #0f1013 !important;
+  background-size: 20px 20px !important;
+}
+
+/* Floating Viewport HUD Controls */
+.plan-floating-hud {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.2rem 0.35rem;
+  background: rgba(18, 19, 23, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+.hud-btn {
+  padding: 0.25rem 0.45rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-primary, #f4f4f5);
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  line-height: 1;
+}
+
+.hud-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.hud-btn-text {
+  font-size: 0.68rem;
+  font-family: var(--font-mono, monospace);
+  padding: 0.25rem 0.4rem;
+}
+
+.hud-btn-icon {
+  font-size: 0.82rem;
+}
+
+.hud-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 0.15rem;
+}
+
+/* Tier 1 Floating Tool Popover */
+.studio-tool-popover {
+  position: fixed;
+  z-index: 99999;
+  width: 290px;
+  background: rgba(18, 20, 24, 0.96);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border-medium, #3f3f46);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+  padding: 0.65rem 0.75rem;
+  pointer-events: none;
+  font-family: var(--font-sans, system-ui, sans-serif);
+  color: var(--text-primary, #f4f4f5);
+  font-size: 0.74rem;
+}
+
+.popover-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.45rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.popover-icon {
+  font-size: 1.15rem;
+}
+
+.popover-title-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+}
+
+.popover-title {
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--text-primary, #f4f4f5);
+}
+
+.popover-badge kbd {
+  font-size: 0.60rem;
+  font-family: var(--font-mono, monospace);
+  background: rgba(73, 137, 217, 0.25);
+  color: var(--accent-primary, #4989D9);
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid rgba(73, 137, 217, 0.4);
+}
+
+.popover-section {
+  margin-bottom: 0.4rem;
+}
+
+.popover-sublabel {
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #a1a1aa);
+  margin-bottom: 2px;
+}
+
+.popover-desc {
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--text-secondary, #d4d4d8);
+  margin: 0;
+}
+
+.popover-steps {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.70rem;
+  line-height: 1.35;
+  color: var(--text-secondary, #d4d4d8);
+}
+
+.popover-section.standards {
+  background: rgba(73, 137, 217, 0.08);
+  border: 1px solid rgba(73, 137, 217, 0.2);
+  border-radius: 5px;
+  padding: 0.35rem 0.45rem;
+  margin-bottom: 0;
+}
+
+.popover-code {
+  font-size: 0.66rem;
+  line-height: 1.35;
+  color: var(--accent-primary, #7dd3fc);
+  margin: 0;
+}
+
+/* Tier 2 Dedicated Architectural Tool Guide Card (C-Panels) */
+.cpanel-tool-guide-card {
+  margin-top: 0.65rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-subtle, #27272a);
+  border-radius: 7px;
+  padding: 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.tool-guide-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.guide-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.guide-icon {
+  font-size: 1rem;
+}
+
+.guide-name {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-primary, #f4f4f5);
+}
+
+.guide-shortcut kbd {
+  font-size: 0.58rem;
+  font-family: var(--font-mono, monospace);
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--accent-primary, #4989D9);
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid rgba(73, 137, 217, 0.3);
+}
+
+.tool-guide-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.guide-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.guide-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #71717a);
+}
+
+.guide-text {
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: var(--text-secondary, #d4d4d8);
+  margin: 0;
+}
+
+.guide-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.guide-step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  font-size: 0.66rem;
+  line-height: 1.3;
+}
+
+.guide-step-item .step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(73, 137, 217, 0.2);
+  color: var(--accent-primary, #4989D9);
+  font-size: 0.58rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.guide-block.standards-block {
+  background: rgba(73, 137, 217, 0.08);
+  border: 1px solid rgba(73, 137, 217, 0.2);
+  border-radius: 5px;
+  padding: 0.35rem;
+}
+
+.guide-code {
+  font-size: 0.65rem;
+  line-height: 1.35;
+  color: var(--accent-primary, #7dd3fc);
+  margin: 0;
+}
+
+.guide-block.protip-block {
+  background: rgba(234, 179, 8, 0.08);
+  border: 1px solid rgba(234, 179, 8, 0.2);
+  border-radius: 5px;
+  padding: 0.35rem;
+}
+
+.guide-protip {
+  font-size: 0.65rem;
+  line-height: 1.35;
+  color: #fde047;
+  margin: 0;
 }
 
 @media (min-width: 1200px) {
@@ -9093,14 +9492,21 @@ body.sidebar-hidden .app-sidebar {
   }
 
   #mode-view-plan .tool-layout-plan-3col {
-    grid-template-columns: 250px minmax(0, 1fr) 280px !important;
-    gap: 0.75rem;
+    grid-template-columns: 92px minmax(0, 1fr) 290px !important;
+    gap: 0.6rem !important;
+    align-items: start !important;
+  }
+
+  #mode-view-plan .plan-tools-card {
+    padding: 0.35rem !important;
+    width: 92px !important;
   }
 
   #mode-view-plan .plan-properties-panel {
     grid-column: 3 !important;
     position: sticky !important;
     top: calc(var(--topbar-height, 56px) + var(--space-md)) !important;
+    padding: 0.45rem !important;
   }
 }
 

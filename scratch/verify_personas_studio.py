@@ -105,7 +105,17 @@ async def main():
         await page.screenshot(path=shot7, full_page=False)
         print(f"Captured: {shot7}")
 
-        # 8. Open Omnipresent AI Assistant Dropdown Drawer
+        # 8. Test Dual-Tier Guidance System (Hover over Wall tool)
+        print("Testing Dual-Tier Guidance System (hover over wall tool)...")
+        wall_btn = page.locator('button[data-tool="wall"]').first
+        if await wall_btn.count() > 0:
+            await wall_btn.hover()
+            await page.wait_for_timeout(600)
+            shot_guide = os.path.join(artifacts_dir, "studio_tool_guidance_hover.png")
+            await page.screenshot(path=shot_guide, full_page=False)
+            print(f"Captured: {shot_guide}")
+
+        # 9. Open Omnipresent AI Assistant Dropdown Drawer
         print("Opening Top Omnipresent AI Assistant Drawer...")
         await page.click('#top-menubar-ai-btn')
         await page.wait_for_timeout(800)

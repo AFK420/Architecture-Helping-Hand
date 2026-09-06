@@ -80,6 +80,7 @@ import { renderStudioRibbon } from '../components/ribbon.js';
 import { renderStudioPalette } from '../components/palette.js';
 import { renderStudioCPanels } from '../components/cpanels.js';
 import { renderStudioCommandBar } from '../components/commandbar.js';
+import { initToolGuidance, updateInspectorGuide } from '../components/tooltip.js';
 
 const PLAN_STATE_KEY = 'archiscale_plan_prefs'; // user preferences only
 
@@ -671,6 +672,7 @@ export function createPlanView(context) {
     syncToolVisibility();
     savePrefs();
     renderContextualToolbar();
+    updateInspectorGuide(newTool);
     showToast(`Tool: ${newTool.charAt(0).toUpperCase() + newTool.slice(1)}`);
   }
 
@@ -737,6 +739,7 @@ export function createPlanView(context) {
 
   function handleStudioToolAction(toolId) {
     if (!toolId) return;
+    updateInspectorGuide(toolId);
 
     if (toolId === 'undo') {
       undo();
@@ -889,6 +892,7 @@ export function createPlanView(context) {
 
     renderStudioCPanels(cpanelsHost, {
       activePanelTab: state.activeCPanelTab || 'properties',
+      activeToolId: state.plan.tool || 'select',
       selectedEntity: selected,
       entityCount: es.length,
       layerCount: normalizeDocumentLayers(doc).length,
@@ -902,6 +906,8 @@ export function createPlanView(context) {
         else createDocument('Strip Footing Detail', 'detail');
       }
     });
+
+    initToolGuidance(cpanelsHost);
 
     const grossEl = cpanelsHost.querySelector('#cpanel-metric-gross-area');
     if (grossEl) grossEl.textContent = `${totalArea.toFixed(1)} m²`;
@@ -919,6 +925,56 @@ export function createPlanView(context) {
           showToast('All items already tagged');
         }
       });
+    }
+  }
+
+  function setupFloatingViewportHud() {
+    const wrap = document.getElementById('plan-svg-wrap');
+    if (!wrap) return;
+    let hud = document.getElementById('plan-floating-hud');
+    if (!hud) {
+      hud = document.createElement('div');
+      hud.id = 'plan-floating-hud';
+      hud.className = 'plan-floating-hud';
+      hud.setAttribute('role', 'toolbar');
+      hud.setAttribute('aria-label', 'Floating Viewport HUD Controls');
+      hud.innerHTML = `
+        <button type="button" class="hud-btn" id="hud-zoom-out" data-tool="zoom_out" title="Zoom Out (−)">−</button>
+        <button type="button" class="hud-btn" id="hud-zoom-in" data-tool="zoom_in" title="Zoom In (+)">+</button>
+        <button type="button" class="hud-btn hud-btn-text" id="hud-fit" data-tool="zoom_extents" title="Fit Drawing to Screen">Fit</button>
+        <button type="button" class="hud-btn hud-btn-text" id="hud-100" title="100% 1:1 Scale">100%</button>
+        <div class="hud-divider"></div>
+        <button type="button" class="hud-btn hud-btn-icon" id="hud-4view" title="4-Viewport Split (4VIEW)">⊞</button>
+        <button type="button" class="hud-btn hud-btn-icon" id="hud-3d" title="3D Massing Preview (PERSP)">🏢</button>
+      `;
+      wrap.appendChild(hud);
+
+      hud.querySelector('#hud-zoom-out')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        zoomStep(1 / 1.3);
+      });
+      hud.querySelector('#hud-zoom-in')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        zoomStep(1.3);
+      });
+      hud.querySelector('#hud-fit')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fitToContent();
+      });
+      hud.querySelector('#hud-100')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setZoomPercent(100);
+      });
+      hud.querySelector('#hud-4view')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleStudioToolAction('view_4split');
+      });
+      hud.querySelector('#hud-3d')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleStudioToolAction('view_perspective');
+      });
+
+      initToolGuidance(hud);
     }
   }
 
@@ -954,6 +1010,7 @@ export function createPlanView(context) {
           handleStudioToolAction(toolId);
         }
       });
+      initToolGuidance(ribbonHost);
     }
 
     if (paletteHost) {
@@ -972,9 +1029,11 @@ export function createPlanView(context) {
           showToast(`Switched to tab: ${tabId}`);
         }
       });
+      initToolGuidance(paletteHost);
     }
 
     updateStudioCPanels();
+    setupFloatingViewportHud();
 
     if (commandbarHost) {
       renderStudioCommandBar(commandbarHost, {

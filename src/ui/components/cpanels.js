@@ -1,7 +1,10 @@
 /**
  * Architecture Helping Hand - Right C-Panels & Containers Component
  * Rhino/AutoCAD style dockable side-panel container (Properties, Layers, Validation, Detailing).
+ * Includes Tier 2 Permanent Architectural Standards & Guidance Inspector.
  */
+
+import { updateInspectorGuide } from './tooltip.js';
 
 export function renderStudioCPanels(container, options = {}) {
   if (!container) return;
@@ -10,22 +13,27 @@ export function renderStudioCPanels(container, options = {}) {
   const selectedEntity = options.selectedEntity || null;
   const entityCount = options.entityCount || 0;
   const layerCount = options.layerCount || 10;
+  const activeToolId = options.activeToolId || 'select';
 
   let html = `
     <div class="studio-cpanels-container">
-      <!-- C-Panel Header Navigation Tabs -->
+      <!-- C-Panel Header Navigation Tabs (Compact & Responsive - Zero Text Overflow) -->
       <div class="cpanels-tab-bar" role="tablist">
         <button type="button" class="cpanel-tab-btn ${activeTab === 'properties' ? 'active' : ''}" data-panel-tab="properties" title="Object Properties Inspector">
-          <span>📋</span> Properties
+          <span class="cpanel-tab-icon">📋</span>
+          <span class="cpanel-tab-text">Props</span>
         </button>
-        <button type="button" class="cpanel-tab-btn ${activeTab === 'layers' ? 'active' : ''}" data-panel-tab="layers" title="CAD Layers & Materials">
-          <span>🗂️</span> Layers (${layerCount})
+        <button type="button" class="cpanel-tab-btn ${activeTab === 'layers' ? 'active' : ''}" data-panel-tab="layers" title="CAD Layers & Materials (${layerCount})">
+          <span class="cpanel-tab-icon">🗂️</span>
+          <span class="cpanel-tab-text">Layers</span>
         </button>
-        <button type="button" class="cpanel-tab-btn ${activeTab === 'validation' ? 'active' : ''}" data-panel-tab="validation" title="Space Planning & Code Compliance">
-          <span>✓</span> Code & Area
+        <button type="button" class="cpanel-tab-btn ${activeTab === 'validation' ? 'active' : ''}" data-panel-tab="validation" title="Space Planning & IBC Code Compliance">
+          <span class="cpanel-tab-icon">✓</span>
+          <span class="cpanel-tab-text">Code</span>
         </button>
         <button type="button" class="cpanel-tab-btn ${activeTab === 'details' ? 'active' : ''}" data-panel-tab="details" title="Construction Details & Keynotes">
-          <span>🔍</span> Detailing
+          <span class="cpanel-tab-icon">🔍</span>
+          <span class="cpanel-tab-text">Details</span>
         </button>
       </div>
 
@@ -78,7 +86,7 @@ export function renderStudioCPanels(container, options = {}) {
             <div class="cpanel-empty-state">
               <span class="empty-icon">➤</span>
               <p>No entity selected</p>
-              <span class="empty-hint">Click any entity on the drawing canvas to inspect and edit properties. Drawing has ${entityCount} entities.</span>
+              <span class="empty-hint">Click any entity on the drawing canvas to inspect and edit properties. (${entityCount} total entities)</span>
             </div>
           `}
         </div>
@@ -163,10 +171,18 @@ export function renderStudioCPanels(container, options = {}) {
           </div>
         </div>
       </div>
+
+      <!-- Tier 2: Dedicated Architectural Tool Guide & Standards Inspector -->
+      <div id="cpanel-tool-guide-card" class="cpanel-tool-guide-card">
+        <!-- Populated dynamically by updateInspectorGuide() -->
+      </div>
     </div>
   `;
 
   container.innerHTML = html;
+
+  // Initialize Tier 2 Architectural Guide
+  updateInspectorGuide(activeToolId);
 
   container.querySelectorAll('.cpanel-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
