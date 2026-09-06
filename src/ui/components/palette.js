@@ -103,14 +103,14 @@ export function renderStudioPalette(container, options = {}) {
       }
 
       searchResults.innerHTML = matches.map(m => `
-        <button type="button" class="search-result-item" data-tool="${m.id}">
+        <button type="button" class="search-result-item" data-tool="${m.id}" data-is-tab="${m.isRibbonTab ? '1' : '0'}" data-tab-id="${m.tabId || ''}" data-persona-id="${m.personaId || ''}" data-is-cat="${m.isCategory ? '1' : '0'}" data-cat-id="${m.categoryId || ''}">
           <span class="search-item-icon">${m.icon}</span>
           <div class="search-item-details">
             <div class="search-item-title-row">
               <span class="search-item-name">${m.name}</span>
               ${m.shortcut ? `<kbd class="search-item-kbd">${m.shortcut}</kbd>` : ''}
             </div>
-            <span class="search-item-cat">${m.categoryIcon} ${m.categoryName} · [${m.commandAlias || m.id}]</span>
+            <span class="search-item-cat">${m.categoryIcon || '📁'} ${m.categoryName || 'Tools'}${m.commandAlias ? ` · [${m.commandAlias}]` : ''}</span>
           </div>
         </button>
       `).join('');
@@ -118,11 +118,32 @@ export function renderStudioPalette(container, options = {}) {
 
       searchResults.querySelectorAll('.search-result-item').forEach(itemBtn => {
         itemBtn.addEventListener('click', () => {
-          const toolId = itemBtn.dataset.tool;
+          const isTab = itemBtn.dataset.isTab === '1';
+          const isCat = itemBtn.dataset.isCat === '1';
           searchResults.style.display = 'none';
           searchInput.value = '';
-          if (typeof options.onSelectTool === 'function') {
-            options.onSelectTool(toolId);
+
+          if (isTab) {
+            const tabId = itemBtn.dataset.tabId;
+            const pId = itemBtn.dataset.personaId;
+            if (typeof options.onSelectRibbonTab === 'function') {
+              options.onSelectRibbonTab(tabId, pId);
+            }
+          } else if (isCat) {
+            const catId = itemBtn.dataset.catId;
+            const catSection = container.querySelector(`.palette-category-section[data-category="${catId}"]`);
+            if (catSection) {
+              const body = catSection.querySelector('.palette-cat-body');
+              const arr = catSection.querySelector('.palette-cat-arrow');
+              if (body) body.style.display = 'grid';
+              if (arr) arr.textContent = '▾';
+              catSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+          } else {
+            const toolId = itemBtn.dataset.tool;
+            if (typeof options.onSelectTool === 'function') {
+              options.onSelectTool(toolId);
+            }
           }
         });
       });

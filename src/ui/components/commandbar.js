@@ -3,7 +3,7 @@
  * Features CLI prompt, Osnap toggles (End, Mid, Cen, Int, Perp), Ortho, and coordinate readout.
  */
 
-import { STUDIO_TOOL_CATALOG } from '../../core/personas.js';
+import { STUDIO_TOOL_CATALOG, parseStudioCommand } from '../../core/personas.js';
 
 export function renderStudioCommandBar(container, options = {}) {
   if (!container) return;
@@ -18,7 +18,8 @@ export function renderStudioCommandBar(container, options = {}) {
       <!-- AutoCAD / Rhino Command Prompt -->
       <div class="commandbar-cli-wrap">
         <label for="commandbar-input" class="commandbar-label">Command:</label>
-        <input type="text" id="commandbar-input" class="commandbar-input" placeholder="Type a command or alias (e.g. 'L', 'REC', 'WALL', 'STAIR', 'DIST')..." autocomplete="off" spellcheck="false" />
+        <input type="text" id="commandbar-input" class="commandbar-input" placeholder="Type a command or alias (e.g. 'REC 6 4', 'WALL 5', 'STAIR', '4VIEW', 'HELP')..." autocomplete="off" spellcheck="false" />
+        <span id="commandbar-history-echo" class="commandbar-history-echo" style="display: none; font-size: 0.70rem; color: var(--color-warning, #fbbf24); font-family: var(--font-mono); white-space: nowrap;"></span>
       </div>
 
       <!-- Drafting Aids Toggles (Osnap, Ortho, Grid) -->
@@ -53,23 +54,26 @@ export function renderStudioCommandBar(container, options = {}) {
     cliInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        const cmd = cliInput.value.trim().toUpperCase();
+        const raw = cliInput.value.trim();
         cliInput.value = '';
-        if (!cmd) return;
+        if (!raw) return;
 
-        // Lookup tool matching commandAlias or id
-        const matchedTool = STUDIO_TOOL_CATALOG.find(t =>
-          (t.commandAlias && t.commandAlias.toUpperCase() === cmd) ||
-          (t.shortcut && t.shortcut.toUpperCase() === cmd) ||
-          t.id.toUpperCase() === cmd
-        );
+        const parsed = parseStudioCommand(raw, { coords: currentCoords });
+        if (parsed) {
+          const historyEl = container.querySelector('#commandbar-history-echo');
+          if (historyEl) {
+            historyEl.textContent = `Command: ${raw} [${parsed.type.toUpperCase()}]`;
+            historyEl.style.display = 'inline-block';
+            setTimeout(() => { if (historyEl) historyEl.style.display = 'none'; }, 4000);
+          }
 
-        if (matchedTool) {
-          if (typeof options.onExecuteCommand === 'function') {
-            options.onExecuteCommand(matchedTool.id);
+          if (typeof options.onExecuteParsedCommand === 'function') {
+            options.onExecuteParsedCommand(parsed);
+          } else if (typeof options.onExecuteCommand === 'function') {
+            options.onExecuteCommand(parsed.toolId || parsed.verb || raw);
           }
         } else if (typeof options.onUnknownCommand === 'function') {
-          options.onUnknownCommand(cmd);
+          options.onUnknownCommand(raw);
         }
       }
     });

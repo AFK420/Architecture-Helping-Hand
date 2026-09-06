@@ -14,6 +14,7 @@ import {
   TOOL_CATEGORIES,
   STUDIO_TOOL_CATALOG,
   searchStudioTools,
+  parseStudioCommand,
   PERSONA_RIBBON_CONFIGS
 } from '../src/core/personas.js';
 
@@ -158,6 +159,56 @@ test('Search Engine: Filters search results by persona', () => {
 
   const rhinoResults = searchStudioTools('loft', { persona: 'rhino' });
   assert.ok(rhinoResults.length > 0, 'Loft should be found under Rhino persona');
+});
+
+test('Search Engine: Expanded search finds ribbon tabs and category entries', () => {
+  const tabResults = searchStudioTools('curves');
+  assert.ok(tabResults.some(r => r.isRibbonTab && r.tabId === 'curves'), 'Should find Curves ribbon tab');
+
+  const catResults = searchStudioTools('measuring');
+  assert.ok(catResults.some(r => r.isCategory && r.categoryId === 'measuring'), 'Should find Measuring category');
+});
+
+test('CLI Parser: parseStudioCommand parses parametric rooms and walls', () => {
+  const roomCmd = parseStudioCommand('REC 6 4');
+  assert.equal(roomCmd.type, 'create_room');
+  assert.equal(roomCmd.width, 6);
+  assert.equal(roomCmd.depth, 4);
+
+  const wallCmd1 = parseStudioCommand('WALL 8');
+  assert.equal(wallCmd1.type, 'create_wall_length');
+  assert.equal(wallCmd1.length, 8);
+
+  const wallCmd2 = parseStudioCommand('WALL 0 0 10 0');
+  assert.equal(wallCmd2.type, 'create_wall');
+  assert.equal(wallCmd2.x1, 0);
+  assert.equal(wallCmd2.x2, 10);
+
+  const stairCmd = parseStudioCommand('STAIR 18 1.2');
+  assert.equal(stairCmd.type, 'create_stair');
+  assert.equal(stairCmd.risers, 18);
+  assert.equal(stairCmd.width, 1.2);
+});
+
+test('CLI Parser: parseStudioCommand parses views, hatch, tools, and help', () => {
+  const v4Cmd = parseStudioCommand('4VIEW');
+  assert.equal(v4Cmd.type, 'set_view');
+  assert.equal(v4Cmd.view, '4view');
+
+  const planCmd = parseStudioCommand('PLAN');
+  assert.equal(planCmd.type, 'set_view');
+  assert.equal(planCmd.view, 'top');
+
+  const hatchCmd = parseStudioCommand('HATCH wood');
+  assert.equal(hatchCmd.type, 'set_hatch');
+  assert.equal(hatchCmd.pattern, 'wood');
+
+  const distCmd = parseStudioCommand('DIST');
+  assert.equal(distCmd.type, 'set_tool');
+  assert.equal(distCmd.toolId, 'measure');
+
+  const helpCmd = parseStudioCommand('HELP');
+  assert.equal(helpCmd.type, 'help');
 });
 
 // -----------------------------------------------------------------------------

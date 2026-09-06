@@ -50,6 +50,25 @@ async def main():
         await page.screenshot(path=shot3, full_page=False)
         print(f"Captured: {shot3}")
 
+        # 3b. Trigger Rhino 4-Viewport Split (view_4split)
+        print("Triggering Rhino 4-Viewport Split...")
+        # Click the 4-viewport tool in the ribbon or palette
+        await page.evaluate("""() => {
+            const btn = document.querySelector('button[data-tool="view_4split"]') || document.querySelector('.palette-tool-btn[data-tool="view_4split"]');
+            if (btn) btn.click();
+            else {
+                const cmdInput = document.getElementById('commandbar-input');
+                if (cmdInput) {
+                    cmdInput.value = '4VIEW';
+                    cmdInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+                }
+            }
+        }""")
+        await page.wait_for_timeout(700)
+        shot3b = os.path.join(artifacts_dir, "studio_rhino_4viewport.png")
+        await page.screenshot(path=shot3b, full_page=False)
+        print(f"Captured: {shot3b}")
+
         # 4. Switch to Photoshop Persona
         print("Switching to Photoshop Persona...")
         await page.click('button[data-persona="photoshop"]')

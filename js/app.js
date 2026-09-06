@@ -15354,11 +15354,211 @@ const STUDIO_TOOL_CATALOG = [
 ];
 
 // ---------------------------------------------------------------------------
-// 4. Universal Studio Search Engine
+// 4. Universal Studio Search Engine & CLI Command Parser
 // ---------------------------------------------------------------------------
 
 /**
- * Searches across all tools, categories, and commands with fuzzy keyword matching.
+ * Parses CAD / Rhino CLI command lines with optional parametric arguments.
+ * Supports: REC 6 4, WALL 5, WALL 0 0 8 0, STAIR 18 1.2, HATCH brick, 4VIEW, PLAN, FRONT, PERSP, etc.
+ * @param {string} cmdLine Raw user input from command bar
+ * @param {Object} [context] Active execution context (e.g. current coordinates, persona)
+ * @returns {Object|null} Structured command action payload
+ */
+function parseStudioCommand(cmdLine, context = {}) {
+  if (!cmdLine || typeof cmdLine !== 'string') return null;
+  const raw = cmdLine.trim();
+  if (!raw) return null;
+
+  const tokens = raw.split(/\s+/);
+  const verb = tokens[0].toUpperCase();
+  const args = tokens.slice(1);
+
+  // 1. HELP command
+  if (verb === 'HELP' || verb === '?') {
+    return {
+      type: 'help',
+      verb,
+      description: 'Display CAD/Rhino shortcut command cheat sheet'
+    };
+  }
+
+  // 2. Room / Rectangle: REC [width] [depth] or ROOM [width] [depth]
+  if (verb === 'REC' || verb === 'RECT' || verb === 'RECTANGLE' || verb === 'ROOM') {
+    if (args.length >= 2) {
+      const width = parseFloat(args[0]);
+      const depth = parseFloat(args[1]);
+      if (Number.isFinite(width) && Number.isFinite(depth) && width > 0 && depth > 0) {
+        return {
+          type: 'create_room',
+          verb,
+          width,
+          depth,
+          name: args.slice(2).join(' ') || `Room ${width}x${depth}m`,
+          description: `Create parametric room ${width}m x ${depth}m`
+        };
+      }
+    } else if (args.length === 1) {
+      const size = parseFloat(args[0]);
+      if (Number.isFinite(size) && size > 0) {
+        return {
+          type: 'create_room',
+          verb,
+          width: size,
+          depth: size,
+          name: `Room ${size}x${size}m`,
+          description: `Create square room ${size}m x ${size}m`
+        };
+      }
+    }
+    return { type: 'set_tool', toolId: 'room', verb };
+  }
+
+  // 3. Wall: WALL [len] or WALL [x1] [y1] [x2] [y2]
+  if (verb === 'WALL' || verb === 'W') {
+    if (args.length >= 4) {
+      const x1 = parseFloat(args[0]);
+      const y1 = parseFloat(args[1]);
+      const x2 = parseFloat(args[2]);
+      const y2 = parseFloat(args[3]);
+      if (Number.isFinite(x1) && Number.isFinite(y1) && Number.isFinite(x2) && Number.isFinite(y2)) {
+        return {
+          type: 'create_wall',
+          verb,
+          x1, y1, x2, y2,
+          description: `Create wall from (${x1}, ${y1}) to (${x2}, ${y2})`
+        };
+      }
+    } else if (args.length === 1) {
+      const length = parseFloat(args[0]);
+      if (Number.isFinite(length) && length > 0) {
+        return {
+          type: 'create_wall_length',
+          verb,
+          length,
+          description: `Create horizontal wall of length ${length}m`
+        };
+      }
+    }
+    return { type: 'set_tool', toolId: 'wall', verb };
+  }
+
+  // 4. Line: LINE or L
+  if (verb === 'LINE' || verb === 'L') {
+    return { type: 'set_tool', toolId: 'line', verb };
+  }
+
+  // 5. Polyline: PLINE or PL
+  if (verb === 'PLINE' || verb === 'PL') {
+    return { type: 'set_tool', toolId: 'polyline', verb };
+  }
+
+  // 6. Stair: STAIR [risers] [width]
+  if (verb === 'STAIR' || verb === 'STAIRS') {
+    if (args.length >= 1) {
+      const risers = parseInt(args[0], 10) || 16;
+      const width = args.length >= 2 ? (parseFloat(args[1]) || 1.1) : 1.1;
+      return {
+        type: 'create_stair',
+        verb,
+        risers,
+        width,
+        description: `Create stair with ${risers} risers, width ${width}m`
+      };
+    }
+    return { type: 'set_tool', toolId: 'stair', verb };
+  }
+
+  // 7. Measure / Dist: DIST, MEASURE, DI
+  if (verb === 'DIST' || verb === 'MEASURE' || verb === 'DI') {
+    return { type: 'set_tool', toolId: 'measure', verb };
+  }
+
+  // 8. Dimensions: DIMLIN, DIM, DAL, DCO
+  if (verb === 'DIMLIN' || verb === 'DIM' || verb === 'DIMENSION') {
+    return { type: 'set_tool', toolId: 'dimension', verb };
+  }
+  if (verb === 'DAL') {
+    return { type: 'set_tool', toolId: 'dim_aligned', verb };
+  }
+  if (verb === 'DCO') {
+    return { type: 'set_tool', toolId: 'dim_chain', verb };
+  }
+
+  // 9. Views: PLAN, TOP, FRONT, ELEV, PERSP, 3D, 4VIEW, SPLIT
+  if (verb === 'PLAN' || verb === 'TOP') {
+    return { type: 'set_view', view: 'top', verb, description: 'Switch to Top 2D Plan View' };
+  }
+  if (verb === 'FRONT' || verb === 'ELEV' || verb === 'SOUTH') {
+    return { type: 'set_view', view: 'south', verb, description: 'Switch to South Elevation View' };
+  }
+  if (verb === 'PERSP' || verb === 'PERSPECTIVE' || verb === '3D') {
+    return { type: 'set_view', view: 'perspective', verb, description: 'Switch to 3D Massing Perspective View' };
+  }
+  if (verb === '4VIEW' || verb === 'SPLIT' || verb === 'QUAD' || verb === 'FOURVIEW') {
+    return { type: 'set_view', view: '4view', verb, description: 'Switch to Rhino 4-Quadrant Viewport' };
+  }
+
+  // 10. Push / Pull massing
+  if (verb === 'PUSHPULL' || verb === 'PUSH' || verb === 'PULL' || verb === 'EXTRUDE') {
+    return { type: 'set_tool', toolId: 'pushpull', verb, description: 'Activate Push/Pull 3D Massing Extrusion' };
+  }
+
+  // 11. Hatch / Material Fill: HATCH [pattern]
+  if (verb === 'HATCH' || verb === 'H' || verb === 'POCHE') {
+    const pattern = args[0] ? args[0].toLowerCase() : 'brick';
+    return {
+      type: 'set_hatch',
+      verb,
+      pattern,
+      description: `Set active architectural hatch pattern to ${pattern}`
+    };
+  }
+
+  // 12. Zoom Extents / Fit: ZE, ZOOM E, FIT
+  if (verb === 'ZE' || (verb === 'ZOOM' && args[0] && args[0].toUpperCase() === 'E') || verb === 'FIT') {
+    return { type: 'zoom_extents', verb, description: 'Zoom Extents (Fit to canvas)' };
+  }
+
+  // 13. Undo / Redo
+  if (verb === 'U' || verb === 'UNDO') {
+    return { type: 'undo', verb };
+  }
+  if (verb === 'REDO') {
+    return { type: 'redo', verb };
+  }
+
+  // 14. Delete / Erase: E, ERASE, DEL
+  if (verb === 'E' || verb === 'ERASE' || verb === 'DEL' || verb === 'DELETE') {
+    return { type: 'delete', verb };
+  }
+
+  // 15. Default lookup in STUDIO_TOOL_CATALOG
+  const matched = STUDIO_TOOL_CATALOG.find(t =>
+    (t.commandAlias && t.commandAlias.toUpperCase() === verb) ||
+    (t.shortcut && t.shortcut.toUpperCase() === verb) ||
+    t.id.toUpperCase() === verb
+  );
+
+  if (matched) {
+    return {
+      type: 'set_tool',
+      toolId: matched.id,
+      verb,
+      tool: matched,
+      description: matched.description
+    };
+  }
+
+  return {
+    type: 'unknown',
+    verb,
+    raw,
+    description: `Unknown command: ${verb}`
+  };
+}
+
+/**
+ * Searches across all tools, categories, commands, and ribbon tabs with fuzzy keyword matching.
  * @param {string} query Search text
  * @param {Object} [options] Filter options (e.g. persona)
  * @returns {Array<Object>} Matching tool descriptors ranked by relevance
@@ -15369,14 +15569,63 @@ function searchStudioTools(query, options = {}) {
   if (q.length === 0) return [];
 
   const filterPersona = options.persona || null;
-
   const results = [];
 
-  for (const tool of STUDIO_TOOL_CATALOG) {
-    if (filterPersona && !tool.personas.includes(filterPersona) && !tool.personas.includes('all')) {
-      // Allow searching other personas, but deprioritize
-    }
+  // 1. Search Ribbon Tabs across personas
+  for (const [personaKey, pConfig] of Object.entries(PERSONA_RIBBON_CONFIGS)) {
+    if (!pConfig || !Array.isArray(pConfig.tabs)) continue;
+    const personaMeta = STUDIO_PERSONAS[personaKey] || { shortLabel: personaKey, name: personaKey };
+    for (const tab of pConfig.tabs) {
+      const tabLabelMatch = tab.label.toLowerCase().includes(q);
+      const tabIdMatch = tab.id.toLowerCase().includes(q);
+      if (tabLabelMatch || tabIdMatch) {
+        let score = 75;
+        if (tab.label.toLowerCase() === q || tab.id.toLowerCase() === q) score += 40;
+        if (filterPersona === personaKey) score += 20;
 
+        results.push({
+          id: `tab_${personaKey}_${tab.id}`,
+          tabId: tab.id,
+          personaId: personaKey,
+          isRibbonTab: true,
+          name: `${personaMeta.shortLabel} Tab: ${tab.label}`,
+          icon: '📑',
+          category: 'ribbon_tabs',
+          categoryName: 'Ribbon Tabs',
+          categoryIcon: '📑',
+          description: `Switch to ${personaMeta.shortLabel} ribbon tab "${tab.label}"`,
+          personas: [personaKey],
+          score
+        });
+      }
+    }
+  }
+
+  // 2. Search Categories
+  for (const cat of TOOL_CATEGORIES) {
+    const catNameMatch = cat.name.toLowerCase().includes(q);
+    const catIdMatch = cat.id.toLowerCase().includes(q);
+    if (catNameMatch || catIdMatch) {
+      let score = 65;
+      if (cat.name.toLowerCase() === q || cat.id.toLowerCase() === q) score += 35;
+      results.push({
+        id: `cat_${cat.id}`,
+        categoryId: cat.id,
+        isCategory: true,
+        name: `Category: ${cat.name}`,
+        icon: cat.icon,
+        category: cat.id,
+        categoryName: 'Categories',
+        categoryIcon: cat.icon,
+        description: cat.description,
+        personas: ['all'],
+        score
+      });
+    }
+  }
+
+  // 3. Search Master Tool Catalog
+  for (const tool of STUDIO_TOOL_CATALOG) {
     const nameMatch = tool.name.toLowerCase().includes(q);
     const idMatch = tool.id.toLowerCase().includes(q);
     const aliasMatch = tool.commandAlias ? tool.commandAlias.toLowerCase().startsWith(q) : false;
@@ -31244,14 +31493,14 @@ function renderStudioPalette(container, options = {}) {
       }
 
       searchResults.innerHTML = matches.map(m => `
-        <button type="button" class="search-result-item" data-tool="${m.id}">
+        <button type="button" class="search-result-item" data-tool="${m.id}" data-is-tab="${m.isRibbonTab ? '1' : '0'}" data-tab-id="${m.tabId || ''}" data-persona-id="${m.personaId || ''}" data-is-cat="${m.isCategory ? '1' : '0'}" data-cat-id="${m.categoryId || ''}">
           <span class="search-item-icon">${m.icon}</span>
           <div class="search-item-details">
             <div class="search-item-title-row">
               <span class="search-item-name">${m.name}</span>
               ${m.shortcut ? `<kbd class="search-item-kbd">${m.shortcut}</kbd>` : ''}
             </div>
-            <span class="search-item-cat">${m.categoryIcon} ${m.categoryName} · [${m.commandAlias || m.id}]</span>
+            <span class="search-item-cat">${m.categoryIcon || '📁'} ${m.categoryName || 'Tools'}${m.commandAlias ? ` · [${m.commandAlias}]` : ''}</span>
           </div>
         </button>
       `).join('');
@@ -31259,11 +31508,32 @@ function renderStudioPalette(container, options = {}) {
 
       searchResults.querySelectorAll('.search-result-item').forEach(itemBtn => {
         itemBtn.addEventListener('click', () => {
-          const toolId = itemBtn.dataset.tool;
+          const isTab = itemBtn.dataset.isTab === '1';
+          const isCat = itemBtn.dataset.isCat === '1';
           searchResults.style.display = 'none';
           searchInput.value = '';
-          if (typeof options.onSelectTool === 'function') {
-            options.onSelectTool(toolId);
+
+          if (isTab) {
+            const tabId = itemBtn.dataset.tabId;
+            const pId = itemBtn.dataset.personaId;
+            if (typeof options.onSelectRibbonTab === 'function') {
+              options.onSelectRibbonTab(tabId, pId);
+            }
+          } else if (isCat) {
+            const catId = itemBtn.dataset.catId;
+            const catSection = container.querySelector(`.palette-category-section[data-category="${catId}"]`);
+            if (catSection) {
+              const body = catSection.querySelector('.palette-cat-body');
+              const arr = catSection.querySelector('.palette-cat-arrow');
+              if (body) body.style.display = 'grid';
+              if (arr) arr.textContent = '▾';
+              catSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+          } else {
+            const toolId = itemBtn.dataset.tool;
+            if (typeof options.onSelectTool === 'function') {
+              options.onSelectTool(toolId);
+            }
           }
         });
       });
@@ -31533,7 +31803,8 @@ function renderStudioCommandBar(container, options = {}) {
       <!-- AutoCAD / Rhino Command Prompt -->
       <div class="commandbar-cli-wrap">
         <label for="commandbar-input" class="commandbar-label">Command:</label>
-        <input type="text" id="commandbar-input" class="commandbar-input" placeholder="Type a command or alias (e.g. 'L', 'REC', 'WALL', 'STAIR', 'DIST')..." autocomplete="off" spellcheck="false" />
+        <input type="text" id="commandbar-input" class="commandbar-input" placeholder="Type a command or alias (e.g. 'REC 6 4', 'WALL 5', 'STAIR', '4VIEW', 'HELP')..." autocomplete="off" spellcheck="false" />
+        <span id="commandbar-history-echo" class="commandbar-history-echo" style="display: none; font-size: 0.70rem; color: var(--color-warning, #fbbf24); font-family: var(--font-mono); white-space: nowrap;"></span>
       </div>
 
       <!-- Drafting Aids Toggles (Osnap, Ortho, Grid) -->
@@ -31568,23 +31839,26 @@ function renderStudioCommandBar(container, options = {}) {
     cliInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        const cmd = cliInput.value.trim().toUpperCase();
+        const raw = cliInput.value.trim();
         cliInput.value = '';
-        if (!cmd) return;
+        if (!raw) return;
 
-        // Lookup tool matching commandAlias or id
-        const matchedTool = STUDIO_TOOL_CATALOG.find(t =>
-          (t.commandAlias && t.commandAlias.toUpperCase() === cmd) ||
-          (t.shortcut && t.shortcut.toUpperCase() === cmd) ||
-          t.id.toUpperCase() === cmd
-        );
+        const parsed = parseStudioCommand(raw, { coords: currentCoords });
+        if (parsed) {
+          const historyEl = container.querySelector('#commandbar-history-echo');
+          if (historyEl) {
+            historyEl.textContent = `Command: ${raw} [${parsed.type.toUpperCase()}]`;
+            historyEl.style.display = 'inline-block';
+            setTimeout(() => { if (historyEl) historyEl.style.display = 'none'; }, 4000);
+          }
 
-        if (matchedTool) {
-          if (typeof options.onExecuteCommand === 'function') {
-            options.onExecuteCommand(matchedTool.id);
+          if (typeof options.onExecuteParsedCommand === 'function') {
+            options.onExecuteParsedCommand(parsed);
+          } else if (typeof options.onExecuteCommand === 'function') {
+            options.onExecuteCommand(parsed.toolId || parsed.verb || raw);
           }
         } else if (typeof options.onUnknownCommand === 'function') {
-          options.onUnknownCommand(cmd);
+          options.onUnknownCommand(raw);
         }
       }
     });
@@ -32058,6 +32332,16 @@ function createPlanView(context) {
         name: docName,
         type: 'sheet',
         sheetConfig: createSheetConfig({ sheetNumber: `A-10${count}`, sheetTitle: 'GROUND FLOOR PLAN' })
+      };
+    } else if (type === 'view_4split' || type === '4view') {
+      const docName = (typeof name === 'string' && name.trim())
+        ? name.trim()
+        : '4-Viewport Split';
+      newDoc = {
+        id: docId,
+        name: docName,
+        type: 'view_4split',
+        camera: { azimuth: 45, elevation: 35.264, zoom: 24, panX: svg.width / 4, panY: svg.height / 4 + 20 }
       };
     } else {
       const count = state.plan.documents.filter(d => d.type === '2d_plan' || d.type === '2d').length + 1;
@@ -32587,10 +32871,47 @@ function createPlanView(context) {
       else createDocument('South Elevation', 'elevation');
       return;
     }
-    if (toolId === 'view_perspective' || toolId === 'pushpull' || toolId === 'massing' || toolId === 'box' || toolId === 'extrude' || toolId === 'loft') {
+    if (toolId === 'view_perspective' || toolId === 'massing' || toolId === 'box' || toolId === 'extrude' || toolId === 'loft') {
       const mDoc = state.plan.documents && state.plan.documents.find(d => d.type === '3d_massing');
       if (mDoc) switchDocument(mDoc.id);
       else createDocument('3D Massing Preview', '3d_massing');
+      return;
+    }
+    if (toolId === 'view_4split' || toolId === '4view') {
+      const splitDoc = state.plan.documents && state.plan.documents.find(d => d.type === 'view_4split' || d.type === '4view');
+      if (splitDoc) switchDocument(splitDoc.id);
+      else createDocument('4-Viewport Split', 'view_4split');
+      showToast('Switched to Rhino 4-Viewport Split (Top, Perspective, Front, Right)');
+      return;
+    }
+    if (toolId === 'pushpull') {
+      const cur = getActiveDocument();
+      if (cur && cur.type !== '3d_massing') {
+        const mDoc = state.plan.documents && state.plan.documents.find(d => d.type === '3d_massing');
+        if (mDoc) switchDocument(mDoc.id);
+        else createDocument('3D Massing Preview', '3d_massing');
+        showToast('Push/Pull Massing: 3D extruded volume active');
+        return;
+      }
+      setTool('pushpull');
+      return;
+    }
+    if (toolId === 'hatch') {
+      setTool('hatch');
+      showToast('Architectural Hatch active. Pick pattern in toolbar & click room.');
+      renderContextualToolbar();
+      return;
+    }
+    if (toolId === 'material_paint') {
+      setTool('material_paint');
+      showToast('Material Paint active. Pick finish in toolbar & click room.');
+      renderContextualToolbar();
+      return;
+    }
+    if (toolId === 'watercolor_brush') {
+      setTool('watercolor_brush');
+      showToast('Presentation Brush active. Pick wash in toolbar & click room.');
+      renderContextualToolbar();
       return;
     }
     if (toolId === 'section') {
@@ -32701,6 +33022,14 @@ function createPlanView(context) {
         activeToolId,
         onSelectTool: (toolId) => {
           handleStudioToolAction(toolId);
+        },
+        onSelectRibbonTab: (tabId, personaId) => {
+          if (personaId && personaId !== state.activePersona) {
+            state.activePersona = personaId;
+          }
+          state.activeRibbonTab = tabId;
+          renderStudioComponents();
+          showToast(`Switched to tab: ${tabId}`);
         }
       });
     }
@@ -32715,6 +33044,116 @@ function createPlanView(context) {
         ortho: state.plan.ortho !== false,
         onExecuteCommand: (cmd) => {
           handleStudioToolAction(cmd);
+        },
+        onExecuteParsedCommand: (parsed) => {
+          if (!parsed) return;
+          if (parsed.type === 'create_room') {
+            const w = parsed.width || 4;
+            const d = parsed.depth || 3;
+            const origin = currentMouseWorld || { x: 2, y: 2 };
+            const r = createRoom({
+              name: parsed.name || `Room ${w}x${d}m`,
+              x: snapToGrid(origin.x, state.plan.grid),
+              y: snapToGrid(origin.y, state.plan.grid),
+              width: w,
+              depth: d
+            });
+            const cmd = entityAddRemoveCommand(entities(), r, `create ${r.name}`);
+            cmd.redo();
+            history.push(cmd);
+            state.plan.selectedIds = new Set([r.id]);
+            showToast(`Created Room: ${r.name} (${(w * d).toFixed(1)} m²)`, 'success');
+            render();
+            updateStudioCPanels();
+            return;
+          }
+          if (parsed.type === 'create_wall_length') {
+            const len = parsed.length || 5;
+            const origin = currentMouseWorld || { x: 2, y: 2 };
+            const wall = createWall({
+              x1: snapToGrid(origin.x, state.plan.grid),
+              y1: snapToGrid(origin.y, state.plan.grid),
+              x2: snapToGrid(origin.x + len, state.plan.grid),
+              y2: snapToGrid(origin.y, state.plan.grid),
+              thickness: 0.2
+            });
+            const cmd = entityAddRemoveCommand(entities(), wall, `create wall ${len}m`);
+            cmd.redo();
+            history.push(cmd);
+            state.plan.selectedIds = new Set([wall.id]);
+            showToast(`Created Wall: ${len}m`, 'success');
+            render();
+            updateStudioCPanels();
+            return;
+          }
+          if (parsed.type === 'create_wall') {
+            const wall = createWall({
+              x1: parsed.x1,
+              y1: parsed.y1,
+              x2: parsed.x2,
+              y2: parsed.y2,
+              thickness: 0.2
+            });
+            const cmd = entityAddRemoveCommand(entities(), wall, `create wall`);
+            cmd.redo();
+            history.push(cmd);
+            state.plan.selectedIds = new Set([wall.id]);
+            showToast(`Created Wall from (${parsed.x1},${parsed.y1}) to (${parsed.x2},${parsed.y2})`, 'success');
+            render();
+            updateStudioCPanels();
+            return;
+          }
+          if (parsed.type === 'create_stair') {
+            const risers = parsed.risers || 16;
+            const width = parsed.width || 1.1;
+            const origin = currentMouseWorld || { x: 2, y: 4 };
+            const stair = createStairEntity({
+              x: snapToGrid(origin.x, state.plan.grid),
+              y: snapToGrid(origin.y, state.plan.grid),
+              width: width,
+              riserCount: risers
+            });
+            const cmd = entityAddRemoveCommand(entities(), stair, `create stair`);
+            cmd.redo();
+            history.push(cmd);
+            state.plan.selectedIds = new Set([stair.id]);
+            showToast(`Created Stair: ${risers} risers, ${width}m width`, 'success');
+            render();
+            updateStudioCPanels();
+            return;
+          }
+          if (parsed.type === 'set_hatch') {
+            state.activeMaterial = parsed.pattern || 'brick';
+            setTool('hatch');
+            showToast(`Active Hatch: ${state.activeMaterial}. Click a room to apply.`);
+            renderContextualToolbar();
+            return;
+          }
+          if (parsed.type === 'set_view') {
+            if (parsed.view === 'top') handleStudioToolAction('view_top');
+            else if (parsed.view === 'south') handleStudioToolAction('view_south');
+            else if (parsed.view === 'perspective') handleStudioToolAction('view_perspective');
+            else if (parsed.view === '4view') handleStudioToolAction('view_4split');
+            return;
+          }
+          if (parsed.type === 'zoom_extents') {
+            fitToContent();
+            return;
+          }
+          if (parsed.type === 'undo') { undo(); return; }
+          if (parsed.type === 'redo') { redo(); return; }
+          if (parsed.type === 'delete') { deleteSelected(); return; }
+          if (parsed.type === 'help') {
+            showToast('Commands: REC [w] [d], WALL [len], STAIR [r] [w], HATCH [pat], PLAN, PERSP, 4VIEW, DIST, HELP');
+            return;
+          }
+          if (parsed.type === 'set_tool') {
+            handleStudioToolAction(parsed.toolId || parsed.verb);
+            return;
+          }
+          if (parsed.type === 'unknown') {
+            showToast(`Unknown command: "${parsed.verb}". Type HELP for command list.`, 'warning');
+          }
         },
         onToggleSnap: () => {
           toggleSnap();
@@ -32748,6 +33187,81 @@ function createPlanView(context) {
         `;
         bar.querySelector('#ctx-close-poly')?.addEventListener('click', finishPolyRoom);
         bar.querySelector('#ctx-cancel-poly')?.addEventListener('click', cancelPolyRoom);
+        return;
+      }
+
+      if (state.plan.tool === 'hatch') {
+        bar.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="context-tag-badge" style="background: rgba(244,63,94,0.18); color: #f43f5e; border-color: rgba(244,63,94,0.4);">ARCHITECTURAL HATCH</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">Pattern:</span>
+            ${['brick', 'concrete', 'diagonal', 'crosshatch', 'wood', 'terrazzo'].map(p => `
+              <button type="button" class="context-action-btn ${(state.activeMaterial || 'brick') === p ? 'active' : ''}" data-hatch="${p}">
+                <span>${p.toUpperCase()}</span>
+              </button>
+            `).join('')}
+            <span style="font-size: 0.70rem; color: var(--text-muted);">(Click room on canvas to apply)</span>
+            <button type="button" class="context-action-btn danger" id="ctx-exit-hatch"><span>✕ Exit</span></button>
+          </div>
+        `;
+        bar.querySelectorAll('[data-hatch]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            state.activeMaterial = btn.dataset.hatch;
+            renderContextualToolbar();
+            showToast(`Selected Hatch: ${btn.dataset.hatch}`);
+          });
+        });
+        bar.querySelector('#ctx-exit-hatch')?.addEventListener('click', () => setTool('select'));
+        return;
+      }
+
+      if (state.plan.tool === 'material_paint' || state.plan.tool === 'watercolor_brush') {
+        bar.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="context-tag-badge" style="background: rgba(59,130,246,0.18); color: #3b82f6; border-color: rgba(59,130,246,0.4);">MATERIAL PAINT</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">Finish:</span>
+            ${[
+              { name: 'Wood', color: 'rgba(217, 119, 6, 0.25)' },
+              { name: 'Concrete', color: 'rgba(100, 116, 139, 0.25)' },
+              { name: 'Garden', color: 'rgba(16, 185, 129, 0.25)' },
+              { name: 'Pool', color: 'rgba(6, 182, 212, 0.25)' },
+              { name: 'Slate', color: 'rgba(59, 130, 246, 0.25)' }
+            ].map(m => `
+              <button type="button" class="context-action-btn ${(state.activeMaterialName || 'Slate') === m.name ? 'active' : ''}" data-mat-name="${m.name}" data-mat-color="${m.color}">
+                <span>${m.name}</span>
+              </button>
+            `).join('')}
+            <span style="font-size: 0.70rem; color: var(--text-muted);">(Click room on canvas to paint)</span>
+            <button type="button" class="context-action-btn danger" id="ctx-exit-paint"><span>✕ Exit</span></button>
+          </div>
+        `;
+        bar.querySelectorAll('[data-mat-name]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            state.activeMaterialName = btn.dataset.matName;
+            state.activePaintColor = btn.dataset.matColor;
+            renderContextualToolbar();
+            showToast(`Selected Material Finish: ${btn.dataset.matName}`);
+          });
+        });
+        bar.querySelector('#ctx-exit-paint')?.addEventListener('click', () => setTool('select'));
+        return;
+      }
+
+      if (state.plan.tool === 'pushpull') {
+        bar.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="context-tag-badge" style="background: rgba(194,120,3,0.2); color: #f59e0b; border-color: rgba(194,120,3,0.4);">SKETCHUP PUSH / PULL</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">Click room to extrude to 3D massing:</span>
+            <button type="button" class="context-action-btn" id="ctx-extrude-std"><span>2.7m Standard</span></button>
+            <button type="button" class="context-action-btn active" id="ctx-extrude-high"><span>3.0m High Ceiling</span></button>
+            <button type="button" class="context-action-btn" id="ctx-extrude-double"><span>4.0m Double Height</span></button>
+            <button type="button" class="context-action-btn danger" id="ctx-exit-pushpull"><span>✕ Exit</span></button>
+          </div>
+        `;
+        bar.querySelector('#ctx-extrude-std')?.addEventListener('click', () => handleStudioToolAction('view_perspective'));
+        bar.querySelector('#ctx-extrude-high')?.addEventListener('click', () => handleStudioToolAction('view_perspective'));
+        bar.querySelector('#ctx-extrude-double')?.addEventListener('click', () => handleStudioToolAction('view_perspective'));
+        bar.querySelector('#ctx-exit-pushpull')?.addEventListener('click', () => setTool('select'));
         return;
       }
 
@@ -33791,6 +34305,203 @@ function createPlanView(context) {
     }
   }
 
+  function render4ViewportSplit(doc) {
+    dom.planSvg.setAttribute('viewBox', `0 0 ${svg.width} ${svg.height}`);
+    const halfW = Math.floor(svg.width / 2);
+    const halfH = Math.floor(svg.height / 2);
+
+    const planDoc = state.plan.documents.find(d => d.type === '2d_plan' || d.type === '2d') || doc;
+    const planEntities = planDoc ? (planDoc.entities || []) : [];
+
+    // 1. Top View (Plan)
+    let minX = 0, maxX = 12, minY = 0, maxY = 10;
+    for (const e of planEntities) {
+      if (typeof e.x === 'number' && typeof e.width === 'number') {
+        minX = Math.min(minX, e.x);
+        maxX = Math.max(maxX, e.x + e.width);
+      }
+      if (typeof e.y === 'number' && typeof e.depth === 'number') {
+        minY = Math.min(minY, e.y);
+        maxY = Math.max(maxY, e.y + e.depth);
+      }
+      if (typeof e.x1 === 'number' && typeof e.x2 === 'number') {
+        minX = Math.min(minX, e.x1, e.x2);
+        maxX = Math.max(maxX, e.x1, e.x2);
+        minY = Math.min(minY, e.y1, e.y2);
+        maxY = Math.max(maxY, e.y1, e.y2);
+      }
+    }
+    const pad = 2;
+    minX -= pad; maxX += pad; minY -= pad; maxY += pad;
+    const rangeX = Math.max(12, maxX - minX);
+    const rangeY = Math.max(10, maxY - minY);
+    const topScale = Math.min((halfW - 40) / rangeX, (halfH - 40) / rangeY);
+
+    const topToSvg = (wx, wy) => ({
+      x: 20 + (wx - minX) * topScale,
+      y: halfH - 20 - (wy - minY) * topScale
+    });
+
+    let topEntitiesMarkup = '';
+    for (const e of planEntities) {
+      if (e.kind === 'room' && typeof e.x === 'number') {
+        const p1 = topToSvg(e.x, e.y + e.depth);
+        const p2 = topToSvg(e.x + e.width, e.y);
+        const cx = 20 + (e.x + e.width / 2 - minX) * topScale;
+        const cy = halfH - 20 - (e.y + e.depth / 2 - minY) * topScale;
+        topEntitiesMarkup += `
+          <rect x="${p1.x.toFixed(1)}" y="${p1.y.toFixed(1)}" width="${(p2.x - p1.x).toFixed(1)}" height="${(p1.y - p2.y).toFixed(1)}" fill="rgba(74, 222, 128, 0.12)" stroke="#4ade80" stroke-width="1.5" />
+          <text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" text-anchor="middle" font-size="10" fill="#cbd5e1" font-family="var(--font-mono)">${escapeHtml(e.name || 'Room')}</text>
+        `;
+      } else if (e.kind === 'wall' && typeof e.x1 === 'number') {
+        const p1 = topToSvg(e.x1, e.y1);
+        const p2 = topToSvg(e.x2, e.y2);
+        topEntitiesMarkup += `<line x1="${p1.x.toFixed(1)}" y1="${p1.y.toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${p2.y.toFixed(1)}" stroke="#38bdf8" stroke-width="2.5" />`;
+      }
+    }
+
+    // 2. Perspective View (3D Massing)
+    const camera = { azimuth: 45, elevation: 35.264, zoom: 18, panX: halfW + halfW / 2, panY: halfH / 2 + 15 };
+    const massingFaces = buildMassing3DModel(planEntities, { wallHeight: 3.0 });
+    const sortedFaces = projectAndSortFaces(massingFaces, camera);
+    const facesMarkup = sortedFaces.map(f => {
+      const pts = f.points.map(pt => `${pt[0].toFixed(1)},${pt[1].toFixed(1)}`).join(' ');
+      return `<polygon points="${pts}" fill="${f.color}" stroke="${f.stroke}" stroke-width="1" opacity="${f.opacity}" />`;
+    }).join('\n');
+
+    // 3. Front Elevation (South)
+    const southModel = generateBuildingElevation(planEntities, 'south');
+    const southSvg = generateElevationSVG(southModel, 'south', { scale: 20 });
+    const southInner = (southSvg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i) || [])[1] || '';
+
+    // 4. Right Elevation (East)
+    const eastModel = generateBuildingElevation(planEntities, 'east');
+    const eastSvg = generateElevationSVG(eastModel, 'east', { scale: 20 });
+    const eastInner = (eastSvg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i) || [])[1] || '';
+
+    dom.planSvg.innerHTML = `
+      <!-- Viewport Backgrounds -->
+      <rect x="0" y="0" width="${halfW}" height="${halfH}" fill="#0f172a" />
+      <rect x="${halfW}" y="0" width="${halfW}" height="${halfH}" fill="#0b1120" />
+      <rect x="0" y="${halfH}" width="${halfW}" height="${halfH}" fill="#0d1527" />
+      <rect x="${halfW}" y="${halfH}" width="${halfW}" height="${halfH}" fill="#0f172a" />
+
+      <!-- Quadrant 1: Top View -->
+      <g class="quadrant-top">
+        ${Array.from({ length: 9 }).map((_, i) => {
+          const gx = 20 + i * (halfW - 40) / 8;
+          const gy = 20 + i * (halfH - 40) / 8;
+          return `<line x1="${gx.toFixed(1)}" y1="20" x2="${gx.toFixed(1)}" y2="${halfH - 20}" stroke="rgba(255,255,255,0.06)" stroke-width="0.7"/>
+                  <line x1="20" y1="${gy.toFixed(1)}" x2="${halfW - 20}" y2="${gy.toFixed(1)}" stroke="rgba(255,255,255,0.06)" stroke-width="0.7"/>`;
+        }).join('')}
+        ${topEntitiesMarkup}
+        <g class="quadrant-pill" data-quadrant="top" cursor="pointer">
+          <rect x="12" y="12" width="130" height="24" rx="4" fill="rgba(15, 23, 42, 0.9)" stroke="#057a55" stroke-width="1.2" />
+          <text x="22" y="28" fill="#4ade80" font-size="11" font-weight="bold" font-family="var(--font-mono)">🦏 Top [Plan]</text>
+        </g>
+      </g>
+
+      <!-- Quadrant 2: Perspective View -->
+      <g class="quadrant-perspective">
+        <g class="massing-faces">
+          ${facesMarkup}
+        </g>
+        <g class="quadrant-pill" data-quadrant="perspective" cursor="pointer">
+          <rect x="${halfW + 12}" y="12" width="145" height="24" rx="4" fill="rgba(11, 17, 32, 0.9)" stroke="#057a55" stroke-width="1.2" />
+          <text x="${halfW + 22}" y="28" fill="#38bdf8" font-size="11" font-weight="bold" font-family="var(--font-mono)">👁️ Perspective</text>
+        </g>
+      </g>
+
+      <!-- Quadrant 3: Front Elevation (South) -->
+      <g class="quadrant-front" transform="translate(10, ${halfH + 10})">
+        <svg x="0" y="0" width="${halfW - 20}" height="${halfH - 20}" viewBox="0 0 ${halfW} ${halfH}">
+          ${southInner}
+        </svg>
+        <g class="quadrant-pill" data-quadrant="front" cursor="pointer">
+          <rect x="12" y="12" width="145" height="24" rx="4" fill="rgba(13, 21, 39, 0.9)" stroke="#057a55" stroke-width="1.2" />
+          <text x="22" y="28" fill="#fbbf24" font-size="11" font-weight="bold" font-family="var(--font-mono)">🏛️ Front [South]</text>
+        </g>
+      </g>
+
+      <!-- Quadrant 4: Right Elevation (East) -->
+      <g class="quadrant-right" transform="translate(${halfW + 10}, ${halfH + 10})">
+        <svg x="0" y="0" width="${halfW - 20}" height="${halfH - 20}" viewBox="0 0 ${halfW} ${halfH}">
+          ${eastInner}
+        </svg>
+        <g class="quadrant-pill" data-quadrant="right" cursor="pointer">
+          <rect x="12" y="12" width="145" height="24" rx="4" fill="rgba(15, 23, 42, 0.9)" stroke="#057a55" stroke-width="1.2" />
+          <text x="22" y="28" fill="#a78bfa" font-size="11" font-weight="bold" font-family="var(--font-mono)">📐 Right [East]</text>
+        </g>
+      </g>
+
+      <!-- Rhino Quadrant Dividers -->
+      <line x1="${halfW}" y1="0" x2="${halfW}" y2="${svg.height}" stroke="#057a55" stroke-width="2" opacity="0.8" />
+      <line x1="0" y1="${halfH}" x2="${svg.width}" y2="${halfH}" stroke="#057a55" stroke-width="2" opacity="0.8" />
+      <circle cx="${halfW}" cy="${halfH}" r="5" fill="#057a55" stroke="#10b981" stroke-width="1.5" />
+    `;
+
+    // Contextual toolbar for 4-viewport split
+    const ctxBar = dom.planContextualToolbar || document.getElementById('plan-contextual-toolbar');
+    if (ctxBar) {
+      ctxBar.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span class="context-tag-badge" style="background: rgba(5, 122, 85, 0.2); color: #10b981; border-color: #057a55;">RHINO 4-VIEWPORT SPLIT</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">Click header or button to maximize:</span>
+            <button type="button" class="result-action-btn" id="btn-4v-top" style="font-size: 0.68rem; padding: 2px 6px;">🔲 Maximize Top</button>
+            <button type="button" class="result-action-btn" id="btn-4v-persp" style="font-size: 0.68rem; padding: 2px 6px;">🔲 Maximize Perspective</button>
+            <button type="button" class="result-action-btn" id="btn-4v-front" style="font-size: 0.68rem; padding: 2px 6px;">🔲 Maximize Front</button>
+            <button type="button" class="result-action-btn" id="btn-4v-right" style="font-size: 0.68rem; padding: 2px 6px;">🔲 Maximize Right</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" id="btn-4v-exit" class="result-action-btn primary" style="font-size: 0.68rem; padding: 2px 8px;">✕ Return to 2D Plan</button>
+          </div>
+        </div>
+      `;
+
+      ctxBar.querySelector('#btn-4v-top')?.addEventListener('click', () => handleStudioToolAction('view_top'));
+      ctxBar.querySelector('#btn-4v-persp')?.addEventListener('click', () => handleStudioToolAction('view_perspective'));
+      ctxBar.querySelector('#btn-4v-front')?.addEventListener('click', () => handleStudioToolAction('view_south'));
+      ctxBar.querySelector('#btn-4v-right')?.addEventListener('click', () => {
+        const eDoc = state.plan.documents && state.plan.documents.find(d => d.type === 'elevation');
+        if (eDoc) {
+          eDoc.elevationDirection = 'east';
+          eDoc.name = 'East Elevation';
+          switchDocument(eDoc.id);
+        } else {
+          createDocument('East Elevation', 'elevation');
+        }
+      });
+      ctxBar.querySelector('#btn-4v-exit')?.addEventListener('click', () => handleStudioToolAction('view_top'));
+    }
+
+    // Quadrant pill click listeners
+    dom.planSvg.querySelectorAll('.quadrant-pill').forEach(pill => {
+      pill.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const quad = pill.dataset.quadrant;
+        if (quad === 'top') handleStudioToolAction('view_top');
+        else if (quad === 'perspective') handleStudioToolAction('view_perspective');
+        else if (quad === 'front') handleStudioToolAction('view_south');
+        else if (quad === 'right') {
+          const eDoc = state.plan.documents && state.plan.documents.find(d => d.type === 'elevation');
+          if (eDoc) {
+            eDoc.elevationDirection = 'east';
+            eDoc.name = 'East Elevation';
+            switchDocument(eDoc.id);
+          } else {
+            createDocument('East Elevation', 'elevation');
+          }
+        }
+      });
+    });
+
+    if (dom.planModeLabel) dom.planModeLabel.textContent = '4-VIEWPORT';
+    if (dom.planStatusBadge) {
+      dom.planStatusBadge.textContent = `Rhino 4-Split · 2x2 Ortho & 3D`;
+    }
+  }
+
   // ------------------------------------------------------------------
   // Rendering
   // ------------------------------------------------------------------
@@ -33799,6 +34510,10 @@ function createPlanView(context) {
     syncSvgSize();
 
     const doc = getActiveDocument();
+    if (doc && (doc.type === 'view_4split' || doc.type === '4view')) {
+      render4ViewportSplit(doc);
+      return;
+    }
     if (doc && doc.type === '3d_massing') {
       render3DMassing(doc);
       return;
@@ -33862,6 +34577,26 @@ function createPlanView(context) {
           <polygon points="9,2 11,4 10,5" fill="none" stroke="var(--text-muted, #888)" stroke-width="0.7" opacity="0.5"/>
           <polygon points="3,9 4,11 2,11" fill="none" stroke="var(--text-muted, #888)" stroke-width="0.7" opacity="0.5"/>
         </pattern>
+        <pattern id="hatch-wood" width="16" height="16" patternUnits="userSpaceOnUse">
+          <rect width="16" height="16" fill="rgba(217, 119, 6, 0.08)"/>
+          <line x1="0" y1="4" x2="16" y2="4" stroke="rgba(217, 119, 6, 0.4)" stroke-width="0.7"/>
+          <line x1="0" y1="8" x2="16" y2="8" stroke="rgba(217, 119, 6, 0.4)" stroke-width="0.7"/>
+          <line x1="0" y1="12" x2="16" y2="12" stroke="rgba(217, 119, 6, 0.4)" stroke-width="0.7"/>
+          <line x1="8" y1="0" x2="8" y2="4" stroke="rgba(217, 119, 6, 0.4)" stroke-width="0.7"/>
+          <line x1="4" y1="4" x2="4" y2="8" stroke="rgba(217, 119, 6, 0.4)" stroke-width="0.7"/>
+          <line x1="12" y1="8" x2="12" y2="12" stroke="rgba(217, 119, 6, 0.4)" stroke-width="0.7"/>
+        </pattern>
+        <pattern id="hatch-terrazzo" width="12" height="12" patternUnits="userSpaceOnUse">
+          <rect width="12" height="12" fill="rgba(99, 102, 241, 0.06)"/>
+          <rect x="0" y="0" width="12" height="12" fill="none" stroke="rgba(99, 102, 241, 0.25)" stroke-width="0.6"/>
+          <circle cx="3" cy="4" r="0.8" fill="rgba(99, 102, 241, 0.5)"/>
+          <circle cx="9" cy="8" r="0.8" fill="rgba(99, 102, 241, 0.5)"/>
+        </pattern>
+        <pattern id="hatch-wash" width="20" height="20" patternUnits="userSpaceOnUse">
+          <rect width="20" height="20" fill="rgba(59, 130, 246, 0.12)"/>
+          <circle cx="5" cy="5" r="3" fill="rgba(59, 130, 246, 0.08)"/>
+          <circle cx="15" cy="12" r="4" fill="rgba(59, 130, 246, 0.08)"/>
+        </pattern>
       </defs>`;
 
     const entityMarkup = entities().map(e => {
@@ -33871,6 +34606,13 @@ function createPlanView(context) {
       const hasRect = isNum(e.x) && isNum(e.y) && isNum(e.width) && isNum(e.depth);
 
       if (e.kind === 'room') {
+        let roomFill = 'var(--bg-chip, rgba(122,162,255,0.08))';
+        if (e.hatch) {
+          roomFill = `url(#hatch-${e.hatch})`;
+        } else if (e.fill) {
+          roomFill = e.fill;
+        }
+
         if (Array.isArray(e.boundary) && e.boundary.length >= 3) {
           const ptsStr = e.boundary.map(pt => {
             const sp = worldToSvg(transform, pt.x, pt.y);
@@ -33881,7 +34623,7 @@ function createPlanView(context) {
           const labelPos = worldToSvg(transform, cx, cy);
           return `<g>
             <polygon points="${ptsStr}"
-              fill="var(--bg-chip, rgba(122,162,255,0.08))" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.6}" data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>
+              fill="${roomFill}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.6}" data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>
             <text x="${labelPos.x.toFixed(1)}" y="${labelPos.y.toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--text-secondary,#9aa)" font-family="var(--font-mono)">${escapeHtml(e.name)} · ${roomArea(e).toFixed(1)}m²</text>
           </g>`;
         } else if (hasRect) {
@@ -33890,7 +34632,7 @@ function createPlanView(context) {
           const labelPos = worldToSvg(transform, e.x + e.width / 2, e.y + e.depth / 2);
           return `<g>
             <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${((p2.x - p1.x)).toFixed(1)}" height="${((p1.y - p2.y)).toFixed(1)}"
-              fill="var(--bg-chip, rgba(122,162,255,0.08))" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.6}" data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>
+              fill="${roomFill}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.6}" data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>
             <text x="${labelPos.x.toFixed(1)}" y="${labelPos.y.toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--text-secondary,#9aa)" font-family="var(--font-mono)">${escapeHtml(e.name)} · ${roomArea(e).toFixed(1)}m²</text>
           </g>`;
         }
@@ -36522,6 +37264,66 @@ function createPlanView(context) {
         dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
       }
       render();
+    } else if (tool === 'hatch' || tool === 'material_paint' || tool === 'watercolor_brush') {
+      const entityEl = event.target.closest ? event.target.closest('.plan-entity') : null;
+      let hitId = entityEl ? entityEl.dataset.entityId : null;
+      if (!hitId) {
+        const hits = pickEntities(visible, { x: world.x, y: world.y, width: 0, depth: 0 });
+        if (hits.length > 0) hitId = hits[hits.length - 1];
+      }
+      if (hitId) {
+        const room = entities().find(x => x.id === hitId && x.kind === 'room');
+        if (room) {
+          if (tool === 'hatch') {
+            const prevHatch = room.hatch;
+            const newHatch = state.activeMaterial || 'brick';
+            history.push({
+              label: `hatch ${room.name}`,
+              redo() { room.hatch = newHatch; render(); },
+              undo() { room.hatch = prevHatch; render(); }
+            });
+            room.hatch = newHatch;
+            showToast(`Applied ${newHatch} hatch to "${room.name}"`, 'success');
+            AudioService.playTick();
+            render();
+            return;
+          } else {
+            const prevFill = room.fill;
+            const newFill = state.activePaintColor || 'rgba(59, 130, 246, 0.25)';
+            history.push({
+              label: `paint ${room.name}`,
+              redo() { room.fill = newFill; render(); },
+              undo() { room.fill = prevFill; render(); }
+            });
+            room.fill = newFill;
+            showToast(`Applied material finish to "${room.name}"`, 'success');
+            AudioService.playTick();
+            render();
+            return;
+          }
+        }
+      }
+    } else if (tool === 'pushpull') {
+      const entityEl = event.target.closest ? event.target.closest('.plan-entity') : null;
+      let hitId = entityEl ? entityEl.dataset.entityId : null;
+      if (!hitId) {
+        const hits = pickEntities(visible, { x: world.x, y: world.y, width: 0, depth: 0 });
+        if (hits.length > 0) hitId = hits[hits.length - 1];
+      }
+      if (hitId) {
+        const room = entities().find(x => x.id === hitId && x.kind === 'room');
+        if (room) {
+          const mDoc = state.plan.documents && state.plan.documents.find(d => d.type === '3d_massing');
+          if (mDoc) {
+            switchDocument(mDoc.id);
+          } else {
+            createDocument('3D Massing Preview', '3d_massing');
+          }
+          showToast(`Extruded "${room.name}" to 3D Massing (3.0m height)!`, 'success');
+          AudioService.playTick();
+          return;
+        }
+      }
     } else if (tool === 'north') {
       const na = createNorthArrow({ x: initialPt.x, y: initialPt.y });
       const cmd = entityAddRemoveCommand(entities(), na, 'place North Arrow');

@@ -631,11 +631,211 @@ export const STUDIO_TOOL_CATALOG = [
 ];
 
 // ---------------------------------------------------------------------------
-// 4. Universal Studio Search Engine
+// 4. Universal Studio Search Engine & CLI Command Parser
 // ---------------------------------------------------------------------------
 
 /**
- * Searches across all tools, categories, and commands with fuzzy keyword matching.
+ * Parses CAD / Rhino CLI command lines with optional parametric arguments.
+ * Supports: REC 6 4, WALL 5, WALL 0 0 8 0, STAIR 18 1.2, HATCH brick, 4VIEW, PLAN, FRONT, PERSP, etc.
+ * @param {string} cmdLine Raw user input from command bar
+ * @param {Object} [context] Active execution context (e.g. current coordinates, persona)
+ * @returns {Object|null} Structured command action payload
+ */
+export function parseStudioCommand(cmdLine, context = {}) {
+  if (!cmdLine || typeof cmdLine !== 'string') return null;
+  const raw = cmdLine.trim();
+  if (!raw) return null;
+
+  const tokens = raw.split(/\s+/);
+  const verb = tokens[0].toUpperCase();
+  const args = tokens.slice(1);
+
+  // 1. HELP command
+  if (verb === 'HELP' || verb === '?') {
+    return {
+      type: 'help',
+      verb,
+      description: 'Display CAD/Rhino shortcut command cheat sheet'
+    };
+  }
+
+  // 2. Room / Rectangle: REC [width] [depth] or ROOM [width] [depth]
+  if (verb === 'REC' || verb === 'RECT' || verb === 'RECTANGLE' || verb === 'ROOM') {
+    if (args.length >= 2) {
+      const width = parseFloat(args[0]);
+      const depth = parseFloat(args[1]);
+      if (Number.isFinite(width) && Number.isFinite(depth) && width > 0 && depth > 0) {
+        return {
+          type: 'create_room',
+          verb,
+          width,
+          depth,
+          name: args.slice(2).join(' ') || `Room ${width}x${depth}m`,
+          description: `Create parametric room ${width}m x ${depth}m`
+        };
+      }
+    } else if (args.length === 1) {
+      const size = parseFloat(args[0]);
+      if (Number.isFinite(size) && size > 0) {
+        return {
+          type: 'create_room',
+          verb,
+          width: size,
+          depth: size,
+          name: `Room ${size}x${size}m`,
+          description: `Create square room ${size}m x ${size}m`
+        };
+      }
+    }
+    return { type: 'set_tool', toolId: 'room', verb };
+  }
+
+  // 3. Wall: WALL [len] or WALL [x1] [y1] [x2] [y2]
+  if (verb === 'WALL' || verb === 'W') {
+    if (args.length >= 4) {
+      const x1 = parseFloat(args[0]);
+      const y1 = parseFloat(args[1]);
+      const x2 = parseFloat(args[2]);
+      const y2 = parseFloat(args[3]);
+      if (Number.isFinite(x1) && Number.isFinite(y1) && Number.isFinite(x2) && Number.isFinite(y2)) {
+        return {
+          type: 'create_wall',
+          verb,
+          x1, y1, x2, y2,
+          description: `Create wall from (${x1}, ${y1}) to (${x2}, ${y2})`
+        };
+      }
+    } else if (args.length === 1) {
+      const length = parseFloat(args[0]);
+      if (Number.isFinite(length) && length > 0) {
+        return {
+          type: 'create_wall_length',
+          verb,
+          length,
+          description: `Create horizontal wall of length ${length}m`
+        };
+      }
+    }
+    return { type: 'set_tool', toolId: 'wall', verb };
+  }
+
+  // 4. Line: LINE or L
+  if (verb === 'LINE' || verb === 'L') {
+    return { type: 'set_tool', toolId: 'line', verb };
+  }
+
+  // 5. Polyline: PLINE or PL
+  if (verb === 'PLINE' || verb === 'PL') {
+    return { type: 'set_tool', toolId: 'polyline', verb };
+  }
+
+  // 6. Stair: STAIR [risers] [width]
+  if (verb === 'STAIR' || verb === 'STAIRS') {
+    if (args.length >= 1) {
+      const risers = parseInt(args[0], 10) || 16;
+      const width = args.length >= 2 ? (parseFloat(args[1]) || 1.1) : 1.1;
+      return {
+        type: 'create_stair',
+        verb,
+        risers,
+        width,
+        description: `Create stair with ${risers} risers, width ${width}m`
+      };
+    }
+    return { type: 'set_tool', toolId: 'stair', verb };
+  }
+
+  // 7. Measure / Dist: DIST, MEASURE, DI
+  if (verb === 'DIST' || verb === 'MEASURE' || verb === 'DI') {
+    return { type: 'set_tool', toolId: 'measure', verb };
+  }
+
+  // 8. Dimensions: DIMLIN, DIM, DAL, DCO
+  if (verb === 'DIMLIN' || verb === 'DIM' || verb === 'DIMENSION') {
+    return { type: 'set_tool', toolId: 'dimension', verb };
+  }
+  if (verb === 'DAL') {
+    return { type: 'set_tool', toolId: 'dim_aligned', verb };
+  }
+  if (verb === 'DCO') {
+    return { type: 'set_tool', toolId: 'dim_chain', verb };
+  }
+
+  // 9. Views: PLAN, TOP, FRONT, ELEV, PERSP, 3D, 4VIEW, SPLIT
+  if (verb === 'PLAN' || verb === 'TOP') {
+    return { type: 'set_view', view: 'top', verb, description: 'Switch to Top 2D Plan View' };
+  }
+  if (verb === 'FRONT' || verb === 'ELEV' || verb === 'SOUTH') {
+    return { type: 'set_view', view: 'south', verb, description: 'Switch to South Elevation View' };
+  }
+  if (verb === 'PERSP' || verb === 'PERSPECTIVE' || verb === '3D') {
+    return { type: 'set_view', view: 'perspective', verb, description: 'Switch to 3D Massing Perspective View' };
+  }
+  if (verb === '4VIEW' || verb === 'SPLIT' || verb === 'QUAD' || verb === 'FOURVIEW') {
+    return { type: 'set_view', view: '4view', verb, description: 'Switch to Rhino 4-Quadrant Viewport' };
+  }
+
+  // 10. Push / Pull massing
+  if (verb === 'PUSHPULL' || verb === 'PUSH' || verb === 'PULL' || verb === 'EXTRUDE') {
+    return { type: 'set_tool', toolId: 'pushpull', verb, description: 'Activate Push/Pull 3D Massing Extrusion' };
+  }
+
+  // 11. Hatch / Material Fill: HATCH [pattern]
+  if (verb === 'HATCH' || verb === 'H' || verb === 'POCHE') {
+    const pattern = args[0] ? args[0].toLowerCase() : 'brick';
+    return {
+      type: 'set_hatch',
+      verb,
+      pattern,
+      description: `Set active architectural hatch pattern to ${pattern}`
+    };
+  }
+
+  // 12. Zoom Extents / Fit: ZE, ZOOM E, FIT
+  if (verb === 'ZE' || (verb === 'ZOOM' && args[0] && args[0].toUpperCase() === 'E') || verb === 'FIT') {
+    return { type: 'zoom_extents', verb, description: 'Zoom Extents (Fit to canvas)' };
+  }
+
+  // 13. Undo / Redo
+  if (verb === 'U' || verb === 'UNDO') {
+    return { type: 'undo', verb };
+  }
+  if (verb === 'REDO') {
+    return { type: 'redo', verb };
+  }
+
+  // 14. Delete / Erase: E, ERASE, DEL
+  if (verb === 'E' || verb === 'ERASE' || verb === 'DEL' || verb === 'DELETE') {
+    return { type: 'delete', verb };
+  }
+
+  // 15. Default lookup in STUDIO_TOOL_CATALOG
+  const matched = STUDIO_TOOL_CATALOG.find(t =>
+    (t.commandAlias && t.commandAlias.toUpperCase() === verb) ||
+    (t.shortcut && t.shortcut.toUpperCase() === verb) ||
+    t.id.toUpperCase() === verb
+  );
+
+  if (matched) {
+    return {
+      type: 'set_tool',
+      toolId: matched.id,
+      verb,
+      tool: matched,
+      description: matched.description
+    };
+  }
+
+  return {
+    type: 'unknown',
+    verb,
+    raw,
+    description: `Unknown command: ${verb}`
+  };
+}
+
+/**
+ * Searches across all tools, categories, commands, and ribbon tabs with fuzzy keyword matching.
  * @param {string} query Search text
  * @param {Object} [options] Filter options (e.g. persona)
  * @returns {Array<Object>} Matching tool descriptors ranked by relevance
@@ -646,14 +846,63 @@ export function searchStudioTools(query, options = {}) {
   if (q.length === 0) return [];
 
   const filterPersona = options.persona || null;
-
   const results = [];
 
-  for (const tool of STUDIO_TOOL_CATALOG) {
-    if (filterPersona && !tool.personas.includes(filterPersona) && !tool.personas.includes('all')) {
-      // Allow searching other personas, but deprioritize
-    }
+  // 1. Search Ribbon Tabs across personas
+  for (const [personaKey, pConfig] of Object.entries(PERSONA_RIBBON_CONFIGS)) {
+    if (!pConfig || !Array.isArray(pConfig.tabs)) continue;
+    const personaMeta = STUDIO_PERSONAS[personaKey] || { shortLabel: personaKey, name: personaKey };
+    for (const tab of pConfig.tabs) {
+      const tabLabelMatch = tab.label.toLowerCase().includes(q);
+      const tabIdMatch = tab.id.toLowerCase().includes(q);
+      if (tabLabelMatch || tabIdMatch) {
+        let score = 75;
+        if (tab.label.toLowerCase() === q || tab.id.toLowerCase() === q) score += 40;
+        if (filterPersona === personaKey) score += 20;
 
+        results.push({
+          id: `tab_${personaKey}_${tab.id}`,
+          tabId: tab.id,
+          personaId: personaKey,
+          isRibbonTab: true,
+          name: `${personaMeta.shortLabel} Tab: ${tab.label}`,
+          icon: '📑',
+          category: 'ribbon_tabs',
+          categoryName: 'Ribbon Tabs',
+          categoryIcon: '📑',
+          description: `Switch to ${personaMeta.shortLabel} ribbon tab "${tab.label}"`,
+          personas: [personaKey],
+          score
+        });
+      }
+    }
+  }
+
+  // 2. Search Categories
+  for (const cat of TOOL_CATEGORIES) {
+    const catNameMatch = cat.name.toLowerCase().includes(q);
+    const catIdMatch = cat.id.toLowerCase().includes(q);
+    if (catNameMatch || catIdMatch) {
+      let score = 65;
+      if (cat.name.toLowerCase() === q || cat.id.toLowerCase() === q) score += 35;
+      results.push({
+        id: `cat_${cat.id}`,
+        categoryId: cat.id,
+        isCategory: true,
+        name: `Category: ${cat.name}`,
+        icon: cat.icon,
+        category: cat.id,
+        categoryName: 'Categories',
+        categoryIcon: cat.icon,
+        description: cat.description,
+        personas: ['all'],
+        score
+      });
+    }
+  }
+
+  // 3. Search Master Tool Catalog
+  for (const tool of STUDIO_TOOL_CATALOG) {
     const nameMatch = tool.name.toLowerCase().includes(q);
     const idMatch = tool.id.toLowerCase().includes(q);
     const aliasMatch = tool.commandAlias ? tool.commandAlias.toLowerCase().startsWith(q) : false;
