@@ -1109,6 +1109,470 @@ function calcWallPolygon(wall) {
   ];
 }
 
+/**
+ * Finds the intersection point of two 2D lines (p1->p2 and p3->p4).
+ * Returns null if lines are parallel or collinear.
+ * @param {{ x: number, y: number }} p1
+ * @param {{ x: number, y: number }} p2
+ * @param {{ x: number, y: number }} p3
+ * @param {{ x: number, y: number }} p4
+ * @returns {{ x: number, y: number, t: number, u: number }|null}
+ */
+function intersectLines(p1, p2, p3, p4) {
+  if (!p1 || !p2 || !p3 || !p4) return null;
+  const dx1 = p2.x - p1.x;
+  const dy1 = p2.y - p1.y;
+  const dx2 = p4.x - p3.x;
+  const dy2 = p4.y - p3.y;
+  const denom = dx1 * dy2 - dy1 * dx2;
+  if (Math.abs(denom) < 1e-9) return null; // parallel
+
+  const dx31 = p3.x - p1.x;
+  const dy31 = p3.y - p1.y;
+
+  const t = (dx31 * dy2 - dy31 * dx2) / denom;
+  const u = (dx31 * dy1 - dy31 * dx1) / denom;
+
+  return {
+    x: p1.x + t * dx1,
+    y: p1.y + t * dy1,
+    t,
+    u
+  };
+}
+
+/**
+ * Checks if two line segments (p1->p2 and p3->p4) intersect.
+ * Returns intersection point if t in [0, 1] and u in [0, 1].
+ * @param {{ x: number, y: number }} p1
+ * @param {{ x: number, y: number }} p2
+ * @param {{ x: number, y: number }} p3
+ * @param {{ x: number, y: number }} p4
+ * @returns {{ x: number, y: number, t: number, u: number }|null}
+ */
+function intersectSegments(p1, p2, p3, p4) {
+  const hit = intersectLines(p1, p2, p3, p4);
+  if (!hit) return null;
+  const eps = 1e-6;
+  if (hit.t >= -eps && hit.t <= 1 + eps && hit.u >= -eps && hit.u <= 1 + eps) {
+    return hit;
+  }
+  return null;
+}
+
+/**
+ * Projects a 2D point onto a line segment (p1->p2).
+ * Returns the closest point on segment, distance, and normalized parameter t in [0, 1].
+ * @param {{ x: number, y: number }} pt
+ * @param {{ x: number, y: number }} p1
+ * @param {{ x: number, y: number }} p2
+ * @returns {{ point: { x: number, y: number }, t: number, distance: number }}
+ */
+function projectPointOnSegment(pt, p1, p2) {
+  if (!pt || !p1 || !p2) throw new TypeError('projectPointOnSegment expects pt, p1, and p2');
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const l2 = dx * dx + dy * dy;
+  if (l2 < 1e-9) {
+    const d = Math.hypot(pt.x - p1.x, pt.y - p1.y);
+    return { point: { x: p1.x, y: p1.y }, t: 0, distance: d };
+  }
+  let t = ((pt.x - p1.x) * dx + (pt.y - p1.y) * dy) / l2;
+  const tClamped = Math.max(0, Math.min(1, t));
+  const qx = p1.x + tClamped * dx;
+  const qy = p1.y + tClamped * dy;
+  const dist = Math.hypot(pt.x - qx, pt.y - qy);
+  return {
+    point: { x: qx, y: qy },
+    t: tClamped,
+    distance: dist
+  };
+}
+
+/**
+ * Splits a continuous wall length into solid spans around hosted openings (doors, windows).
+ * Openings are sorted and clamped to [0, wallLength].
+ * @param {number} wallLength
+ * @param {Array<{ position: number, width: number }>} openings
+ * @returns {Array<{ start: number, end: number, length: number }>}
+ */
+function punchWallSpans(wallLength, openings = []) {
+  if (typeof wallLength !== 'number' || wallLength <= 0) return [];
+  if (!Array.isArray(openings) || openings.length === 0) {
+    return [{ start: 0, end: wallLength, length: wallLength }];
+  }
+
+  // Filter and normalize opening intervals
+  const intervals = [];
+  for (const op of openings) {
+    if (!op || typeof op.position !== 'number' || typeof op.width !== 'number') continue;
+    const s = Math.max(0, Math.min(wallLength, op.position));
+    const e = Math.max(0, Math.min(wallLength, op.position + Math.max(0, op.width)));
+    if (e > s) {
+      intervals.push({ start: s, end: e });
+    }
+  }
+
+  if (intervals.length === 0) {
+    return [{ start: 0, end: wallLength, length: wallLength }];
+  }
+
+  intervals.sort((a, b) => a.start - b.start);
+
+  // Merge overlapping intervals
+  const merged = [intervals[0]];
+  for (let i = 1; i < intervals.length; i++) {
+    const prev = merged[merged.length - 1];
+    const cur = intervals[i];
+    if (cur.start <= prev.end) {
+      prev.end = Math.max(prev.end, cur.end);
+    } else {
+      merged.push(cur);
+    }
+  }
+
+  // Generate solid spans
+  const solidSpans = [];
+  let curPos = 0;
+  for (const cutout of merged) {
+    if (cutout.start > curPos + 1e-4) {
+      solidSpans.push({
+        start: curPos,
+        end: cutout.start,
+        length: cutout.start - curPos
+      });
+    }
+    curPos = Math.max(curPos, cutout.end);
+  }
+
+  if (curPos < wallLength - 1e-4) {
+    solidSpans.push({
+      start: curPos,
+      end: wallLength,
+      length: wallLength - curPos
+    });
+  }
+
+  return solidSpans;
+}
+
+/**
+ * Computes intelligent auto-joinery for a collection of walls.
+ * Detects:
+ *   - L-Junctions (Corner Miter): Two endpoints meet -> miters outer & inner corners.
+ *   - T-Junctions (Butt Join): Stem endpoint meets host wall body -> trims stem to host face.
+ * Returns an enriched wall array with mitered/trimmed polygon boundaries.
+ * @param {Array<Object>} walls
+ * @param {number} [tolerance=0.35]
+ * @returns {Map<string, { polygon: Array<{x: number, y: number}>, junctions: Array<Object>, trimmed: Object }>}
+ */
+function calcWallJunctions(walls = [], tolerance = 0.35) {
+  const result = new Map();
+  if (!Array.isArray(walls) || walls.length === 0) return result;
+
+  // Initialize all walls with default 4-corner polygon
+  for (const w of walls) {
+    if (!w) continue;
+    const poly = calcWallPolygon(w);
+    result.set(w.id, {
+      polygon: poly,
+      junctions: [],
+      trimmed: { x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2 }
+    });
+  }
+
+  const n = walls.length;
+  for (let i = 0; i < n; i++) {
+    const w1 = walls[i];
+    if (!w1) continue;
+    const len1 = Math.hypot(w1.x2 - w1.x1, w1.y2 - w1.y1);
+    if (len1 < 1e-4) continue;
+    const t1 = w1.thickness || 0.2;
+    const h1 = t1 / 2;
+    const u1 = { x: (w1.x2 - w1.x1) / len1, y: (w1.y2 - w1.y1) / len1 };
+    const n1 = { x: -u1.y, y: u1.x };
+
+    for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      const w2 = walls[j];
+      if (!w2) continue;
+      const len2 = Math.hypot(w2.x2 - w2.x1, w2.y2 - w2.y1);
+      if (len2 < 1e-4) continue;
+      const t2 = w2.thickness || 0.2;
+      const h2 = t2 / 2;
+      const u2 = { x: (w2.x2 - w2.x1) / len2, y: (w2.y2 - w2.y1) / len2 };
+      const n2 = { x: -u2.y, y: u2.x };
+
+      // 1. Check L-junction (Corner miter) between endpoints
+      const checkL = (p1, isEnd1, p2, isEnd2) => {
+        const d = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+        const maxTol = Math.max(tolerance, (t1 + t2) / 2 + 0.05);
+        if (d <= maxTol) {
+          // Angle check to prevent collinear walls from falsely mitering
+          const dot = u1.x * u2.x + u1.y * u2.y;
+          if (Math.abs(Math.abs(dot) - 1) < 1e-3) return false; // collinear
+
+          // Left and right boundary lines of w1
+          // Side A: centerline + n * h, Side B: centerline - n * h
+          const w1_sideA1 = { x: w1.x1 + n1.x * h1, y: w1.y1 + n1.y * h1 };
+          const w1_sideA2 = { x: w1.x2 + n1.x * h1, y: w1.y2 + n1.y * h1 };
+          const w1_sideB1 = { x: w1.x1 - n1.x * h1, y: w1.y1 - n1.y * h1 };
+          const w1_sideB2 = { x: w1.x2 - n1.x * h1, y: w1.y2 - n1.y * h1 };
+
+          const w2_sideA1 = { x: w2.x1 + n2.x * h2, y: w2.y1 + n2.y * h2 };
+          const w2_sideA2 = { x: w2.x2 + n2.x * h2, y: w2.y2 + n2.y * h2 };
+          const w2_sideB1 = { x: w2.x1 - n2.x * h2, y: w2.y1 - n2.y * h2 };
+          const w2_sideB2 = { x: w2.x2 - n2.x * h2, y: w2.y2 - n2.y * h2 };
+
+          const interAA = intersectLines(w1_sideA1, w1_sideA2, w2_sideA1, w2_sideA2);
+          const interBB = intersectLines(w1_sideB1, w1_sideB2, w2_sideB1, w2_sideB2);
+
+          if (interAA && interBB) {
+            const entry1 = result.get(w1.id);
+            if (entry1) {
+              entry1.junctions.push({
+                type: 'L',
+                otherWallId: w2.id,
+                isEnd: isEnd1,
+                cornerPoint: p1,
+                miterA: { x: interAA.x, y: interAA.y },
+                miterB: { x: interBB.x, y: interBB.y }
+              });
+
+              // Adjust polygon corner points on w1
+              const poly = entry1.polygon;
+              // poly is [p1-B, p2-B, p2+A, p1+A]
+              // If w1 start: replace index 0 (B) and index 3 (A)
+              // If w1 end: replace index 1 (B) and index 2 (A)
+              // Limit miter projection distance to 2.5 * max(t1, t2)
+              const maxExt = 2.5 * Math.max(t1, t2);
+              if (Math.hypot(interAA.x - p1.x, interAA.y - p1.y) <= maxExt &&
+                  Math.hypot(interBB.x - p1.x, interBB.y - p1.y) <= maxExt) {
+                if (!isEnd1) {
+                  poly[0] = { x: interBB.x, y: interBB.y };
+                  poly[3] = { x: interAA.x, y: interAA.y };
+                } else {
+                  poly[1] = { x: interBB.x, y: interBB.y };
+                  poly[2] = { x: interAA.x, y: interAA.y };
+                }
+              }
+            }
+            return true;
+          }
+        }
+        return false;
+      };
+
+      // Check all 4 endpoint pairs
+      const isL = checkL({ x: w1.x1, y: w1.y1 }, false, { x: w2.x1, y: w2.y1 }, false) ||
+                  checkL({ x: w1.x1, y: w1.y1 }, false, { x: w2.x2, y: w2.y2 }, true)  ||
+                  checkL({ x: w1.x2, y: w1.y2 }, true,  { x: w2.x1, y: w2.y1 }, false) ||
+                  checkL({ x: w1.x2, y: w1.y2 }, true,  { x: w2.x2, y: w2.y2 }, true);
+
+      if (isL) continue;
+
+      // 2. Check T-junction (Stem w1 terminates into host body w2)
+      const checkT = (pt, isEnd1) => {
+        const proj = projectPointOnSegment(pt, { x: w2.x1, y: w2.y1 }, { x: w2.x2, y: w2.y2 });
+        // Must hit body (not right on endpoints) and be within half thickness + tolerance
+        if (proj.t > 0.05 && proj.t < 0.95 && proj.distance <= h2 + tolerance) {
+          const entry1 = result.get(w1.id);
+          if (entry1) {
+            entry1.junctions.push({
+              type: 'T',
+              isStem: true,
+              hostWallId: w2.id,
+              isEnd: isEnd1,
+              touchPoint: proj.point
+            });
+
+            // Trim stem endpoint inwards towards wall interior by host wall half-thickness h2
+            const inwardsX = isEnd1 ? -u1.x : u1.x;
+            const inwardsY = isEnd1 ? -u1.y : u1.y;
+            const shiftX = inwardsX * h2;
+            const shiftY = inwardsY * h2;
+
+            const poly = entry1.polygon;
+            if (!isEnd1) {
+              poly[0] = { x: poly[0].x + shiftX, y: poly[0].y + shiftY };
+              poly[3] = { x: poly[3].x + shiftX, y: poly[3].y + shiftY };
+              entry1.trimmed.x1 += shiftX;
+              entry1.trimmed.y1 += shiftY;
+            } else {
+              poly[1] = { x: poly[1].x + shiftX, y: poly[1].y + shiftY };
+              poly[2] = { x: poly[2].x + shiftX, y: poly[2].y + shiftY };
+              entry1.trimmed.x2 += shiftX;
+              entry1.trimmed.y2 += shiftY;
+            }
+          }
+        }
+      };
+
+      checkT({ x: w1.x1, y: w1.y1 }, false);
+      checkT({ x: w1.x2, y: w1.y2 }, true);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Calculates CAD door swing geometry, leaf position, and SVG arc aligned with wall angle.
+ * Supports: swing 'left', 'right', 'double', flipSide (inward vs outward).
+ * @param {Object} wall
+ * @param {Object} door
+ * @returns {Object}
+ */
+function calcDoorCADGeometry(wall, door) {
+  if (!wall || !door) throw new TypeError('calcDoorCADGeometry expects wall and door');
+  const dx = wall.x2 - wall.x1;
+  const dy = wall.y2 - wall.y1;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-4) throw new Error('Cannot place door on zero-length wall');
+
+  const u = { x: dx / len, y: dy / len };
+  const n = { x: -u.y, y: u.x }; // Perpendicular normal
+  const t = wall.thickness || 0.2;
+  const h = t / 2;
+
+  const wDoor = typeof door.width === 'number' && door.width > 0 ? door.width : 0.9;
+  const pos = typeof door.position === 'number' ? Math.max(0, Math.min(len - wDoor, door.position)) : 0;
+  const swing = door.swing || 'left';
+  const flipSide = Boolean(door.flipSide);
+
+  // Normal swing direction vector (+n or -n)
+  const sDir = flipSide ? -1 : 1;
+  const sNormal = { x: n.x * sDir, y: n.y * sDir };
+
+  // Jamb 1 (start of opening) and Jamb 2 (end of opening) along wall centerline
+  const pJamb1 = { x: wall.x1 + pos * u.x, y: wall.y1 + pos * u.y };
+  const pJamb2 = { x: wall.x1 + (pos + wDoor) * u.x, y: wall.y1 + (pos + wDoor) * u.y };
+
+  // Jamb cross lines (outer face to inner face across wall thickness)
+  const jamb1Line = [
+    { x: pJamb1.x - n.x * h, y: pJamb1.y - n.y * h },
+    { x: pJamb1.x + n.x * h, y: pJamb1.y + n.y * h }
+  ];
+  const jamb2Line = [
+    { x: pJamb2.x - n.x * h, y: pJamb2.y - n.y * h },
+    { x: pJamb2.x + n.x * h, y: pJamb2.y + n.y * h }
+  ];
+
+  if (swing === 'double') {
+    const halfW = wDoor / 2;
+    const pMid = { x: wall.x1 + (pos + halfW) * u.x, y: wall.y1 + (pos + halfW) * u.y };
+
+    const hinge1 = pJamb1;
+    const leaf1 = { x: hinge1.x + halfW * sNormal.x, y: hinge1.y + halfW * sNormal.y };
+
+    const hinge2 = pJamb2;
+    const leaf2 = { x: hinge2.x + halfW * sNormal.x, y: hinge2.y + halfW * sNormal.y };
+
+    return {
+      type: 'double',
+      width: wDoor,
+      leafWidth: halfW,
+      jamb1Line,
+      jamb2Line,
+      leaves: [
+        { hinge: hinge1, openEnd: leaf1, closedEnd: pMid, radius: halfW },
+        { hinge: hinge2, openEnd: leaf2, closedEnd: pMid, radius: halfW }
+      ]
+    };
+  }
+
+  // Single door (left or right swing)
+  const isLeft = swing === 'left';
+  const hinge = isLeft ? pJamb1 : pJamb2;
+  const closedEnd = isLeft ? pJamb2 : pJamb1;
+
+  // Open leaf swings 90 deg out from hinge along normal
+  const openEnd = {
+    x: hinge.x + wDoor * sNormal.x,
+    y: hinge.y + wDoor * sNormal.y
+  };
+
+  return {
+    type: 'single',
+    swing,
+    flipSide,
+    width: wDoor,
+    hinge,
+    closedEnd,
+    openEnd,
+    radius: wDoor,
+    jamb1Line,
+    jamb2Line
+  };
+}
+
+/**
+ * Calculates CAD window geometry (jambs, sills, and glass lines) aligned with wall angle.
+ * @param {Object} wall
+ * @param {Object} window
+ * @returns {Object}
+ */
+function calcWindowCADGeometry(wall, window) {
+  if (!wall || !window) throw new TypeError('calcWindowCADGeometry expects wall and window');
+  const dx = wall.x2 - wall.x1;
+  const dy = wall.y2 - wall.y1;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-4) throw new Error('Cannot place window on zero-length wall');
+
+  const u = { x: dx / len, y: dy / len };
+  const n = { x: -u.y, y: u.x };
+  const t = wall.thickness || 0.2;
+  const h = t / 2;
+
+  const wWin = typeof window.width === 'number' && window.width > 0 ? window.width : 1.2;
+  const pos = typeof window.position === 'number' ? Math.max(0, Math.min(len - wWin, window.position)) : 0;
+
+  const p1 = { x: wall.x1 + pos * u.x, y: wall.y1 + pos * u.y };
+  const p2 = { x: wall.x1 + (pos + wWin) * u.x, y: wall.y1 + (pos + wWin) * u.y };
+
+  // Jamb lines across thickness
+  const jamb1 = [
+    { x: p1.x - n.x * h, y: p1.y - n.y * h },
+    { x: p1.x + n.x * h, y: p1.y + n.y * h }
+  ];
+  const jamb2 = [
+    { x: p2.x - n.x * h, y: p2.y - n.y * h },
+    { x: p2.x + n.x * h, y: p2.y + n.y * h }
+  ];
+
+  // Outer and inner sill lines
+  const sillOuter = [
+    { x: p1.x - n.x * h, y: p1.y - n.y * h },
+    { x: p2.x - n.x * h, y: p2.y - n.y * h }
+  ];
+  const sillInner = [
+    { x: p1.x + n.x * h, y: p1.y + n.y * h },
+    { x: p2.x + n.x * h, y: p2.y + n.y * h }
+  ];
+
+  // Center glass pane lines (double glazing standard)
+  const glassOffset = Math.min(0.025, h * 0.25);
+  const glassPane1 = [
+    { x: p1.x - n.x * glassOffset, y: p1.y - n.y * glassOffset },
+    { x: p2.x - n.x * glassOffset, y: p2.y - n.y * glassOffset }
+  ];
+  const glassPane2 = [
+    { x: p1.x + n.x * glassOffset, y: p1.y + n.y * glassOffset },
+    { x: p2.x + n.x * glassOffset, y: p2.y + n.y * glassOffset }
+  ];
+
+  return {
+    width: wWin,
+    jamb1,
+    jamb2,
+    sillOuter,
+    sillInner,
+    glassPane1,
+    glassPane2
+  };
+}
+
+
 
 
   // =========================================================================
@@ -9812,10 +10276,69 @@ function rectsIntersect(a, b) {
 }
 
 // ---------------------------------------------------------------------------
+// Wall Assemblies Catalog (composite multi-layer parametric definitions)
+// ---------------------------------------------------------------------------
+
+const WALL_ASSEMBLIES = Object.freeze({
+  'generic-200': {
+    id: 'generic-200',
+    name: 'Generic Solid 200mm',
+    category: 'basic',
+    totalThickness: 0.20,
+    layers: [
+      { id: 'core', name: 'Solid Core', thickness: 0.20, material: 'concrete', hatch: 'solid', color: 'rgba(122,162,255,0.18)' }
+    ]
+  },
+  'interior-partition-100': {
+    id: 'interior-partition-100',
+    name: 'Interior Stud Partition 100mm',
+    category: 'interior',
+    totalThickness: 0.10,
+    layers: [
+      { id: 'gyp-1', name: 'Gypsum Board', thickness: 0.013, material: 'gypsum', hatch: 'solid', color: 'rgba(200,200,210,0.3)' },
+      { id: 'stud', name: 'Metal / Wood Stud', thickness: 0.074, material: 'stud_cavity', hatch: 'diagonal', color: 'rgba(120,130,150,0.15)' },
+      { id: 'gyp-2', name: 'Gypsum Board', thickness: 0.013, material: 'gypsum', hatch: 'solid', color: 'rgba(200,200,210,0.3)' }
+    ]
+  },
+  'interior-masonry-150': {
+    id: 'interior-masonry-150',
+    name: 'Interior Masonry 150mm',
+    category: 'interior',
+    totalThickness: 0.15,
+    layers: [
+      { id: 'plaster-1', name: 'Plaster / Render', thickness: 0.012, material: 'plaster', hatch: 'solid', color: 'rgba(220,220,220,0.25)' },
+      { id: 'cmu', name: 'CMU Block', thickness: 0.126, material: 'masonry', hatch: 'crosshatch', color: 'rgba(160,160,170,0.2)' },
+      { id: 'plaster-2', name: 'Plaster / Render', thickness: 0.012, material: 'plaster', hatch: 'solid', color: 'rgba(220,220,220,0.25)' }
+    ]
+  },
+  'exterior-cavity-265': {
+    id: 'exterior-cavity-265',
+    name: 'Exterior Brick Cavity 265mm',
+    category: 'exterior',
+    totalThickness: 0.265,
+    layers: [
+      { id: 'brick', name: 'Face Brick', thickness: 0.102, material: 'brick', hatch: 'brick', color: 'rgba(217,119,6,0.25)' },
+      { id: 'air-insul', name: 'Cavity & Insulation', thickness: 0.050, material: 'insulation', hatch: 'insulation', color: 'rgba(234,179,8,0.2)' },
+      { id: 'block', name: 'CMU Inner Leaf', thickness: 0.100, material: 'blockwork', hatch: 'crosshatch', color: 'rgba(148,163,184,0.2)' },
+      { id: 'finish', name: 'Internal Gypsum', thickness: 0.013, material: 'gypsum', hatch: 'solid', color: 'rgba(226,232,240,0.2)' }
+    ]
+  },
+  'concrete-structural-250': {
+    id: 'concrete-structural-250',
+    name: 'Structural Concrete 250mm',
+    category: 'structural',
+    totalThickness: 0.25,
+    layers: [
+      { id: 'core', name: 'Reinforced Concrete', thickness: 0.25, material: 'rc_concrete', hatch: 'concrete', color: 'rgba(100,116,139,0.3)' }
+    ]
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Walls (unconstrained vector segments with thickness & curved arcs)
 // ---------------------------------------------------------------------------
 
-/** Wall: start/end points in world meters (supports arbitrary angles and curved arcs). */
+/** Wall: start/end points in world meters (supports arbitrary angles, assemblies, and curved arcs). */
 function createWall({
   id,
   name,
@@ -9825,8 +10348,9 @@ function createWall({
   y2,
   start,
   end,
-  thickness = 0.2,
+  thickness,
   height = 2.7,
+  assemblyId = 'generic-200',
   floorId = 'floor-1',
   material = 'generic',
   isArc = false,
@@ -9841,7 +10365,17 @@ function createWall({
   requireFiniteNumber(actualY1, 'wall.y1');
   requireFiniteNumber(actualX2, 'wall.x2');
   requireFiniteNumber(actualY2, 'wall.y2');
-  if (thickness <= 0) throw new Error('Wall thickness must be greater than zero');
+
+  const assembly = WALL_ASSEMBLIES[assemblyId] || null;
+  let actualThickness;
+  if (thickness !== undefined && thickness !== null) {
+    requireFiniteNumber(thickness, 'wall.thickness');
+    if (thickness <= 0) throw new Error('Wall thickness must be greater than zero');
+    actualThickness = thickness;
+  } else {
+    actualThickness = assembly ? assembly.totalThickness : 0.2;
+  }
+  if (actualThickness <= 0) throw new Error('Wall thickness must be greater than zero');
 
   const dx = actualX2 - actualX1;
   const dy = actualY2 - actualY1;
@@ -9861,8 +10395,9 @@ function createWall({
     y1: actualY1,
     x2: actualX2,
     y2: actualY2,
-    thickness,
+    thickness: actualThickness,
     height,
+    assemblyId: assembly ? assemblyId : 'generic-200',
     floorId,
     material,
     isArc: Boolean(isArc),
@@ -9900,7 +10435,16 @@ function wallDirection(wall) {
 
 const SWING_TYPES = Object.freeze(['left', 'right', 'double']);
 
-function createDoor({ id, name, wallId, position, width = 0.9, height = 2.05, swing = 'left' }) {
+function createDoor({
+  id,
+  name,
+  wallId,
+  position,
+  width = 0.9,
+  height = 2.05,
+  swing = 'left',
+  flipSide = false
+}) {
   if (typeof wallId !== 'string' || !wallId) throw new TypeError('Door requires a wallId');
   requireFiniteNumber(position, 'door.position');
   if (position < 0) throw new Error('Door position must be non-negative (offset along the wall)');
@@ -9917,11 +10461,22 @@ function createDoor({ id, name, wallId, position, width = 0.9, height = 2.05, sw
     position,
     width,
     height,
-    swing
+    swing,
+    flipSide: Boolean(flipSide)
   };
 }
 
-function createWindow({ id, name, wallId, position, width = 1.2, height = 1.2, sill = 0.9 }) {
+function createWindow({
+  id,
+  name,
+  wallId,
+  position,
+  width = 1.2,
+  height = 1.2,
+  sill = 0.9,
+  frameWidth = 0.05,
+  glazingPanes = 2
+}) {
   if (typeof wallId !== 'string' || !wallId) throw new TypeError('Window requires a wallId');
   requireFiniteNumber(position, 'window.position');
   if (position < 0) throw new Error('Window position must be non-negative');
@@ -9935,8 +10490,27 @@ function createWindow({ id, name, wallId, position, width = 1.2, height = 1.2, s
     position,
     width,
     height,
-    sill
+    sill,
+    frameWidth,
+    glazingPanes
   };
+}
+
+/**
+ * Returns all valid doors and windows hosted on a specific wall, sorted by position along the wall.
+ * @param {Object} wall
+ * @param {Array<Object>} allEntities
+ * @returns {Array<Object>}
+ */
+function wallOpenings(wall, allEntities = []) {
+  if (!wall || !wall.id) return [];
+  const list = Array.isArray(allEntities)
+    ? allEntities
+    : (allEntities && typeof allEntities === 'object' ? Object.values(allEntities).flat().filter(Boolean) : []);
+
+  return list
+    .filter(e => (e.kind === 'door' || e.kind === 'window') && e.wallId === wall.id)
+    .sort((a, b) => (a.position || 0) - (b.position || 0));
 }
 
 /**
@@ -10478,6 +11052,25 @@ function pickEntities(entities, worldRect) {
     } else if (rectsIntersect(worldRect, r)) {
       hits.push(e.id);
     }
+
+    if ((e.kind === 'door' || e.kind === 'window') && e.wallId) {
+      const hostWall = list.find(w => w && w.id === e.wallId);
+      if (hostWall && typeof hostWall.x1 === 'number') {
+        const lenW = Math.hypot(hostWall.x2 - hostWall.x1, hostWall.y2 - hostWall.y1);
+        if (lenW > 1e-4) {
+          const uW = { x: (hostWall.x2 - hostWall.x1) / lenW, y: (hostWall.y2 - hostWall.y1) / lenW };
+          const opMid = (e.position || 0) + (e.width || 0.9) / 2;
+          const px = hostWall.x1 + opMid * uW.x;
+          const py = hostWall.y1 + opMid * uW.y;
+          const rad = (e.width || 0.9) / 2 + 0.25;
+          if (worldRect.width === 0 && worldRect.depth === 0) {
+            if (Math.hypot(worldRect.x - px, worldRect.y - py) <= rad) {
+              hits.push(e.id);
+            }
+          }
+        }
+      }
+    }
   }
   return hits;
 }
@@ -10559,8 +11152,34 @@ function entityAddRemoveCommand(list, entity, label) {
 function entityMoveCommand(entity, dx, dy, label) {
   return {
     label,
-    redo() { entity.x += dx; entity.y += dy; },
-    undo() { entity.x -= dx; entity.y -= dy; }
+    redo() {
+      if (typeof entity.x === 'number') entity.x += dx;
+      if (typeof entity.y === 'number') entity.y += dy;
+      if (typeof entity.x1 === 'number') entity.x1 += dx;
+      if (typeof entity.y1 === 'number') entity.y1 += dy;
+      if (typeof entity.x2 === 'number') entity.x2 += dx;
+      if (typeof entity.y2 === 'number') entity.y2 += dy;
+      if (Array.isArray(entity.boundary)) {
+        for (const pt of entity.boundary) {
+          pt.x += dx;
+          pt.y += dy;
+        }
+      }
+    },
+    undo() {
+      if (typeof entity.x === 'number') entity.x -= dx;
+      if (typeof entity.y === 'number') entity.y -= dy;
+      if (typeof entity.x1 === 'number') entity.x1 -= dx;
+      if (typeof entity.y1 === 'number') entity.y1 -= dy;
+      if (typeof entity.x2 === 'number') entity.x2 -= dx;
+      if (typeof entity.y2 === 'number') entity.y2 -= dy;
+      if (Array.isArray(entity.boundary)) {
+        for (const pt of entity.boundary) {
+          pt.x -= dx;
+          pt.y -= dy;
+        }
+      }
+    }
   };
 }
 
@@ -24246,6 +24865,7 @@ function createProjectsView(context) {
 
 
 
+
 const PLAN_STATE_KEY = 'archiscale_plan_prefs'; // user preferences only
 
 function createPlanView(context) {
@@ -24877,25 +25497,50 @@ function createPlanView(context) {
 
     if (sel.kind === 'wall') {
       const len = wallLength(sel);
+      const currentAssId = sel.assemblyId || 'generic-200';
+      const assemblyOpts = Object.values(WALL_ASSEMBLIES).map(a =>
+        `<option value="${a.id}" ${currentAssId === a.id ? 'selected' : ''}>${a.name}</option>`
+      ).join('');
+
       bar.innerHTML = `
         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
           <span class="context-tag-badge">WALL</span>
           <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(sel.name)} (${len.toFixed(2)}m)</span>
+          <select class="calc-input" id="ctx-wall-assembly" title="Select Wall Assembly" style="height: 26px; font-size: 0.72rem; padding: 0 4px; max-width: 170px;">
+            ${assemblyOpts}
+          </select>
           <button type="button" class="context-action-btn" id="ctx-wall-door"><span>🚪 + Door</span></button>
           <button type="button" class="context-action-btn" id="ctx-wall-win"><span>🪟 + Window</span></button>
           <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate (Ctrl+D)</span></button>
           <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete (Del)</span></button>
         </div>
       `;
+
+      bar.querySelector('#ctx-wall-assembly')?.addEventListener('change', (e) => {
+        const assId = e.target.value;
+        const ass = WALL_ASSEMBLIES[assId];
+        if (ass) {
+          sel.assemblyId = assId;
+          sel.thickness = ass.totalThickness;
+          showToast(`Wall assembly set to ${ass.name}`);
+          AudioService.playTick();
+          render();
+          renderPropertiesInspector();
+        }
+      });
+
       bar.querySelector('#ctx-wall-door')?.addEventListener('click', () => {
         try {
-          const door = createDoor({ wallId: sel.id, position: len / 2, width: 0.9 });
+          const door = createDoor({ wallId: sel.id, position: Math.max(0.1, len / 2 - 0.45), width: 0.9 });
           const cmd = entityAddRemoveCommand(entities(), door, `add door on ${sel.name}`);
           cmd.redo();
           history.push(cmd);
+          state.plan.selectedIds = new Set([door.id]);
           showToast('Door placed at wall center');
           AudioService.playTick();
           render();
+          renderContextualToolbar();
+          renderPropertiesInspector();
         } catch (e) { showToast(e.message, 'warning'); }
       });
       bar.querySelector('#ctx-wall-win')?.addEventListener('click', () => {
@@ -24904,11 +25549,97 @@ function createPlanView(context) {
           const cmd = entityAddRemoveCommand(entities(), win, `add window on ${sel.name}`);
           cmd.redo();
           history.push(cmd);
+          state.plan.selectedIds = new Set([win.id]);
           showToast('Window placed at wall center');
           AudioService.playTick();
           render();
+          renderContextualToolbar();
+          renderPropertiesInspector();
         } catch (e) { showToast(e.message, 'warning'); }
       });
+      bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
+      bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
+      return;
+    }
+
+    if (sel.kind === 'door') {
+      bar.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+          <span class="context-tag-badge" style="background: rgba(251,191,36,0.15); color: var(--color-warning, #fbbf24);">DOOR</span>
+          <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(sel.name)} (${(sel.width * 1000).toFixed(0)}mm)</span>
+          <button type="button" class="context-action-btn" id="ctx-door-swing"><span>↻ Swing: ${sel.swing.toUpperCase()}</span></button>
+          <button type="button" class="context-action-btn" id="ctx-door-flip"><span>⇄ Side: ${sel.flipSide ? 'OUT' : 'IN'}</span></button>
+          <span style="font-size: 0.68rem; color: var(--text-muted); margin-left: 2px;">Width:</span>
+          <button type="button" class="context-action-btn ${Math.abs(sel.width - 0.7) < 0.01 ? 'active' : ''}" id="ctx-door-w700">700</button>
+          <button type="button" class="context-action-btn ${Math.abs(sel.width - 0.8) < 0.01 ? 'active' : ''}" id="ctx-door-w800">800</button>
+          <button type="button" class="context-action-btn ${Math.abs(sel.width - 0.9) < 0.01 ? 'active' : ''}" id="ctx-door-w900">900</button>
+          <button type="button" class="context-action-btn ${Math.abs(sel.width - 1.0) < 0.01 ? 'active' : ''}" id="ctx-door-w1000">1000</button>
+          <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate</span></button>
+          <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete</span></button>
+        </div>
+      `;
+
+      bar.querySelector('#ctx-door-swing')?.addEventListener('click', () => {
+        const nextSwing = sel.swing === 'left' ? 'right' : (sel.swing === 'right' ? 'double' : 'left');
+        sel.swing = nextSwing;
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        showToast(`Door swing set to ${nextSwing}`);
+        AudioService.playTick();
+      });
+
+      bar.querySelector('#ctx-door-flip')?.addEventListener('click', () => {
+        sel.flipSide = !sel.flipSide;
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        showToast(`Door flipped ${sel.flipSide ? 'outward' : 'inward'}`);
+        AudioService.playTick();
+      });
+
+      const setDoorW = (w) => {
+        sel.width = w;
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        AudioService.playTick();
+      };
+      bar.querySelector('#ctx-door-w700')?.addEventListener('click', () => setDoorW(0.7));
+      bar.querySelector('#ctx-door-w800')?.addEventListener('click', () => setDoorW(0.8));
+      bar.querySelector('#ctx-door-w900')?.addEventListener('click', () => setDoorW(0.9));
+      bar.querySelector('#ctx-door-w1000')?.addEventListener('click', () => setDoorW(1.0));
+      bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
+      bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
+      return;
+    }
+
+    if (sel.kind === 'window') {
+      bar.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+          <span class="context-tag-badge" style="background: rgba(56,189,248,0.15); color: var(--accent-primary, #38bdf8);">WINDOW</span>
+          <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(sel.name)} (${(sel.width * 1000).toFixed(0)}mm)</span>
+          <span style="font-size: 0.68rem; color: var(--text-muted); margin-left: 2px;">Width:</span>
+          <button type="button" class="context-action-btn ${Math.abs(sel.width - 0.9) < 0.01 ? 'active' : ''}" id="ctx-win-w900">900</button>
+          <button type="button" class="context-action-btn ${Math.abs(sel.width - 1.2) < 0.01 ? 'active' : ''}" id="ctx-win-w1200">1200</button>
+          <button type="button" class="context-action-btn ${Math.abs(sel.width - 1.5) < 0.01 ? 'active' : ''}" id="ctx-win-w1500">1500</button>
+          <button type="button" class="context-action-btn ${Math.abs(sel.width - 1.8) < 0.01 ? 'active' : ''}" id="ctx-win-w1800">1800</button>
+          <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate</span></button>
+          <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete</span></button>
+        </div>
+      `;
+
+      const setWinW = (w) => {
+        sel.width = w;
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        AudioService.playTick();
+      };
+      bar.querySelector('#ctx-win-w900')?.addEventListener('click', () => setWinW(0.9));
+      bar.querySelector('#ctx-win-w1200')?.addEventListener('click', () => setWinW(1.2));
+      bar.querySelector('#ctx-win-w1500')?.addEventListener('click', () => setWinW(1.5));
+      bar.querySelector('#ctx-win-w1800')?.addEventListener('click', () => setWinW(1.8));
       bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
       bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
       return;
@@ -25055,10 +25786,39 @@ function createPlanView(context) {
       })
       .join('');
 
+    const isNum = v => typeof v === 'number' && isFinite(v);
+    const allWalls = entities().filter(x => x.kind === 'wall' && isNum(x.x1) && isNum(x.y1) && isNum(x.x2) && isNum(x.y2));
+    const wallJunctions = calcWallJunctions(allWalls);
+
+    const defsMarkup = `
+      <defs>
+        <pattern id="hatch-diagonal" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="10" stroke="var(--border-color, #888)" stroke-width="1.2" opacity="0.45"/>
+        </pattern>
+        <pattern id="hatch-crosshatch" width="10" height="10" patternUnits="userSpaceOnUse">
+          <line x1="0" y1="0" x2="10" y2="10" stroke="var(--border-color, #888)" stroke-width="0.9" opacity="0.4"/>
+          <line x1="10" y1="0" x2="0" y2="10" stroke="var(--border-color, #888)" stroke-width="0.9" opacity="0.4"/>
+        </pattern>
+        <pattern id="hatch-brick" width="16" height="8" patternUnits="userSpaceOnUse">
+          <line x1="0" y1="0" x2="16" y2="0" stroke="var(--border-color, #888)" stroke-width="0.8" opacity="0.5"/>
+          <line x1="0" y1="4" x2="16" y2="4" stroke="var(--border-color, #888)" stroke-width="0.8" opacity="0.5"/>
+          <line x1="0" y1="0" x2="0" y2="4" stroke="var(--border-color, #888)" stroke-width="0.8" opacity="0.5"/>
+          <line x1="8" y1="4" x2="8" y2="8" stroke="var(--border-color, #888)" stroke-width="0.8" opacity="0.5"/>
+        </pattern>
+        <pattern id="hatch-insulation" width="12" height="12" patternUnits="userSpaceOnUse">
+          <path d="M 0 6 Q 3 0 6 6 T 12 6" fill="none" stroke="var(--color-warning, #eab308)" stroke-width="1.2" opacity="0.6"/>
+        </pattern>
+        <pattern id="hatch-concrete" width="14" height="14" patternUnits="userSpaceOnUse">
+          <circle cx="2" cy="3" r="0.7" fill="var(--text-muted, #888)" opacity="0.6"/>
+          <circle cx="8" cy="9" r="0.7" fill="var(--text-muted, #888)" opacity="0.6"/>
+          <polygon points="9,2 11,4 10,5" fill="none" stroke="var(--text-muted, #888)" stroke-width="0.7" opacity="0.5"/>
+          <polygon points="3,9 4,11 2,11" fill="none" stroke="var(--text-muted, #888)" stroke-width="0.7" opacity="0.5"/>
+        </pattern>
+      </defs>`;
+
     const entityMarkup = entities().map(e => {
       const selected = state.plan.selectedIds.has(e.id);
       const stroke = selected ? 'var(--color-warning, #fbbf24)' : 'var(--accent-primary, #7aa2ff)';
-      const isNum = v => typeof v === 'number' && isFinite(v);
       const hasRect = isNum(e.x) && isNum(e.y) && isNum(e.width) && isNum(e.depth);
 
       if (e.kind === 'room') {
@@ -25087,12 +25847,117 @@ function createPlanView(context) {
         }
       }
       if (e.kind === 'wall' && isNum(e.x1) && isNum(e.y1) && isNum(e.x2) && isNum(e.y2)) {
+        const len = wallLength(e);
+        if (len < 1e-4) {
+          const a = worldToSvg(transform, e.x1, e.y1);
+          const b = worldToSvg(transform, e.x2, e.y2);
+          return `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${stroke}" stroke-width="2" class="plan-entity" data-entity-id="${escapeHtml(e.id)}"/>`;
+        }
+
+        const assembly = WALL_ASSEMBLIES[e.assemblyId] || WALL_ASSEMBLIES['generic-200'];
+        const totalThick = typeof e.thickness === 'number' && e.thickness > 0
+          ? e.thickness
+          : (assembly ? assembly.totalThickness : 0.2);
+        const halfThick = totalThick / 2;
+
+        const u = { x: (e.x2 - e.x1) / len, y: (e.y2 - e.y1) / len };
+        const n = { x: -u.y, y: u.x };
+
+        const openings = wallOpenings(e, entities());
+        const solidSpans = punchWallSpans(len, openings);
+        const juncInfo = wallJunctions ? wallJunctions.get(e.id) : null;
+
+        const layers = (assembly && Array.isArray(assembly.layers) && assembly.layers.length > 0)
+          ? assembly.layers
+          : [{ id: 'core', name: 'Core', thickness: totalThick, color: 'rgba(122,162,255,0.18)', hatch: 'solid' }];
+
+        const assemblySum = layers.reduce((sum, l) => sum + (l.thickness || 0), 0) || totalThick;
+        const scaleFactor = totalThick / assemblySum;
+
+        let wallSvg = '';
+
+        for (const span of solidSpans) {
+          const isAtStart = Math.abs(span.start) < 1e-4;
+          const isAtEnd = Math.abs(span.end - len) < 1e-4;
+
+          let startB, startA, endB, endA;
+
+          if (isAtStart && juncInfo && Array.isArray(juncInfo.polygon) && juncInfo.polygon.length === 4) {
+            startB = juncInfo.polygon[0];
+            startA = juncInfo.polygon[3];
+          } else {
+            const p = { x: e.x1 + span.start * u.x, y: e.y1 + span.start * u.y };
+            startB = { x: p.x - n.x * halfThick, y: p.y - n.y * halfThick };
+            startA = { x: p.x + n.x * halfThick, y: p.y + n.y * halfThick };
+          }
+
+          if (isAtEnd && juncInfo && Array.isArray(juncInfo.polygon) && juncInfo.polygon.length === 4) {
+            endB = juncInfo.polygon[1];
+            endA = juncInfo.polygon[2];
+          } else {
+            const p = { x: e.x1 + span.end * u.x, y: e.y1 + span.end * u.y };
+            endB = { x: p.x - n.x * halfThick, y: p.y - n.y * halfThick };
+            endA = { x: p.x + n.x * halfThick, y: p.y + n.y * halfThick };
+          }
+
+          const interpStart = (tFrac) => ({
+            x: startB.x + tFrac * (startA.x - startB.x),
+            y: startB.y + tFrac * (startA.y - startB.y)
+          });
+          const interpEnd = (tFrac) => ({
+            x: endB.x + tFrac * (endA.x - endB.x),
+            y: endB.y + tFrac * (endA.y - endB.y)
+          });
+
+          let currentFraction = 0;
+          for (let li = 0; li < layers.length; li++) {
+            const layer = layers[li];
+            const layerFrac = ((layer.thickness || 0) * scaleFactor) / totalThick;
+            const nextFraction = Math.min(1.0, currentFraction + layerFrac);
+
+            const pt0 = interpStart(currentFraction);
+            const pt1 = interpEnd(currentFraction);
+            const pt2 = interpEnd(nextFraction);
+            const pt3 = interpStart(nextFraction);
+            currentFraction = nextFraction;
+
+            const sp0 = worldToSvg(transform, pt0.x, pt0.y);
+            const sp1 = worldToSvg(transform, pt1.x, pt1.y);
+            const sp2 = worldToSvg(transform, pt2.x, pt2.y);
+            const sp3 = worldToSvg(transform, pt3.x, pt3.y);
+
+            const pts = `${sp0.x.toFixed(1)},${sp0.y.toFixed(1)} ${sp1.x.toFixed(1)},${sp1.y.toFixed(1)} ${sp2.x.toFixed(1)},${sp2.y.toFixed(1)} ${sp3.x.toFixed(1)},${sp3.y.toFixed(1)}`;
+            const layerColor = layer.color || 'rgba(122,162,255,0.18)';
+            const hatchId = layer.hatch && layer.hatch !== 'solid' ? `hatch-${layer.hatch}` : null;
+
+            wallSvg += `<polygon points="${pts}" fill="${layerColor}" stroke="${stroke}" stroke-width="${selected ? 1.5 : 0.8}" stroke-linejoin="round"/>`;
+            if (hatchId) {
+              wallSvg += `<polygon points="${pts}" fill="url(#${hatchId})" stroke="none" opacity="0.85" pointer-events="none"/>`;
+            }
+          }
+
+          if (!isAtStart) {
+            const sj0 = worldToSvg(transform, startB.x, startB.y);
+            const sj1 = worldToSvg(transform, startA.x, startA.y);
+            wallSvg += `<line x1="${sj0.x.toFixed(1)}" y1="${sj0.y.toFixed(1)}" x2="${sj1.x.toFixed(1)}" y2="${sj1.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.2 : 1.4}"/>`;
+          }
+          if (!isAtEnd) {
+            const ej0 = worldToSvg(transform, endB.x, endB.y);
+            const ej1 = worldToSvg(transform, endA.x, endA.y);
+            wallSvg += `<line x1="${ej0.x.toFixed(1)}" y1="${ej0.y.toFixed(1)}" x2="${ej1.x.toFixed(1)}" y2="${ej1.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.2 : 1.4}"/>`;
+          }
+        }
+
         const a = worldToSvg(transform, e.x1, e.y1);
         const b = worldToSvg(transform, e.x2, e.y2);
-        const thickness = isNum(e.thickness) ? e.thickness : 0.2;
-        return `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"
-          stroke="${stroke}" stroke-width="${Math.max(3, thickness * transform.zoom)}" stroke-linecap="square"
-          data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>`;
+        const hitWidth = Math.max(12, totalThick * transform.zoom);
+        wallSvg += `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="transparent" stroke-width="${hitWidth.toFixed(1)}" stroke-linecap="butt"/>`;
+
+        if (selected) {
+          wallSvg += `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="var(--color-warning, #fbbf24)" stroke-width="1" stroke-dasharray="4 3" opacity="0.75" pointer-events="none"/>`;
+        }
+
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">${wallSvg}</g>`;
       }
       if (e.kind === 'furniture' && hasRect) {
         const p1 = worldToSvg(transform, e.x, e.y + e.depth);
@@ -25121,32 +25986,94 @@ function createPlanView(context) {
       if (e.kind === 'door') {
         const w = entities().find(x => x.id === e.wallId);
         if (w && typeof w.x1 === 'number') {
-          const len = wallLength(w);
-          const t = len > 0 ? (e.position / len) : 0;
-          const wx = w.x1 + t * (w.x2 - w.x1);
-          const wy = w.y1 + t * (w.y2 - w.y1);
-          const p = worldToSvg(transform, wx, wy);
-          const doorR = (e.width || 0.9) * transform.zoom;
-          return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
-            <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="var(--color-warning, #fbbf24)"/>
-            <path d="M ${p.x.toFixed(1)} ${p.y.toFixed(1)} A ${doorR.toFixed(1)} ${doorR.toFixed(1)} 0 0 1 ${(p.x + doorR).toFixed(1)} ${(p.y - doorR).toFixed(1)}" fill="none" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.5}" stroke-dasharray="3 2"/>
-            <line x1="${p.x.toFixed(1)}" y1="${p.y.toFixed(1)}" x2="${(p.x + doorR).toFixed(1)}" y2="${p.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 3 : 2}"/>
-          </g>`;
+          try {
+            const doorCAD = calcDoorCADGeometry(w, e);
+            let doorSvg = '';
+            const jambCol = 'var(--text-secondary, #9aa)';
+
+            if (doorCAD.jamb1Line) {
+              const j1a = worldToSvg(transform, doorCAD.jamb1Line[0].x, doorCAD.jamb1Line[0].y);
+              const j1b = worldToSvg(transform, doorCAD.jamb1Line[1].x, doorCAD.jamb1Line[1].y);
+              doorSvg += `<line x1="${j1a.x.toFixed(1)}" y1="${j1a.y.toFixed(1)}" x2="${j1b.x.toFixed(1)}" y2="${j1b.y.toFixed(1)}" stroke="${jambCol}" stroke-width="1.6"/>`;
+            }
+            if (doorCAD.jamb2Line) {
+              const j2a = worldToSvg(transform, doorCAD.jamb2Line[0].x, doorCAD.jamb2Line[0].y);
+              const j2b = worldToSvg(transform, doorCAD.jamb2Line[1].x, doorCAD.jamb2Line[1].y);
+              doorSvg += `<line x1="${j2a.x.toFixed(1)}" y1="${j2a.y.toFixed(1)}" x2="${j2b.x.toFixed(1)}" y2="${j2b.y.toFixed(1)}" stroke="${jambCol}" stroke-width="1.6"/>`;
+            }
+
+            if (doorCAD.type === 'double') {
+              for (const leaf of doorCAD.leaves) {
+                const spHinge = worldToSvg(transform, leaf.hinge.x, leaf.hinge.y);
+                const spOpen = worldToSvg(transform, leaf.openEnd.x, leaf.openEnd.y);
+                const spClosed = worldToSvg(transform, leaf.closedEnd.x, leaf.closedEnd.y);
+                const rSvg = leaf.radius * transform.zoom;
+                const dx1 = spClosed.x - spHinge.x, dy1 = spClosed.y - spHinge.y;
+                const dx2 = spOpen.x - spHinge.x, dy2 = spOpen.y - spHinge.y;
+                const cross = dx1 * dy2 - dy1 * dx2;
+                const sweepFlag = cross > 0 ? 1 : 0;
+
+                doorSvg += `
+                  <circle cx="${spHinge.x.toFixed(1)}" cy="${spHinge.y.toFixed(1)}" r="3" fill="var(--color-warning, #fbbf24)"/>
+                  <line x1="${spHinge.x.toFixed(1)}" y1="${spHinge.y.toFixed(1)}" x2="${spOpen.x.toFixed(1)}" y2="${spOpen.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 2}"/>
+                  <path d="M ${spClosed.x.toFixed(1)} ${spClosed.y.toFixed(1)} A ${rSvg.toFixed(1)} ${rSvg.toFixed(1)} 0 0 ${sweepFlag} ${spOpen.x.toFixed(1)} ${spOpen.y.toFixed(1)}" fill="none" stroke="${stroke}" stroke-width="${selected ? 2 : 1.2}" stroke-dasharray="3 2"/>
+                `;
+              }
+            } else {
+              const spHinge = worldToSvg(transform, doorCAD.hinge.x, doorCAD.hinge.y);
+              const spOpen = worldToSvg(transform, doorCAD.openEnd.x, doorCAD.openEnd.y);
+              const spClosed = worldToSvg(transform, doorCAD.closedEnd.x, doorCAD.closedEnd.y);
+              const rSvg = doorCAD.radius * transform.zoom;
+              const dx1 = spClosed.x - spHinge.x, dy1 = spClosed.y - spHinge.y;
+              const dx2 = spOpen.x - spHinge.x, dy2 = spOpen.y - spHinge.y;
+              const cross = dx1 * dy2 - dy1 * dx2;
+              const sweepFlag = cross > 0 ? 1 : 0;
+
+              doorSvg += `
+                <circle cx="${spHinge.x.toFixed(1)}" cy="${spHinge.y.toFixed(1)}" r="3.5" fill="var(--color-warning, #fbbf24)"/>
+                <line x1="${spHinge.x.toFixed(1)}" y1="${spHinge.y.toFixed(1)}" x2="${spOpen.x.toFixed(1)}" y2="${spOpen.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.8 : 2}"/>
+                <path d="M ${spClosed.x.toFixed(1)} ${spClosed.y.toFixed(1)} A ${rSvg.toFixed(1)} ${rSvg.toFixed(1)} 0 0 ${sweepFlag} ${spOpen.x.toFixed(1)} ${spOpen.y.toFixed(1)}" fill="none" stroke="${stroke}" stroke-width="${selected ? 2 : 1.2}" stroke-dasharray="3 2"/>
+              `;
+            }
+
+            return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">${doorSvg}</g>`;
+          } catch (err) {
+            // fallback
+          }
         }
       }
       if (e.kind === 'window') {
         const w = entities().find(x => x.id === e.wallId);
         if (w && typeof w.x1 === 'number') {
-          const len = wallLength(w);
-          const t1 = len > 0 ? (e.position / len) : 0;
-          const t2 = len > 0 ? (Math.min(len, e.position + (e.width || 1.2)) / len) : 0;
-          const p1 = worldToSvg(transform, w.x1 + t1 * (w.x2 - w.x1), w.y1 + t1 * (w.y2 - w.y1));
-          const p2 = worldToSvg(transform, w.x1 + t2 * (w.x2 - w.x1), w.y1 + t2 * (w.y2 - w.y1));
-          return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
-            <line x1="${p1.x.toFixed(1)}" y1="${p1.y.toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${p2.y.toFixed(1)}" stroke="var(--bg-app, #121214)" stroke-width="6"/>
-            <line x1="${p1.x.toFixed(1)}" y1="${(p1.y - 2).toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${(p2.y - 2).toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.8}"/>
-            <line x1="${p1.x.toFixed(1)}" y1="${(p1.y + 2).toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${(p2.y + 2).toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.8}"/>
-          </g>`;
+          try {
+            const winCAD = calcWindowCADGeometry(w, e);
+            const j1a = worldToSvg(transform, winCAD.jamb1[0].x, winCAD.jamb1[0].y);
+            const j1b = worldToSvg(transform, winCAD.jamb1[1].x, winCAD.jamb1[1].y);
+            const j2a = worldToSvg(transform, winCAD.jamb2[0].x, winCAD.jamb2[0].y);
+            const j2b = worldToSvg(transform, winCAD.jamb2[1].x, winCAD.jamb2[1].y);
+
+            const soA = worldToSvg(transform, winCAD.sillOuter[0].x, winCAD.sillOuter[0].y);
+            const soB = worldToSvg(transform, winCAD.sillOuter[1].x, winCAD.sillOuter[1].y);
+            const siA = worldToSvg(transform, winCAD.sillInner[0].x, winCAD.sillInner[0].y);
+            const siB = worldToSvg(transform, winCAD.sillInner[1].x, winCAD.sillInner[1].y);
+
+            const g1a = worldToSvg(transform, winCAD.glassPane1[0].x, winCAD.glassPane1[0].y);
+            const g1b = worldToSvg(transform, winCAD.glassPane1[1].x, winCAD.glassPane1[1].y);
+            const g2a = worldToSvg(transform, winCAD.glassPane2[0].x, winCAD.glassPane2[0].y);
+            const g2b = worldToSvg(transform, winCAD.glassPane2[1].x, winCAD.glassPane2[1].y);
+
+            return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+              <polygon points="${g1a.x.toFixed(1)},${g1a.y.toFixed(1)} ${g1b.x.toFixed(1)},${g1b.y.toFixed(1)} ${g2b.x.toFixed(1)},${g2b.y.toFixed(1)} ${g2a.x.toFixed(1)},${g2a.y.toFixed(1)}" fill="rgba(56, 189, 248, 0.22)"/>
+              <line x1="${j1a.x.toFixed(1)}" y1="${j1a.y.toFixed(1)}" x2="${j1b.x.toFixed(1)}" y2="${j1b.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.5}"/>
+              <line x1="${j2a.x.toFixed(1)}" y1="${j2a.y.toFixed(1)}" x2="${j2b.x.toFixed(1)}" y2="${j2b.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.5}"/>
+              <line x1="${soA.x.toFixed(1)}" y1="${soA.y.toFixed(1)}" x2="${soB.x.toFixed(1)}" y2="${soB.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.8}"/>
+              <line x1="${siA.x.toFixed(1)}" y1="${siA.y.toFixed(1)}" x2="${siB.x.toFixed(1)}" y2="${siB.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.4}"/>
+              <line x1="${g1a.x.toFixed(1)}" y1="${g1a.y.toFixed(1)}" x2="${g1b.x.toFixed(1)}" y2="${g1b.y.toFixed(1)}" stroke="var(--cyan-glow, #38bdf8)" stroke-width="1.2"/>
+              <line x1="${g2a.x.toFixed(1)}" y1="${g2a.y.toFixed(1)}" x2="${g2b.x.toFixed(1)}" y2="${g2b.y.toFixed(1)}" stroke="var(--cyan-glow, #38bdf8)" stroke-width="1.2"/>
+            </g>`;
+          } catch (err) {
+            // fallback
+          }
         }
       }
       if (e.kind === 'dimension' && typeof e.x1 === 'number' && typeof e.x2 === 'number') {
@@ -25340,6 +26267,7 @@ function createPlanView(context) {
     }
 
     dom.planSvg.innerHTML = `
+      ${defsMarkup}
       <g class="plan-grid">${gridLines}</g>
       <g class="plan-entities">${entityMarkup}</g>
       ${guidesMarkup}
@@ -25944,11 +26872,21 @@ function createPlanView(context) {
       const dir = typeof selected.x1 === 'number' ? wallDirection(selected) : '—';
       const thick = typeof selected.thickness === 'number' ? selected.thickness : 0.2;
       const openings = es.filter(e => (e.kind === 'door' || e.kind === 'window') && e.wallId === selected.id);
+      const currentAssId = selected.assemblyId || 'generic-200';
+      const assemblyOpts = Object.values(WALL_ASSEMBLIES).map(a =>
+        `<option value="${a.id}" ${currentAssId === a.id ? 'selected' : ''}>${a.name}</option>`
+      ).join('');
 
       dom.planPropContent.innerHTML = `
         <div class="plan-prop-section">
           <div class="plan-prop-title">Wall Parameters</div>
           <div class="plan-prop-row"><span class="plan-prop-label">Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name)}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Assembly</span>
+            <select class="calc-input" id="prop-wall-assembly" style="height: 24px; font-size: 0.72rem; padding: 0 4px; max-width: 160px;">
+              ${assemblyOpts}
+            </select>
+          </div>
           <div class="plan-prop-row"><span class="plan-prop-label">Length</span><span class="plan-prop-value note-number">${len.toFixed(2)} m</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Direction</span><span class="plan-prop-value" style="text-transform: capitalize;">${escapeHtml(dir)}</span></div>
           <div class="plan-prop-row">
@@ -25969,6 +26907,19 @@ function createPlanView(context) {
       dom.planPropContent.querySelector('#prop-entity-name')?.addEventListener('change', (e) => {
         selected.name = e.target.value.trim() || 'Wall';
         render();
+      });
+
+      dom.planPropContent.querySelector('#prop-wall-assembly')?.addEventListener('change', (e) => {
+        const assId = e.target.value;
+        const ass = WALL_ASSEMBLIES[assId];
+        if (ass) {
+          selected.assemblyId = assId;
+          selected.thickness = ass.totalThickness;
+          render();
+          renderPropertiesInspector();
+          renderContextualToolbar();
+          showToast(`Wall assembly: ${ass.name}`);
+        }
       });
 
       const wallThickInput = dom.planPropContent.querySelector('#prop-wall-thickness');
@@ -25994,24 +26945,172 @@ function createPlanView(context) {
         });
       });
 
-    } else if (selected.kind === 'door' || selected.kind === 'window') {
-      const isDoor = selected.kind === 'door';
+    } else if (selected.kind === 'door') {
       const wall = es.find(w => w.id === selected.wallId);
       const fits = wall ? openingFitsWall(selected, wall) : { fits: false, reason: 'Orphaned opening' };
 
       dom.planPropContent.innerHTML = `
         <div class="plan-prop-section">
-          <div class="plan-prop-title">${isDoor ? 'Door' : 'Window'} Specifications</div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Name</span><span class="plan-prop-value">${escapeHtml(selected.name)}</span></div>
+          <div class="plan-prop-title">Door Specifications</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name)}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Host Wall</span><span class="plan-prop-value">${wall ? escapeHtml(wall.name) : 'None'}</span></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Wall Offset</span><span class="plan-prop-value">${typeof selected.position === 'number' ? selected.position.toFixed(2) : '0'} m</span></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Width</span><span class="plan-prop-value">${typeof selected.width === 'number' ? selected.width.toFixed(2) : '0.9'} m</span></div>
-          ${isDoor ? `<div class="plan-prop-row"><span class="plan-prop-label">Swing</span><span class="plan-prop-value" style="text-transform: capitalize;">${escapeHtml(selected.swing || 'left')}</span></div>` : ''}
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Width</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-door-w" class="text-input" value="${(selected.width || 0.9).toFixed(2)}" step="0.05" min="0.5" max="3.0" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Wall Offset</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-door-pos" class="text-input" value="${(selected.position || 0).toFixed(2)}" step="0.1" min="0" max="50" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Swing</span>
+            <select class="calc-input" id="prop-door-swing" style="height: 24px; font-size: 0.72rem; padding: 0 4px; max-width: 110px;">
+              <option value="left" ${selected.swing === 'left' ? 'selected' : ''}>Left Swing</option>
+              <option value="right" ${selected.swing === 'right' ? 'selected' : ''}>Right Swing</option>
+              <option value="double" ${selected.swing === 'double' ? 'selected' : ''}>Double Swing</option>
+            </select>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Side Flip</span>
+            <button type="button" class="plan-prop-btn" id="prop-door-flip-btn" style="padding: 2px 8px; font-size: 0.72rem;">${selected.flipSide ? 'Outward' : 'Inward'}</button>
+          </div>
           <div class="plan-prop-row"><span class="plan-prop-label">Wall Fit</span><span class="plan-prop-badge ${fits.fits ? 'fits' : 'no-fit'}">${fits.fits ? 'FITS' : 'OVERFLOW'}</span></div>
         </div>
         <div class="plan-prop-actions">
-          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Opening</span></button>
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Door</span></button>
         </div>`;
+
+      dom.planPropContent.querySelector('#prop-entity-name')?.addEventListener('change', (e) => {
+        selected.name = e.target.value.trim() || 'Door';
+        render();
+      });
+
+      const doorWInput = dom.planPropContent.querySelector('#prop-door-w');
+      if (doorWInput) {
+        attachNumericScrubber(doorWInput, {
+          step: 0.05, min: 0.5, max: 3.0, precision: 2,
+          onChange: (val) => { selected.width = val; render(); },
+          onCommit: (val) => { selected.width = val; render(); renderContextualToolbar(); }
+        });
+        doorWInput.addEventListener('change', (e) => {
+          selected.width = Math.max(0.5, parseFloat(e.target.value) || 0.9);
+          render();
+          renderContextualToolbar();
+        });
+      }
+
+      const doorPosInput = dom.planPropContent.querySelector('#prop-door-pos');
+      if (doorPosInput) {
+        attachNumericScrubber(doorPosInput, {
+          step: 0.1, min: 0, max: 50, precision: 2,
+          onChange: (val) => { selected.position = val; render(); },
+          onCommit: (val) => { selected.position = val; render(); }
+        });
+        doorPosInput.addEventListener('change', (e) => {
+          selected.position = Math.max(0, parseFloat(e.target.value) || 0);
+          render();
+        });
+      }
+
+      dom.planPropContent.querySelector('#prop-door-swing')?.addEventListener('change', (e) => {
+        selected.swing = e.target.value;
+        render();
+        renderContextualToolbar();
+      });
+
+      dom.planPropContent.querySelector('#prop-door-flip-btn')?.addEventListener('click', () => {
+        selected.flipSide = !selected.flipSide;
+        render();
+        renderPropertiesInspector();
+        renderContextualToolbar();
+      });
+
+    } else if (selected.kind === 'window') {
+      const wall = es.find(w => w.id === selected.wallId);
+      const fits = wall ? openingFitsWall(selected, wall) : { fits: false, reason: 'Orphaned opening' };
+
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Window Specifications</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name)}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Host Wall</span><span class="plan-prop-value">${wall ? escapeHtml(wall.name) : 'None'}</span></div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Width</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-win-w" class="text-input" value="${(selected.width || 1.2).toFixed(2)}" step="0.05" min="0.4" max="6.0" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Wall Offset</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-win-pos" class="text-input" value="${(selected.position || 0).toFixed(2)}" step="0.1" min="0" max="50" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Sill Height</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-win-sill" class="text-input" value="${(selected.sill || 0.9).toFixed(2)}" step="0.05" min="0" max="2.5" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Wall Fit</span><span class="plan-prop-badge ${fits.fits ? 'fits' : 'no-fit'}">${fits.fits ? 'FITS' : 'OVERFLOW'}</span></div>
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Window</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-entity-name')?.addEventListener('change', (e) => {
+        selected.name = e.target.value.trim() || 'Window';
+        render();
+      });
+
+      const winWInput = dom.planPropContent.querySelector('#prop-win-w');
+      if (winWInput) {
+        attachNumericScrubber(winWInput, {
+          step: 0.05, min: 0.4, max: 6.0, precision: 2,
+          onChange: (val) => { selected.width = val; render(); },
+          onCommit: (val) => { selected.width = val; render(); renderContextualToolbar(); }
+        });
+        winWInput.addEventListener('change', (e) => {
+          selected.width = Math.max(0.4, parseFloat(e.target.value) || 1.2);
+          render();
+          renderContextualToolbar();
+        });
+      }
+
+      const winPosInput = dom.planPropContent.querySelector('#prop-win-pos');
+      if (winPosInput) {
+        attachNumericScrubber(winPosInput, {
+          step: 0.1, min: 0, max: 50, precision: 2,
+          onChange: (val) => { selected.position = val; render(); },
+          onCommit: (val) => { selected.position = val; render(); }
+        });
+        winPosInput.addEventListener('change', (e) => {
+          selected.position = Math.max(0, parseFloat(e.target.value) || 0);
+          render();
+        });
+      }
+
+      const winSillInput = dom.planPropContent.querySelector('#prop-win-sill');
+      if (winSillInput) {
+        attachNumericScrubber(winSillInput, {
+          step: 0.05, min: 0, max: 2.5, precision: 2,
+          onChange: (val) => { selected.sill = val; render(); },
+          onCommit: (val) => { selected.sill = val; render(); }
+        });
+        winSillInput.addEventListener('change', (e) => {
+          selected.sill = Math.max(0, parseFloat(e.target.value) || 0.9);
+          render();
+        });
+      }
 
     } else if (selected.kind === 'dimension') {
       const dist = Math.hypot(selected.x2 - selected.x1, selected.y2 - selected.y1);
@@ -26427,6 +27526,19 @@ function createPlanView(context) {
             dragState.entity.x = Math.min(dragState.entity.x1, dragState.entity.x2);
             dragState.entity.y = Math.min(dragState.entity.y1, dragState.entity.y2);
           }
+        } else if (dragState.entity.kind === 'door' || dragState.entity.kind === 'window') {
+          const hostWall = entities().find(w => w.id === dragState.entity.wallId);
+          if (hostWall && typeof hostWall.x1 === 'number') {
+            const dxW = hostWall.x2 - hostWall.x1;
+            const dyW = hostWall.y2 - hostWall.y1;
+            const lenW = Math.hypot(dxW, dyW);
+            if (lenW > 1e-4) {
+              const uW = { x: dxW / lenW, y: dyW / lenW };
+              const dPos = dx * uW.x + dy * uW.y;
+              const maxPos = Math.max(0, lenW - (dragState.entity.width || 0.9));
+              dragState.entity.position = Math.max(0, Math.min(maxPos, (dragState.entity.position || 0) + dPos));
+            }
+          }
         } else {
           dragState.entity.x += dx;
           dragState.entity.y += dy;
@@ -26559,6 +27671,7 @@ function createPlanView(context) {
     state.plan.selectedIds = new Set([room.id]);
     showToast(`Room added: ${width.toFixed(2)} × ${depth.toFixed(2)} m (${roomArea(room).toFixed(2)} m²)`);
     AudioService.playTick();
+    render();
   }
 
   function createWallEntity(start, end) {
@@ -26579,6 +27692,7 @@ function createPlanView(context) {
     state.plan.selectedIds = new Set([wall.id]);
     showToast(`Wall added: ${wallLength(wall).toFixed(2)} m`);
     AudioService.playTick();
+    render();
   }
 
   function createStairEntityFromDrag(start, end) {
@@ -26607,6 +27721,7 @@ function createPlanView(context) {
     state.plan.selectedIds = new Set([stair.id]);
     showToast(`Stair added: ${width.toFixed(2)}m width × ${run.toFixed(2)}m run (${stair.risers}R @ ${(stair.riserHeight * 1000).toFixed(0)}mm)`);
     AudioService.playTick();
+    render();
   }
 
   function createRampEntityFromDrag(start, end) {
@@ -26633,6 +27748,7 @@ function createPlanView(context) {
     state.plan.selectedIds = new Set([ramp.id]);
     showToast(`Ramp added: ${width.toFixed(2)}m width × ${run.toFixed(2)}m run (1:${ramp.slopeRatio.toFixed(1)} / ${ramp.slopePercent.toFixed(1)}%)`);
     AudioService.playTick();
+    render();
   }
 
   function sendToScratchpad(item) {

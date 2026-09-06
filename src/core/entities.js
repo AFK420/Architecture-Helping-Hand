@@ -143,10 +143,69 @@ export function rectsIntersect(a, b) {
 }
 
 // ---------------------------------------------------------------------------
+// Wall Assemblies Catalog (composite multi-layer parametric definitions)
+// ---------------------------------------------------------------------------
+
+export const WALL_ASSEMBLIES = Object.freeze({
+  'generic-200': {
+    id: 'generic-200',
+    name: 'Generic Solid 200mm',
+    category: 'basic',
+    totalThickness: 0.20,
+    layers: [
+      { id: 'core', name: 'Solid Core', thickness: 0.20, material: 'concrete', hatch: 'solid', color: 'rgba(122,162,255,0.18)' }
+    ]
+  },
+  'interior-partition-100': {
+    id: 'interior-partition-100',
+    name: 'Interior Stud Partition 100mm',
+    category: 'interior',
+    totalThickness: 0.10,
+    layers: [
+      { id: 'gyp-1', name: 'Gypsum Board', thickness: 0.013, material: 'gypsum', hatch: 'solid', color: 'rgba(200,200,210,0.3)' },
+      { id: 'stud', name: 'Metal / Wood Stud', thickness: 0.074, material: 'stud_cavity', hatch: 'diagonal', color: 'rgba(120,130,150,0.15)' },
+      { id: 'gyp-2', name: 'Gypsum Board', thickness: 0.013, material: 'gypsum', hatch: 'solid', color: 'rgba(200,200,210,0.3)' }
+    ]
+  },
+  'interior-masonry-150': {
+    id: 'interior-masonry-150',
+    name: 'Interior Masonry 150mm',
+    category: 'interior',
+    totalThickness: 0.15,
+    layers: [
+      { id: 'plaster-1', name: 'Plaster / Render', thickness: 0.012, material: 'plaster', hatch: 'solid', color: 'rgba(220,220,220,0.25)' },
+      { id: 'cmu', name: 'CMU Block', thickness: 0.126, material: 'masonry', hatch: 'crosshatch', color: 'rgba(160,160,170,0.2)' },
+      { id: 'plaster-2', name: 'Plaster / Render', thickness: 0.012, material: 'plaster', hatch: 'solid', color: 'rgba(220,220,220,0.25)' }
+    ]
+  },
+  'exterior-cavity-265': {
+    id: 'exterior-cavity-265',
+    name: 'Exterior Brick Cavity 265mm',
+    category: 'exterior',
+    totalThickness: 0.265,
+    layers: [
+      { id: 'brick', name: 'Face Brick', thickness: 0.102, material: 'brick', hatch: 'brick', color: 'rgba(217,119,6,0.25)' },
+      { id: 'air-insul', name: 'Cavity & Insulation', thickness: 0.050, material: 'insulation', hatch: 'insulation', color: 'rgba(234,179,8,0.2)' },
+      { id: 'block', name: 'CMU Inner Leaf', thickness: 0.100, material: 'blockwork', hatch: 'crosshatch', color: 'rgba(148,163,184,0.2)' },
+      { id: 'finish', name: 'Internal Gypsum', thickness: 0.013, material: 'gypsum', hatch: 'solid', color: 'rgba(226,232,240,0.2)' }
+    ]
+  },
+  'concrete-structural-250': {
+    id: 'concrete-structural-250',
+    name: 'Structural Concrete 250mm',
+    category: 'structural',
+    totalThickness: 0.25,
+    layers: [
+      { id: 'core', name: 'Reinforced Concrete', thickness: 0.25, material: 'rc_concrete', hatch: 'concrete', color: 'rgba(100,116,139,0.3)' }
+    ]
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Walls (unconstrained vector segments with thickness & curved arcs)
 // ---------------------------------------------------------------------------
 
-/** Wall: start/end points in world meters (supports arbitrary angles and curved arcs). */
+/** Wall: start/end points in world meters (supports arbitrary angles, assemblies, and curved arcs). */
 export function createWall({
   id,
   name,
@@ -156,8 +215,9 @@ export function createWall({
   y2,
   start,
   end,
-  thickness = 0.2,
+  thickness,
   height = 2.7,
+  assemblyId = 'generic-200',
   floorId = 'floor-1',
   material = 'generic',
   isArc = false,
@@ -172,7 +232,17 @@ export function createWall({
   requireFiniteNumber(actualY1, 'wall.y1');
   requireFiniteNumber(actualX2, 'wall.x2');
   requireFiniteNumber(actualY2, 'wall.y2');
-  if (thickness <= 0) throw new Error('Wall thickness must be greater than zero');
+
+  const assembly = WALL_ASSEMBLIES[assemblyId] || null;
+  let actualThickness;
+  if (thickness !== undefined && thickness !== null) {
+    requireFiniteNumber(thickness, 'wall.thickness');
+    if (thickness <= 0) throw new Error('Wall thickness must be greater than zero');
+    actualThickness = thickness;
+  } else {
+    actualThickness = assembly ? assembly.totalThickness : 0.2;
+  }
+  if (actualThickness <= 0) throw new Error('Wall thickness must be greater than zero');
 
   const dx = actualX2 - actualX1;
   const dy = actualY2 - actualY1;
@@ -192,8 +262,9 @@ export function createWall({
     y1: actualY1,
     x2: actualX2,
     y2: actualY2,
-    thickness,
+    thickness: actualThickness,
     height,
+    assemblyId: assembly ? assemblyId : 'generic-200',
     floorId,
     material,
     isArc: Boolean(isArc),
@@ -231,7 +302,16 @@ export function wallDirection(wall) {
 
 export const SWING_TYPES = Object.freeze(['left', 'right', 'double']);
 
-export function createDoor({ id, name, wallId, position, width = 0.9, height = 2.05, swing = 'left' }) {
+export function createDoor({
+  id,
+  name,
+  wallId,
+  position,
+  width = 0.9,
+  height = 2.05,
+  swing = 'left',
+  flipSide = false
+}) {
   if (typeof wallId !== 'string' || !wallId) throw new TypeError('Door requires a wallId');
   requireFiniteNumber(position, 'door.position');
   if (position < 0) throw new Error('Door position must be non-negative (offset along the wall)');
@@ -248,11 +328,22 @@ export function createDoor({ id, name, wallId, position, width = 0.9, height = 2
     position,
     width,
     height,
-    swing
+    swing,
+    flipSide: Boolean(flipSide)
   };
 }
 
-export function createWindow({ id, name, wallId, position, width = 1.2, height = 1.2, sill = 0.9 }) {
+export function createWindow({
+  id,
+  name,
+  wallId,
+  position,
+  width = 1.2,
+  height = 1.2,
+  sill = 0.9,
+  frameWidth = 0.05,
+  glazingPanes = 2
+}) {
   if (typeof wallId !== 'string' || !wallId) throw new TypeError('Window requires a wallId');
   requireFiniteNumber(position, 'window.position');
   if (position < 0) throw new Error('Window position must be non-negative');
@@ -266,8 +357,27 @@ export function createWindow({ id, name, wallId, position, width = 1.2, height =
     position,
     width,
     height,
-    sill
+    sill,
+    frameWidth,
+    glazingPanes
   };
+}
+
+/**
+ * Returns all valid doors and windows hosted on a specific wall, sorted by position along the wall.
+ * @param {Object} wall
+ * @param {Array<Object>} allEntities
+ * @returns {Array<Object>}
+ */
+export function wallOpenings(wall, allEntities = []) {
+  if (!wall || !wall.id) return [];
+  const list = Array.isArray(allEntities)
+    ? allEntities
+    : (allEntities && typeof allEntities === 'object' ? Object.values(allEntities).flat().filter(Boolean) : []);
+
+  return list
+    .filter(e => (e.kind === 'door' || e.kind === 'window') && e.wallId === wall.id)
+    .sort((a, b) => (a.position || 0) - (b.position || 0));
 }
 
 /**

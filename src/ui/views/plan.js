@@ -22,8 +22,13 @@ import {
   createRoom, createWall, createDoor, createWindow,
   placeFurniture, createStairEntity, createRampEntity,
   roomArea, wallLength, roomPerimeter, roomAspectRatio,
-  wallDirection, openingFitsWall, generateEntityId
+  wallDirection, openingFitsWall, generateEntityId,
+  WALL_ASSEMBLIES, wallOpenings
 } from '../../core/entities.js';
+import {
+  calcWallJunctions, punchWallSpans, calcDoorCADGeometry,
+  calcWindowCADGeometry, calcWallPolygon
+} from '../../core/geometry.js';
 import { checkFurnitureFit, checkClearance, checkOverlaps } from '../../core/space-planning.js';
 import { FURNITURE_DATABASE } from '../../core/furniture.js';
 import { getFurniturePlanSVG } from '../visualizer.js';
@@ -664,25 +669,50 @@ export function createPlanView(context) {
 
     if (sel.kind === 'wall') {
       const len = wallLength(sel);
+      const currentAssId = sel.assemblyId || 'generic-200';
+      const assemblyOpts = Object.values(WALL_ASSEMBLIES).map(a =>
+        `<option value="${a.id}" ${currentAssId === a.id ? 'selected' : ''}>${a.name}</option>`
+      ).join('');
+
       bar.innerHTML = `
         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
           <span class="context-tag-badge">WALL</span>
           <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(sel.name)} (${len.toFixed(2)}m)</span>
+          <select class="calc-input" id="ctx-wall-assembly" title="Select Wall Assembly" style="height: 26px; font-size: 0.72rem; padding: 0 4px; max-width: 170px;">
+            ${assemblyOpts}
+          </select>
           <button type="button" class="context-action-btn" id="ctx-wall-door"><span>🚪 + Door</span></button>
           <button type="button" class="context-action-btn" id="ctx-wall-win"><span>🪟 + Window</span></button>
           <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate (Ctrl+D)</span></button>
           <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete (Del)</span></button>
         </div>
       `;
+
+      bar.querySelector('#ctx-wall-assembly')?.addEventListener('change', (e) => {
+        const assId = e.target.value;
+        const ass = WALL_ASSEMBLIES[assId];
+        if (ass) {
+          sel.assemblyId = assId;
+          sel.thickness = ass.totalThickness;
+          showToast(`Wall assembly set to ${ass.name}`);
+          AudioService.playTick();
+          render();
+          renderPropertiesInspector();
+        }
+      });
+
       bar.querySelector('#ctx-wall-door')?.addEventListener('click', () => {
         try {
-          const door = createDoor({ wallId: sel.id, position: len / 2, width: 0.9 });
+          const door = createDoor({ wallId: sel.id, position: Math.max(0.1, len / 2 - 0.45), width: 0.9 });
           const cmd = entityAddRemoveCommand(entities(), door, `add door on ${sel.name}`);
           cmd.redo();
           history.push(cmd);
+          state.plan.selectedIds = new Set([door.id]);
           showToast('Door placed at wall center');
           AudioService.playTick();
           render();
+          renderContextualToolbar();
+          renderPropertiesInspector();
         } catch (e) { showToast(e.message, 'warning'); }
       });
       bar.querySelector('#ctx-wall-win')?.addEventListener('click', () => {
@@ -691,11 +721,97 @@ export function createPlanView(context) {
           const cmd = entityAddRemoveCommand(entities(), win, `add window on ${sel.name}`);
           cmd.redo();
           history.push(cmd);
+          state.plan.selectedIds = new Set([win.id]);
           showToast('Window placed at wall center');
           AudioService.playTick();
           render();
+          renderContextualToolbar();
+          renderPropertiesInspector();
         } catch (e) { showToast(e.message, 'warning'); }
       });
+      bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
+      bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
+      return;
+    }
+
+    if (sel.kind === 'door') {
+      bar.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+          <span class="context-tag-badge" style="background: rgba(251,191,36,0.15); color: var(--color-warning, #fbbf24);">DOOR</span>
+          <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(sel.name)} (${(sel.width * 1000).toFixed(0)}mm)</span>
+          <button type="button" class="context-action-btn" id="ctx-door-swing"><span>↻ Swing: ${sel.swing.toUpperCase()}</span></button>
+          <button type="button" class="context-action-btn" id="ctx-door-flip"><span>⇄ Side: ${sel.flipSide ? 'OUT' : 'IN'}</span></button>
+          <span style="font-size: 0.68rem; color: var(--text-muted); margin-left: 2px;">Width:</span>
+          <button type="button" class="context-action-btn ${Math.abs(sel.width - 0.7) < 0.01 ? 'active' : ''}" id="ctx-door-w700">700</button>
+          <button type="button" class="context-action-btn ${Math.abs(sel.width - 0.8) < 0.01 ? 'active' : ''}" id="ctx-door-w800">800</button>
+          <button type="button" class="context-action-btn ${Math.abs(sel.width - 0.9) < 0.01 ? 'active' : ''}" id="ctx-door-w900">900</button>
+          <button type="button" class="context-action-btn ${Math.abs(sel.width - 1.0) < 0.01 ? 'active' : ''}" id="ctx-door-w1000">1000</button>
+          <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate</span></button>
+          <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete</span></button>
+        </div>
+      `;
+
+      bar.querySelector('#ctx-door-swing')?.addEventListener('click', () => {
+        const nextSwing = sel.swing === 'left' ? 'right' : (sel.swing === 'right' ? 'double' : 'left');
+        sel.swing = nextSwing;
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        showToast(`Door swing set to ${nextSwing}`);
+        AudioService.playTick();
+      });
+
+      bar.querySelector('#ctx-door-flip')?.addEventListener('click', () => {
+        sel.flipSide = !sel.flipSide;
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        showToast(`Door flipped ${sel.flipSide ? 'outward' : 'inward'}`);
+        AudioService.playTick();
+      });
+
+      const setDoorW = (w) => {
+        sel.width = w;
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        AudioService.playTick();
+      };
+      bar.querySelector('#ctx-door-w700')?.addEventListener('click', () => setDoorW(0.7));
+      bar.querySelector('#ctx-door-w800')?.addEventListener('click', () => setDoorW(0.8));
+      bar.querySelector('#ctx-door-w900')?.addEventListener('click', () => setDoorW(0.9));
+      bar.querySelector('#ctx-door-w1000')?.addEventListener('click', () => setDoorW(1.0));
+      bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
+      bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
+      return;
+    }
+
+    if (sel.kind === 'window') {
+      bar.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+          <span class="context-tag-badge" style="background: rgba(56,189,248,0.15); color: var(--accent-primary, #38bdf8);">WINDOW</span>
+          <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(sel.name)} (${(sel.width * 1000).toFixed(0)}mm)</span>
+          <span style="font-size: 0.68rem; color: var(--text-muted); margin-left: 2px;">Width:</span>
+          <button type="button" class="context-action-btn ${Math.abs(sel.width - 0.9) < 0.01 ? 'active' : ''}" id="ctx-win-w900">900</button>
+          <button type="button" class="context-action-btn ${Math.abs(sel.width - 1.2) < 0.01 ? 'active' : ''}" id="ctx-win-w1200">1200</button>
+          <button type="button" class="context-action-btn ${Math.abs(sel.width - 1.5) < 0.01 ? 'active' : ''}" id="ctx-win-w1500">1500</button>
+          <button type="button" class="context-action-btn ${Math.abs(sel.width - 1.8) < 0.01 ? 'active' : ''}" id="ctx-win-w1800">1800</button>
+          <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate</span></button>
+          <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete</span></button>
+        </div>
+      `;
+
+      const setWinW = (w) => {
+        sel.width = w;
+        render();
+        renderContextualToolbar();
+        renderPropertiesInspector();
+        AudioService.playTick();
+      };
+      bar.querySelector('#ctx-win-w900')?.addEventListener('click', () => setWinW(0.9));
+      bar.querySelector('#ctx-win-w1200')?.addEventListener('click', () => setWinW(1.2));
+      bar.querySelector('#ctx-win-w1500')?.addEventListener('click', () => setWinW(1.5));
+      bar.querySelector('#ctx-win-w1800')?.addEventListener('click', () => setWinW(1.8));
       bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
       bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
       return;
@@ -842,10 +958,39 @@ export function createPlanView(context) {
       })
       .join('');
 
+    const isNum = v => typeof v === 'number' && isFinite(v);
+    const allWalls = entities().filter(x => x.kind === 'wall' && isNum(x.x1) && isNum(x.y1) && isNum(x.x2) && isNum(x.y2));
+    const wallJunctions = calcWallJunctions(allWalls);
+
+    const defsMarkup = `
+      <defs>
+        <pattern id="hatch-diagonal" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="10" stroke="var(--border-color, #888)" stroke-width="1.2" opacity="0.45"/>
+        </pattern>
+        <pattern id="hatch-crosshatch" width="10" height="10" patternUnits="userSpaceOnUse">
+          <line x1="0" y1="0" x2="10" y2="10" stroke="var(--border-color, #888)" stroke-width="0.9" opacity="0.4"/>
+          <line x1="10" y1="0" x2="0" y2="10" stroke="var(--border-color, #888)" stroke-width="0.9" opacity="0.4"/>
+        </pattern>
+        <pattern id="hatch-brick" width="16" height="8" patternUnits="userSpaceOnUse">
+          <line x1="0" y1="0" x2="16" y2="0" stroke="var(--border-color, #888)" stroke-width="0.8" opacity="0.5"/>
+          <line x1="0" y1="4" x2="16" y2="4" stroke="var(--border-color, #888)" stroke-width="0.8" opacity="0.5"/>
+          <line x1="0" y1="0" x2="0" y2="4" stroke="var(--border-color, #888)" stroke-width="0.8" opacity="0.5"/>
+          <line x1="8" y1="4" x2="8" y2="8" stroke="var(--border-color, #888)" stroke-width="0.8" opacity="0.5"/>
+        </pattern>
+        <pattern id="hatch-insulation" width="12" height="12" patternUnits="userSpaceOnUse">
+          <path d="M 0 6 Q 3 0 6 6 T 12 6" fill="none" stroke="var(--color-warning, #eab308)" stroke-width="1.2" opacity="0.6"/>
+        </pattern>
+        <pattern id="hatch-concrete" width="14" height="14" patternUnits="userSpaceOnUse">
+          <circle cx="2" cy="3" r="0.7" fill="var(--text-muted, #888)" opacity="0.6"/>
+          <circle cx="8" cy="9" r="0.7" fill="var(--text-muted, #888)" opacity="0.6"/>
+          <polygon points="9,2 11,4 10,5" fill="none" stroke="var(--text-muted, #888)" stroke-width="0.7" opacity="0.5"/>
+          <polygon points="3,9 4,11 2,11" fill="none" stroke="var(--text-muted, #888)" stroke-width="0.7" opacity="0.5"/>
+        </pattern>
+      </defs>`;
+
     const entityMarkup = entities().map(e => {
       const selected = state.plan.selectedIds.has(e.id);
       const stroke = selected ? 'var(--color-warning, #fbbf24)' : 'var(--accent-primary, #7aa2ff)';
-      const isNum = v => typeof v === 'number' && isFinite(v);
       const hasRect = isNum(e.x) && isNum(e.y) && isNum(e.width) && isNum(e.depth);
 
       if (e.kind === 'room') {
@@ -874,12 +1019,117 @@ export function createPlanView(context) {
         }
       }
       if (e.kind === 'wall' && isNum(e.x1) && isNum(e.y1) && isNum(e.x2) && isNum(e.y2)) {
+        const len = wallLength(e);
+        if (len < 1e-4) {
+          const a = worldToSvg(transform, e.x1, e.y1);
+          const b = worldToSvg(transform, e.x2, e.y2);
+          return `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${stroke}" stroke-width="2" class="plan-entity" data-entity-id="${escapeHtml(e.id)}"/>`;
+        }
+
+        const assembly = WALL_ASSEMBLIES[e.assemblyId] || WALL_ASSEMBLIES['generic-200'];
+        const totalThick = typeof e.thickness === 'number' && e.thickness > 0
+          ? e.thickness
+          : (assembly ? assembly.totalThickness : 0.2);
+        const halfThick = totalThick / 2;
+
+        const u = { x: (e.x2 - e.x1) / len, y: (e.y2 - e.y1) / len };
+        const n = { x: -u.y, y: u.x };
+
+        const openings = wallOpenings(e, entities());
+        const solidSpans = punchWallSpans(len, openings);
+        const juncInfo = wallJunctions ? wallJunctions.get(e.id) : null;
+
+        const layers = (assembly && Array.isArray(assembly.layers) && assembly.layers.length > 0)
+          ? assembly.layers
+          : [{ id: 'core', name: 'Core', thickness: totalThick, color: 'rgba(122,162,255,0.18)', hatch: 'solid' }];
+
+        const assemblySum = layers.reduce((sum, l) => sum + (l.thickness || 0), 0) || totalThick;
+        const scaleFactor = totalThick / assemblySum;
+
+        let wallSvg = '';
+
+        for (const span of solidSpans) {
+          const isAtStart = Math.abs(span.start) < 1e-4;
+          const isAtEnd = Math.abs(span.end - len) < 1e-4;
+
+          let startB, startA, endB, endA;
+
+          if (isAtStart && juncInfo && Array.isArray(juncInfo.polygon) && juncInfo.polygon.length === 4) {
+            startB = juncInfo.polygon[0];
+            startA = juncInfo.polygon[3];
+          } else {
+            const p = { x: e.x1 + span.start * u.x, y: e.y1 + span.start * u.y };
+            startB = { x: p.x - n.x * halfThick, y: p.y - n.y * halfThick };
+            startA = { x: p.x + n.x * halfThick, y: p.y + n.y * halfThick };
+          }
+
+          if (isAtEnd && juncInfo && Array.isArray(juncInfo.polygon) && juncInfo.polygon.length === 4) {
+            endB = juncInfo.polygon[1];
+            endA = juncInfo.polygon[2];
+          } else {
+            const p = { x: e.x1 + span.end * u.x, y: e.y1 + span.end * u.y };
+            endB = { x: p.x - n.x * halfThick, y: p.y - n.y * halfThick };
+            endA = { x: p.x + n.x * halfThick, y: p.y + n.y * halfThick };
+          }
+
+          const interpStart = (tFrac) => ({
+            x: startB.x + tFrac * (startA.x - startB.x),
+            y: startB.y + tFrac * (startA.y - startB.y)
+          });
+          const interpEnd = (tFrac) => ({
+            x: endB.x + tFrac * (endA.x - endB.x),
+            y: endB.y + tFrac * (endA.y - endB.y)
+          });
+
+          let currentFraction = 0;
+          for (let li = 0; li < layers.length; li++) {
+            const layer = layers[li];
+            const layerFrac = ((layer.thickness || 0) * scaleFactor) / totalThick;
+            const nextFraction = Math.min(1.0, currentFraction + layerFrac);
+
+            const pt0 = interpStart(currentFraction);
+            const pt1 = interpEnd(currentFraction);
+            const pt2 = interpEnd(nextFraction);
+            const pt3 = interpStart(nextFraction);
+            currentFraction = nextFraction;
+
+            const sp0 = worldToSvg(transform, pt0.x, pt0.y);
+            const sp1 = worldToSvg(transform, pt1.x, pt1.y);
+            const sp2 = worldToSvg(transform, pt2.x, pt2.y);
+            const sp3 = worldToSvg(transform, pt3.x, pt3.y);
+
+            const pts = `${sp0.x.toFixed(1)},${sp0.y.toFixed(1)} ${sp1.x.toFixed(1)},${sp1.y.toFixed(1)} ${sp2.x.toFixed(1)},${sp2.y.toFixed(1)} ${sp3.x.toFixed(1)},${sp3.y.toFixed(1)}`;
+            const layerColor = layer.color || 'rgba(122,162,255,0.18)';
+            const hatchId = layer.hatch && layer.hatch !== 'solid' ? `hatch-${layer.hatch}` : null;
+
+            wallSvg += `<polygon points="${pts}" fill="${layerColor}" stroke="${stroke}" stroke-width="${selected ? 1.5 : 0.8}" stroke-linejoin="round"/>`;
+            if (hatchId) {
+              wallSvg += `<polygon points="${pts}" fill="url(#${hatchId})" stroke="none" opacity="0.85" pointer-events="none"/>`;
+            }
+          }
+
+          if (!isAtStart) {
+            const sj0 = worldToSvg(transform, startB.x, startB.y);
+            const sj1 = worldToSvg(transform, startA.x, startA.y);
+            wallSvg += `<line x1="${sj0.x.toFixed(1)}" y1="${sj0.y.toFixed(1)}" x2="${sj1.x.toFixed(1)}" y2="${sj1.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.2 : 1.4}"/>`;
+          }
+          if (!isAtEnd) {
+            const ej0 = worldToSvg(transform, endB.x, endB.y);
+            const ej1 = worldToSvg(transform, endA.x, endA.y);
+            wallSvg += `<line x1="${ej0.x.toFixed(1)}" y1="${ej0.y.toFixed(1)}" x2="${ej1.x.toFixed(1)}" y2="${ej1.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.2 : 1.4}"/>`;
+          }
+        }
+
         const a = worldToSvg(transform, e.x1, e.y1);
         const b = worldToSvg(transform, e.x2, e.y2);
-        const thickness = isNum(e.thickness) ? e.thickness : 0.2;
-        return `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"
-          stroke="${stroke}" stroke-width="${Math.max(3, thickness * transform.zoom)}" stroke-linecap="square"
-          data-entity-id="${escapeHtml(e.id)}" class="plan-entity"/>`;
+        const hitWidth = Math.max(12, totalThick * transform.zoom);
+        wallSvg += `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="transparent" stroke-width="${hitWidth.toFixed(1)}" stroke-linecap="butt"/>`;
+
+        if (selected) {
+          wallSvg += `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="var(--color-warning, #fbbf24)" stroke-width="1" stroke-dasharray="4 3" opacity="0.75" pointer-events="none"/>`;
+        }
+
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">${wallSvg}</g>`;
       }
       if (e.kind === 'furniture' && hasRect) {
         const p1 = worldToSvg(transform, e.x, e.y + e.depth);
@@ -908,32 +1158,94 @@ export function createPlanView(context) {
       if (e.kind === 'door') {
         const w = entities().find(x => x.id === e.wallId);
         if (w && typeof w.x1 === 'number') {
-          const len = wallLength(w);
-          const t = len > 0 ? (e.position / len) : 0;
-          const wx = w.x1 + t * (w.x2 - w.x1);
-          const wy = w.y1 + t * (w.y2 - w.y1);
-          const p = worldToSvg(transform, wx, wy);
-          const doorR = (e.width || 0.9) * transform.zoom;
-          return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
-            <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="var(--color-warning, #fbbf24)"/>
-            <path d="M ${p.x.toFixed(1)} ${p.y.toFixed(1)} A ${doorR.toFixed(1)} ${doorR.toFixed(1)} 0 0 1 ${(p.x + doorR).toFixed(1)} ${(p.y - doorR).toFixed(1)}" fill="none" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.5}" stroke-dasharray="3 2"/>
-            <line x1="${p.x.toFixed(1)}" y1="${p.y.toFixed(1)}" x2="${(p.x + doorR).toFixed(1)}" y2="${p.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 3 : 2}"/>
-          </g>`;
+          try {
+            const doorCAD = calcDoorCADGeometry(w, e);
+            let doorSvg = '';
+            const jambCol = 'var(--text-secondary, #9aa)';
+
+            if (doorCAD.jamb1Line) {
+              const j1a = worldToSvg(transform, doorCAD.jamb1Line[0].x, doorCAD.jamb1Line[0].y);
+              const j1b = worldToSvg(transform, doorCAD.jamb1Line[1].x, doorCAD.jamb1Line[1].y);
+              doorSvg += `<line x1="${j1a.x.toFixed(1)}" y1="${j1a.y.toFixed(1)}" x2="${j1b.x.toFixed(1)}" y2="${j1b.y.toFixed(1)}" stroke="${jambCol}" stroke-width="1.6"/>`;
+            }
+            if (doorCAD.jamb2Line) {
+              const j2a = worldToSvg(transform, doorCAD.jamb2Line[0].x, doorCAD.jamb2Line[0].y);
+              const j2b = worldToSvg(transform, doorCAD.jamb2Line[1].x, doorCAD.jamb2Line[1].y);
+              doorSvg += `<line x1="${j2a.x.toFixed(1)}" y1="${j2a.y.toFixed(1)}" x2="${j2b.x.toFixed(1)}" y2="${j2b.y.toFixed(1)}" stroke="${jambCol}" stroke-width="1.6"/>`;
+            }
+
+            if (doorCAD.type === 'double') {
+              for (const leaf of doorCAD.leaves) {
+                const spHinge = worldToSvg(transform, leaf.hinge.x, leaf.hinge.y);
+                const spOpen = worldToSvg(transform, leaf.openEnd.x, leaf.openEnd.y);
+                const spClosed = worldToSvg(transform, leaf.closedEnd.x, leaf.closedEnd.y);
+                const rSvg = leaf.radius * transform.zoom;
+                const dx1 = spClosed.x - spHinge.x, dy1 = spClosed.y - spHinge.y;
+                const dx2 = spOpen.x - spHinge.x, dy2 = spOpen.y - spHinge.y;
+                const cross = dx1 * dy2 - dy1 * dx2;
+                const sweepFlag = cross > 0 ? 1 : 0;
+
+                doorSvg += `
+                  <circle cx="${spHinge.x.toFixed(1)}" cy="${spHinge.y.toFixed(1)}" r="3" fill="var(--color-warning, #fbbf24)"/>
+                  <line x1="${spHinge.x.toFixed(1)}" y1="${spHinge.y.toFixed(1)}" x2="${spOpen.x.toFixed(1)}" y2="${spOpen.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 2}"/>
+                  <path d="M ${spClosed.x.toFixed(1)} ${spClosed.y.toFixed(1)} A ${rSvg.toFixed(1)} ${rSvg.toFixed(1)} 0 0 ${sweepFlag} ${spOpen.x.toFixed(1)} ${spOpen.y.toFixed(1)}" fill="none" stroke="${stroke}" stroke-width="${selected ? 2 : 1.2}" stroke-dasharray="3 2"/>
+                `;
+              }
+            } else {
+              const spHinge = worldToSvg(transform, doorCAD.hinge.x, doorCAD.hinge.y);
+              const spOpen = worldToSvg(transform, doorCAD.openEnd.x, doorCAD.openEnd.y);
+              const spClosed = worldToSvg(transform, doorCAD.closedEnd.x, doorCAD.closedEnd.y);
+              const rSvg = doorCAD.radius * transform.zoom;
+              const dx1 = spClosed.x - spHinge.x, dy1 = spClosed.y - spHinge.y;
+              const dx2 = spOpen.x - spHinge.x, dy2 = spOpen.y - spHinge.y;
+              const cross = dx1 * dy2 - dy1 * dx2;
+              const sweepFlag = cross > 0 ? 1 : 0;
+
+              doorSvg += `
+                <circle cx="${spHinge.x.toFixed(1)}" cy="${spHinge.y.toFixed(1)}" r="3.5" fill="var(--color-warning, #fbbf24)"/>
+                <line x1="${spHinge.x.toFixed(1)}" y1="${spHinge.y.toFixed(1)}" x2="${spOpen.x.toFixed(1)}" y2="${spOpen.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.8 : 2}"/>
+                <path d="M ${spClosed.x.toFixed(1)} ${spClosed.y.toFixed(1)} A ${rSvg.toFixed(1)} ${rSvg.toFixed(1)} 0 0 ${sweepFlag} ${spOpen.x.toFixed(1)} ${spOpen.y.toFixed(1)}" fill="none" stroke="${stroke}" stroke-width="${selected ? 2 : 1.2}" stroke-dasharray="3 2"/>
+              `;
+            }
+
+            return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">${doorSvg}</g>`;
+          } catch (err) {
+            // fallback
+          }
         }
       }
       if (e.kind === 'window') {
         const w = entities().find(x => x.id === e.wallId);
         if (w && typeof w.x1 === 'number') {
-          const len = wallLength(w);
-          const t1 = len > 0 ? (e.position / len) : 0;
-          const t2 = len > 0 ? (Math.min(len, e.position + (e.width || 1.2)) / len) : 0;
-          const p1 = worldToSvg(transform, w.x1 + t1 * (w.x2 - w.x1), w.y1 + t1 * (w.y2 - w.y1));
-          const p2 = worldToSvg(transform, w.x1 + t2 * (w.x2 - w.x1), w.y1 + t2 * (w.y2 - w.y1));
-          return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
-            <line x1="${p1.x.toFixed(1)}" y1="${p1.y.toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${p2.y.toFixed(1)}" stroke="var(--bg-app, #121214)" stroke-width="6"/>
-            <line x1="${p1.x.toFixed(1)}" y1="${(p1.y - 2).toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${(p2.y - 2).toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.8}"/>
-            <line x1="${p1.x.toFixed(1)}" y1="${(p1.y + 2).toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${(p2.y + 2).toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.8}"/>
-          </g>`;
+          try {
+            const winCAD = calcWindowCADGeometry(w, e);
+            const j1a = worldToSvg(transform, winCAD.jamb1[0].x, winCAD.jamb1[0].y);
+            const j1b = worldToSvg(transform, winCAD.jamb1[1].x, winCAD.jamb1[1].y);
+            const j2a = worldToSvg(transform, winCAD.jamb2[0].x, winCAD.jamb2[0].y);
+            const j2b = worldToSvg(transform, winCAD.jamb2[1].x, winCAD.jamb2[1].y);
+
+            const soA = worldToSvg(transform, winCAD.sillOuter[0].x, winCAD.sillOuter[0].y);
+            const soB = worldToSvg(transform, winCAD.sillOuter[1].x, winCAD.sillOuter[1].y);
+            const siA = worldToSvg(transform, winCAD.sillInner[0].x, winCAD.sillInner[0].y);
+            const siB = worldToSvg(transform, winCAD.sillInner[1].x, winCAD.sillInner[1].y);
+
+            const g1a = worldToSvg(transform, winCAD.glassPane1[0].x, winCAD.glassPane1[0].y);
+            const g1b = worldToSvg(transform, winCAD.glassPane1[1].x, winCAD.glassPane1[1].y);
+            const g2a = worldToSvg(transform, winCAD.glassPane2[0].x, winCAD.glassPane2[0].y);
+            const g2b = worldToSvg(transform, winCAD.glassPane2[1].x, winCAD.glassPane2[1].y);
+
+            return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+              <polygon points="${g1a.x.toFixed(1)},${g1a.y.toFixed(1)} ${g1b.x.toFixed(1)},${g1b.y.toFixed(1)} ${g2b.x.toFixed(1)},${g2b.y.toFixed(1)} ${g2a.x.toFixed(1)},${g2a.y.toFixed(1)}" fill="rgba(56, 189, 248, 0.22)"/>
+              <line x1="${j1a.x.toFixed(1)}" y1="${j1a.y.toFixed(1)}" x2="${j1b.x.toFixed(1)}" y2="${j1b.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.5}"/>
+              <line x1="${j2a.x.toFixed(1)}" y1="${j2a.y.toFixed(1)}" x2="${j2b.x.toFixed(1)}" y2="${j2b.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.5}"/>
+              <line x1="${soA.x.toFixed(1)}" y1="${soA.y.toFixed(1)}" x2="${soB.x.toFixed(1)}" y2="${soB.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.8}"/>
+              <line x1="${siA.x.toFixed(1)}" y1="${siA.y.toFixed(1)}" x2="${siB.x.toFixed(1)}" y2="${siB.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.4}"/>
+              <line x1="${g1a.x.toFixed(1)}" y1="${g1a.y.toFixed(1)}" x2="${g1b.x.toFixed(1)}" y2="${g1b.y.toFixed(1)}" stroke="var(--cyan-glow, #38bdf8)" stroke-width="1.2"/>
+              <line x1="${g2a.x.toFixed(1)}" y1="${g2a.y.toFixed(1)}" x2="${g2b.x.toFixed(1)}" y2="${g2b.y.toFixed(1)}" stroke="var(--cyan-glow, #38bdf8)" stroke-width="1.2"/>
+            </g>`;
+          } catch (err) {
+            // fallback
+          }
         }
       }
       if (e.kind === 'dimension' && typeof e.x1 === 'number' && typeof e.x2 === 'number') {
@@ -1127,6 +1439,7 @@ export function createPlanView(context) {
     }
 
     dom.planSvg.innerHTML = `
+      ${defsMarkup}
       <g class="plan-grid">${gridLines}</g>
       <g class="plan-entities">${entityMarkup}</g>
       ${guidesMarkup}
@@ -1731,11 +2044,21 @@ export function createPlanView(context) {
       const dir = typeof selected.x1 === 'number' ? wallDirection(selected) : '—';
       const thick = typeof selected.thickness === 'number' ? selected.thickness : 0.2;
       const openings = es.filter(e => (e.kind === 'door' || e.kind === 'window') && e.wallId === selected.id);
+      const currentAssId = selected.assemblyId || 'generic-200';
+      const assemblyOpts = Object.values(WALL_ASSEMBLIES).map(a =>
+        `<option value="${a.id}" ${currentAssId === a.id ? 'selected' : ''}>${a.name}</option>`
+      ).join('');
 
       dom.planPropContent.innerHTML = `
         <div class="plan-prop-section">
           <div class="plan-prop-title">Wall Parameters</div>
           <div class="plan-prop-row"><span class="plan-prop-label">Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name)}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Assembly</span>
+            <select class="calc-input" id="prop-wall-assembly" style="height: 24px; font-size: 0.72rem; padding: 0 4px; max-width: 160px;">
+              ${assemblyOpts}
+            </select>
+          </div>
           <div class="plan-prop-row"><span class="plan-prop-label">Length</span><span class="plan-prop-value note-number">${len.toFixed(2)} m</span></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Direction</span><span class="plan-prop-value" style="text-transform: capitalize;">${escapeHtml(dir)}</span></div>
           <div class="plan-prop-row">
@@ -1756,6 +2079,19 @@ export function createPlanView(context) {
       dom.planPropContent.querySelector('#prop-entity-name')?.addEventListener('change', (e) => {
         selected.name = e.target.value.trim() || 'Wall';
         render();
+      });
+
+      dom.planPropContent.querySelector('#prop-wall-assembly')?.addEventListener('change', (e) => {
+        const assId = e.target.value;
+        const ass = WALL_ASSEMBLIES[assId];
+        if (ass) {
+          selected.assemblyId = assId;
+          selected.thickness = ass.totalThickness;
+          render();
+          renderPropertiesInspector();
+          renderContextualToolbar();
+          showToast(`Wall assembly: ${ass.name}`);
+        }
       });
 
       const wallThickInput = dom.planPropContent.querySelector('#prop-wall-thickness');
@@ -1781,24 +2117,172 @@ export function createPlanView(context) {
         });
       });
 
-    } else if (selected.kind === 'door' || selected.kind === 'window') {
-      const isDoor = selected.kind === 'door';
+    } else if (selected.kind === 'door') {
       const wall = es.find(w => w.id === selected.wallId);
       const fits = wall ? openingFitsWall(selected, wall) : { fits: false, reason: 'Orphaned opening' };
 
       dom.planPropContent.innerHTML = `
         <div class="plan-prop-section">
-          <div class="plan-prop-title">${isDoor ? 'Door' : 'Window'} Specifications</div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Name</span><span class="plan-prop-value">${escapeHtml(selected.name)}</span></div>
+          <div class="plan-prop-title">Door Specifications</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name)}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
           <div class="plan-prop-row"><span class="plan-prop-label">Host Wall</span><span class="plan-prop-value">${wall ? escapeHtml(wall.name) : 'None'}</span></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Wall Offset</span><span class="plan-prop-value">${typeof selected.position === 'number' ? selected.position.toFixed(2) : '0'} m</span></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Width</span><span class="plan-prop-value">${typeof selected.width === 'number' ? selected.width.toFixed(2) : '0.9'} m</span></div>
-          ${isDoor ? `<div class="plan-prop-row"><span class="plan-prop-label">Swing</span><span class="plan-prop-value" style="text-transform: capitalize;">${escapeHtml(selected.swing || 'left')}</span></div>` : ''}
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Width</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-door-w" class="text-input" value="${(selected.width || 0.9).toFixed(2)}" step="0.05" min="0.5" max="3.0" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Wall Offset</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-door-pos" class="text-input" value="${(selected.position || 0).toFixed(2)}" step="0.1" min="0" max="50" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Swing</span>
+            <select class="calc-input" id="prop-door-swing" style="height: 24px; font-size: 0.72rem; padding: 0 4px; max-width: 110px;">
+              <option value="left" ${selected.swing === 'left' ? 'selected' : ''}>Left Swing</option>
+              <option value="right" ${selected.swing === 'right' ? 'selected' : ''}>Right Swing</option>
+              <option value="double" ${selected.swing === 'double' ? 'selected' : ''}>Double Swing</option>
+            </select>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Side Flip</span>
+            <button type="button" class="plan-prop-btn" id="prop-door-flip-btn" style="padding: 2px 8px; font-size: 0.72rem;">${selected.flipSide ? 'Outward' : 'Inward'}</button>
+          </div>
           <div class="plan-prop-row"><span class="plan-prop-label">Wall Fit</span><span class="plan-prop-badge ${fits.fits ? 'fits' : 'no-fit'}">${fits.fits ? 'FITS' : 'OVERFLOW'}</span></div>
         </div>
         <div class="plan-prop-actions">
-          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Opening</span></button>
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Door</span></button>
         </div>`;
+
+      dom.planPropContent.querySelector('#prop-entity-name')?.addEventListener('change', (e) => {
+        selected.name = e.target.value.trim() || 'Door';
+        render();
+      });
+
+      const doorWInput = dom.planPropContent.querySelector('#prop-door-w');
+      if (doorWInput) {
+        attachNumericScrubber(doorWInput, {
+          step: 0.05, min: 0.5, max: 3.0, precision: 2,
+          onChange: (val) => { selected.width = val; render(); },
+          onCommit: (val) => { selected.width = val; render(); renderContextualToolbar(); }
+        });
+        doorWInput.addEventListener('change', (e) => {
+          selected.width = Math.max(0.5, parseFloat(e.target.value) || 0.9);
+          render();
+          renderContextualToolbar();
+        });
+      }
+
+      const doorPosInput = dom.planPropContent.querySelector('#prop-door-pos');
+      if (doorPosInput) {
+        attachNumericScrubber(doorPosInput, {
+          step: 0.1, min: 0, max: 50, precision: 2,
+          onChange: (val) => { selected.position = val; render(); },
+          onCommit: (val) => { selected.position = val; render(); }
+        });
+        doorPosInput.addEventListener('change', (e) => {
+          selected.position = Math.max(0, parseFloat(e.target.value) || 0);
+          render();
+        });
+      }
+
+      dom.planPropContent.querySelector('#prop-door-swing')?.addEventListener('change', (e) => {
+        selected.swing = e.target.value;
+        render();
+        renderContextualToolbar();
+      });
+
+      dom.planPropContent.querySelector('#prop-door-flip-btn')?.addEventListener('click', () => {
+        selected.flipSide = !selected.flipSide;
+        render();
+        renderPropertiesInspector();
+        renderContextualToolbar();
+      });
+
+    } else if (selected.kind === 'window') {
+      const wall = es.find(w => w.id === selected.wallId);
+      const fits = wall ? openingFitsWall(selected, wall) : { fits: false, reason: 'Orphaned opening' };
+
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Window Specifications</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Name</span><input type="text" id="prop-entity-name" class="text-input" value="${escapeHtml(selected.name)}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Host Wall</span><span class="plan-prop-value">${wall ? escapeHtml(wall.name) : 'None'}</span></div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Width</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-win-w" class="text-input" value="${(selected.width || 1.2).toFixed(2)}" step="0.05" min="0.4" max="6.0" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Wall Offset</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-win-pos" class="text-input" value="${(selected.position || 0).toFixed(2)}" step="0.1" min="0" max="50" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Sill Height</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="prop-win-sill" class="text-input" value="${(selected.sill || 0.9).toFixed(2)}" step="0.05" min="0" max="2.5" style="width: 65px; padding: 0.2rem 0.35rem; font-size: 0.78rem;" />
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">m</span>
+            </div>
+          </div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Wall Fit</span><span class="plan-prop-badge ${fits.fits ? 'fits' : 'no-fit'}">${fits.fits ? 'FITS' : 'OVERFLOW'}</span></div>
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Window</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-entity-name')?.addEventListener('change', (e) => {
+        selected.name = e.target.value.trim() || 'Window';
+        render();
+      });
+
+      const winWInput = dom.planPropContent.querySelector('#prop-win-w');
+      if (winWInput) {
+        attachNumericScrubber(winWInput, {
+          step: 0.05, min: 0.4, max: 6.0, precision: 2,
+          onChange: (val) => { selected.width = val; render(); },
+          onCommit: (val) => { selected.width = val; render(); renderContextualToolbar(); }
+        });
+        winWInput.addEventListener('change', (e) => {
+          selected.width = Math.max(0.4, parseFloat(e.target.value) || 1.2);
+          render();
+          renderContextualToolbar();
+        });
+      }
+
+      const winPosInput = dom.planPropContent.querySelector('#prop-win-pos');
+      if (winPosInput) {
+        attachNumericScrubber(winPosInput, {
+          step: 0.1, min: 0, max: 50, precision: 2,
+          onChange: (val) => { selected.position = val; render(); },
+          onCommit: (val) => { selected.position = val; render(); }
+        });
+        winPosInput.addEventListener('change', (e) => {
+          selected.position = Math.max(0, parseFloat(e.target.value) || 0);
+          render();
+        });
+      }
+
+      const winSillInput = dom.planPropContent.querySelector('#prop-win-sill');
+      if (winSillInput) {
+        attachNumericScrubber(winSillInput, {
+          step: 0.05, min: 0, max: 2.5, precision: 2,
+          onChange: (val) => { selected.sill = val; render(); },
+          onCommit: (val) => { selected.sill = val; render(); }
+        });
+        winSillInput.addEventListener('change', (e) => {
+          selected.sill = Math.max(0, parseFloat(e.target.value) || 0.9);
+          render();
+        });
+      }
 
     } else if (selected.kind === 'dimension') {
       const dist = Math.hypot(selected.x2 - selected.x1, selected.y2 - selected.y1);
@@ -2214,6 +2698,19 @@ export function createPlanView(context) {
             dragState.entity.x = Math.min(dragState.entity.x1, dragState.entity.x2);
             dragState.entity.y = Math.min(dragState.entity.y1, dragState.entity.y2);
           }
+        } else if (dragState.entity.kind === 'door' || dragState.entity.kind === 'window') {
+          const hostWall = entities().find(w => w.id === dragState.entity.wallId);
+          if (hostWall && typeof hostWall.x1 === 'number') {
+            const dxW = hostWall.x2 - hostWall.x1;
+            const dyW = hostWall.y2 - hostWall.y1;
+            const lenW = Math.hypot(dxW, dyW);
+            if (lenW > 1e-4) {
+              const uW = { x: dxW / lenW, y: dyW / lenW };
+              const dPos = dx * uW.x + dy * uW.y;
+              const maxPos = Math.max(0, lenW - (dragState.entity.width || 0.9));
+              dragState.entity.position = Math.max(0, Math.min(maxPos, (dragState.entity.position || 0) + dPos));
+            }
+          }
         } else {
           dragState.entity.x += dx;
           dragState.entity.y += dy;
@@ -2346,6 +2843,7 @@ export function createPlanView(context) {
     state.plan.selectedIds = new Set([room.id]);
     showToast(`Room added: ${width.toFixed(2)} × ${depth.toFixed(2)} m (${roomArea(room).toFixed(2)} m²)`);
     AudioService.playTick();
+    render();
   }
 
   function createWallEntity(start, end) {
@@ -2366,6 +2864,7 @@ export function createPlanView(context) {
     state.plan.selectedIds = new Set([wall.id]);
     showToast(`Wall added: ${wallLength(wall).toFixed(2)} m`);
     AudioService.playTick();
+    render();
   }
 
   function createStairEntityFromDrag(start, end) {
@@ -2394,6 +2893,7 @@ export function createPlanView(context) {
     state.plan.selectedIds = new Set([stair.id]);
     showToast(`Stair added: ${width.toFixed(2)}m width × ${run.toFixed(2)}m run (${stair.risers}R @ ${(stair.riserHeight * 1000).toFixed(0)}mm)`);
     AudioService.playTick();
+    render();
   }
 
   function createRampEntityFromDrag(start, end) {
@@ -2420,6 +2920,7 @@ export function createPlanView(context) {
     state.plan.selectedIds = new Set([ramp.id]);
     showToast(`Ramp added: ${width.toFixed(2)}m width × ${run.toFixed(2)}m run (1:${ramp.slopeRatio.toFixed(1)} / ${ramp.slopePercent.toFixed(1)}%)`);
     AudioService.playTick();
+    render();
   }
 
   function sendToScratchpad(item) {

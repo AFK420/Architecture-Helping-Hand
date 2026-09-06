@@ -367,6 +367,25 @@ export function pickEntities(entities, worldRect) {
     } else if (rectsIntersect(worldRect, r)) {
       hits.push(e.id);
     }
+
+    if ((e.kind === 'door' || e.kind === 'window') && e.wallId) {
+      const hostWall = list.find(w => w && w.id === e.wallId);
+      if (hostWall && typeof hostWall.x1 === 'number') {
+        const lenW = Math.hypot(hostWall.x2 - hostWall.x1, hostWall.y2 - hostWall.y1);
+        if (lenW > 1e-4) {
+          const uW = { x: (hostWall.x2 - hostWall.x1) / lenW, y: (hostWall.y2 - hostWall.y1) / lenW };
+          const opMid = (e.position || 0) + (e.width || 0.9) / 2;
+          const px = hostWall.x1 + opMid * uW.x;
+          const py = hostWall.y1 + opMid * uW.y;
+          const rad = (e.width || 0.9) / 2 + 0.25;
+          if (worldRect.width === 0 && worldRect.depth === 0) {
+            if (Math.hypot(worldRect.x - px, worldRect.y - py) <= rad) {
+              hits.push(e.id);
+            }
+          }
+        }
+      }
+    }
   }
   return hits;
 }
@@ -448,8 +467,34 @@ export function entityAddRemoveCommand(list, entity, label) {
 export function entityMoveCommand(entity, dx, dy, label) {
   return {
     label,
-    redo() { entity.x += dx; entity.y += dy; },
-    undo() { entity.x -= dx; entity.y -= dy; }
+    redo() {
+      if (typeof entity.x === 'number') entity.x += dx;
+      if (typeof entity.y === 'number') entity.y += dy;
+      if (typeof entity.x1 === 'number') entity.x1 += dx;
+      if (typeof entity.y1 === 'number') entity.y1 += dy;
+      if (typeof entity.x2 === 'number') entity.x2 += dx;
+      if (typeof entity.y2 === 'number') entity.y2 += dy;
+      if (Array.isArray(entity.boundary)) {
+        for (const pt of entity.boundary) {
+          pt.x += dx;
+          pt.y += dy;
+        }
+      }
+    },
+    undo() {
+      if (typeof entity.x === 'number') entity.x -= dx;
+      if (typeof entity.y === 'number') entity.y -= dy;
+      if (typeof entity.x1 === 'number') entity.x1 -= dx;
+      if (typeof entity.y1 === 'number') entity.y1 -= dy;
+      if (typeof entity.x2 === 'number') entity.x2 -= dx;
+      if (typeof entity.y2 === 'number') entity.y2 -= dy;
+      if (Array.isArray(entity.boundary)) {
+        for (const pt of entity.boundary) {
+          pt.x -= dx;
+          pt.y -= dy;
+        }
+      }
+    }
   };
 }
 

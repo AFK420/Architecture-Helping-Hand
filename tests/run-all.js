@@ -51,7 +51,8 @@ const testFiles = [
   'custom-shortcuts.test.js',
   'contextual-studio.test.js',
   'responsive.test.js',
-  'studio-phase1.test.js'
+  'studio-phase1.test.js',
+  'studio-phase2.test.js'
 ];
 
 console.log('=================================================================');
