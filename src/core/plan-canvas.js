@@ -21,6 +21,12 @@ import {
   findExtensionSnap,
   findSegmentIntersections
 } from './geometry.js';
+import {
+  columnContour,
+  columnHatchLines,
+  columnSnapPoints,
+  gridLineIntersection
+} from './grid-columns.js';
 
 /**
  * Creates a view transform for the plan canvas.
@@ -159,11 +165,17 @@ export function findSnapPoint(point, entities = [], options = {}) {
 
   const walls = [];
   const otherEntities = [];
+  const gridLines = [];
+  const columns = [];
 
   for (const e of entities) {
     if (!e || e.id === excludeId) continue;
     if (e.kind === 'wall' && typeof e.x1 === 'number') {
       walls.push(e);
+    } else if (e.kind === 'grid_line' && e.p1 && e.p2) {
+      gridLines.push(e);
+    } else if (e.kind === 'column') {
+      columns.push(e);
     } else if (typeof e.x === 'number' && typeof e.width === 'number') {
       otherEntities.push(e);
     }
@@ -180,21 +192,59 @@ export function findSnapPoint(point, entities = [], options = {}) {
     }
   }
 
-  // 2. Wall-wall Intersections
-  if (isEnabled('intersection') && walls.length >= 2) {
-    const segments = walls.map(w => ({
-      p1: { x: w.x1, y: w.y1 },
-      p2: { x: w.x2, y: w.y2 },
-      id: w.id
-    }));
-    const intersections = findSegmentIntersections(segments);
-    for (const hit of intersections) {
-      testCandidate({
-        x: hit.x,
-        y: hit.y,
-        type: 'intersection',
-        targetId: hit.segId1
-      });
+  // Grid line endpoints & midpoints
+  for (const gl of gridLines) {
+    if (isEnabled('endpoint')) {
+      testCandidate({ x: gl.p1.x, y: gl.p1.y, type: 'endpoint', targetId: gl.id });
+      testCandidate({ x: gl.p2.x, y: gl.p2.y, type: 'endpoint', targetId: gl.id });
+    }
+    if (isEnabled('midpoint')) {
+      testCandidate({ x: (gl.p1.x + gl.p2.x) / 2, y: (gl.p1.y + gl.p2.y) / 2, type: 'midpoint', targetId: gl.id });
+    }
+  }
+
+  // 2. Wall-wall Intersections & Grid Line Intersections
+  if (isEnabled('intersection')) {
+    if (walls.length >= 2) {
+      const segments = walls.map(w => ({
+        p1: { x: w.x1, y: w.y1 },
+        p2: { x: w.x2, y: w.y2 },
+        id: w.id
+      }));
+      const intersections = findSegmentIntersections(segments);
+      for (const hit of intersections) {
+        testCandidate({
+          x: hit.x,
+          y: hit.y,
+          type: 'intersection',
+          targetId: hit.segId1
+        });
+      }
+    }
+    if (gridLines.length >= 2) {
+      for (let i = 0; i < gridLines.length; i++) {
+        for (let j = i + 1; j < gridLines.length; j++) {
+          const hit = gridLineIntersection(gridLines[i], gridLines[j]);
+          if (hit) {
+            testCandidate({
+              x: hit.x,
+              y: hit.y,
+              type: 'intersection',
+              targetId: gridLines[i].id
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Column snap points (center, corners, midpoints, quadrants)
+  for (const col of columns) {
+    const snaps = columnSnapPoints(col);
+    for (const s of snaps) {
+      if (isEnabled(s.type)) {
+        testCandidate(s);
+      }
     }
   }
 
@@ -631,7 +681,7 @@ export function entityMoveCommand(entity, dx, dy, label) {
  */
 export function planToExportGeometry(entities, options = {}) {
   const includeLabels = options.includeLabels !== false;
-  const out = { lines: [], polygons: [], texts: [] };
+  const out = { lines: [], polygons: [], texts: [], circles: [] };
   const list = Array.isArray(entities)
     ? entities
     : (entities && typeof entities === 'object' ? Object.values(entities).flat().filter(Boolean) : []);
@@ -645,6 +695,7 @@ export function planToExportGeometry(entities, options = {}) {
       : e.kind === 'furniture' ? 'A-FURN'
       : e.kind === 'dimension' ? 'A-DIMS'
       : (e.kind === 'room_tag' || e.kind === 'door_tag' || e.kind === 'window_tag' || e.kind === 'north_arrow') ? 'A-ANNO-TAGS'
+      : (e.kind === 'column' || e.kind === 'grid_line') ? 'A-GRID'
       : 'A-ANNO-TEXT');
 
     if (e.kind === 'room') {
@@ -830,6 +881,30 @@ export function planToExportGeometry(entities, options = {}) {
       if (includeLabels) {
         const labelPos = rot(0, s + 0.25);
         out.texts.push({ x: labelPos[0], y: labelPos[1], text: 'N', height: 0.25, layer: lyr });
+      }
+    } else if (e.kind === 'column') {
+      const contour = columnContour(e);
+      if (contour.length >= 3) {
+        out.polygons.push({ closed: true, points: contour, label: e.name || 'Column', layer: lyr });
+      }
+      const hatches = columnHatchLines(e);
+      for (const h of hatches) {
+        out.lines.push({ x1: h.x1, y1: h.y1, x2: h.x2, y2: h.y2, layer: lyr });
+      }
+    } else if (e.kind === 'grid_line' && e.p1 && e.p2) {
+      out.lines.push({ x1: e.p1.x, y1: e.p1.y, x2: e.p2.x, y2: e.p2.y, layer: lyr, linetype: 'CENTER' });
+      const bRad = e.bubbleRadius || 0.35;
+      if (e.bubblePosition === 'both' || e.bubblePosition === 'start') {
+        out.circles.push({ cx: e.p1.x, cy: e.p1.y, r: bRad, layer: lyr });
+        if (includeLabels && e.name) {
+          out.texts.push({ x: e.p1.x, y: e.p1.y, text: e.name, height: 0.22, layer: lyr });
+        }
+      }
+      if (e.bubblePosition === 'both' || e.bubblePosition === 'end') {
+        out.circles.push({ cx: e.p2.x, cy: e.p2.y, r: bRad, layer: lyr });
+        if (includeLabels && e.name) {
+          out.texts.push({ x: e.p2.x, y: e.p2.y, text: e.name, height: 0.22, layer: lyr });
+        }
       }
     } else if (e.kind === 'text' && typeof e.x === 'number' && typeof e.y === 'number') {
       if (includeLabels) {

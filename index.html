@@ -3863,6 +3863,15 @@
                 <span class="tool-icon">🧭</span>
                 <span class="tool-name">North</span>
               </button>
+              <button type="button" class="tool-palette-btn" data-tool="column" title="Structural Column (C)">
+                <span class="tool-icon">🏛️</span>
+                <span class="tool-name">Column</span>
+                <kbd class="tool-kbd">C</kbd>
+              </button>
+              <button type="button" class="tool-palette-btn" data-tool="grid" title="Structural Grid Line (G)">
+                <span class="tool-icon">⌗</span>
+                <span class="tool-name">Grid</span>
+              </button>
               <button type="button" class="tool-palette-btn" data-tool="measure" title="Tape Measure Tool (M)">
                 <span class="tool-icon">📐</span>
                 <span class="tool-name">Measure</span>
@@ -3875,6 +3884,8 @@
               <option value="wall">─ Wall (drag segment)</option>
               <option value="room">▭ Room (drag rectangle)</option>
               <option value="polyroom">⬡ Poly Room (custom polygon)</option>
+              <option value="column">🏛️ Column (structural)</option>
+              <option value="grid">⌗ Grid Line (axis)</option>
               <option value="door">🚪 Door (place on wall)</option>
               <option value="window">🪟 Window (place on wall)</option>
               <option value="furniture">🛋️ Furniture (catalog footprint)</option>
@@ -3967,7 +3978,20 @@
             <div id="plan-doc-tabs-list" class="plan-doc-tabs-list">
               <!-- Dynamically populated tab items -->
             </div>
-            <button type="button" id="btn-plan-new-doc" class="plan-doc-new-btn" title="Create new drawing tab / sheet (+)">+ New Tab</button>
+            <div style="position: relative; display: inline-block;">
+              <button type="button" id="btn-plan-new-doc" class="plan-doc-new-btn" title="Create new drawing tab / sheet (+)">+ New Tab ▾</button>
+              <div id="plan-new-tab-menu" class="plan-tab-dropdown-menu" style="display: none; position: absolute; top: 100%; right: 0; z-index: 100; background: var(--bg-surface-2, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); min-width: 175px; padding: 4px; margin-top: 4px;">
+                <button type="button" class="plan-dropdown-item" data-tab-type="2d_plan" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: none; background: transparent; color: var(--text-normal, #f8fafc); font-size: 0.74rem; cursor: pointer; text-align: left; border-radius: 4px;">
+                  <span>📐</span> 2D Floor Plan
+                </button>
+                <button type="button" class="plan-dropdown-item" data-tab-type="3d_massing" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: none; background: transparent; color: var(--text-normal, #f8fafc); font-size: 0.74rem; cursor: pointer; text-align: left; border-radius: 4px;">
+                  <span>🏢</span> 3D Massing Preview
+                </button>
+                <button type="button" class="plan-dropdown-item" data-tab-type="sheet" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: none; background: transparent; color: var(--text-normal, #f8fafc); font-size: 0.74rem; cursor: pointer; text-align: left; border-radius: 4px;">
+                  <span>📄</span> Presentation Sheet
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Zoom / view controls -->

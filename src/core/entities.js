@@ -16,6 +16,17 @@
 
 import { requireFiniteNumber } from './calculator.js';
 import { calcPolygon, pointInPolygon } from './geometry.js';
+export {
+  COLUMN_PROFILES,
+  BUBBLE_POSITIONS,
+  createColumn,
+  createGridLine,
+  columnContour,
+  columnHatchLines,
+  columnSnapPoints,
+  gridLineIntersection,
+  generateGridSystem
+} from './grid-columns.js';
 
 // ---------------------------------------------------------------------------
 // Rooms (rectilinear & generalized polygonal boundaries)
@@ -376,7 +387,12 @@ export function wallOpenings(wall, allEntities = []) {
     : (allEntities && typeof allEntities === 'object' ? Object.values(allEntities).flat().filter(Boolean) : []);
 
   return list
-    .filter(e => (e.kind === 'door' || e.kind === 'window') && e.wallId === wall.id)
+    .filter(e => (e.kind === 'door' || e.kind === 'window') && (e.wallId === wall.id || e.hostWallId === wall.id))
+    .map(e => ({
+      ...e,
+      wallId: e.wallId || e.hostWallId,
+      position: typeof e.position === 'number' ? e.position : (typeof e.offset === 'number' ? e.offset : 0)
+    }))
     .sort((a, b) => (a.position || 0) - (b.position || 0));
 }
 

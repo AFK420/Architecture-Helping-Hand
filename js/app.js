@@ -10404,7 +10404,7 @@ const DEFAULT_CAD_LAYERS = [
   { id: 'A-DIMS', name: 'Dimensions', kinds: ['dimension'], color: '#38BDF8', lineweight: 0.18, visible: true, locked: false, printable: true },
   { id: 'A-ANNO-TEXT', name: 'Text & Notes', kinds: ['text', 'leader'], color: '#E5E7EB', lineweight: 0.18, visible: true, locked: false, printable: true },
   { id: 'A-ANNO-TAGS', name: 'Tags & Callouts', kinds: ['room_tag', 'door_tag', 'window_tag', 'north_arrow'], color: '#FBBF24', lineweight: 0.18, visible: true, locked: false, printable: true },
-  { id: 'A-GRID', name: 'Grid & Guidelines', kinds: ['grid'], color: '#6B7280', lineweight: 0.13, visible: true, locked: false, printable: false }
+  { id: 'A-GRID', name: 'Grid & Guidelines', kinds: ['grid', 'grid_line', 'column'], color: '#6B7280', lineweight: 0.13, visible: true, locked: false, printable: true }
 ];
 
 function cloneDefaultLayers() {
@@ -10597,6 +10597,468 @@ function setEntityLayer(entity, layerId) {
 
 
   // =========================================================================
+  // MODULE: GridColumns
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Structural Grid & Column System
+ * Provides data structures, geometric calculations, and snapping helpers for
+ * architectural structural columns (rectangular, circular, steel H-beams) and
+ * structural grid lines (centerlines with alphanumeric bubble badges).
+ */
+
+
+
+const COLUMN_PROFILES = Object.freeze(['rect', 'circle', 'h_beam']);
+const BUBBLE_POSITIONS = Object.freeze(['both', 'start', 'end', 'none']);
+
+let entityCounter = 1;
+function generateGridEntityId(prefix = 'grid') {
+  return `${prefix}-${Date.now().toString(36)}-${(entityCounter++).toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/**
+ * Creates a structural column entity.
+ *
+ * @param {Object} options
+ * @param {string} [options.id]
+ * @param {string} [options.name]
+ * @param {'rect'|'circle'|'h_beam'} [options.profile='rect']
+ * @param {number} options.x - World X coordinate of center
+ * @param {number} options.y - World Y coordinate of center
+ * @param {number} [options.width=0.4] - Width in meters (for rect and h_beam)
+ * @param {number} [options.depth=0.4] - Depth in meters (for rect and h_beam)
+ * @param {number} [options.radius=0.2] - Radius in meters (for circle)
+ * @param {number} [options.rotation=0] - Rotation angle in degrees
+ * @param {string} [options.material='concrete'] - 'concrete' | 'steel' | 'timber'
+ * @param {string} [options.layerId='A-GRID']
+ * @param {string} [options.floorId='floor-1']
+ * @returns {Object} Column entity
+ */
+function createColumn({
+  id,
+  name,
+  label,
+  profile = 'rect',
+  x = 0,
+  y = 0,
+  width = 0.4,
+  depth = 0.4,
+  radius = 0.2,
+  rotation = 0,
+  material = 'concrete',
+  layerId = 'A-GRID',
+  layer,
+  floorId = 'floor-1'
+} = {}) {
+  requireFiniteNumber(x, 'column.x');
+  requireFiniteNumber(y, 'column.y');
+
+  const prof = COLUMN_PROFILES.includes(profile) ? profile : 'rect';
+  const w = typeof width === 'number' && width > 0 ? width : 0.4;
+  const d = typeof depth === 'number' && depth > 0 ? depth : 0.4;
+  const r = typeof radius === 'number' && radius > 0 ? radius : 0.2;
+  const rot = typeof rotation === 'number' && !isNaN(rotation) ? rotation : 0;
+  const finalLayer = layer || layerId || 'A-GRID';
+  const finalName = typeof name === 'string' && name ? name : (typeof label === 'string' && label ? label : `Column ${prof.toUpperCase()}`);
+
+  return {
+    kind: 'column',
+    id: id || generateGridEntityId('col'),
+    name: finalName,
+    label: finalName,
+    profile: prof,
+    x,
+    y,
+    width: prof === 'circle' ? r * 2 : w,
+    depth: prof === 'circle' ? r * 2 : d,
+    radius: r,
+    rotation: rot,
+    material: typeof material === 'string' ? material : 'concrete',
+    layerId: finalLayer,
+    layer: finalLayer,
+    floorId
+  };
+}
+
+/**
+ * Creates a structural grid line entity (with bubble tags).
+ *
+ * @param {Object} options
+ * @param {string} [options.id]
+ * @param {string} [options.name] - Bubble label (e.g. '1', '2', 'A', 'B')
+ * @param {{x: number, y: number}} [options.p1] - Start point
+ * @param {{x: number, y: number}} [options.p2] - End point
+ * @param {number} [options.x1]
+ * @param {number} [options.y1]
+ * @param {number} [options.x2]
+ * @param {number} [options.y2]
+ * @param {'both'|'start'|'end'|'none'} [options.bubblePosition='both']
+ * @param {number} [options.bubbleRadius=0.35]
+ * @param {string} [options.layerId='A-GRID']
+ * @param {string} [options.floorId='floor-1']
+ * @returns {Object} Grid line entity
+ */
+function createGridLine({
+  id,
+  name,
+  label,
+  p1,
+  p2,
+  x1,
+  y1,
+  x2,
+  y2,
+  bubblePosition,
+  bubble,
+  bubbleRadius = 0.35,
+  layerId = 'A-GRID',
+  layer,
+  floorId = 'floor-1'
+} = {}) {
+  const pt1 = p1 || { x: typeof x1 === 'number' ? x1 : 0, y: typeof y1 === 'number' ? y1 : 0 };
+  const pt2 = p2 || { x: typeof x2 === 'number' ? x2 : 10, y: typeof y2 === 'number' ? y2 : 0 };
+
+  if (!pt1 || typeof pt1.x !== 'number' || typeof pt1.y !== 'number') {
+    throw new Error('gridLine requires valid p1 {x, y}');
+  }
+  if (!pt2 || typeof pt2.x !== 'number' || typeof pt2.y !== 'number') {
+    throw new Error('gridLine requires valid p2 {x, y}');
+  }
+
+  const rawBubble = bubblePosition || bubble || 'both';
+  const bPos = BUBBLE_POSITIONS.includes(rawBubble) ? rawBubble : 'both';
+  const bRad = typeof bubbleRadius === 'number' && bubbleRadius > 0 ? bubbleRadius : 0.35;
+  const finalLayer = layer || layerId || 'A-GRID';
+  const finalName = typeof name === 'string' && name ? name : (typeof label === 'string' && label ? label : '1');
+
+  return {
+    kind: 'grid_line',
+    id: id || generateGridEntityId('gl'),
+    name: finalName,
+    label: finalName,
+    p1: { x: pt1.x, y: pt1.y },
+    p2: { x: pt2.x, y: pt2.y },
+    bubblePosition: bPos,
+    bubble: bPos,
+    bubbleRadius: bRad,
+    layerId: finalLayer,
+    layer: finalLayer,
+    floorId
+  };
+}
+
+/**
+ * Computes polygon contour vertices for a column in world coordinates.
+ * @param {Object} column
+ * @returns {Array<[number, number]>} Array of [x, y] coordinates
+ */
+function columnContour(column) {
+  if (!column) return [];
+  const cx = column.x;
+  const cy = column.y;
+  const rotRad = ((column.rotation || 0) * Math.PI) / 180;
+  const cosR = Math.cos(rotRad);
+  const sinR = Math.sin(rotRad);
+
+  const rotate = (lx, ly) => [
+    cx + lx * cosR - ly * sinR,
+    cy + lx * sinR + ly * cosR
+  ];
+
+  if (column.profile === 'circle') {
+    const r = column.radius || 0.2;
+    const segments = 24;
+    const pts = [];
+    for (let i = 0; i < segments; i++) {
+      const theta = (i / segments) * 2 * Math.PI;
+      pts.push([cx + Math.cos(theta) * r, cy + Math.sin(theta) * r]);
+    }
+    return pts;
+  }
+
+  if (column.profile === 'h_beam') {
+    const w = column.width || 0.3;
+    const d = column.depth || 0.3;
+    const tf = Math.max(0.015, d * 0.1); // flange thickness
+    const tw = Math.max(0.012, w * 0.08); // web thickness
+    const hw = w / 2;
+    const hd = d / 2;
+    const htw = tw / 2;
+
+    // Standard I-beam / H-beam contour (12 vertices)
+    const localPts = [
+      [-hw, -hd],
+      [hw, -hd],
+      [hw, -hd + tf],
+      [htw, -hd + tf],
+      [htw, hd - tf],
+      [hw, hd - tf],
+      [hw, hd],
+      [-hw, hd],
+      [-hw, hd - tf],
+      [-htw, hd - tf],
+      [-htw, -hd + tf],
+      [-hw, -hd + tf]
+    ];
+    return localPts.map(([lx, ly]) => rotate(lx, ly));
+  }
+
+  // Default 'rect'
+  const hw = (column.width || 0.4) / 2;
+  const hd = (column.depth || 0.4) / 2;
+  const localPts = [
+    [-hw, -hd],
+    [hw, -hd],
+    [hw, hd],
+    [-hw, hd]
+  ];
+  return localPts.map(([lx, ly]) => rotate(lx, ly));
+}
+
+/**
+ * Computes architectural CAD cross-hatch lines for a column (the standard structural X symbol).
+ * @param {Object} column
+ * @returns {Array<{x1: number, y1: number, x2: number, y2: number}>}
+ */
+function columnHatchLines(column) {
+  if (!column) return [];
+  const cx = column.x;
+  const cy = column.y;
+  const rotRad = ((column.rotation || 0) * Math.PI) / 180;
+  const cosR = Math.cos(rotRad);
+  const sinR = Math.sin(rotRad);
+
+  const rotate = (lx, ly) => ({
+    x: cx + lx * cosR - ly * sinR,
+    y: cy + lx * sinR + ly * cosR
+  });
+
+  if (column.profile === 'circle') {
+    const r = column.radius || 0.2;
+    const pTop = rotate(0, r);
+    const pBottom = rotate(0, -r);
+    const pLeft = rotate(-r, 0);
+    const pRight = rotate(r, 0);
+    return [
+      { x1: pLeft.x, y1: pLeft.y, x2: pRight.x, y2: pRight.y },
+      { x1: pTop.x, y1: pTop.y, x2: pBottom.x, y2: pBottom.y }
+    ];
+  }
+
+  if (column.profile === 'h_beam') {
+    // Center web line
+    const hd = (column.depth || 0.3) / 2;
+    const tf = Math.max(0.015, hd * 0.2);
+    const p1 = rotate(0, -hd + tf);
+    const p2 = rotate(0, hd - tf);
+    return [{ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y }];
+  }
+
+  // Rect cross-hatch (corner to corner X)
+  const hw = (column.width || 0.4) / 2;
+  const hd = (column.depth || 0.4) / 2;
+  const c1 = rotate(-hw, -hd);
+  const c2 = rotate(hw, hd);
+  const c3 = rotate(hw, -hd);
+  const c4 = rotate(-hw, hd);
+
+  return [
+    { x1: c1.x, y1: c1.y, x2: c2.x, y2: c2.y },
+    { x1: c3.x, y1: c3.y, x2: c4.x, y2: c4.y }
+  ];
+}
+
+/**
+ * Returns snap points for a column (center, corners, edge midpoints).
+ * @param {Object} column
+ * @returns {Array<{x: number, y: number, type: string, targetId: string}>}
+ */
+function columnSnapPoints(column) {
+  if (!column) return [];
+  const snaps = [
+    { x: column.x, y: column.y, type: 'center', targetId: column.id }
+  ];
+
+  if (column.profile === 'circle') {
+    const r = column.radius || 0.2;
+    snaps.push(
+      { x: column.x + r, y: column.y, type: 'quadrant', targetId: column.id },
+      { x: column.x - r, y: column.y, type: 'quadrant', targetId: column.id },
+      { x: column.x, y: column.y + r, type: 'quadrant', targetId: column.id },
+      { x: column.x, y: column.y - r, type: 'quadrant', targetId: column.id }
+    );
+    return snaps;
+  }
+
+  const contour = columnContour(column);
+  if (column.profile === 'rect') {
+    for (const [px, py] of contour) {
+      snaps.push({ x: px, y: py, type: 'corner', targetId: column.id });
+    }
+    // Edge midpoints
+    for (let i = 0; i < contour.length; i++) {
+      const p1 = contour[i];
+      const p2 = contour[(i + 1) % contour.length];
+      snaps.push({
+        x: (p1[0] + p2[0]) / 2,
+        y: (p1[1] + p2[1]) / 2,
+        type: 'midpoint',
+        targetId: column.id
+      });
+    }
+  } else {
+    for (const [px, py] of contour) {
+      snaps.push({ x: px, y: py, type: 'corner', targetId: column.id });
+    }
+  }
+
+  return snaps;
+}
+
+/**
+ * Finds the intersection point between two grid lines (line-line intersection).
+ * @param {Object} g1 - First grid line
+ * @param {Object} g2 - Second grid line
+ * @returns {{x: number, y: number}|null} Intersection point or null if parallel
+ */
+function gridLineIntersection(g1, g2) {
+  if (!g1 || !g2 || !g1.p1 || !g1.p2 || !g2.p1 || !g2.p2) return null;
+
+  const x1 = g1.p1.x;
+  const y1 = g1.p1.y;
+  const x2 = g1.p2.x;
+  const y2 = g1.p2.y;
+
+  const x3 = g2.p1.x;
+  const y3 = g2.p1.y;
+  const x4 = g2.p2.x;
+  const y4 = g2.p2.y;
+
+  const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+  if (Math.abs(denom) < 1e-9) return null; // parallel or coincident
+
+  const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+  const ix = x1 + t * (x2 - x1);
+  const iy = y1 + t * (y2 - y1);
+
+  return { x: ix, y: iy };
+}
+
+/**
+ * Generates an automated orthogonal structural grid system based on span spacings.
+ *
+ * @param {Object} options
+ * @param {Array<number>} [options.xSpacings=[6, 6, 6]] - Spans along X in meters
+ * @param {Array<number>} [options.ySpacings=[6, 6, 6]] - Spans along Y in meters
+ * @param {number} [options.originX=0]
+ * @param {number} [options.originY=0]
+ * @param {number} [options.extension=1.5] - Distance grid line extends past outer grid boundary
+ * @param {Array<string>} [options.xLabels] - Labels for vertical grid lines (default 1, 2, 3...)
+ * @param {Array<string>} [options.yLabels] - Labels for horizontal grid lines (default A, B, C...)
+ * @param {number} [options.bubbleRadius=0.35]
+ * @param {string} [options.layerId='A-GRID']
+ * @returns {Array<Object>} Array of grid line entities
+ */
+function generateGridSystem({
+  xSpacings = [6, 6, 6],
+  ySpacings = [6, 6, 6],
+  originX = 0,
+  originY = 0,
+  xOrigin,
+  yOrigin,
+  extension = 1.5,
+  xLabels,
+  yLabels,
+  bubbleRadius = 0.35,
+  layerId = 'A-GRID'
+} = {}) {
+  const lines = [];
+  const ox = typeof originX === 'number' && originX !== 0 ? originX : (typeof xOrigin === 'number' ? xOrigin : (originX || 0));
+  const oy = typeof originY === 'number' && originY !== 0 ? originY : (typeof yOrigin === 'number' ? yOrigin : (originY || 0));
+
+  // Compute X grid line positions
+  const xCoords = [ox];
+  let curX = ox;
+  for (const s of xSpacings) {
+    curX += Math.max(0.1, s);
+    xCoords.push(curX);
+  }
+
+  // Compute Y grid line positions
+  const yCoords = [oy];
+  let curY = oy;
+  for (const s of ySpacings) {
+    curY += Math.max(0.1, s);
+    yCoords.push(curY);
+  }
+
+  const minX = Math.min(...xCoords);
+  const maxX = Math.max(...xCoords);
+  const minY = Math.min(...yCoords);
+  const maxY = Math.max(...yCoords);
+
+  const ext = Math.max(0.5, extension);
+
+  // Vertical grid lines (labeled 1, 2, 3...)
+  xCoords.forEach((xVal, idx) => {
+    const lbl = (Array.isArray(xLabels) && xLabels[idx]) ? xLabels[idx] : String(idx + 1);
+    lines.push(
+      createGridLine({
+        name: lbl,
+        label: lbl,
+        p1: { x: xVal, y: minY - ext },
+        p2: { x: xVal, y: maxY + ext },
+        bubblePosition: 'both',
+        bubbleRadius,
+        layerId
+      })
+    );
+  });
+
+  // Horizontal grid lines (labeled A, B, C...)
+  const defaultYLabels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M'];
+  yCoords.forEach((yVal, idx) => {
+    const lbl = (Array.isArray(yLabels) && yLabels[idx])
+      ? yLabels[idx]
+      : (defaultYLabels[idx] || `Y${idx + 1}`);
+    lines.push(
+      createGridLine({
+        name: lbl,
+        label: lbl,
+        p1: { x: minX - ext, y: yVal },
+        p2: { x: maxX + ext, y: yVal },
+        bubblePosition: 'both',
+        bubbleRadius,
+        layerId
+      })
+    );
+  });
+
+  // Structural columns placed at every grid intersection
+  const columns = [];
+  xCoords.forEach(xVal => {
+    yCoords.forEach(yVal => {
+      columns.push(
+        createColumn({
+          x: xVal,
+          y: yVal,
+          profile: 'rect',
+          width: 0.4,
+          depth: 0.4,
+          layerId
+        })
+      );
+    });
+  });
+
+  lines.gridLines = lines;
+  lines.columns = columns;
+  return lines;
+}
+
+
+  // =========================================================================
   // MODULE: Entities
   // =========================================================================
 
@@ -10615,6 +11077,7 @@ function setEntityLayer(entity, layerId) {
  *  - The existing furniture dataset (core/furniture.js) remains the single
  *    source of furniture dimensions; placement wraps it, never duplicates it.
  */
+
 
 
 
@@ -10978,7 +11441,12 @@ function wallOpenings(wall, allEntities = []) {
     : (allEntities && typeof allEntities === 'object' ? Object.values(allEntities).flat().filter(Boolean) : []);
 
   return list
-    .filter(e => (e.kind === 'door' || e.kind === 'window') && e.wallId === wall.id)
+    .filter(e => (e.kind === 'door' || e.kind === 'window') && (e.wallId === wall.id || e.hostWallId === wall.id))
+    .map(e => ({
+      ...e,
+      wallId: e.wallId || e.hostWallId,
+      position: typeof e.position === 'number' ? e.position : (typeof e.offset === 'number' ? e.offset : 0)
+    }))
     .sort((a, b) => (a.position || 0) - (b.position || 0));
 }
 
@@ -11634,6 +12102,439 @@ function generateEntityId(prefix) {
 
 
   // =========================================================================
+  // MODULE: Massing3D
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Lightweight 3D Massing & Axonometric Engine
+ * Pure mathematical 3D projection engine with ZERO runtime dependencies.
+ * Converts 2D floor plans into 3D axonometric and isometric vector models with
+ * wall extrusion, opening lintels/sills, structural columns, depth sorting,
+ * and architectural directional shading.
+ */
+
+
+
+
+const CAMERA_PRESETS = Object.freeze({
+  isometric_ne: { azimuth: 45, elevation: 35.264, label: 'Isometric NE (30°/30°)' },
+  isometric_nw: { azimuth: 135, elevation: 35.264, label: 'Isometric NW' },
+  isometric_se: { azimuth: -45, elevation: 35.264, label: 'Isometric SE' },
+  isometric_sw: { azimuth: -135, elevation: 35.264, label: 'Isometric SW' },
+  axonometric_top: { azimuth: 45, elevation: 60, label: 'Top Axo (60°)' },
+  cavalier: { azimuth: 45, elevation: 45, label: 'Plan Oblique (45°)' },
+  iso_ne: { azimuth: 45, elevation: 35.264, label: 'Isometric NE (30°/30°)' },
+  iso_nw: { azimuth: 135, elevation: 35.264, label: 'Isometric NW' },
+  iso_se: { azimuth: -45, elevation: 35.264, label: 'Isometric SE' },
+  iso_sw: { azimuth: -135, elevation: 35.264, label: 'Isometric SW' },
+  axonometric: { azimuth: 45, elevation: 60, label: 'Top Axo (60°)' },
+  plan: { azimuth: 0, elevation: 89.9, label: 'Plan View' }
+});
+
+// Normalized directional sun light vector [Lx, Ly, Lz]
+const SUN_VECTOR = (() => {
+  const vx = 0.5, vy = -0.7, vz = 0.9;
+  const len = Math.hypot(vx, vy, vz);
+  return [vx / len, vy / len, vz / len];
+})();
+
+/**
+ * Projects a 3D point (world meters) to screen coordinates (pixels) and depth.
+ *
+ * @param {{x: number, y: number, z: number}} p
+ * @param {Object} camera
+ * @param {number} [camera.azimuth=45] - Azimuth / yaw in degrees
+ * @param {number} [camera.elevation=35.264] - Elevation / pitch in degrees
+ * @param {number} [camera.zoom=40] - Pixels per meter
+ * @param {number} [camera.panX=400]
+ * @param {number} [camera.panY=300]
+ * @returns {{x: number, y: number, depth: number}}
+ */
+function projectPoint3D(p, camera = {}) {
+  const az = ((camera.azimuth ?? 45) * Math.PI) / 180;
+  const el = ((camera.elevation ?? 35.264) * Math.PI) / 180;
+  const zoom = camera.zoom || 40;
+  const panX = camera.panX || 0;
+  const panY = camera.panY || 0;
+
+  // Yaw rotation around vertical Z axis
+  const cosAz = Math.cos(az);
+  const sinAz = Math.sin(az);
+  const x1 = p.x * cosAz - p.y * sinAz;
+  const y1 = p.x * sinAz + p.y * cosAz;
+  const z1 = p.z || 0;
+
+  // Pitch tilt by elevation
+  const cosEl = Math.cos(el);
+  const sinEl = Math.sin(el);
+
+  // Screen X = x1
+  // Screen Y = in SVG Y is downwards, so positive world Z projects upwards (-Z)
+  const screenX = panX + x1 * zoom;
+  const screenY = panY - (z1 * cosEl - y1 * sinEl) * zoom;
+  const depth = z1 * sinEl + y1 * cosEl;
+
+  return { x: screenX, y: screenY, depth };
+}
+
+/**
+ * Computes the normal vector for a 3D polygon face and its lighting factor.
+ */
+function computeFaceLighting(vertices) {
+  if (vertices.length < 3) return { normal: [0, 0, 1], factor: 1 };
+  const p0 = vertices[0];
+  const p1 = vertices[1];
+  const p2 = vertices[2];
+
+  // Vectors P1-P0 and P2-P0
+  const v1 = [p1.x - p0.x, p1.y - p0.y, p1.z - p0.z];
+  const v2 = [p2.x - p0.x, p2.y - p0.y, p2.z - p0.z];
+
+  // Cross product
+  const nx = v1[1] * v2[2] - v1[2] * v2[1];
+  const ny = v1[2] * v2[0] - v1[0] * v2[2];
+  const nz = v1[0] * v2[1] - v1[1] * v2[0];
+  const len = Math.hypot(nx, ny, nz);
+
+  if (len < 1e-6) return { normal: [0, 0, 1], factor: 0.8 };
+  const normal = [nx / len, ny / len, nz / len];
+
+  // Dot product with sun light vector
+  const dot = normal[0] * SUN_VECTOR[0] + normal[1] * SUN_VECTOR[1] + normal[2] * SUN_VECTOR[2];
+  // Ambient floor 0.35, max 1.0
+  const factor = Math.max(0.35, Math.min(1.0, 0.45 + 0.55 * dot));
+  return { normal, factor };
+}
+
+/**
+ * Generates shaded RGB color from a base hex color and lighting factor.
+ */
+function applyLightingToColor(hexColor, factor) {
+  let hex = hexColor.replace('#', '');
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  const num = parseInt(hex, 16);
+  if (isNaN(num)) return hexColor;
+
+  const r = Math.round(Math.min(255, ((num >> 16) & 255) * factor));
+  const g = Math.round(Math.min(255, ((num >> 8) & 255) * factor));
+  const b = Math.round(Math.min(255, (num & 255) * factor));
+
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/**
+ * Creates a 3D box / prism from a 2D base polygon extruded along Z.
+ */
+function extrudePolygon(basePoints, zBottom, zTop, baseColor = '#e2e8f0', strokeColor = '#334155', opacity = 1, type = 'wall') {
+  const faces = [];
+  const n = basePoints.length;
+  if (n < 3) return faces;
+
+  const bottomVerts = basePoints.map(p => ({ x: p[0], y: p[1], z: zBottom }));
+  const topVerts = basePoints.map(p => ({ x: p[0], y: p[1], z: zTop }));
+
+  // 1. Top face
+  const topLight = computeFaceLighting(topVerts);
+  faces.push({
+    vertices: topVerts,
+    color: applyLightingToColor(baseColor, Math.min(1.0, topLight.factor + 0.15)),
+    stroke: strokeColor,
+    opacity,
+    type,
+    isTop: true
+  });
+
+  // 2. Bottom face
+  const botVertsReversed = [...bottomVerts].reverse();
+  const botLight = computeFaceLighting(botVertsReversed);
+  faces.push({
+    vertices: botVertsReversed,
+    color: applyLightingToColor(baseColor, botLight.factor * 0.5),
+    stroke: strokeColor,
+    opacity,
+    type,
+    isBottom: true
+  });
+
+  // 3. Side faces
+  for (let i = 0; i < n; i++) {
+    const next = (i + 1) % n;
+    const quad = [
+      bottomVerts[i],
+      bottomVerts[next],
+      topVerts[next],
+      topVerts[i]
+    ];
+    const sideLight = computeFaceLighting(quad);
+    faces.push({
+      vertices: quad,
+      color: applyLightingToColor(baseColor, sideLight.factor),
+      stroke: strokeColor,
+      opacity,
+      type,
+      isSide: true
+    });
+  }
+
+  return faces;
+}
+
+/**
+ * Converts a 2D floor plan into 3D massing face polygons.
+ *
+ * @param {Array<Object>} entities - 2D plan entities
+ * @param {Object} [options]
+ * @param {number} [options.wallHeight=3.0] - Height of walls in meters
+ * @param {number} [options.doorHeight=2.1] - Height of doors in meters
+ * @param {number} [options.windowSill=0.9] - Height of window sill in meters
+ * @param {number} [options.windowHeight=1.2] - Height of window glass in meters
+ * @param {number} [options.slabThickness=0.2] - Slab thickness in meters
+ * @returns {Array<Object>} Array of 3D face objects
+ */
+function buildMassing3DModel(entities = [], options = {}) {
+  const wallH = typeof options.wallHeight === 'number' && options.wallHeight > 0 ? options.wallHeight : 3.0;
+  const doorH = Math.min(wallH - 0.2, options.doorHeight || 2.1);
+  const winSill = options.windowSill || 0.9;
+  const winH = options.windowHeight || 1.2;
+  const winTop = Math.min(wallH - 0.2, winSill + winH);
+  const slabThick = options.slabThickness || 0.2;
+
+  const faces = [];
+  const list = Array.isArray(entities) ? entities : [];
+
+  // 1. Floor Slabs / Rooms
+  const rooms = list.filter(e => e && e.kind === 'room');
+  for (const r of rooms) {
+    let poly = [];
+    if (Array.isArray(r.boundary) && r.boundary.length >= 3) {
+      poly = r.boundary.map(p => [p.x, p.y]);
+    } else if (typeof r.x === 'number' && typeof r.width === 'number') {
+      const w = r.width;
+      const d = r.depth || 0;
+      poly = [
+        [r.x, r.y],
+        [r.x + w, r.y],
+        [r.x + w, r.y + d],
+        [r.x, r.y + d]
+      ];
+    }
+    if (poly.length >= 3) {
+      const slabFaces = extrudePolygon(poly, -slabThick, 0, '#cbd5e1', '#94a3b8', 1, 'slab');
+      faces.push(...slabFaces);
+    }
+  }
+
+  // 2. Walls and Openings (Extruded with lintels & sills)
+  const walls = list.filter(e => e && e.kind === 'wall' && typeof e.x1 === 'number');
+  for (const w of walls) {
+    const dx = w.x2 - w.x1;
+    const dy = w.y2 - w.y1;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-4) continue;
+
+    const thick = w.thickness || 0.2;
+    const ux = dx / len;
+    const uy = dy / len;
+    const nx = -uy * (thick / 2);
+    const ny = ux * (thick / 2);
+
+    const openings = wallOpenings(w, list);
+
+    if (openings.length === 0) {
+      // Solid wall: full extrusion from 0 to wallH
+      const basePts = [
+        [w.x1 + nx, w.y1 + ny],
+        [w.x2 + nx, w.y2 + ny],
+        [w.x2 - nx, w.y2 - ny],
+        [w.x1 - nx, w.y1 - ny]
+      ];
+      faces.push(...extrudePolygon(basePts, 0, wallH, '#f1f5f9', '#475569', 1, 'wall'));
+    } else {
+      // Segmented wall around openings
+      let currentPos = 0;
+      for (const op of openings) {
+        const opStart = Math.max(0, Math.min(len, op.position || 0));
+        const opEnd = Math.max(0, Math.min(len, opStart + (op.width || 0.9)));
+
+        // Solid sub-segment before opening
+        if (opStart > currentPos + 1e-4) {
+          const segLen = opStart - currentPos;
+          const pStart = { x: w.x1 + ux * currentPos, y: w.y1 + uy * currentPos };
+          const pEnd = { x: w.x1 + ux * opStart, y: w.y1 + uy * opStart };
+          const segPts = [
+            [pStart.x + nx, pStart.y + ny],
+            [pEnd.x + nx, pEnd.y + ny],
+            [pEnd.x - nx, pEnd.y - ny],
+            [pStart.x - nx, pStart.y - ny]
+          ];
+          faces.push(...extrudePolygon(segPts, 0, wallH, '#f1f5f9', '#475569', 1, 'wall'));
+        }
+
+        // Opening segment
+        const oStart = { x: w.x1 + ux * opStart, y: w.y1 + uy * opStart };
+        const oEnd = { x: w.x1 + ux * opEnd, y: w.y1 + uy * opEnd };
+        const opPts = [
+          [oStart.x + nx, oStart.y + ny],
+          [oEnd.x + nx, oEnd.y + ny],
+          [oEnd.x - nx, oEnd.y - ny],
+          [oStart.x - nx, oStart.y - ny]
+        ];
+
+        if (op.kind === 'door') {
+          // Lintel above door (from doorH to wallH)
+          if (wallH > doorH) {
+            faces.push(...extrudePolygon(opPts, doorH, wallH, '#f1f5f9', '#475569', 1, 'lintel'));
+          }
+        } else if (op.kind === 'window') {
+          // Parapet / sill below window (from 0 to winSill)
+          if (winSill > 0) {
+            faces.push(...extrudePolygon(opPts, 0, winSill, '#f1f5f9', '#475569', 1, 'sill'));
+          }
+          // Tinted window glass pane in middle (from winSill to winTop)
+          faces.push(...extrudePolygon(opPts, winSill, winTop, '#38bdf8', '#0284c7', 0.55, 'glass'));
+          // Lintel above window (from winTop to wallH)
+          if (wallH > winTop) {
+            faces.push(...extrudePolygon(opPts, winTop, wallH, '#f1f5f9', '#475569', 1, 'lintel'));
+          }
+        }
+
+        currentPos = Math.max(currentPos, opEnd);
+      }
+
+      // Final solid segment after last opening
+      if (currentPos < len - 1e-4) {
+        const pStart = { x: w.x1 + ux * currentPos, y: w.y1 + uy * currentPos };
+        const pEnd = { x: w.x2, y: w.y2 };
+        const segPts = [
+          [pStart.x + nx, pStart.y + ny],
+          [pEnd.x + nx, pEnd.y + ny],
+          [pEnd.x - nx, pEnd.y - ny],
+          [pStart.x - nx, pStart.y - ny]
+        ];
+        faces.push(...extrudePolygon(segPts, 0, wallH, '#f1f5f9', '#475569', 1, 'wall'));
+      }
+    }
+  }
+
+  // 3. Structural Columns
+  const columns = list.filter(e => e && e.kind === 'column');
+  for (const c of columns) {
+    const contour = columnContour(c);
+    if (contour.length >= 3) {
+      const colColor = c.material === 'steel' ? '#64748b' : '#94a3b8';
+      faces.push(...extrudePolygon(contour, 0, wallH, colColor, '#1e293b', 1, 'column'));
+    }
+  }
+
+  // 4. Stairs (3D Step Flight)
+  const stairs = list.filter(e => e && e.kind === 'stair');
+  for (const st of stairs) {
+    const numRisers = st.riserCount || 10;
+    const riserH = wallH / numRisers;
+    const stW = st.width || 1.0;
+    const stD = st.depth || st.run || 2.5;
+    const treadD = stD / numRisers;
+
+    for (let s = 0; s < numRisers; s++) {
+      const stepBottom = 0;
+      const stepTop = (s + 1) * riserH;
+      const stepY = st.y + s * treadD;
+      const stepPts = [
+        [st.x, stepY],
+        [st.x + stW, stepY],
+        [st.x + stW, stepY + treadD],
+        [st.x, stepY + treadD]
+      ];
+      faces.push(...extrudePolygon(stepPts, stepBottom, stepTop, '#fbcfe8', '#db2777', 1, 'stair'));
+    }
+  }
+
+  faces.faces = faces;
+  return faces;
+}
+
+/**
+ * Projects 3D faces to 2D screen coordinates and depth-sorts them (Painter's algorithm).
+ *
+ * @param {Array<Object>} faces3D - 3D face objects
+ * @param {Object} camera - Camera projection settings
+ * @returns {Array<Object>} Sorted 2D projected faces
+ */
+function projectAndSortFaces(faces3D, camera) {
+  const projected = [];
+
+  for (const face of faces3D) {
+    let sumDepth = 0;
+    const pts2D = [];
+
+    for (const v of face.vertices) {
+      const p = projectPoint3D(v, camera);
+      pts2D.push([p.x, p.y]);
+      sumDepth += p.depth;
+    }
+
+    const avgDepth = pts2D.length > 0 ? sumDepth / pts2D.length : 0;
+
+    projected.push({
+      points: pts2D,
+      depth: avgDepth,
+      color: face.color,
+      stroke: face.stroke,
+      opacity: face.opacity || 1
+    });
+  }
+
+  // Painter's algorithm: sort ascending by depth (farthest rendered first, nearest on top)
+  projected.sort((a, b) => a.depth - b.depth);
+
+  return projected;
+}
+
+/**
+ * Generates standalone clean SVG markup for a 3D massing model.
+ *
+ * @param {Array<Object>} entities - 2D plan entities
+ * @param {Object} [camera] - Camera options
+ * @param {Object} [options] - Modeling & rendering options
+ * @returns {string} Standalone SVG string
+ */
+function generateMassingSVG(entities = [], camera = {}, options = {}) {
+  const faces3D = buildMassing3DModel(entities, options);
+
+  const width = options.width || 800;
+  const height = options.height || 600;
+
+  const cam = {
+    azimuth: camera.azimuth ?? 45,
+    elevation: camera.elevation ?? 35.264,
+    zoom: camera.zoom || 32,
+    panX: camera.panX || width / 2,
+    panY: camera.panY || height / 2 + 50
+  };
+
+  const sortedFaces = projectAndSortFaces(faces3D, cam);
+
+  const polygonsMarkup = sortedFaces.map(f => {
+    const pointsAttr = f.points.map(pt => `${pt[0].toFixed(1)},${pt[1].toFixed(1)}`).join(' ');
+    const op = f.opacity < 1 ? ` opacity="${f.opacity}"` : '';
+    return `    <polygon points="${pointsAttr}" fill="${f.color}" stroke="${f.stroke}" stroke-width="1.2" stroke-linejoin="round"${op} />`;
+  }).join('\n');
+
+  const title = options.title || camera.title || '';
+  const titleMarkup = title
+    ? `  <text id="massing-title" x="24" y="36" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14" font-weight="600">${title}</text>\n`
+    : '';
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
+  <rect width="100%" height="100%" fill="#0f172a" />
+${titleMarkup}  <g class="massing-faces">
+${polygonsMarkup}
+  </g>
+</svg>`;
+}
+
+
+  // =========================================================================
   // MODULE: PlanCanvas
   // =========================================================================
 
@@ -11647,6 +12548,7 @@ function generateEntityId(prefix) {
  * and a lightweight undo/redo command stack. Rendering lives in the UI
  * view; persistence in the project document via the store.
  */
+
 
 
 
@@ -11788,11 +12690,17 @@ function findSnapPoint(point, entities = [], options = {}) {
 
   const walls = [];
   const otherEntities = [];
+  const gridLines = [];
+  const columns = [];
 
   for (const e of entities) {
     if (!e || e.id === excludeId) continue;
     if (e.kind === 'wall' && typeof e.x1 === 'number') {
       walls.push(e);
+    } else if (e.kind === 'grid_line' && e.p1 && e.p2) {
+      gridLines.push(e);
+    } else if (e.kind === 'column') {
+      columns.push(e);
     } else if (typeof e.x === 'number' && typeof e.width === 'number') {
       otherEntities.push(e);
     }
@@ -11809,21 +12717,59 @@ function findSnapPoint(point, entities = [], options = {}) {
     }
   }
 
-  // 2. Wall-wall Intersections
-  if (isEnabled('intersection') && walls.length >= 2) {
-    const segments = walls.map(w => ({
-      p1: { x: w.x1, y: w.y1 },
-      p2: { x: w.x2, y: w.y2 },
-      id: w.id
-    }));
-    const intersections = findSegmentIntersections(segments);
-    for (const hit of intersections) {
-      testCandidate({
-        x: hit.x,
-        y: hit.y,
-        type: 'intersection',
-        targetId: hit.segId1
-      });
+  // Grid line endpoints & midpoints
+  for (const gl of gridLines) {
+    if (isEnabled('endpoint')) {
+      testCandidate({ x: gl.p1.x, y: gl.p1.y, type: 'endpoint', targetId: gl.id });
+      testCandidate({ x: gl.p2.x, y: gl.p2.y, type: 'endpoint', targetId: gl.id });
+    }
+    if (isEnabled('midpoint')) {
+      testCandidate({ x: (gl.p1.x + gl.p2.x) / 2, y: (gl.p1.y + gl.p2.y) / 2, type: 'midpoint', targetId: gl.id });
+    }
+  }
+
+  // 2. Wall-wall Intersections & Grid Line Intersections
+  if (isEnabled('intersection')) {
+    if (walls.length >= 2) {
+      const segments = walls.map(w => ({
+        p1: { x: w.x1, y: w.y1 },
+        p2: { x: w.x2, y: w.y2 },
+        id: w.id
+      }));
+      const intersections = findSegmentIntersections(segments);
+      for (const hit of intersections) {
+        testCandidate({
+          x: hit.x,
+          y: hit.y,
+          type: 'intersection',
+          targetId: hit.segId1
+        });
+      }
+    }
+    if (gridLines.length >= 2) {
+      for (let i = 0; i < gridLines.length; i++) {
+        for (let j = i + 1; j < gridLines.length; j++) {
+          const hit = gridLineIntersection(gridLines[i], gridLines[j]);
+          if (hit) {
+            testCandidate({
+              x: hit.x,
+              y: hit.y,
+              type: 'intersection',
+              targetId: gridLines[i].id
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Column snap points (center, corners, midpoints, quadrants)
+  for (const col of columns) {
+    const snaps = columnSnapPoints(col);
+    for (const s of snaps) {
+      if (isEnabled(s.type)) {
+        testCandidate(s);
+      }
     }
   }
 
@@ -12260,7 +13206,7 @@ function entityMoveCommand(entity, dx, dy, label) {
  */
 function planToExportGeometry(entities, options = {}) {
   const includeLabels = options.includeLabels !== false;
-  const out = { lines: [], polygons: [], texts: [] };
+  const out = { lines: [], polygons: [], texts: [], circles: [] };
   const list = Array.isArray(entities)
     ? entities
     : (entities && typeof entities === 'object' ? Object.values(entities).flat().filter(Boolean) : []);
@@ -12274,6 +13220,7 @@ function planToExportGeometry(entities, options = {}) {
       : e.kind === 'furniture' ? 'A-FURN'
       : e.kind === 'dimension' ? 'A-DIMS'
       : (e.kind === 'room_tag' || e.kind === 'door_tag' || e.kind === 'window_tag' || e.kind === 'north_arrow') ? 'A-ANNO-TAGS'
+      : (e.kind === 'column' || e.kind === 'grid_line') ? 'A-GRID'
       : 'A-ANNO-TEXT');
 
     if (e.kind === 'room') {
@@ -12460,6 +13407,30 @@ function planToExportGeometry(entities, options = {}) {
         const labelPos = rot(0, s + 0.25);
         out.texts.push({ x: labelPos[0], y: labelPos[1], text: 'N', height: 0.25, layer: lyr });
       }
+    } else if (e.kind === 'column') {
+      const contour = columnContour(e);
+      if (contour.length >= 3) {
+        out.polygons.push({ closed: true, points: contour, label: e.name || 'Column', layer: lyr });
+      }
+      const hatches = columnHatchLines(e);
+      for (const h of hatches) {
+        out.lines.push({ x1: h.x1, y1: h.y1, x2: h.x2, y2: h.y2, layer: lyr });
+      }
+    } else if (e.kind === 'grid_line' && e.p1 && e.p2) {
+      out.lines.push({ x1: e.p1.x, y1: e.p1.y, x2: e.p2.x, y2: e.p2.y, layer: lyr, linetype: 'CENTER' });
+      const bRad = e.bubbleRadius || 0.35;
+      if (e.bubblePosition === 'both' || e.bubblePosition === 'start') {
+        out.circles.push({ cx: e.p1.x, cy: e.p1.y, r: bRad, layer: lyr });
+        if (includeLabels && e.name) {
+          out.texts.push({ x: e.p1.x, y: e.p1.y, text: e.name, height: 0.22, layer: lyr });
+        }
+      }
+      if (e.bubblePosition === 'both' || e.bubblePosition === 'end') {
+        out.circles.push({ cx: e.p2.x, cy: e.p2.y, r: bRad, layer: lyr });
+        if (includeLabels && e.name) {
+          out.texts.push({ x: e.p2.x, y: e.p2.y, text: e.name, height: 0.22, layer: lyr });
+        }
+      }
     } else if (e.kind === 'text' && typeof e.x === 'number' && typeof e.y === 'number') {
       if (includeLabels) {
         out.texts.push({ x: e.x, y: e.y, text: e.text || e.name || '', height: 0.2, layer: lyr });
@@ -12526,6 +13497,365 @@ function generatePlanSVG(geometry, options = {}) {
   <rect x="0" y="0" width="${widthPx.toFixed(0)}" height="${heightPx.toFixed(0)}" fill="#ffffff"/>
   ${shapes}
   ${labels}
+</svg>`;
+}
+
+
+  // =========================================================================
+  // MODULE: Sheet
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Presentation Sheet & Title Block Engine
+ * Generates ISO architectural drawing sheets (A4, A3, A2, A1) with standardized
+ * margins, professional CAD title blocks, scaled plan drawing viewports,
+ * and print-ready SVG generation.
+ */
+
+const SHEET_SIZES = Object.freeze({
+  A4: { widthMm: 297, heightMm: 210, name: 'ISO A4 (297 × 210 mm)' },
+  A3: { widthMm: 420, heightMm: 297, name: 'ISO A3 (420 × 297 mm)' },
+  A2: { widthMm: 594, heightMm: 420, name: 'ISO A2 (594 × 420 mm)' },
+  A1: { widthMm: 841, heightMm: 594, name: 'ISO A1 (841 × 594 mm)' }
+});
+
+const ARCHITECTURAL_SCALES = Object.freeze([
+  { ratio: 20, label: '1:20 (Detail)' },
+  { ratio: 50, label: '1:50 (Detailed Plan)' },
+  { ratio: 100, label: '1:100 (Standard Floor Plan)' },
+  { ratio: 200, label: '1:200 (Site / Overall Plan)' },
+  { ratio: 500, label: '1:500 (Master Plan)' }
+]);
+
+/**
+ * Creates default presentation sheet document metadata.
+ *
+ * @param {Object} options
+ * @returns {Object} Sheet configuration
+ */
+function createSheetConfig(options = {}) {
+  const rawSize = options.size || options.sheetSize || 'A3';
+  const sizeKey = SHEET_SIZES[rawSize] ? rawSize : 'A3';
+  const sizeDef = SHEET_SIZES[sizeKey];
+  const isPortrait = options.orientation === 'portrait';
+
+  const widthMm = isPortrait ? sizeDef.heightMm : sizeDef.widthMm;
+  const heightMm = isPortrait ? sizeDef.widthMm : sizeDef.heightMm;
+  const pName = options.projectName || 'Studio Residence Project';
+  const sTitle = options.sheetTitle || 'GROUND FLOOR PLAN & STRUCTURAL GRID';
+  const sNumber = options.sheetNumber || 'A-101';
+  const sRatio = options.scaleRatio || 100;
+
+  return {
+    size: sizeKey,
+    sheetSize: sizeKey,
+    orientation: isPortrait ? 'portrait' : 'landscape',
+    widthMm,
+    heightMm,
+    scaleRatio: sRatio,
+    projectName: pName,
+    sheetTitle: sTitle,
+    sheetNumber: sNumber,
+    marginMm: typeof options.marginMm === 'number' ? options.marginMm : 10,
+    bindingMarginMm: typeof options.bindingMarginMm === 'number' ? options.bindingMarginMm : 20,
+    titleBlock: {
+      projectName: pName,
+      sheetTitle: sTitle,
+      sheetNumber: sNumber,
+      scale: options.scale || `1:${sRatio}`,
+      date: options.date || new Date().toISOString().slice(0, 10),
+      revision: options.revision || 'REV 01',
+      author: options.author || 'Architectural Studio',
+      widthMm: 170,
+      heightMm: 48
+    },
+    viewport: {
+      scaleRatio: sRatio, // 1:100 scale default
+      title: options.viewportTitle || `1  ${sTitle}`,
+      showGrid: options.showGrid !== false
+    }
+  };
+}
+
+/**
+ * Computes bounding box of real-world plan entities in meters.
+ */
+function computePlanBounds(entities = []) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+  for (const e of entities) {
+    if (!e) continue;
+    if (e.kind === 'wall' && typeof e.x1 === 'number') {
+      minX = Math.min(minX, e.x1, e.x2);
+      minY = Math.min(minY, e.y1, e.y2);
+      maxX = Math.max(maxX, e.x1, e.x2);
+      maxY = Math.max(maxY, e.y1, e.y2);
+    } else if (e.kind === 'grid_line' && e.p1 && e.p2) {
+      minX = Math.min(minX, e.p1.x, e.p2.x);
+      minY = Math.min(minY, e.p1.y, e.p2.y);
+      maxX = Math.max(maxX, e.p1.x, e.p2.x);
+      maxY = Math.max(maxY, e.p1.y, e.p2.y);
+    } else if (e.kind === 'column' && typeof e.x === 'number' && typeof e.y === 'number') {
+      const hw = (e.width || (e.radius ? e.radius * 2 : 0.4)) / 2;
+      const hd = (e.depth || (e.radius ? e.radius * 2 : 0.4)) / 2;
+      minX = Math.min(minX, e.x - hw);
+      minY = Math.min(minY, e.y - hd);
+      maxX = Math.max(maxX, e.x + hw);
+      maxY = Math.max(maxY, e.y + hd);
+    } else if (typeof e.x === 'number' && typeof e.y === 'number') {
+      const w = e.width || (e.radius ? e.radius * 2 : 1);
+      const d = e.depth || (e.radius ? e.radius * 2 : 1);
+      minX = Math.min(minX, e.x);
+      minY = Math.min(minY, e.y);
+      maxX = Math.max(maxX, e.x + w);
+      maxY = Math.max(maxY, e.y + d);
+    }
+  }
+
+  if (!isFinite(minX)) {
+    return { minX: 0, minY: 0, maxX: 10, maxY: 10, widthM: 10, heightM: 10, centerX: 5, centerY: 5 };
+  }
+
+  const widthM = Math.max(1, maxX - minX);
+  const heightM = Math.max(1, maxY - minY);
+  return {
+    minX, minY, maxX, maxY,
+    widthM, heightM,
+    centerX: minX + widthM / 2,
+    centerY: minY + heightM / 2
+  };
+}
+
+/**
+ * Computes drawing viewport placement and transformation on the sheet.
+ *
+ * @param {Object} sheetConfig
+ * @param {Array<Object>} entities
+ * @returns {Object} Viewport layout parameters
+ */
+function computeViewportLayout(sheetConfig, entities = []) {
+  const cfg = sheetConfig || createSheetConfig();
+  const leftMargin = cfg.bindingMarginMm || 20;
+  const rightMargin = cfg.marginMm || 10;
+  const topMargin = cfg.marginMm || 10;
+  const bottomMargin = cfg.marginMm || 10;
+
+  // Usable area inside borders
+  const drawAreaX = leftMargin;
+  const drawAreaY = topMargin;
+  const drawAreaW = cfg.widthMm - leftMargin - rightMargin;
+  const drawAreaH = cfg.heightMm - topMargin - bottomMargin;
+
+  const tb = cfg.titleBlock;
+  const tbW = tb.widthMm || 170;
+  const tbH = tb.heightMm || 48;
+  const tbX = cfg.widthMm - rightMargin - tbW;
+  const tbY = cfg.heightMm - bottomMargin - tbH;
+
+  // Plan bounds in world meters (accepts entities array or precomputed bounds object)
+  const bounds = (entities && typeof entities.minX === 'number')
+    ? entities
+    : computePlanBounds(entities);
+  const scaleRatio = cfg.viewport.scaleRatio || 100;
+  // 1 meter in real world = (1000 / scaleRatio) millimeters on sheet paper
+  const mmPerMeter = 1000 / scaleRatio;
+
+  const planWidthMm = bounds.widthM * mmPerMeter;
+  const planHeightMm = bounds.heightM * mmPerMeter;
+
+  // Viewport center in drawing area
+  const vpCenterX = drawAreaX + drawAreaW / 2;
+  const vpCenterY = drawAreaY + (drawAreaH - tbH * 0.4) / 2;
+
+  return {
+    drawArea: { x: drawAreaX, y: drawAreaY, width: drawAreaW, height: drawAreaH },
+    titleBlock: { x: tbX, y: tbY, width: tbW, height: tbH },
+    mmPerMeter,
+    scaleRatio,
+    planBounds: bounds,
+    planSizeMm: { width: planWidthMm, height: planHeightMm },
+    viewportWidth: planWidthMm,
+    viewportHeight: planHeightMm,
+    viewportCenterMm: { x: vpCenterX, y: vpCenterY }
+  };
+}
+
+/**
+ * Generates print-ready SVG presentation sheet with borders, title block,
+ * and scaled drawing viewport.
+ *
+ * @param {Object|Array} arg1 - sheetConfig or entities
+ * @param {Array|Object} [arg2] - entities or sheetConfig
+ * @param {Object} [renderOptions]
+ * @returns {string} Clean SVG markup string
+ */
+function generateSheetSVG(arg1, arg2 = [], renderOptions = {}) {
+  let cfg, entities;
+  if (Array.isArray(arg1)) {
+    entities = arg1;
+    cfg = (arg2 && typeof arg2 === 'object' && arg2.widthMm) ? arg2 : createSheetConfig(arg2);
+  } else {
+    cfg = (arg1 && typeof arg1 === 'object' && arg1.widthMm) ? arg1 : createSheetConfig(arg1);
+    entities = Array.isArray(arg2) ? arg2 : [];
+  }
+  const layout = computeViewportLayout(cfg, entities);
+
+  const wMm = cfg.widthMm;
+  const hMm = cfg.heightMm;
+  const pxPerMm = renderOptions.pxPerMm || 3.7795; // ~96 DPI screen preview or 300 DPI print
+  const wPx = (wMm * pxPerMm).toFixed(1);
+  const hPx = (hMm * pxPerMm).toFixed(1);
+
+  const { drawArea, titleBlock, mmPerMeter, planBounds, viewportCenterMm } = layout;
+
+  // Title block cell paths and labels
+  const tb = cfg.titleBlock;
+  const tbX = titleBlock.x;
+  const tbY = titleBlock.y;
+  const tbW = titleBlock.width;
+  const tbH = titleBlock.height;
+
+  // Vector linework of plan inside viewport
+  // Transform world (meters) to sheet (mm):
+  // sheetX = vpCenterX + (worldX - centerX) * mmPerMeter
+  // sheetY = vpCenterY - (worldY - centerY) * mmPerMeter
+  const worldToSheet = (wx, wy) => ({
+    x: viewportCenterMm.x + (wx - planBounds.centerX) * mmPerMeter,
+    y: viewportCenterMm.y - (wy - planBounds.centerY) * mmPerMeter
+  });
+
+  const planElements = [];
+
+  for (const e of entities) {
+    if (!e) continue;
+    if (e.kind === 'wall' && typeof e.x1 === 'number') {
+      const p1 = worldToSheet(e.x1, e.y1);
+      const p2 = worldToSheet(e.x2, e.y2);
+      const thMm = (e.thickness || 0.2) * mmPerMeter;
+      planElements.push(
+        `<line x1="${p1.x.toFixed(2)}" y1="${p1.y.toFixed(2)}" x2="${p2.x.toFixed(2)}" y2="${p2.y.toFixed(2)}" stroke="#1e293b" stroke-width="${Math.max(0.6, thMm).toFixed(2)}" stroke-linecap="round" />`
+      );
+    } else if (e.kind === 'room' && typeof e.x === 'number' && typeof e.width === 'number') {
+      const tl = worldToSheet(e.x, e.y + (e.depth || 0));
+      const br = worldToSheet(e.x + e.width, e.y);
+      const rw = Math.abs(br.x - tl.x);
+      const rh = Math.abs(br.y - tl.y);
+      planElements.push(
+        `<rect x="${tl.x.toFixed(2)}" y="${tl.y.toFixed(2)}" width="${rw.toFixed(2)}" height="${rh.toFixed(2)}" fill="#f1f5f9" stroke="#94a3b8" stroke-width="0.3" stroke-dasharray="2 1" />`
+      );
+      if (e.name) {
+        const c = worldToSheet(e.x + e.width / 2, e.y + (e.depth || 0) / 2);
+        planElements.push(
+          `<text x="${c.x.toFixed(2)}" y="${c.y.toFixed(2)}" font-family="system-ui, sans-serif" font-size="2.5" font-weight="600" fill="#334155" text-anchor="middle">${e.name}</text>`
+        );
+      }
+    } else if (e.kind === 'column' && typeof e.x === 'number') {
+      const c = worldToSheet(e.x, e.y);
+      const cw = (e.width || 0.4) * mmPerMeter;
+      const cd = (e.depth || 0.4) * mmPerMeter;
+      if (e.profile === 'circle') {
+        const cr = (e.radius || 0.2) * mmPerMeter;
+        planElements.push(
+          `<circle cx="${c.x.toFixed(2)}" cy="${c.y.toFixed(2)}" r="${cr.toFixed(2)}" fill="#475569" stroke="#0f172a" stroke-width="0.4" />`
+        );
+      } else {
+        planElements.push(
+          `<rect x="${(c.x - cw / 2).toFixed(2)}" y="${(c.y - cd / 2).toFixed(2)}" width="${cw.toFixed(2)}" height="${cd.toFixed(2)}" fill="#475569" stroke="#0f172a" stroke-width="0.4" />`
+        );
+      }
+    } else if (e.kind === 'grid_line' && e.p1 && e.p2) {
+      const p1 = worldToSheet(e.p1.x, e.p1.y);
+      const p2 = worldToSheet(e.p2.x, e.p2.y);
+      const bRad = (e.bubbleRadius || 0.35) * mmPerMeter;
+      planElements.push(
+        `<line x1="${p1.x.toFixed(2)}" y1="${p1.y.toFixed(2)}" x2="${p2.x.toFixed(2)}" y2="${p2.y.toFixed(2)}" stroke="#64748b" stroke-width="0.25" stroke-dasharray="4 1.5 1 1.5" />`
+      );
+      if (e.bubblePosition === 'both' || e.bubblePosition === 'start') {
+        planElements.push(
+          `<circle cx="${p1.x.toFixed(2)}" cy="${p1.y.toFixed(2)}" r="${bRad.toFixed(2)}" fill="#ffffff" stroke="#475569" stroke-width="0.3" />`,
+          `<text x="${p1.x.toFixed(2)}" y="${(p1.y + 0.8).toFixed(2)}" font-family="system-ui, sans-serif" font-size="2.2" font-weight="bold" fill="#0f172a" text-anchor="middle">${e.name}</text>`
+        );
+      }
+      if (e.bubblePosition === 'both' || e.bubblePosition === 'end') {
+        planElements.push(
+          `<circle cx="${p2.x.toFixed(2)}" cy="${p2.y.toFixed(2)}" r="${bRad.toFixed(2)}" fill="#ffffff" stroke="#475569" stroke-width="0.3" />`,
+          `<text x="${p2.x.toFixed(2)}" y="${(p2.y + 0.8).toFixed(2)}" font-family="system-ui, sans-serif" font-size="2.2" font-weight="bold" fill="#0f172a" text-anchor="middle">${e.name}</text>`
+        );
+      }
+    }
+  }
+
+  // Viewport Title underline mark
+  const vpTitleY = viewportCenterMm.y + layout.planSizeMm.height / 2 + 12;
+  const vpTitleMarkup = `
+    <!-- Drawing Viewport Title -->
+    <g class="sheet-viewport-title">
+      <circle cx="${drawArea.x + 10}" cy="${vpTitleY.toFixed(2)}" r="4.5" fill="none" stroke="#0f172a" stroke-width="0.5" />
+      <text x="${drawArea.x + 10}" y="${(vpTitleY + 1.5).toFixed(2)}" font-family="system-ui, sans-serif" font-size="3.5" font-weight="bold" fill="#0f172a" text-anchor="middle">1</text>
+      <text x="${drawArea.x + 18}" y="${vpTitleY.toFixed(2)}" font-family="system-ui, sans-serif" font-size="3.5" font-weight="bold" fill="#0f172a">${cfg.viewport.title || 'GROUND FLOOR PLAN'}</text>
+      <text x="${drawArea.x + 18}" y="${(vpTitleY + 4.5).toFixed(2)}" font-family="system-ui, sans-serif" font-size="2.5" font-weight="normal" fill="#64748b">SCALE ${cfg.titleBlock.scale || '1:100'}</text>
+      <line x1="${drawArea.x + 5}" y1="${(vpTitleY + 7).toFixed(2)}" x2="${drawArea.x + 120}" y2="${(vpTitleY + 7).toFixed(2)}" stroke="#0f172a" stroke-width="0.6" />
+    </g>
+  `;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${wMm} ${hMm}" width="${wPx}px" height="${hPx}px">
+  <!-- Sheet Background (Paper) -->
+  <rect x="0" y="0" width="${wMm}" height="${hMm}" fill="#ffffff" />
+
+  <!-- Outer Sheet Margin Guide -->
+  <rect x="5" y="5" width="${wMm - 10}" height="${hMm - 10}" fill="none" stroke="#e2e8f0" stroke-width="0.25" />
+
+  <!-- Inner CAD Drawing Border -->
+  <rect x="${drawArea.x}" y="${drawArea.y}" width="${drawArea.width}" height="${drawArea.height}" fill="none" stroke="#0f172a" stroke-width="0.7" />
+
+  <!-- Scaled Plan Viewport Geometry -->
+  <g class="sheet-plan-graphics">
+    ${planElements.join('\n    ')}
+  </g>
+
+  ${vpTitleMarkup}
+
+  <!-- CAD Title Block -->
+  <g class="sheet-title-block" id="title-block" transform="translate(${tbX}, ${tbY})">
+    <!-- Title block border -->
+    <rect x="0" y="0" width="${tbW}" height="${tbH}" fill="#ffffff" stroke="#0f172a" stroke-width="0.7" />
+
+    <!-- Grid dividing lines -->
+    <line x1="0" y1="16" x2="${tbW}" y2="16" stroke="#0f172a" stroke-width="0.4" />
+    <line x1="0" y1="32" x2="${tbW}" y2="32" stroke="#0f172a" stroke-width="0.4" />
+    <line x1="100" y1="16" x2="100" y2="${tbH}" stroke="#0f172a" stroke-width="0.4" />
+    <line x1="135" y1="32" x2="135" y2="${tbH}" stroke="#0f172a" stroke-width="0.4" />
+
+    <!-- Top cell: Practice & Project Name -->
+    <text x="6" y="6.5" font-family="system-ui, sans-serif" font-size="2" fill="#64748b" font-weight="600">PROJECT</text>
+    <text x="6" y="12" font-family="system-ui, sans-serif" font-size="4" fill="#0f172a" font-weight="bold">${tb.projectName}</text>
+
+    <!-- Middle cell: Drawing Title -->
+    <text x="6" y="21" font-family="system-ui, sans-serif" font-size="2" fill="#64748b" font-weight="600">DRAWING TITLE</text>
+    <text x="6" y="27" font-family="system-ui, sans-serif" font-size="3.5" fill="#0f172a" font-weight="bold">${tb.sheetTitle}</text>
+
+    <!-- Bottom Left: Author & Date -->
+    <text x="6" y="37" font-family="system-ui, sans-serif" font-size="1.8" fill="#64748b">AUTHOR: <tspan fill="#0f172a" font-weight="bold">${tb.author}</tspan></text>
+    <text x="6" y="43" font-family="system-ui, sans-serif" font-size="1.8" fill="#64748b">DATE: <tspan fill="#0f172a" font-weight="bold">${tb.date}</tspan></text>
+
+    <!-- Middle Right: Scale & Rev -->
+    <text x="104" y="21" font-family="system-ui, sans-serif" font-size="2" fill="#64748b" font-weight="600">SCALE</text>
+    <text x="104" y="27" font-family="system-ui, sans-serif" font-size="3.5" fill="#0f172a" font-weight="bold">${tb.scale}</text>
+
+    <text x="104" y="37" font-family="system-ui, sans-serif" font-size="2" fill="#64748b" font-weight="600">REV</text>
+    <text x="104" y="44" font-family="system-ui, sans-serif" font-size="4" fill="#0f172a" font-weight="bold">${tb.revision}</text>
+
+    <!-- Bottom Right: Sheet Number -->
+    <text x="139" y="37" font-family="system-ui, sans-serif" font-size="2" fill="#64748b" font-weight="600">SHEET NO.</text>
+    <text x="139" y="44" font-family="system-ui, sans-serif" font-size="5" fill="#0f172a" font-weight="bold">${tb.sheetNumber}</text>
+
+    <!-- Mini North Arrow inside title block -->
+    <g class="sheet-north-arrow" id="north-arrow" transform="translate(${tbW - 14}, 8) scale(0.6)">
+      <polygon points="0,-7 -3.5,4 0,1.5" fill="#0f172a" />
+      <polygon points="0,-7 0,1.5 3.5,4" fill="#94a3b8" />
+      <text x="0" y="-8.5" font-family="system-ui, sans-serif" font-size="3" font-weight="bold" fill="#0f172a" text-anchor="middle">N</text>
+    </g>
+  </g>
 </svg>`;
 }
 
@@ -26101,6 +27431,9 @@ function createProjectsView(context) {
 
 
 
+
+
+
 const PLAN_STATE_KEY = 'archiscale_plan_prefs'; // user preferences only
 
 function createPlanView(context) {
@@ -26131,7 +27464,7 @@ function createPlanView(context) {
       const initialDoc = {
         id: 'doc-1',
         name: 'Ground Floor',
-        type: '2d',
+        type: '2d_plan',
         entities: Array.isArray(state.plan.entities) ? state.plan.entities : [],
         viewport: { zoom: transform.zoom, offsetX: transform.offsetX, offsetY: transform.offsetY }
       };
@@ -26142,7 +27475,7 @@ function createPlanView(context) {
       state.plan.activeDocId = state.plan.documents[0].id;
     }
     const active = getActiveDocument();
-    state.plan.entities = active.entities;
+    state.plan.entities = active.entities || [];
   }
 
   function getActiveDocument() {
@@ -26150,20 +27483,22 @@ function createPlanView(context) {
       initDocuments();
     }
     const doc = state.plan.documents.find(d => d.id === state.plan.activeDocId) || state.plan.documents[0];
-    if (doc) normalizeDocumentLayers(doc);
+    if (doc && doc.type !== '3d_massing' && doc.type !== 'sheet') {
+      normalizeDocumentLayers(doc);
+    }
     return doc;
   }
 
   function switchDocument(docId) {
     if (!state.plan || state.plan.activeDocId === docId) return;
     const prevDoc = getActiveDocument();
-    if (prevDoc) {
+    if (prevDoc && prevDoc.viewport) {
       prevDoc.viewport = { zoom: transform.zoom, offsetX: transform.offsetX, offsetY: transform.offsetY };
     }
     const target = state.plan.documents.find(d => d.id === docId);
     if (!target) return;
     state.plan.activeDocId = target.id;
-    state.plan.entities = target.entities;
+    state.plan.entities = target.entities || [];
     state.plan.selectedIds = new Set();
     if (target.viewport && typeof target.viewport.zoom === 'number') {
       transform = {
@@ -26176,21 +27511,52 @@ function createPlanView(context) {
     render();
     renderEntityList();
     renderPropertiesInspector();
-    showToast(`Switched to sheet "${target.name}"`);
+    showToast(`Switched to "${target.name}"`);
     AudioService.playTick();
   }
 
-  function createDocument(name) {
+  function createDocument(name, type = '2d_plan') {
     initDocuments();
-    const count = state.plan.documents.length + 1;
-    const docName = typeof name === 'string' && name.trim() ? name.trim() : `Level ${count}`;
-    const newDoc = {
-      id: `doc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      name: docName,
-      type: '2d',
-      entities: [],
-      viewport: { zoom: 40, offsetX: 60, offsetY: 420 }
-    };
+    const docId = `doc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    let newDoc;
+
+    if (type === '3d_massing') {
+      const count = state.plan.documents.filter(d => d.type === '3d_massing').length + 1;
+      const docName = (typeof name === 'string' && name.trim())
+        ? name.trim()
+        : (count === 1 ? '3D Massing Preview' : `3D Massing ${count}`);
+      newDoc = {
+        id: docId,
+        name: docName,
+        type: '3d_massing',
+        camera: { azimuth: 45, elevation: 35.264, zoom: 32, panX: svg.width / 2, panY: svg.height / 2 + 30 },
+        massingOptions: { wallHeight: 3.0, doorHeight: 2.1, windowSill: 0.9, windowHeight: 1.2, slabThickness: 0.2, wireframe: false }
+      };
+    } else if (type === 'sheet') {
+      const count = state.plan.documents.filter(d => d.type === 'sheet').length + 1;
+      const docName = (typeof name === 'string' && name.trim())
+        ? name.trim()
+        : `Sheet A-10${count}`;
+      newDoc = {
+        id: docId,
+        name: docName,
+        type: 'sheet',
+        sheetConfig: createSheetConfig({ sheetNumber: `A-10${count}`, sheetTitle: 'GROUND FLOOR PLAN' })
+      };
+    } else {
+      const count = state.plan.documents.filter(d => d.type === '2d_plan' || d.type === '2d').length + 1;
+      const docName = (typeof name === 'string' && name.trim())
+        ? name.trim()
+        : `Level ${count}`;
+      newDoc = {
+        id: docId,
+        name: docName,
+        type: '2d_plan',
+        entities: [],
+        viewport: { zoom: 40, offsetX: 60, offsetY: 420 }
+      };
+    }
+
     state.plan.documents.push(newDoc);
     switchDocument(newDoc.id);
   }
@@ -26236,9 +27602,10 @@ function createPlanView(context) {
       tab.className = `plan-doc-tab ${isActive ? 'active' : ''}`;
       tab.dataset.docId = doc.id;
 
+      const typeIcon = doc.type === '3d_massing' ? '🏢 ' : (doc.type === 'sheet' ? '📄 ' : '📐 ');
       const titleSpan = document.createElement('span');
       titleSpan.className = 'plan-doc-tab-title';
-      titleSpan.textContent = doc.name;
+      titleSpan.textContent = `${typeIcon}${doc.name}`;
       titleSpan.title = 'Double click to rename tab';
 
       titleSpan.addEventListener('dblclick', (e) => {
@@ -27227,11 +28594,236 @@ function createPlanView(context) {
   }
 
   // ------------------------------------------------------------------
+  // 3D Massing & Presentation Sheet Workspace Viewports
+  // ------------------------------------------------------------------
+  function render3DMassing(doc) {
+    const planDoc = state.plan.documents.find(d => d.type === '2d_plan' || d.type === '2d') || doc;
+    const planEntities = planDoc ? (planDoc.entities || []) : [];
+
+    doc.camera = doc.camera || { azimuth: 45, elevation: 35.264, zoom: 32, panX: svg.width / 2, panY: svg.height / 2 + 30 };
+    doc.massingOptions = doc.massingOptions || { wallHeight: 3.0, doorHeight: 2.1, windowSill: 0.9, windowHeight: 1.2, slabThickness: 0.2, wireframe: false };
+
+    const faces3D = buildMassing3DModel(planEntities, doc.massingOptions);
+    const sortedFaces = projectAndSortFaces(faces3D, doc.camera);
+
+    const facesMarkup = sortedFaces.map(f => {
+      const pts = f.points.map(pt => `${pt[0].toFixed(1)},${pt[1].toFixed(1)}`).join(' ');
+      const fill = doc.massingOptions.wireframe ? 'none' : f.color;
+      const stroke = doc.massingOptions.wireframe ? 'var(--accent-primary, #38bdf8)' : f.stroke;
+      const op = f.opacity < 1 ? ` opacity="${f.opacity}"` : '';
+      return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="${doc.massingOptions.wireframe ? 1 : 1.2}" stroke-linejoin="round"${op}/>`;
+    }).join('\n');
+
+    const presetsMarkup = Object.entries(CAMERA_PRESETS).map(([key, p]) => {
+      const isAct = Math.abs((doc.camera.azimuth || 45) - p.azimuth) < 5 && Math.abs((doc.camera.elevation || 35.264) - p.elevation) < 5;
+      return `<button type="button" class="result-action-btn chip-3d-preset ${isAct ? 'primary' : ''}" data-preset="${key}" style="font-size: 0.68rem; padding: 2px 6px;">${p.label}</button>`;
+    }).join('');
+
+    dom.planSvg.setAttribute('viewBox', `0 0 ${svg.width} ${svg.height}`);
+    dom.planSvg.innerHTML = `
+      <rect width="100%" height="100%" fill="#0b1120" />
+      <!-- Ground Grid Lines -->
+      <g opacity="0.18">
+        ${Array.from({ length: 15 }).map((_, i) => {
+          const val = (i - 7) * 2;
+          const p1 = projectPoint3D({ x: -14, y: val, z: 0 }, doc.camera);
+          const p2 = projectPoint3D({ x: 14, y: val, z: 0 }, doc.camera);
+          const p3 = projectPoint3D({ x: val, y: -14, z: 0 }, doc.camera);
+          const p4 = projectPoint3D({ x: val, y: 14, z: 0 }, doc.camera);
+          return `<line x1="${p1.x.toFixed(1)}" y1="${p1.y.toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${p2.y.toFixed(1)}" stroke="#38bdf8" stroke-width="0.8"/>
+                  <line x1="${p3.x.toFixed(1)}" y1="${p3.y.toFixed(1)}" x2="${p4.x.toFixed(1)}" y2="${p4.y.toFixed(1)}" stroke="#38bdf8" stroke-width="0.8"/>`;
+        }).join('')}
+      </g>
+      <g class="massing-faces">
+        ${facesMarkup}
+      </g>
+    `;
+
+    const ctxBar = dom.planContextualToolbar || document.getElementById('plan-contextual-toolbar');
+    if (ctxBar) {
+      ctxBar.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+            <span class="context-tag-badge">3D MASSING</span>
+            ${presetsMarkup}
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" id="btn-3d-wireframe" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">${doc.massingOptions.wireframe ? 'Shaded' : 'Wireframe'}</button>
+            <button type="button" id="btn-3d-height" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">H: ${(doc.massingOptions.wallHeight || 3.0).toFixed(1)}m</button>
+            <button type="button" id="btn-3d-export" class="result-action-btn primary" style="font-size: 0.68rem; padding: 2px 8px;">💾 Export 3D SVG</button>
+          </div>
+        </div>
+      `;
+
+      ctxBar.querySelectorAll('.chip-3d-preset').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const preset = CAMERA_PRESETS[btn.dataset.preset];
+          if (preset) {
+            doc.camera.azimuth = preset.azimuth;
+            doc.camera.elevation = preset.elevation;
+            render();
+            AudioService.playTick();
+          }
+        });
+      });
+
+      ctxBar.querySelector('#btn-3d-wireframe')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        doc.massingOptions.wireframe = !doc.massingOptions.wireframe;
+        render();
+        AudioService.playTick();
+      });
+
+      ctxBar.querySelector('#btn-3d-height')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const heights = [2.4, 2.7, 3.0, 3.6, 4.2];
+        const cur = doc.massingOptions.wallHeight || 3.0;
+        const next = heights[(heights.indexOf(cur) + 1) % heights.length] || 3.0;
+        doc.massingOptions.wallHeight = next;
+        render();
+        AudioService.playTick();
+      });
+
+      ctxBar.querySelector('#btn-3d-export')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const svgCode = generateMassingSVG(planEntities, doc.camera, doc.massingOptions);
+        const blob = new Blob([svgCode], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${(planDoc.name || 'plan').toLowerCase().replace(/\s+/g, '-')}-massing-3d.svg`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Exported 3D Massing SVG');
+        AudioService.playSuccess();
+      });
+    }
+
+    if (dom.planModeLabel) dom.planModeLabel.textContent = '3D MASSING';
+    if (dom.planStatusBadge) dom.planStatusBadge.textContent = `az ${Math.round(doc.camera.azimuth || 45)}° · el ${Math.round(doc.camera.elevation || 35)}°`;
+  }
+
+  function renderPresentationSheet(doc) {
+    const planDoc = state.plan.documents.find(d => d.type === '2d_plan' || d.type === '2d') || doc;
+    const planEntities = planDoc ? (planDoc.entities || []) : [];
+
+    doc.sheetConfig = doc.sheetConfig || createSheetConfig({ sheetNumber: 'A-101', sheetTitle: (planDoc.name || 'GROUND FLOOR PLAN').toUpperCase() });
+
+    const sheetSvg = generateSheetSVG(doc.sheetConfig, planEntities, {
+      pxPerMm: (svg.width / doc.sheetConfig.widthMm) * 0.85
+    });
+
+    const innerMatch = sheetSvg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i);
+    const innerContent = innerMatch ? innerMatch[1] : '';
+
+    const wMm = doc.sheetConfig.widthMm;
+    const hMm = doc.sheetConfig.heightMm;
+
+    dom.planSvg.setAttribute('viewBox', `0 0 ${wMm} ${hMm}`);
+    dom.planSvg.innerHTML = `
+      <rect x="-100" y="-100" width="${wMm + 200}" height="${hMm + 200}" fill="#1e2433" />
+      <filter id="sheet-shadow" x="-5%" y="-5%" width="115%" height="115%">
+        <feDropShadow dx="2" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.45" />
+      </filter>
+      <g filter="url(#sheet-shadow)">
+        ${innerContent}
+      </g>
+    `;
+
+    const ctxBar = dom.planContextualToolbar || document.getElementById('plan-contextual-toolbar');
+    if (ctxBar) {
+      const tb = doc.sheetConfig.titleBlock;
+      ctxBar.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span class="context-tag-badge">PRESENTATION SHEET</span>
+            <select id="sheet-size-select" class="calc-select" style="height: 24px; padding: 0 4px; font-size: 0.7rem; width: 85px;">
+              <option value="A4" ${doc.sheetConfig.size === 'A4' ? 'selected' : ''}>A4</option>
+              <option value="A3" ${doc.sheetConfig.size === 'A3' ? 'selected' : ''}>A3 (Std)</option>
+              <option value="A2" ${doc.sheetConfig.size === 'A2' ? 'selected' : ''}>A2</option>
+              <option value="A1" ${doc.sheetConfig.size === 'A1' ? 'selected' : ''}>A1</option>
+            </select>
+            <select id="sheet-scale-select" class="calc-select" style="height: 24px; padding: 0 4px; font-size: 0.7rem; width: 85px;">
+              <option value="20" ${doc.sheetConfig.viewport.scaleRatio === 20 ? 'selected' : ''}>1:20</option>
+              <option value="50" ${doc.sheetConfig.viewport.scaleRatio === 50 ? 'selected' : ''}>1:50</option>
+              <option value="100" ${doc.sheetConfig.viewport.scaleRatio === 100 ? 'selected' : ''}>1:100</option>
+              <option value="200" ${doc.sheetConfig.viewport.scaleRatio === 200 ? 'selected' : ''}>1:200</option>
+            </select>
+            <button type="button" id="btn-sheet-orientation" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">${doc.sheetConfig.orientation === 'landscape' ? 'Landscape' : 'Portrait'}</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" id="btn-sheet-export" class="result-action-btn primary" style="font-size: 0.68rem; padding: 2px 8px;">💾 Export Sheet SVG</button>
+          </div>
+        </div>
+      `;
+
+      ctxBar.querySelector('#sheet-size-select')?.addEventListener('change', (e) => {
+        doc.sheetConfig = createSheetConfig({
+          ...doc.sheetConfig,
+          size: e.target.value,
+          orientation: doc.sheetConfig.orientation,
+          titleBlock: doc.sheetConfig.titleBlock
+        });
+        render();
+        AudioService.playTick();
+      });
+
+      ctxBar.querySelector('#sheet-scale-select')?.addEventListener('change', (e) => {
+        const r = parseInt(e.target.value, 10) || 100;
+        doc.sheetConfig.viewport.scaleRatio = r;
+        doc.sheetConfig.titleBlock.scale = `1:${r}`;
+        render();
+        AudioService.playTick();
+      });
+
+      ctxBar.querySelector('#btn-sheet-orientation')?.addEventListener('click', () => {
+        const nextOri = doc.sheetConfig.orientation === 'landscape' ? 'portrait' : 'landscape';
+        doc.sheetConfig = createSheetConfig({
+          ...doc.sheetConfig,
+          orientation: nextOri,
+          size: doc.sheetConfig.size,
+          titleBlock: doc.sheetConfig.titleBlock
+        });
+        render();
+        AudioService.playTick();
+      });
+
+      ctxBar.querySelector('#btn-sheet-export')?.addEventListener('click', () => {
+        const svgCode = generateSheetSVG(doc.sheetConfig, planEntities);
+        const blob = new Blob([svgCode], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${(tb.sheetNumber || 'sheet').toLowerCase()}-${(tb.sheetTitle || 'drawing').toLowerCase().replace(/\s+/g, '-')}.svg`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Exported Presentation Sheet SVG');
+        AudioService.playSuccess();
+      });
+    }
+
+    if (dom.planModeLabel) dom.planModeLabel.textContent = 'SHEET';
+    if (dom.planStatusBadge) dom.planStatusBadge.textContent = `${doc.sheetConfig.size} · 1:${doc.sheetConfig.viewport.scaleRatio || 100}`;
+  }
+
+  // ------------------------------------------------------------------
   // Rendering
   // ------------------------------------------------------------------
   function render() {
     if (!dom.planSvg) return;
     syncSvgSize();
+
+    const doc = getActiveDocument();
+    if (doc && doc.type === '3d_massing') {
+      render3DMassing(doc);
+      return;
+    }
+    if (doc && doc.type === 'sheet') {
+      renderPresentationSheet(doc);
+      return;
+    }
+
     dom.planSvg.setAttribute('viewBox', `0 0 ${svg.width} ${svg.height}`);
     const gridLines = buildGrid(transform, svg.width, svg.height, state.plan.grid, 4)
       .map(l => {
@@ -27276,7 +28868,6 @@ function createPlanView(context) {
         </pattern>
       </defs>`;
 
-    const doc = getActiveDocument();
     const entityMarkup = entities().map(e => {
       if (!isEntityVisible(e, doc)) return '';
       const selected = state.plan.selectedIds.has(e.id);
@@ -27753,6 +29344,50 @@ function createPlanView(context) {
           <text x="0" y="-22" text-anchor="middle" font-size="11" font-family="var(--font-mono)" font-weight="800" fill="${stroke}">N</text>
         </g>`;
       }
+      if (e.kind === 'column') {
+        const contour = columnContour(e);
+        const hatches = columnHatchLines(e);
+        const ptsSvg = contour.map(([cx, cy]) => {
+          const sp = worldToSvg(transform, cx, cy);
+          return `${sp.x.toFixed(1)},${sp.y.toFixed(1)}`;
+        }).join(' ');
+
+        const hatchLinesSvg = hatches.map(h => {
+          const sp1 = worldToSvg(transform, h.x1, h.y1);
+          const sp2 = worldToSvg(transform, h.x2, h.y2);
+          return `<line x1="${sp1.x.toFixed(1)}" y1="${sp1.y.toFixed(1)}" x2="${sp2.x.toFixed(1)}" y2="${sp2.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 1.5 : 1}" opacity="0.65"/>`;
+        }).join('');
+
+        const centerSvg = worldToSvg(transform, e.x, e.y);
+        const cd = e.depth || 0.4;
+
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <polygon points="${ptsSvg}" fill="var(--bg-chip, #334155)" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.5}"/>
+          ${hatchLinesSvg}
+          <text x="${centerSvg.x.toFixed(1)}" y="${(centerSvg.y + cd * transform.zoom / 2 + 12).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="var(--text-muted, #888)" font-family="var(--font-mono)">${escapeHtml(e.name || 'Col')}</text>
+        </g>`;
+      }
+      if (e.kind === 'grid_line' && e.p1 && e.p2) {
+        const sp1 = worldToSvg(transform, e.p1.x, e.p1.y);
+        const sp2 = worldToSvg(transform, e.p2.x, e.p2.y);
+        const bRadPx = Math.max(10, (e.bubbleRadius || 0.35) * transform.zoom);
+        const gridColor = selected ? 'var(--color-warning, #fbbf24)' : 'var(--text-muted, #94a3b8)';
+
+        let bubbles = '';
+        if (e.bubblePosition === 'both' || e.bubblePosition === 'start') {
+          bubbles += `<circle cx="${sp1.x.toFixed(1)}" cy="${sp1.y.toFixed(1)}" r="${bRadPx.toFixed(1)}" fill="var(--bg-surface-elevated, #1e293b)" stroke="${gridColor}" stroke-width="${selected ? 2 : 1.2}"/>
+            <text x="${sp1.x.toFixed(1)}" y="${(sp1.y + 3.5).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" font-weight="700" fill="var(--text-normal, #f8fafc)">${escapeHtml(e.name)}</text>`;
+        }
+        if (e.bubblePosition === 'both' || e.bubblePosition === 'end') {
+          bubbles += `<circle cx="${sp2.x.toFixed(1)}" cy="${sp2.y.toFixed(1)}" r="${bRadPx.toFixed(1)}" fill="var(--bg-surface-elevated, #1e293b)" stroke="${gridColor}" stroke-width="${selected ? 2 : 1.2}"/>
+            <text x="${sp2.x.toFixed(1)}" y="${(sp2.y + 3.5).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" font-weight="700" fill="var(--text-normal, #f8fafc)">${escapeHtml(e.name)}</text>`;
+        }
+
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <line x1="${sp1.x.toFixed(1)}" y1="${sp1.y.toFixed(1)}" x2="${sp2.x.toFixed(1)}" y2="${sp2.y.toFixed(1)}" stroke="${gridColor}" stroke-width="${selected ? 2 : 1.2}" stroke-dasharray="10 4 2 4"/>
+          ${bubbles}
+        </g>`;
+      }
       return '';
     }).join('');
 
@@ -27815,7 +29450,17 @@ function createPlanView(context) {
         const b = worldToSvg(transform, Math.max(dragState.start.x, dragState.current.x), Math.min(dragState.start.y, dragState.current.y));
         const col = dragState.tool === 'stair' ? 'var(--note-number, #4989D9)' : 'var(--accent-action, #D32F2F)';
         dragMarkup = `<rect x="${a.x.toFixed(1)}" y="${a.y.toFixed(1)}" width="${(b.x - a.x).toFixed(1)}" height="${(a.y - b.y).toFixed(1)}"
-          fill="none" stroke="${col}" stroke-width="1.8" stroke-dasharray="5 3"/>`;
+          fill="none" stroke="${col}" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+      } else if (dragState.tool === 'grid') {
+        const a = worldToSvg(transform, dragState.start.x, dragState.start.y);
+        const b = worldToSvg(transform, dragState.current.x, dragState.current.y);
+        dragMarkup = `
+          <g class="drag-preview-grid" pointer-events="none">
+            <line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="var(--accent-primary, #4989D9)" stroke-width="1.8" stroke-dasharray="8 4 2 4"/>
+            <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="12" fill="var(--bg-surface-elevated, #1e293b)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.5"/>
+            <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="12" fill="var(--bg-surface-elevated, #1e293b)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.5"/>
+          </g>
+        `;
       } else {
         const a = worldToSvg(transform, Math.min(dragState.start.x, dragState.current.x), Math.max(dragState.start.y, dragState.current.y));
         const b = worldToSvg(transform, Math.max(dragState.start.x, dragState.current.x), Math.min(dragState.start.y, dragState.current.y));
@@ -27962,6 +29607,8 @@ function createPlanView(context) {
       else if (e.kind === 'window_tag') desc = `Badge <${escapeHtml(e.tag || '')}>`;
       else if (e.kind === 'leader') desc = `Leader · "${escapeHtml(e.text || '')}"`;
       else if (e.kind === 'north_arrow') desc = `North · ${Math.round(e.rotation || 0)}°`;
+      else if (e.kind === 'column') desc = `Column · ${e.profile || 'rect'} · ${num(e.width)}×${num(e.depth)} m`;
+      else if (e.kind === 'grid_line') desc = `Grid · Axis [${escapeHtml(e.name || '')}]`;
       else if (e.kind === 'text') desc = `"${escapeHtml(e.text || e.name)}"`;
       else desc = e.kind;
 
@@ -29210,6 +30857,101 @@ function createPlanView(context) {
         selected.scale = Math.max(0.2, parseFloat(e.target.value) || 1.0);
         render();
       });
+
+    } else if (selected.kind === 'column') {
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Structural Column</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Label</span><input type="text" id="prop-col-name" class="text-input" value="${escapeHtml(selected.name || 'Column')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Profile</span>
+            <select id="prop-col-profile" class="calc-select" style="width: 140px; height: 24px; padding: 0 4px; font-size: 0.74rem;">
+              <option value="rect" ${selected.profile === 'rect' ? 'selected' : ''}>Rectangular</option>
+              <option value="circle" ${selected.profile === 'circle' ? 'selected' : ''}>Circular</option>
+              <option value="h_beam" ${selected.profile === 'h_beam' ? 'selected' : ''}>Steel H-Beam</option>
+            </select>
+          </div>
+          ${selected.profile === 'circle' ? `
+            <div class="plan-prop-row"><span class="plan-prop-label">Radius (m)</span><input type="number" id="prop-col-radius" class="text-input" value="${selected.radius || 0.2}" step="0.05" min="0.05" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          ` : `
+            <div class="plan-prop-row"><span class="plan-prop-label">Width (m)</span><input type="number" id="prop-col-width" class="text-input" value="${selected.width || 0.4}" step="0.05" min="0.1" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+            <div class="plan-prop-row"><span class="plan-prop-label">Depth (m)</span><input type="number" id="prop-col-depth" class="text-input" value="${selected.depth || 0.4}" step="0.05" min="0.1" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          `}
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Material</span>
+            <select id="prop-col-mat" class="calc-select" style="width: 140px; height: 24px; padding: 0 4px; font-size: 0.74rem;">
+              <option value="concrete" ${selected.material === 'concrete' ? 'selected' : ''}>Reinforced Concrete</option>
+              <option value="steel" ${selected.material === 'steel' ? 'selected' : ''}>Structural Steel</option>
+              <option value="timber" ${selected.material === 'timber' ? 'selected' : ''}>Heavy Timber</option>
+            </select>
+          </div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Column</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-col-name')?.addEventListener('change', (e) => {
+        selected.name = e.target.value.trim() || 'Column';
+        render();
+        renderEntityList();
+      });
+      dom.planPropContent.querySelector('#prop-col-profile')?.addEventListener('change', (e) => {
+        selected.profile = e.target.value;
+        render();
+        renderPropertiesInspector();
+      });
+      dom.planPropContent.querySelector('#prop-col-width')?.addEventListener('change', (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v) && v > 0) { selected.width = v; render(); }
+      });
+      dom.planPropContent.querySelector('#prop-col-depth')?.addEventListener('change', (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v) && v > 0) { selected.depth = v; render(); }
+      });
+      dom.planPropContent.querySelector('#prop-col-radius')?.addEventListener('change', (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v) && v > 0) { selected.radius = v; render(); }
+      });
+      dom.planPropContent.querySelector('#prop-col-mat')?.addEventListener('change', (e) => {
+        selected.material = e.target.value;
+        render();
+      });
+
+    } else if (selected.kind === 'grid_line') {
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Structural Grid Line</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Axis Label</span><input type="text" id="prop-grid-name" class="text-input" value="${escapeHtml(selected.name || '1')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Bubble End</span>
+            <select id="prop-grid-bubble" class="calc-select" style="width: 140px; height: 24px; padding: 0 4px; font-size: 0.74rem;">
+              <option value="both" ${selected.bubblePosition === 'both' ? 'selected' : ''}>Both Ends</option>
+              <option value="start" ${selected.bubblePosition === 'start' ? 'selected' : ''}>Start Only</option>
+              <option value="end" ${selected.bubblePosition === 'end' ? 'selected' : ''}>End Only</option>
+              <option value="none" ${selected.bubblePosition === 'none' ? 'selected' : ''}>None</option>
+            </select>
+          </div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Bubble Radius</span><input type="number" id="prop-grid-rad" class="text-input" value="${selected.bubbleRadius || 0.35}" step="0.05" min="0.1" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Grid Line</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-grid-name')?.addEventListener('change', (e) => {
+        selected.name = e.target.value.trim() || '1';
+        render();
+        renderEntityList();
+      });
+      dom.planPropContent.querySelector('#prop-grid-bubble')?.addEventListener('change', (e) => {
+        selected.bubblePosition = e.target.value;
+        render();
+      });
+      dom.planPropContent.querySelector('#prop-grid-rad')?.addEventListener('change', (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v) && v > 0) { selected.bubbleRadius = v; render(); }
+      });
     }
 
     dom.planPropContent.querySelector('#btn-prop-delete')?.addEventListener('click', () => {
@@ -29374,14 +31116,49 @@ function createPlanView(context) {
     return svgToWorld(transform, sp.x, sp.y);
   }
 
+  function dropColumn(pt) {
+    const existingCols = entities().filter(e => e.kind === 'column');
+    const nextNum = existingCols.length + 1;
+    const col = createColumn({
+      name: `Col ${nextNum}`,
+      profile: 'rect',
+      x: pt.x,
+      y: pt.y,
+      width: 0.4,
+      depth: 0.4
+    });
+    const cmd = entityAddRemoveCommand(entities(), col, 'place Column');
+    cmd.redo();
+    history.push(cmd);
+    state.plan.selectedIds = new Set([col.id]);
+    showToast(`Placed Column ${col.name}`);
+    AudioService.playTick();
+    setTool('select');
+    render();
+    renderEntityList();
+    renderPropertiesInspector();
+  }
+
   function onPointerDown(event) {
     if (event.button !== 0) return;
+    const doc = getActiveDocument();
+    if (doc && doc.type === '3d_massing') {
+      dragState = {
+        mode: 'orbit_3d',
+        startClient: { x: event.clientX, y: event.clientY },
+        startCam: { ...(doc.camera || {}) }
+      };
+      event.preventDefault();
+      return;
+    }
+    if (doc && doc.type === 'sheet') {
+      return;
+    }
     if (event.button === 1 || isPanHotkey()) {
       event.preventDefault();
       dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
       return;
     }
-    const doc = getActiveDocument();
     const visible = entities().filter(x => isEntityVisible(x, doc));
     const world = svgPoint(event);
     const snapOn = state.plan.snap !== false;
@@ -29451,6 +31228,9 @@ function createPlanView(context) {
       setTool('select');
       render();
       return;
+    } else if (tool === 'column') {
+      dropColumn(initialPt);
+      return;
     } else if (tool === 'polyroom') {
       let targetPt = initialPt;
       if (snapOn) {
@@ -29472,7 +31252,7 @@ function createPlanView(context) {
       render();
       renderContextualToolbar();
       return;
-    } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'leader' || tool === 'measure') {
+    } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'leader' || tool === 'measure' || tool === 'grid') {
       if (snapOn) {
         const snapRes = findSnapPoint(world, visible, { snapDistance: 0.25, snapGrid: true, gridMeters: state.plan.grid });
         if (snapRes.snapped) {
@@ -29522,6 +31302,17 @@ function createPlanView(context) {
           render();
         }
       }
+      return;
+    }
+
+    if (dragState.mode === 'orbit_3d') {
+      const dx = event.clientX - dragState.startClient.x;
+      const dy = event.clientY - dragState.startClient.y;
+      const doc = getActiveDocument();
+      if (!doc.camera) doc.camera = {};
+      doc.camera.azimuth = (dragState.startCam.azimuth || 45) + dx * 0.5;
+      doc.camera.elevation = Math.max(10, Math.min(85, (dragState.startCam.elevation || 35.264) - dy * 0.5));
+      render();
       return;
     }
 
@@ -29750,6 +31541,10 @@ function createPlanView(context) {
           AudioService.playTick();
         }
       }
+    } else if (dragState.mode === 'orbit_3d') {
+      dragState = null;
+      render();
+      return;
     } else if (dragState.mode === 'create') {
       const start = dragState.start;
       const end = dragState.current;
@@ -29757,6 +31552,33 @@ function createPlanView(context) {
         createRoomEntity(start, end);
       } else if (dragState.tool === 'wall') {
         createWallEntity(start, end);
+      } else if (dragState.tool === 'grid') {
+        const dx = Math.abs(end.x - start.x);
+        const dy = Math.abs(end.y - start.y);
+        if (dx < 0.2 && dy < 0.2) {
+          showToast('Grid line too short', 'warning');
+          dragState = null;
+          render();
+          return;
+        }
+        const existingGrids = entities().filter(e => e.kind === 'grid_line');
+        const nextNum = existingGrids.length + 1;
+        const gLine = createGridLine({
+          name: String(nextNum),
+          p1: start,
+          p2: end,
+          bubblePosition: 'both'
+        });
+        const cmd = entityAddRemoveCommand(entities(), gLine, 'add grid line');
+        cmd.redo();
+        history.push(cmd);
+        state.plan.selectedIds = new Set([gLine.id]);
+        showToast(`Placed Grid Line ${gLine.name}`);
+        AudioService.playTick();
+        setTool('select');
+        render();
+        renderEntityList();
+        renderPropertiesInspector();
       } else if (dragState.tool === 'stair') {
         createStairEntityFromDrag(start, end);
       } else if (dragState.tool === 'ramp') {
@@ -30350,9 +32172,30 @@ function createPlanView(context) {
       setupSidebarTabs();
 
       const newDocBtn = dom.btnPlanNewDoc || document.getElementById('btn-plan-new-doc');
+      const newTabMenu = document.getElementById('plan-new-tab-menu');
       if (newDocBtn) {
-        newDocBtn.addEventListener('click', () => {
-          createDocument();
+        newDocBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (newTabMenu) {
+            const isHidden = newTabMenu.style.display === 'none' || !newTabMenu.style.display;
+            newTabMenu.style.display = isHidden ? 'block' : 'none';
+          } else {
+            createDocument();
+          }
+        });
+      }
+      if (newTabMenu) {
+        newTabMenu.addEventListener('click', (e) => {
+          const item = e.target.closest('.plan-dropdown-item');
+          if (item && item.dataset.tabType) {
+            createDocument(null, item.dataset.tabType);
+            newTabMenu.style.display = 'none';
+          }
+        });
+        document.addEventListener('click', (e) => {
+          if (!newTabMenu.contains(e.target) && e.target !== newDocBtn) {
+            newTabMenu.style.display = 'none';
+          }
         });
       }
       setupHudListeners();
@@ -30410,6 +32253,16 @@ function createPlanView(context) {
         dom.planSvg.addEventListener('wheel', (e) => {
           e.preventDefault();
           syncSvgSize();
+          const activeDoc = getActiveDocument();
+          if (activeDoc && activeDoc.type === '3d_massing') {
+            const factor = e.deltaY < 0 ? 1.15 : 0.87;
+            if (!activeDoc.camera) {
+              activeDoc.camera = { azimuth: 45, elevation: 35.264, zoom: 32, panX: svg.width / 2, panY: svg.height / 2 + 30 };
+            }
+            activeDoc.camera.zoom = Math.max(5, Math.min(250, (activeDoc.camera.zoom || 32) * factor));
+            render();
+            return;
+          }
           const sp = clientToSvg(e.clientX, e.clientY);
           transform = zoomAt(transform, e.deltaY < 0 ? 1.15 : 0.87, sp.x, sp.y);
           render();

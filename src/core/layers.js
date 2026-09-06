@@ -14,7 +14,7 @@ export const DEFAULT_CAD_LAYERS = [
   { id: 'A-DIMS', name: 'Dimensions', kinds: ['dimension'], color: '#38BDF8', lineweight: 0.18, visible: true, locked: false, printable: true },
   { id: 'A-ANNO-TEXT', name: 'Text & Notes', kinds: ['text', 'leader'], color: '#E5E7EB', lineweight: 0.18, visible: true, locked: false, printable: true },
   { id: 'A-ANNO-TAGS', name: 'Tags & Callouts', kinds: ['room_tag', 'door_tag', 'window_tag', 'north_arrow'], color: '#FBBF24', lineweight: 0.18, visible: true, locked: false, printable: true },
-  { id: 'A-GRID', name: 'Grid & Guidelines', kinds: ['grid'], color: '#6B7280', lineweight: 0.13, visible: true, locked: false, printable: false }
+  { id: 'A-GRID', name: 'Grid & Guidelines', kinds: ['grid', 'grid_line', 'column'], color: '#6B7280', lineweight: 0.13, visible: true, locked: false, printable: true }
 ];
 
 export function cloneDefaultLayers() {

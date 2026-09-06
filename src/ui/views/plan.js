@@ -35,6 +35,16 @@ import {
   setEntityLayer, DEFAULT_CAD_LAYERS
 } from '../../core/layers.js';
 import {
+  createColumn, createGridLine, generateGridSystem, columnContour,
+  columnHatchLines, columnSnapPoints, gridLineIntersection, COLUMN_PROFILES, BUBBLE_POSITIONS
+} from '../../core/grid-columns.js';
+import {
+  CAMERA_PRESETS, buildMassing3DModel, projectAndSortFaces, generateMassingSVG, projectPoint3D
+} from '../../core/massing-3d.js';
+import {
+  SHEET_SIZES, ARCHITECTURAL_SCALES, createSheetConfig, computeViewportLayout, generateSheetSVG
+} from '../../core/sheet.js';
+import {
   calcWallJunctions, punchWallSpans, calcDoorCADGeometry,
   calcWindowCADGeometry, calcWallPolygon, calcDimensionGeometry
 } from '../../core/geometry.js';
@@ -78,7 +88,7 @@ export function createPlanView(context) {
       const initialDoc = {
         id: 'doc-1',
         name: 'Ground Floor',
-        type: '2d',
+        type: '2d_plan',
         entities: Array.isArray(state.plan.entities) ? state.plan.entities : [],
         viewport: { zoom: transform.zoom, offsetX: transform.offsetX, offsetY: transform.offsetY }
       };
@@ -89,7 +99,7 @@ export function createPlanView(context) {
       state.plan.activeDocId = state.plan.documents[0].id;
     }
     const active = getActiveDocument();
-    state.plan.entities = active.entities;
+    state.plan.entities = active.entities || [];
   }
 
   function getActiveDocument() {
@@ -97,20 +107,22 @@ export function createPlanView(context) {
       initDocuments();
     }
     const doc = state.plan.documents.find(d => d.id === state.plan.activeDocId) || state.plan.documents[0];
-    if (doc) normalizeDocumentLayers(doc);
+    if (doc && doc.type !== '3d_massing' && doc.type !== 'sheet') {
+      normalizeDocumentLayers(doc);
+    }
     return doc;
   }
 
   function switchDocument(docId) {
     if (!state.plan || state.plan.activeDocId === docId) return;
     const prevDoc = getActiveDocument();
-    if (prevDoc) {
+    if (prevDoc && prevDoc.viewport) {
       prevDoc.viewport = { zoom: transform.zoom, offsetX: transform.offsetX, offsetY: transform.offsetY };
     }
     const target = state.plan.documents.find(d => d.id === docId);
     if (!target) return;
     state.plan.activeDocId = target.id;
-    state.plan.entities = target.entities;
+    state.plan.entities = target.entities || [];
     state.plan.selectedIds = new Set();
     if (target.viewport && typeof target.viewport.zoom === 'number') {
       transform = {
@@ -123,21 +135,52 @@ export function createPlanView(context) {
     render();
     renderEntityList();
     renderPropertiesInspector();
-    showToast(`Switched to sheet "${target.name}"`);
+    showToast(`Switched to "${target.name}"`);
     AudioService.playTick();
   }
 
-  function createDocument(name) {
+  function createDocument(name, type = '2d_plan') {
     initDocuments();
-    const count = state.plan.documents.length + 1;
-    const docName = typeof name === 'string' && name.trim() ? name.trim() : `Level ${count}`;
-    const newDoc = {
-      id: `doc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      name: docName,
-      type: '2d',
-      entities: [],
-      viewport: { zoom: 40, offsetX: 60, offsetY: 420 }
-    };
+    const docId = `doc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    let newDoc;
+
+    if (type === '3d_massing') {
+      const count = state.plan.documents.filter(d => d.type === '3d_massing').length + 1;
+      const docName = (typeof name === 'string' && name.trim())
+        ? name.trim()
+        : (count === 1 ? '3D Massing Preview' : `3D Massing ${count}`);
+      newDoc = {
+        id: docId,
+        name: docName,
+        type: '3d_massing',
+        camera: { azimuth: 45, elevation: 35.264, zoom: 32, panX: svg.width / 2, panY: svg.height / 2 + 30 },
+        massingOptions: { wallHeight: 3.0, doorHeight: 2.1, windowSill: 0.9, windowHeight: 1.2, slabThickness: 0.2, wireframe: false }
+      };
+    } else if (type === 'sheet') {
+      const count = state.plan.documents.filter(d => d.type === 'sheet').length + 1;
+      const docName = (typeof name === 'string' && name.trim())
+        ? name.trim()
+        : `Sheet A-10${count}`;
+      newDoc = {
+        id: docId,
+        name: docName,
+        type: 'sheet',
+        sheetConfig: createSheetConfig({ sheetNumber: `A-10${count}`, sheetTitle: 'GROUND FLOOR PLAN' })
+      };
+    } else {
+      const count = state.plan.documents.filter(d => d.type === '2d_plan' || d.type === '2d').length + 1;
+      const docName = (typeof name === 'string' && name.trim())
+        ? name.trim()
+        : `Level ${count}`;
+      newDoc = {
+        id: docId,
+        name: docName,
+        type: '2d_plan',
+        entities: [],
+        viewport: { zoom: 40, offsetX: 60, offsetY: 420 }
+      };
+    }
+
     state.plan.documents.push(newDoc);
     switchDocument(newDoc.id);
   }
@@ -183,9 +226,10 @@ export function createPlanView(context) {
       tab.className = `plan-doc-tab ${isActive ? 'active' : ''}`;
       tab.dataset.docId = doc.id;
 
+      const typeIcon = doc.type === '3d_massing' ? '🏢 ' : (doc.type === 'sheet' ? '📄 ' : '📐 ');
       const titleSpan = document.createElement('span');
       titleSpan.className = 'plan-doc-tab-title';
-      titleSpan.textContent = doc.name;
+      titleSpan.textContent = `${typeIcon}${doc.name}`;
       titleSpan.title = 'Double click to rename tab';
 
       titleSpan.addEventListener('dblclick', (e) => {
@@ -1174,11 +1218,236 @@ export function createPlanView(context) {
   }
 
   // ------------------------------------------------------------------
+  // 3D Massing & Presentation Sheet Workspace Viewports
+  // ------------------------------------------------------------------
+  function render3DMassing(doc) {
+    const planDoc = state.plan.documents.find(d => d.type === '2d_plan' || d.type === '2d') || doc;
+    const planEntities = planDoc ? (planDoc.entities || []) : [];
+
+    doc.camera = doc.camera || { azimuth: 45, elevation: 35.264, zoom: 32, panX: svg.width / 2, panY: svg.height / 2 + 30 };
+    doc.massingOptions = doc.massingOptions || { wallHeight: 3.0, doorHeight: 2.1, windowSill: 0.9, windowHeight: 1.2, slabThickness: 0.2, wireframe: false };
+
+    const faces3D = buildMassing3DModel(planEntities, doc.massingOptions);
+    const sortedFaces = projectAndSortFaces(faces3D, doc.camera);
+
+    const facesMarkup = sortedFaces.map(f => {
+      const pts = f.points.map(pt => `${pt[0].toFixed(1)},${pt[1].toFixed(1)}`).join(' ');
+      const fill = doc.massingOptions.wireframe ? 'none' : f.color;
+      const stroke = doc.massingOptions.wireframe ? 'var(--accent-primary, #38bdf8)' : f.stroke;
+      const op = f.opacity < 1 ? ` opacity="${f.opacity}"` : '';
+      return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="${doc.massingOptions.wireframe ? 1 : 1.2}" stroke-linejoin="round"${op}/>`;
+    }).join('\n');
+
+    const presetsMarkup = Object.entries(CAMERA_PRESETS).map(([key, p]) => {
+      const isAct = Math.abs((doc.camera.azimuth || 45) - p.azimuth) < 5 && Math.abs((doc.camera.elevation || 35.264) - p.elevation) < 5;
+      return `<button type="button" class="result-action-btn chip-3d-preset ${isAct ? 'primary' : ''}" data-preset="${key}" style="font-size: 0.68rem; padding: 2px 6px;">${p.label}</button>`;
+    }).join('');
+
+    dom.planSvg.setAttribute('viewBox', `0 0 ${svg.width} ${svg.height}`);
+    dom.planSvg.innerHTML = `
+      <rect width="100%" height="100%" fill="#0b1120" />
+      <!-- Ground Grid Lines -->
+      <g opacity="0.18">
+        ${Array.from({ length: 15 }).map((_, i) => {
+          const val = (i - 7) * 2;
+          const p1 = projectPoint3D({ x: -14, y: val, z: 0 }, doc.camera);
+          const p2 = projectPoint3D({ x: 14, y: val, z: 0 }, doc.camera);
+          const p3 = projectPoint3D({ x: val, y: -14, z: 0 }, doc.camera);
+          const p4 = projectPoint3D({ x: val, y: 14, z: 0 }, doc.camera);
+          return `<line x1="${p1.x.toFixed(1)}" y1="${p1.y.toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${p2.y.toFixed(1)}" stroke="#38bdf8" stroke-width="0.8"/>
+                  <line x1="${p3.x.toFixed(1)}" y1="${p3.y.toFixed(1)}" x2="${p4.x.toFixed(1)}" y2="${p4.y.toFixed(1)}" stroke="#38bdf8" stroke-width="0.8"/>`;
+        }).join('')}
+      </g>
+      <g class="massing-faces">
+        ${facesMarkup}
+      </g>
+    `;
+
+    const ctxBar = dom.planContextualToolbar || document.getElementById('plan-contextual-toolbar');
+    if (ctxBar) {
+      ctxBar.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+            <span class="context-tag-badge">3D MASSING</span>
+            ${presetsMarkup}
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" id="btn-3d-wireframe" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">${doc.massingOptions.wireframe ? 'Shaded' : 'Wireframe'}</button>
+            <button type="button" id="btn-3d-height" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">H: ${(doc.massingOptions.wallHeight || 3.0).toFixed(1)}m</button>
+            <button type="button" id="btn-3d-export" class="result-action-btn primary" style="font-size: 0.68rem; padding: 2px 8px;">💾 Export 3D SVG</button>
+          </div>
+        </div>
+      `;
+
+      ctxBar.querySelectorAll('.chip-3d-preset').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const preset = CAMERA_PRESETS[btn.dataset.preset];
+          if (preset) {
+            doc.camera.azimuth = preset.azimuth;
+            doc.camera.elevation = preset.elevation;
+            render();
+            AudioService.playTick();
+          }
+        });
+      });
+
+      ctxBar.querySelector('#btn-3d-wireframe')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        doc.massingOptions.wireframe = !doc.massingOptions.wireframe;
+        render();
+        AudioService.playTick();
+      });
+
+      ctxBar.querySelector('#btn-3d-height')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const heights = [2.4, 2.7, 3.0, 3.6, 4.2];
+        const cur = doc.massingOptions.wallHeight || 3.0;
+        const next = heights[(heights.indexOf(cur) + 1) % heights.length] || 3.0;
+        doc.massingOptions.wallHeight = next;
+        render();
+        AudioService.playTick();
+      });
+
+      ctxBar.querySelector('#btn-3d-export')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const svgCode = generateMassingSVG(planEntities, doc.camera, doc.massingOptions);
+        const blob = new Blob([svgCode], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${(planDoc.name || 'plan').toLowerCase().replace(/\s+/g, '-')}-massing-3d.svg`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Exported 3D Massing SVG');
+        AudioService.playSuccess();
+      });
+    }
+
+    if (dom.planModeLabel) dom.planModeLabel.textContent = '3D MASSING';
+    if (dom.planStatusBadge) dom.planStatusBadge.textContent = `az ${Math.round(doc.camera.azimuth || 45)}° · el ${Math.round(doc.camera.elevation || 35)}°`;
+  }
+
+  function renderPresentationSheet(doc) {
+    const planDoc = state.plan.documents.find(d => d.type === '2d_plan' || d.type === '2d') || doc;
+    const planEntities = planDoc ? (planDoc.entities || []) : [];
+
+    doc.sheetConfig = doc.sheetConfig || createSheetConfig({ sheetNumber: 'A-101', sheetTitle: (planDoc.name || 'GROUND FLOOR PLAN').toUpperCase() });
+
+    const sheetSvg = generateSheetSVG(doc.sheetConfig, planEntities, {
+      pxPerMm: (svg.width / doc.sheetConfig.widthMm) * 0.85
+    });
+
+    const innerMatch = sheetSvg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i);
+    const innerContent = innerMatch ? innerMatch[1] : '';
+
+    const wMm = doc.sheetConfig.widthMm;
+    const hMm = doc.sheetConfig.heightMm;
+
+    dom.planSvg.setAttribute('viewBox', `0 0 ${wMm} ${hMm}`);
+    dom.planSvg.innerHTML = `
+      <rect x="-100" y="-100" width="${wMm + 200}" height="${hMm + 200}" fill="#1e2433" />
+      <filter id="sheet-shadow" x="-5%" y="-5%" width="115%" height="115%">
+        <feDropShadow dx="2" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.45" />
+      </filter>
+      <g filter="url(#sheet-shadow)">
+        ${innerContent}
+      </g>
+    `;
+
+    const ctxBar = dom.planContextualToolbar || document.getElementById('plan-contextual-toolbar');
+    if (ctxBar) {
+      const tb = doc.sheetConfig.titleBlock;
+      ctxBar.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span class="context-tag-badge">PRESENTATION SHEET</span>
+            <select id="sheet-size-select" class="calc-select" style="height: 24px; padding: 0 4px; font-size: 0.7rem; width: 85px;">
+              <option value="A4" ${doc.sheetConfig.size === 'A4' ? 'selected' : ''}>A4</option>
+              <option value="A3" ${doc.sheetConfig.size === 'A3' ? 'selected' : ''}>A3 (Std)</option>
+              <option value="A2" ${doc.sheetConfig.size === 'A2' ? 'selected' : ''}>A2</option>
+              <option value="A1" ${doc.sheetConfig.size === 'A1' ? 'selected' : ''}>A1</option>
+            </select>
+            <select id="sheet-scale-select" class="calc-select" style="height: 24px; padding: 0 4px; font-size: 0.7rem; width: 85px;">
+              <option value="20" ${doc.sheetConfig.viewport.scaleRatio === 20 ? 'selected' : ''}>1:20</option>
+              <option value="50" ${doc.sheetConfig.viewport.scaleRatio === 50 ? 'selected' : ''}>1:50</option>
+              <option value="100" ${doc.sheetConfig.viewport.scaleRatio === 100 ? 'selected' : ''}>1:100</option>
+              <option value="200" ${doc.sheetConfig.viewport.scaleRatio === 200 ? 'selected' : ''}>1:200</option>
+            </select>
+            <button type="button" id="btn-sheet-orientation" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">${doc.sheetConfig.orientation === 'landscape' ? 'Landscape' : 'Portrait'}</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" id="btn-sheet-export" class="result-action-btn primary" style="font-size: 0.68rem; padding: 2px 8px;">💾 Export Sheet SVG</button>
+          </div>
+        </div>
+      `;
+
+      ctxBar.querySelector('#sheet-size-select')?.addEventListener('change', (e) => {
+        doc.sheetConfig = createSheetConfig({
+          ...doc.sheetConfig,
+          size: e.target.value,
+          orientation: doc.sheetConfig.orientation,
+          titleBlock: doc.sheetConfig.titleBlock
+        });
+        render();
+        AudioService.playTick();
+      });
+
+      ctxBar.querySelector('#sheet-scale-select')?.addEventListener('change', (e) => {
+        const r = parseInt(e.target.value, 10) || 100;
+        doc.sheetConfig.viewport.scaleRatio = r;
+        doc.sheetConfig.titleBlock.scale = `1:${r}`;
+        render();
+        AudioService.playTick();
+      });
+
+      ctxBar.querySelector('#btn-sheet-orientation')?.addEventListener('click', () => {
+        const nextOri = doc.sheetConfig.orientation === 'landscape' ? 'portrait' : 'landscape';
+        doc.sheetConfig = createSheetConfig({
+          ...doc.sheetConfig,
+          orientation: nextOri,
+          size: doc.sheetConfig.size,
+          titleBlock: doc.sheetConfig.titleBlock
+        });
+        render();
+        AudioService.playTick();
+      });
+
+      ctxBar.querySelector('#btn-sheet-export')?.addEventListener('click', () => {
+        const svgCode = generateSheetSVG(doc.sheetConfig, planEntities);
+        const blob = new Blob([svgCode], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${(tb.sheetNumber || 'sheet').toLowerCase()}-${(tb.sheetTitle || 'drawing').toLowerCase().replace(/\s+/g, '-')}.svg`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Exported Presentation Sheet SVG');
+        AudioService.playSuccess();
+      });
+    }
+
+    if (dom.planModeLabel) dom.planModeLabel.textContent = 'SHEET';
+    if (dom.planStatusBadge) dom.planStatusBadge.textContent = `${doc.sheetConfig.size} · 1:${doc.sheetConfig.viewport.scaleRatio || 100}`;
+  }
+
+  // ------------------------------------------------------------------
   // Rendering
   // ------------------------------------------------------------------
   function render() {
     if (!dom.planSvg) return;
     syncSvgSize();
+
+    const doc = getActiveDocument();
+    if (doc && doc.type === '3d_massing') {
+      render3DMassing(doc);
+      return;
+    }
+    if (doc && doc.type === 'sheet') {
+      renderPresentationSheet(doc);
+      return;
+    }
+
     dom.planSvg.setAttribute('viewBox', `0 0 ${svg.width} ${svg.height}`);
     const gridLines = buildGrid(transform, svg.width, svg.height, state.plan.grid, 4)
       .map(l => {
@@ -1223,7 +1492,6 @@ export function createPlanView(context) {
         </pattern>
       </defs>`;
 
-    const doc = getActiveDocument();
     const entityMarkup = entities().map(e => {
       if (!isEntityVisible(e, doc)) return '';
       const selected = state.plan.selectedIds.has(e.id);
@@ -1700,6 +1968,50 @@ export function createPlanView(context) {
           <text x="0" y="-22" text-anchor="middle" font-size="11" font-family="var(--font-mono)" font-weight="800" fill="${stroke}">N</text>
         </g>`;
       }
+      if (e.kind === 'column') {
+        const contour = columnContour(e);
+        const hatches = columnHatchLines(e);
+        const ptsSvg = contour.map(([cx, cy]) => {
+          const sp = worldToSvg(transform, cx, cy);
+          return `${sp.x.toFixed(1)},${sp.y.toFixed(1)}`;
+        }).join(' ');
+
+        const hatchLinesSvg = hatches.map(h => {
+          const sp1 = worldToSvg(transform, h.x1, h.y1);
+          const sp2 = worldToSvg(transform, h.x2, h.y2);
+          return `<line x1="${sp1.x.toFixed(1)}" y1="${sp1.y.toFixed(1)}" x2="${sp2.x.toFixed(1)}" y2="${sp2.y.toFixed(1)}" stroke="${stroke}" stroke-width="${selected ? 1.5 : 1}" opacity="0.65"/>`;
+        }).join('');
+
+        const centerSvg = worldToSvg(transform, e.x, e.y);
+        const cd = e.depth || 0.4;
+
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <polygon points="${ptsSvg}" fill="var(--bg-chip, #334155)" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.5}"/>
+          ${hatchLinesSvg}
+          <text x="${centerSvg.x.toFixed(1)}" y="${(centerSvg.y + cd * transform.zoom / 2 + 12).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="var(--text-muted, #888)" font-family="var(--font-mono)">${escapeHtml(e.name || 'Col')}</text>
+        </g>`;
+      }
+      if (e.kind === 'grid_line' && e.p1 && e.p2) {
+        const sp1 = worldToSvg(transform, e.p1.x, e.p1.y);
+        const sp2 = worldToSvg(transform, e.p2.x, e.p2.y);
+        const bRadPx = Math.max(10, (e.bubbleRadius || 0.35) * transform.zoom);
+        const gridColor = selected ? 'var(--color-warning, #fbbf24)' : 'var(--text-muted, #94a3b8)';
+
+        let bubbles = '';
+        if (e.bubblePosition === 'both' || e.bubblePosition === 'start') {
+          bubbles += `<circle cx="${sp1.x.toFixed(1)}" cy="${sp1.y.toFixed(1)}" r="${bRadPx.toFixed(1)}" fill="var(--bg-surface-elevated, #1e293b)" stroke="${gridColor}" stroke-width="${selected ? 2 : 1.2}"/>
+            <text x="${sp1.x.toFixed(1)}" y="${(sp1.y + 3.5).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" font-weight="700" fill="var(--text-normal, #f8fafc)">${escapeHtml(e.name)}</text>`;
+        }
+        if (e.bubblePosition === 'both' || e.bubblePosition === 'end') {
+          bubbles += `<circle cx="${sp2.x.toFixed(1)}" cy="${sp2.y.toFixed(1)}" r="${bRadPx.toFixed(1)}" fill="var(--bg-surface-elevated, #1e293b)" stroke="${gridColor}" stroke-width="${selected ? 2 : 1.2}"/>
+            <text x="${sp2.x.toFixed(1)}" y="${(sp2.y + 3.5).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" font-weight="700" fill="var(--text-normal, #f8fafc)">${escapeHtml(e.name)}</text>`;
+        }
+
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <line x1="${sp1.x.toFixed(1)}" y1="${sp1.y.toFixed(1)}" x2="${sp2.x.toFixed(1)}" y2="${sp2.y.toFixed(1)}" stroke="${gridColor}" stroke-width="${selected ? 2 : 1.2}" stroke-dasharray="10 4 2 4"/>
+          ${bubbles}
+        </g>`;
+      }
       return '';
     }).join('');
 
@@ -1762,7 +2074,17 @@ export function createPlanView(context) {
         const b = worldToSvg(transform, Math.max(dragState.start.x, dragState.current.x), Math.min(dragState.start.y, dragState.current.y));
         const col = dragState.tool === 'stair' ? 'var(--note-number, #4989D9)' : 'var(--accent-action, #D32F2F)';
         dragMarkup = `<rect x="${a.x.toFixed(1)}" y="${a.y.toFixed(1)}" width="${(b.x - a.x).toFixed(1)}" height="${(a.y - b.y).toFixed(1)}"
-          fill="none" stroke="${col}" stroke-width="1.8" stroke-dasharray="5 3"/>`;
+          fill="none" stroke="${col}" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+      } else if (dragState.tool === 'grid') {
+        const a = worldToSvg(transform, dragState.start.x, dragState.start.y);
+        const b = worldToSvg(transform, dragState.current.x, dragState.current.y);
+        dragMarkup = `
+          <g class="drag-preview-grid" pointer-events="none">
+            <line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="var(--accent-primary, #4989D9)" stroke-width="1.8" stroke-dasharray="8 4 2 4"/>
+            <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="12" fill="var(--bg-surface-elevated, #1e293b)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.5"/>
+            <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="12" fill="var(--bg-surface-elevated, #1e293b)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.5"/>
+          </g>
+        `;
       } else {
         const a = worldToSvg(transform, Math.min(dragState.start.x, dragState.current.x), Math.max(dragState.start.y, dragState.current.y));
         const b = worldToSvg(transform, Math.max(dragState.start.x, dragState.current.x), Math.min(dragState.start.y, dragState.current.y));
@@ -1909,6 +2231,8 @@ export function createPlanView(context) {
       else if (e.kind === 'window_tag') desc = `Badge <${escapeHtml(e.tag || '')}>`;
       else if (e.kind === 'leader') desc = `Leader · "${escapeHtml(e.text || '')}"`;
       else if (e.kind === 'north_arrow') desc = `North · ${Math.round(e.rotation || 0)}°`;
+      else if (e.kind === 'column') desc = `Column · ${e.profile || 'rect'} · ${num(e.width)}×${num(e.depth)} m`;
+      else if (e.kind === 'grid_line') desc = `Grid · Axis [${escapeHtml(e.name || '')}]`;
       else if (e.kind === 'text') desc = `"${escapeHtml(e.text || e.name)}"`;
       else desc = e.kind;
 
@@ -3157,6 +3481,101 @@ export function createPlanView(context) {
         selected.scale = Math.max(0.2, parseFloat(e.target.value) || 1.0);
         render();
       });
+
+    } else if (selected.kind === 'column') {
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Structural Column</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Label</span><input type="text" id="prop-col-name" class="text-input" value="${escapeHtml(selected.name || 'Column')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Profile</span>
+            <select id="prop-col-profile" class="calc-select" style="width: 140px; height: 24px; padding: 0 4px; font-size: 0.74rem;">
+              <option value="rect" ${selected.profile === 'rect' ? 'selected' : ''}>Rectangular</option>
+              <option value="circle" ${selected.profile === 'circle' ? 'selected' : ''}>Circular</option>
+              <option value="h_beam" ${selected.profile === 'h_beam' ? 'selected' : ''}>Steel H-Beam</option>
+            </select>
+          </div>
+          ${selected.profile === 'circle' ? `
+            <div class="plan-prop-row"><span class="plan-prop-label">Radius (m)</span><input type="number" id="prop-col-radius" class="text-input" value="${selected.radius || 0.2}" step="0.05" min="0.05" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          ` : `
+            <div class="plan-prop-row"><span class="plan-prop-label">Width (m)</span><input type="number" id="prop-col-width" class="text-input" value="${selected.width || 0.4}" step="0.05" min="0.1" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+            <div class="plan-prop-row"><span class="plan-prop-label">Depth (m)</span><input type="number" id="prop-col-depth" class="text-input" value="${selected.depth || 0.4}" step="0.05" min="0.1" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          `}
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Material</span>
+            <select id="prop-col-mat" class="calc-select" style="width: 140px; height: 24px; padding: 0 4px; font-size: 0.74rem;">
+              <option value="concrete" ${selected.material === 'concrete' ? 'selected' : ''}>Reinforced Concrete</option>
+              <option value="steel" ${selected.material === 'steel' ? 'selected' : ''}>Structural Steel</option>
+              <option value="timber" ${selected.material === 'timber' ? 'selected' : ''}>Heavy Timber</option>
+            </select>
+          </div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Column</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-col-name')?.addEventListener('change', (e) => {
+        selected.name = e.target.value.trim() || 'Column';
+        render();
+        renderEntityList();
+      });
+      dom.planPropContent.querySelector('#prop-col-profile')?.addEventListener('change', (e) => {
+        selected.profile = e.target.value;
+        render();
+        renderPropertiesInspector();
+      });
+      dom.planPropContent.querySelector('#prop-col-width')?.addEventListener('change', (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v) && v > 0) { selected.width = v; render(); }
+      });
+      dom.planPropContent.querySelector('#prop-col-depth')?.addEventListener('change', (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v) && v > 0) { selected.depth = v; render(); }
+      });
+      dom.planPropContent.querySelector('#prop-col-radius')?.addEventListener('change', (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v) && v > 0) { selected.radius = v; render(); }
+      });
+      dom.planPropContent.querySelector('#prop-col-mat')?.addEventListener('change', (e) => {
+        selected.material = e.target.value;
+        render();
+      });
+
+    } else if (selected.kind === 'grid_line') {
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Structural Grid Line</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Axis Label</span><input type="text" id="prop-grid-name" class="text-input" value="${escapeHtml(selected.name || '1')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Bubble End</span>
+            <select id="prop-grid-bubble" class="calc-select" style="width: 140px; height: 24px; padding: 0 4px; font-size: 0.74rem;">
+              <option value="both" ${selected.bubblePosition === 'both' ? 'selected' : ''}>Both Ends</option>
+              <option value="start" ${selected.bubblePosition === 'start' ? 'selected' : ''}>Start Only</option>
+              <option value="end" ${selected.bubblePosition === 'end' ? 'selected' : ''}>End Only</option>
+              <option value="none" ${selected.bubblePosition === 'none' ? 'selected' : ''}>None</option>
+            </select>
+          </div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Bubble Radius</span><input type="number" id="prop-grid-rad" class="text-input" value="${selected.bubbleRadius || 0.35}" step="0.05" min="0.1" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Grid Line</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-grid-name')?.addEventListener('change', (e) => {
+        selected.name = e.target.value.trim() || '1';
+        render();
+        renderEntityList();
+      });
+      dom.planPropContent.querySelector('#prop-grid-bubble')?.addEventListener('change', (e) => {
+        selected.bubblePosition = e.target.value;
+        render();
+      });
+      dom.planPropContent.querySelector('#prop-grid-rad')?.addEventListener('change', (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v) && v > 0) { selected.bubbleRadius = v; render(); }
+      });
     }
 
     dom.planPropContent.querySelector('#btn-prop-delete')?.addEventListener('click', () => {
@@ -3321,14 +3740,49 @@ export function createPlanView(context) {
     return svgToWorld(transform, sp.x, sp.y);
   }
 
+  function dropColumn(pt) {
+    const existingCols = entities().filter(e => e.kind === 'column');
+    const nextNum = existingCols.length + 1;
+    const col = createColumn({
+      name: `Col ${nextNum}`,
+      profile: 'rect',
+      x: pt.x,
+      y: pt.y,
+      width: 0.4,
+      depth: 0.4
+    });
+    const cmd = entityAddRemoveCommand(entities(), col, 'place Column');
+    cmd.redo();
+    history.push(cmd);
+    state.plan.selectedIds = new Set([col.id]);
+    showToast(`Placed Column ${col.name}`);
+    AudioService.playTick();
+    setTool('select');
+    render();
+    renderEntityList();
+    renderPropertiesInspector();
+  }
+
   function onPointerDown(event) {
     if (event.button !== 0) return;
+    const doc = getActiveDocument();
+    if (doc && doc.type === '3d_massing') {
+      dragState = {
+        mode: 'orbit_3d',
+        startClient: { x: event.clientX, y: event.clientY },
+        startCam: { ...(doc.camera || {}) }
+      };
+      event.preventDefault();
+      return;
+    }
+    if (doc && doc.type === 'sheet') {
+      return;
+    }
     if (event.button === 1 || isPanHotkey()) {
       event.preventDefault();
       dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
       return;
     }
-    const doc = getActiveDocument();
     const visible = entities().filter(x => isEntityVisible(x, doc));
     const world = svgPoint(event);
     const snapOn = state.plan.snap !== false;
@@ -3398,6 +3852,9 @@ export function createPlanView(context) {
       setTool('select');
       render();
       return;
+    } else if (tool === 'column') {
+      dropColumn(initialPt);
+      return;
     } else if (tool === 'polyroom') {
       let targetPt = initialPt;
       if (snapOn) {
@@ -3419,7 +3876,7 @@ export function createPlanView(context) {
       render();
       renderContextualToolbar();
       return;
-    } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'leader' || tool === 'measure') {
+    } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'leader' || tool === 'measure' || tool === 'grid') {
       if (snapOn) {
         const snapRes = findSnapPoint(world, visible, { snapDistance: 0.25, snapGrid: true, gridMeters: state.plan.grid });
         if (snapRes.snapped) {
@@ -3469,6 +3926,17 @@ export function createPlanView(context) {
           render();
         }
       }
+      return;
+    }
+
+    if (dragState.mode === 'orbit_3d') {
+      const dx = event.clientX - dragState.startClient.x;
+      const dy = event.clientY - dragState.startClient.y;
+      const doc = getActiveDocument();
+      if (!doc.camera) doc.camera = {};
+      doc.camera.azimuth = (dragState.startCam.azimuth || 45) + dx * 0.5;
+      doc.camera.elevation = Math.max(10, Math.min(85, (dragState.startCam.elevation || 35.264) - dy * 0.5));
+      render();
       return;
     }
 
@@ -3697,6 +4165,10 @@ export function createPlanView(context) {
           AudioService.playTick();
         }
       }
+    } else if (dragState.mode === 'orbit_3d') {
+      dragState = null;
+      render();
+      return;
     } else if (dragState.mode === 'create') {
       const start = dragState.start;
       const end = dragState.current;
@@ -3704,6 +4176,33 @@ export function createPlanView(context) {
         createRoomEntity(start, end);
       } else if (dragState.tool === 'wall') {
         createWallEntity(start, end);
+      } else if (dragState.tool === 'grid') {
+        const dx = Math.abs(end.x - start.x);
+        const dy = Math.abs(end.y - start.y);
+        if (dx < 0.2 && dy < 0.2) {
+          showToast('Grid line too short', 'warning');
+          dragState = null;
+          render();
+          return;
+        }
+        const existingGrids = entities().filter(e => e.kind === 'grid_line');
+        const nextNum = existingGrids.length + 1;
+        const gLine = createGridLine({
+          name: String(nextNum),
+          p1: start,
+          p2: end,
+          bubblePosition: 'both'
+        });
+        const cmd = entityAddRemoveCommand(entities(), gLine, 'add grid line');
+        cmd.redo();
+        history.push(cmd);
+        state.plan.selectedIds = new Set([gLine.id]);
+        showToast(`Placed Grid Line ${gLine.name}`);
+        AudioService.playTick();
+        setTool('select');
+        render();
+        renderEntityList();
+        renderPropertiesInspector();
       } else if (dragState.tool === 'stair') {
         createStairEntityFromDrag(start, end);
       } else if (dragState.tool === 'ramp') {
@@ -4297,9 +4796,30 @@ export function createPlanView(context) {
       setupSidebarTabs();
 
       const newDocBtn = dom.btnPlanNewDoc || document.getElementById('btn-plan-new-doc');
+      const newTabMenu = document.getElementById('plan-new-tab-menu');
       if (newDocBtn) {
-        newDocBtn.addEventListener('click', () => {
-          createDocument();
+        newDocBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (newTabMenu) {
+            const isHidden = newTabMenu.style.display === 'none' || !newTabMenu.style.display;
+            newTabMenu.style.display = isHidden ? 'block' : 'none';
+          } else {
+            createDocument();
+          }
+        });
+      }
+      if (newTabMenu) {
+        newTabMenu.addEventListener('click', (e) => {
+          const item = e.target.closest('.plan-dropdown-item');
+          if (item && item.dataset.tabType) {
+            createDocument(null, item.dataset.tabType);
+            newTabMenu.style.display = 'none';
+          }
+        });
+        document.addEventListener('click', (e) => {
+          if (!newTabMenu.contains(e.target) && e.target !== newDocBtn) {
+            newTabMenu.style.display = 'none';
+          }
         });
       }
       setupHudListeners();
@@ -4357,6 +4877,16 @@ export function createPlanView(context) {
         dom.planSvg.addEventListener('wheel', (e) => {
           e.preventDefault();
           syncSvgSize();
+          const activeDoc = getActiveDocument();
+          if (activeDoc && activeDoc.type === '3d_massing') {
+            const factor = e.deltaY < 0 ? 1.15 : 0.87;
+            if (!activeDoc.camera) {
+              activeDoc.camera = { azimuth: 45, elevation: 35.264, zoom: 32, panX: svg.width / 2, panY: svg.height / 2 + 30 };
+            }
+            activeDoc.camera.zoom = Math.max(5, Math.min(250, (activeDoc.camera.zoom || 32) * factor));
+            render();
+            return;
+          }
           const sp = clientToSvg(e.clientX, e.clientY);
           transform = zoomAt(transform, e.deltaY < 0 ? 1.15 : 0.87, sp.x, sp.y);
           render();
