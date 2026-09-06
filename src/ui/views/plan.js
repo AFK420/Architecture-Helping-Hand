@@ -45,6 +45,11 @@ import {
   SHEET_SIZES, ARCHITECTURAL_SCALES, createSheetConfig, computeViewportLayout, generateSheetSVG
 } from '../../core/sheet.js';
 import {
+  ELEVATION_DIRECTIONS, createSectionCut,
+  generateBuildingElevation, generateBuildingSection,
+  generateElevationSVG, generateSectionSVG
+} from '../../core/sections-elevations.js';
+import {
   calculateRoomSchedule, calculateFloorTotals, formatScheduleCSV, guessZoningFromRoomName
 } from '../../core/zoning-schedule.js';
 import {
@@ -110,7 +115,7 @@ export function createPlanView(context) {
       initDocuments();
     }
     const doc = state.plan.documents.find(d => d.id === state.plan.activeDocId) || state.plan.documents[0];
-    if (doc && doc.type !== '3d_massing' && doc.type !== 'sheet') {
+    if (doc && doc.type !== '3d_massing' && doc.type !== 'sheet' && doc.type !== 'elevation' && doc.type !== 'section') {
       normalizeDocumentLayers(doc);
     }
     return doc;
@@ -158,6 +163,36 @@ export function createPlanView(context) {
         type: '3d_massing',
         camera: { azimuth: 45, elevation: 35.264, zoom: 32, panX: svg.width / 2, panY: svg.height / 2 + 30 },
         massingOptions: { wallHeight: 3.0, doorHeight: 2.1, windowSill: 0.9, windowHeight: 1.2, slabThickness: 0.2, wireframe: false }
+      };
+    } else if (type === 'elevation') {
+      const count = state.plan.documents.filter(d => d.type === 'elevation').length + 1;
+      const dirs = ['south', 'north', 'east', 'west'];
+      const dir = dirs[(count - 1) % dirs.length];
+      const dirLabels = { south: 'South Elevation', north: 'North Elevation', east: 'East Elevation', west: 'West Elevation' };
+      const docName = (typeof name === 'string' && name.trim())
+        ? name.trim()
+        : dirLabels[dir];
+      newDoc = {
+        id: docId,
+        name: docName,
+        type: 'elevation',
+        elevationDirection: dir,
+        multiStory: true
+      };
+    } else if (type === 'section') {
+      const count = state.plan.documents.filter(d => d.type === 'section').length + 1;
+      const labels = ['A', 'B', 'C', 'D'];
+      const lbl = labels[(count - 1) % labels.length];
+      const docName = (typeof name === 'string' && name.trim())
+        ? name.trim()
+        : `Section ${lbl}-${lbl}`;
+      newDoc = {
+        id: docId,
+        name: docName,
+        type: 'section',
+        sectionCut: { label: lbl, direction: 'forward' },
+        multiStory: true,
+        poche: true
       };
     } else if (type === 'sheet') {
       const count = state.plan.documents.filter(d => d.type === 'sheet').length + 1;
@@ -229,7 +264,7 @@ export function createPlanView(context) {
       tab.className = `plan-doc-tab ${isActive ? 'active' : ''}`;
       tab.dataset.docId = doc.id;
 
-      const typeIcon = doc.type === '3d_massing' ? '🏢 ' : (doc.type === 'sheet' ? '📄 ' : '📐 ');
+      const typeIcon = doc.type === '3d_massing' ? '🏢 ' : (doc.type === 'sheet' ? '📄 ' : (doc.type === 'elevation' ? '🏛️ ' : (doc.type === 'section' ? '✂️ ' : '📐 ')));
       const titleSpan = document.createElement('span');
       titleSpan.className = 'plan-doc-tab-title';
       titleSpan.textContent = `${typeIcon}${doc.name}`;
@@ -1403,6 +1438,8 @@ export function createPlanView(context) {
               <option value="single" ${doc.sheetConfig.layoutMode === 'single' ? 'selected' : ''}>Full Plan</option>
               <option value="plan_3d" ${doc.sheetConfig.layoutMode === 'plan_3d' ? 'selected' : ''}>Plan + 3D Axo</option>
               <option value="plan_schedule" ${doc.sheetConfig.layoutMode === 'plan_schedule' ? 'selected' : ''}>Plan + Schedule</option>
+              <option value="plan_elevation" ${doc.sheetConfig.layoutMode === 'plan_elevation' ? 'selected' : ''}>Plan + Elevation</option>
+              <option value="plan_section" ${doc.sheetConfig.layoutMode === 'plan_section' ? 'selected' : ''}>Plan + Section</option>
             </select>
             <select id="sheet-size-select" class="calc-select" style="height: 24px; padding: 0 4px; font-size: 0.7rem; width: 85px;">
               <option value="A4" ${doc.sheetConfig.size === 'A4' ? 'selected' : ''}>A4</option>
@@ -1484,6 +1521,154 @@ export function createPlanView(context) {
     if (dom.planStatusBadge) dom.planStatusBadge.textContent = `${doc.sheetConfig.size} · 1:${doc.sheetConfig.viewport.scaleRatio || 100} · ${doc.sheetConfig.layoutMode || 'single'}`;
   }
 
+  function renderElevationView(doc) {
+    const dir = doc.elevationDirection || 'south';
+    const planDocs = state.plan.documents.filter(d => d.type === '2d_plan' || d.type === '2d' || !d.type);
+    const source = doc.multiStory !== false ? planDocs : (planDocs[0] ? planDocs[0].entities : []);
+
+    const model = generateBuildingElevation(source, dir);
+    const elevSvg = generateElevationSVG(model, dir, { scale: 35 });
+
+    const innerMatch = elevSvg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i);
+    const vbMatch = elevSvg.match(/viewBox="([^"]+)"/i);
+    const innerContent = innerMatch ? innerMatch[1] : '';
+    const viewBox = vbMatch ? vbMatch[1] : `0 0 ${svg.width} ${svg.height}`;
+
+    dom.planSvg.setAttribute('viewBox', viewBox);
+    dom.planSvg.innerHTML = innerContent;
+
+    const ctxBar = dom.planContextualToolbar || document.getElementById('plan-contextual-toolbar');
+    if (ctxBar) {
+      ctxBar.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span class="context-tag-badge">BUILDING ELEVATION</span>
+            <div style="display: flex; gap: 4px;">
+              <button type="button" class="result-action-btn ${dir === 'south' ? 'primary' : ''}" data-dir="south" style="font-size: 0.68rem; padding: 2px 6px;">South (Front)</button>
+              <button type="button" class="result-action-btn ${dir === 'north' ? 'primary' : ''}" data-dir="north" style="font-size: 0.68rem; padding: 2px 6px;">North (Rear)</button>
+              <button type="button" class="result-action-btn ${dir === 'east' ? 'primary' : ''}" data-dir="east" style="font-size: 0.68rem; padding: 2px 6px;">East (Right)</button>
+              <button type="button" class="result-action-btn ${dir === 'west' ? 'primary' : ''}" data-dir="west" style="font-size: 0.68rem; padding: 2px 6px;">West (Left)</button>
+            </div>
+            <button type="button" id="btn-elev-multistory" class="result-action-btn ${doc.multiStory !== false ? 'active' : ''}" style="font-size: 0.68rem; padding: 2px 6px;">${doc.multiStory !== false ? '🏢 Stack All Stories' : '📄 Single Floor'}</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" id="btn-elev-export" class="result-action-btn primary" style="font-size: 0.68rem; padding: 2px 8px;">💾 Export Elevation SVG</button>
+          </div>
+        </div>
+      `;
+
+      ctxBar.querySelectorAll('button[data-dir]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          doc.elevationDirection = btn.dataset.dir;
+          const dirNames = { south: 'South Elevation', north: 'North Elevation', east: 'East Elevation', west: 'West Elevation' };
+          doc.name = dirNames[doc.elevationDirection] || 'Building Elevation';
+          renderTabs();
+          render();
+          AudioService.playTick();
+        });
+      });
+
+      ctxBar.querySelector('#btn-elev-multistory')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        doc.multiStory = !doc.multiStory;
+        render();
+        AudioService.playTick();
+      });
+
+      ctxBar.querySelector('#btn-elev-export')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const blob = new Blob([elevSvg], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${(doc.name || 'elevation').toLowerCase().replace(/\s+/g, '-')}.svg`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`Exported ${doc.name} SVG`);
+        AudioService.playSuccess();
+      });
+    }
+
+    if (dom.planModeLabel) dom.planModeLabel.textContent = 'ELEVATION';
+    if (dom.planStatusBadge) {
+      dom.planStatusBadge.textContent = `${model.title} · ${model.totalHeight.toFixed(1)}m H · Span ${model.span.toFixed(1)}m`;
+    }
+  }
+
+  function renderSectionView(doc) {
+    const planDocs = state.plan.documents.filter(d => d.type === '2d_plan' || d.type === '2d' || !d.type);
+    const source = planDocs;
+    const cut = doc.sectionCut || { label: 'A', direction: 'forward' };
+
+    const model = generateBuildingSection(source, cut, { poche: doc.poche !== false });
+    const sectSvg = generateSectionSVG(model, cut, { scale: 35 });
+
+    const innerMatch = sectSvg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i);
+    const vbMatch = sectSvg.match(/viewBox="([^"]+)"/i);
+    const innerContent = innerMatch ? innerMatch[1] : '';
+    const viewBox = vbMatch ? vbMatch[1] : `0 0 ${svg.width} ${svg.height}`;
+
+    dom.planSvg.setAttribute('viewBox', viewBox);
+    dom.planSvg.innerHTML = innerContent;
+
+    const ctxBar = dom.planContextualToolbar || document.getElementById('plan-contextual-toolbar');
+    if (ctxBar) {
+      ctxBar.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span class="context-tag-badge">BUILDING SECTION</span>
+            <div style="display: flex; gap: 4px;">
+              <button type="button" class="result-action-btn ${cut.label === 'A' ? 'primary' : ''}" data-label="A" style="font-size: 0.68rem; padding: 2px 6px;">Section A-A</button>
+              <button type="button" class="result-action-btn ${cut.label === 'B' ? 'primary' : ''}" data-label="B" style="font-size: 0.68rem; padding: 2px 6px;">Section B-B</button>
+            </div>
+            <button type="button" id="btn-sect-poche" class="result-action-btn ${doc.poche !== false ? 'active' : ''}" style="font-size: 0.68rem; padding: 2px 6px;">${doc.poche !== false ? '🧱 Pochè Hatch: ON' : 'Pochè: OFF'}</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" id="btn-sect-export" class="result-action-btn primary" style="font-size: 0.68rem; padding: 2px 8px;">💾 Export Section SVG</button>
+          </div>
+        </div>
+      `;
+
+      ctxBar.querySelectorAll('button[data-label]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const lbl = btn.dataset.label;
+          doc.sectionCut = { ...doc.sectionCut, label: lbl };
+          doc.name = `Section ${lbl}-${lbl}`;
+          renderTabs();
+          render();
+          AudioService.playTick();
+        });
+      });
+
+      ctxBar.querySelector('#btn-sect-poche')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        doc.poche = !doc.poche;
+        render();
+        AudioService.playTick();
+      });
+
+      ctxBar.querySelector('#btn-sect-export')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const blob = new Blob([sectSvg], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${(doc.name || 'section').toLowerCase().replace(/\s+/g, '-')}.svg`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`Exported ${doc.name} SVG`);
+        AudioService.playSuccess();
+      });
+    }
+
+    if (dom.planModeLabel) dom.planModeLabel.textContent = 'SECTION';
+    if (dom.planStatusBadge) {
+      dom.planStatusBadge.textContent = `${model.title} · ${model.totalHeight.toFixed(1)}m H · Cut ${model.cutLength.toFixed(1)}m`;
+    }
+  }
+
   // ------------------------------------------------------------------
   // Rendering
   // ------------------------------------------------------------------
@@ -1498,6 +1683,14 @@ export function createPlanView(context) {
     }
     if (doc && doc.type === 'sheet') {
       renderPresentationSheet(doc);
+      return;
+    }
+    if (doc && doc.type === 'elevation') {
+      renderElevationView(doc);
+      return;
+    }
+    if (doc && doc.type === 'section') {
+      renderSectionView(doc);
       return;
     }
 
@@ -2044,6 +2237,38 @@ export function createPlanView(context) {
           <text x="${centerSvg.x.toFixed(1)}" y="${(centerSvg.y + cd * transform.zoom / 2 + 12).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="var(--text-muted, #888)" font-family="var(--font-mono)">${escapeHtml(e.name || 'Col')}</text>
         </g>`;
       }
+      if (e.kind === 'section_cut') {
+        const p1 = e.p1 || { x: e.x, y: e.y };
+        const p2 = e.p2 || { x: e.x + (e.width || 10), y: e.y };
+        const sp1 = worldToSvg(transform, p1.x, p1.y);
+        const sp2 = worldToSvg(transform, p2.x, p2.y);
+        const cutStroke = selected ? 'var(--color-warning, #fbbf24)' : (stroke || '#f87171');
+        const lbl = e.label || 'A';
+        const sRef = e.sheetRef || 'A-201';
+
+        const dx = sp2.x - sp1.x;
+        const dy = sp2.y - sp1.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len;
+        const ny = dx / len;
+        const arrowDir = e.direction === 'reverse' ? -1 : 1;
+        const ax = nx * 14 * arrowDir;
+        const ay = ny * 14 * arrowDir;
+
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <line x1="${sp1.x.toFixed(1)}" y1="${sp1.y.toFixed(1)}" x2="${sp2.x.toFixed(1)}" y2="${sp2.y.toFixed(1)}" stroke="${cutStroke}" stroke-width="${selected ? 2.5 : 1.8}" stroke-dasharray="14 4 3 4"/>
+          <line x1="${sp1.x.toFixed(1)}" y1="${sp1.y.toFixed(1)}" x2="${(sp1.x + ax).toFixed(1)}" y2="${(sp1.y + ay).toFixed(1)}" stroke="${cutStroke}" stroke-width="2"/>
+          <circle cx="${sp1.x.toFixed(1)}" cy="${sp1.y.toFixed(1)}" r="14" fill="#1e293b" stroke="${cutStroke}" stroke-width="2"/>
+          <line x1="${(sp1.x - 14).toFixed(1)}" y1="${sp1.y.toFixed(1)}" x2="${(sp1.x + 14).toFixed(1)}" y2="${sp1.y.toFixed(1)}" stroke="${cutStroke}" stroke-width="1"/>
+          <text x="${sp1.x.toFixed(1)}" y="${(sp1.y - 3).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" font-weight="bold" fill="#f8fafc">${escapeHtml(lbl)}</text>
+          <text x="${sp1.x.toFixed(1)}" y="${(sp1.y + 9).toFixed(1)}" text-anchor="middle" font-size="7.5" font-family="var(--font-mono)" fill="#94a3b8">${escapeHtml(sRef)}</text>
+          <line x1="${sp2.x.toFixed(1)}" y1="${sp2.y.toFixed(1)}" x2="${(sp2.x + ax).toFixed(1)}" y2="${(sp2.y + ay).toFixed(1)}" stroke="${cutStroke}" stroke-width="2"/>
+          <circle cx="${sp2.x.toFixed(1)}" cy="${sp2.y.toFixed(1)}" r="14" fill="#1e293b" stroke="${cutStroke}" stroke-width="2"/>
+          <line x1="${(sp2.x - 14).toFixed(1)}" y1="${sp2.y.toFixed(1)}" x2="${(sp2.x + 14).toFixed(1)}" y2="${sp2.y.toFixed(1)}" stroke="${cutStroke}" stroke-width="1"/>
+          <text x="${sp2.x.toFixed(1)}" y="${(sp2.y - 3).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" font-weight="bold" fill="#f8fafc">${escapeHtml(lbl)}</text>
+          <text x="${sp2.x.toFixed(1)}" y="${(sp2.y + 9).toFixed(1)}" text-anchor="middle" font-size="7.5" font-family="var(--font-mono)" fill="#94a3b8">${escapeHtml(sRef)}</text>
+        </g>`;
+      }
       if (e.kind === 'grid_line' && e.p1 && e.p2) {
         const sp1 = worldToSvg(transform, e.p1.x, e.p1.y);
         const sp2 = worldToSvg(transform, e.p2.x, e.p2.y);
@@ -2136,6 +2361,16 @@ export function createPlanView(context) {
             <line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="var(--accent-primary, #4989D9)" stroke-width="1.8" stroke-dasharray="8 4 2 4"/>
             <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="12" fill="var(--bg-surface-elevated, #1e293b)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.5"/>
             <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="12" fill="var(--bg-surface-elevated, #1e293b)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.5"/>
+          </g>
+        `;
+      } else if (dragState.tool === 'section_cut') {
+        const a = worldToSvg(transform, dragState.start.x, dragState.start.y);
+        const b = worldToSvg(transform, dragState.current.x, dragState.current.y);
+        dragMarkup = `
+          <g class="drag-preview-section" pointer-events="none">
+            <line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="#f87171" stroke-width="2" stroke-dasharray="12 4 3 4"/>
+            <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="12" fill="var(--bg-surface-elevated, #1e293b)" stroke="#f87171" stroke-width="1.8"/>
+            <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="12" fill="var(--bg-surface-elevated, #1e293b)" stroke="#f87171" stroke-width="1.8"/>
           </g>
         `;
       } else {
@@ -2287,6 +2522,7 @@ export function createPlanView(context) {
       else if (e.kind === 'north_arrow') desc = `North · ${Math.round(e.rotation || 0)}°`;
       else if (e.kind === 'column') desc = `Column · ${e.profile || 'rect'} · ${num(e.width)}×${num(e.depth)} m`;
       else if (e.kind === 'grid_line') desc = `Grid · Axis [${escapeHtml(e.name || '')}]`;
+      else if (e.kind === 'section_cut') desc = `Section · [${escapeHtml(e.label || 'A')}-${escapeHtml(e.label || 'A')}] · ${escapeHtml(e.sheetRef || 'A-201')}`;
       else if (e.kind === 'text') desc = `"${escapeHtml(e.text || e.name)}"`;
       else desc = e.kind;
 
@@ -3746,6 +3982,39 @@ export function createPlanView(context) {
         const v = parseFloat(e.target.value);
         if (!isNaN(v) && v > 0) { selected.bubbleRadius = v; render(); }
       });
+    } else if (selected.kind === 'section_cut') {
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Section Cut Callout</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Cut Label</span><input type="text" id="prop-section-label" class="text-input" value="${escapeHtml(selected.label || 'A')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Sheet Ref</span><input type="text" id="prop-section-sheet" class="text-input" value="${escapeHtml(selected.sheetRef || 'A-201')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">View Direction</span>
+            <select id="prop-section-dir" class="calc-select" style="width: 140px; height: 24px; padding: 0 4px; font-size: 0.74rem;">
+              <option value="forward" ${selected.direction === 'forward' ? 'selected' : ''}>Forward</option>
+              <option value="reverse" ${selected.direction === 'reverse' ? 'selected' : ''}>Reverse</option>
+            </select>
+          </div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Section Cut</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-section-label')?.addEventListener('change', (e) => {
+        selected.label = e.target.value.trim() || 'A';
+        selected.name = `Section ${selected.label}-${selected.label}`;
+        render();
+        renderEntityList();
+      });
+      dom.planPropContent.querySelector('#prop-section-sheet')?.addEventListener('change', (e) => {
+        selected.sheetRef = e.target.value.trim() || 'A-201';
+        render();
+      });
+      dom.planPropContent.querySelector('#prop-section-dir')?.addEventListener('change', (e) => {
+        selected.direction = e.target.value;
+        render();
+      });
     }
 
     dom.planPropContent.querySelector('#btn-prop-delete')?.addEventListener('click', () => {
@@ -4046,7 +4315,7 @@ export function createPlanView(context) {
       render();
       renderContextualToolbar();
       return;
-    } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'leader' || tool === 'measure' || tool === 'grid') {
+    } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'leader' || tool === 'measure' || tool === 'grid' || tool === 'section_cut') {
       if (snapOn) {
         const snapRes = findSnapPoint(world, visible, { snapDistance: 0.25, snapGrid: true, gridMeters: state.plan.grid });
         if (snapRes.snapped) {
@@ -4368,6 +4637,35 @@ export function createPlanView(context) {
         history.push(cmd);
         state.plan.selectedIds = new Set([gLine.id]);
         showToast(`Placed Grid Line ${gLine.name}`);
+        AudioService.playTick();
+        setTool('select');
+        render();
+        renderEntityList();
+        renderPropertiesInspector();
+      } else if (dragState.tool === 'section_cut') {
+        const dx = Math.abs(end.x - start.x);
+        const dy = Math.abs(end.y - start.y);
+        if (dx < 0.2 && dy < 0.2) {
+          showToast('Section cut line too short', 'warning');
+          dragState = null;
+          render();
+          return;
+        }
+        const existingSections = entities().filter(e => e.kind === 'section_cut');
+        const labels = ['A', 'B', 'C', 'D', 'E', 'F'];
+        const nextLabel = labels[existingSections.length % labels.length];
+        const sCut = createSectionCut({
+          name: `Section ${nextLabel}-${nextLabel}`,
+          label: nextLabel,
+          p1: start,
+          p2: end,
+          sheetRef: `A-20${existingSections.length + 1}`
+        });
+        const cmd = entityAddRemoveCommand(entities(), sCut, 'add section cut');
+        cmd.redo();
+        history.push(cmd);
+        state.plan.selectedIds = new Set([sCut.id]);
+        showToast(`Placed Section Cut ${sCut.label}-${sCut.label}`);
         AudioService.playTick();
         setTool('select');
         render();

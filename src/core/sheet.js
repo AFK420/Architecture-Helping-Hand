@@ -1,5 +1,6 @@
 import { calculateRoomSchedule, calculateFloorTotals } from './zoning-schedule.js';
 import { buildMassing3DModel, generateMassingSVG } from './massing-3d.js';
+import { generateElevationSVG, generateSectionSVG } from './sections-elevations.js';
 
 
 export const SHEET_SIZES = Object.freeze({
@@ -159,6 +160,8 @@ export function computeViewportLayout(sheetConfig, entities = []) {
   let vpCenterX, vpCenterY;
   let vignette3D = null;
   let scheduleTable = null;
+  let elevationViewport = null;
+  let sectionViewport = null;
 
   if (layoutMode === 'plan_3d') {
     // 3D Vignette box in upper right quadrant above title block
@@ -188,6 +191,32 @@ export function computeViewportLayout(sheetConfig, entities = []) {
     const leftRegionW = Math.max(100, tbX - drawAreaX - 10);
     vpCenterX = drawAreaX + leftRegionW / 2;
     vpCenterY = drawAreaY + drawAreaH / 2;
+  } else if (layoutMode === 'plan_elevation') {
+    // Building Elevation viewport in right region above title block
+    const elevH = Math.max(60, tbY - topMargin - 10);
+    elevationViewport = {
+      x: tbX,
+      y: topMargin + 5,
+      width: tbW,
+      height: elevH,
+      title: 'SOUTH ELEVATION'
+    };
+    const leftRegionW = Math.max(100, tbX - drawAreaX - 10);
+    vpCenterX = drawAreaX + leftRegionW / 2;
+    vpCenterY = drawAreaY + drawAreaH / 2;
+  } else if (layoutMode === 'plan_section') {
+    // Building Section viewport in right region above title block
+    const sectH = Math.max(60, tbY - topMargin - 10);
+    sectionViewport = {
+      x: tbX,
+      y: topMargin + 5,
+      width: tbW,
+      height: sectH,
+      title: 'BUILDING SECTION A-A'
+    };
+    const leftRegionW = Math.max(100, tbX - drawAreaX - 10);
+    vpCenterX = drawAreaX + leftRegionW / 2;
+    vpCenterY = drawAreaY + drawAreaH / 2;
   } else {
     // Single viewport centered
     vpCenterX = drawAreaX + drawAreaW / 2;
@@ -200,6 +229,8 @@ export function computeViewportLayout(sheetConfig, entities = []) {
     layoutMode,
     vignette3D,
     scheduleTable,
+    elevationViewport,
+    sectionViewport,
     mmPerMeter,
     scaleRatio,
     planBounds: bounds,
@@ -419,6 +450,55 @@ export function generateSheetSVG(arg1, arg2 = [], renderOptions = {}) {
     </g>`;
   }
 
+  let elevationMarkup = '';
+  if (layout.layoutMode === 'plan_elevation' && layout.elevationViewport) {
+    const ev = layout.elevationViewport;
+    const elevDir = renderOptions.elevationDirection || 'south';
+    const elevSVG = generateElevationSVG(entities, elevDir, { scale: 30 });
+    let vb = '0 0 800 600';
+    const vbMatch = elevSVG.match(/viewBox="([^"]+)"/);
+    if (vbMatch) vb = vbMatch[1];
+    const innerContent = elevSVG
+      .replace(/^<svg[^>]*>/i, '')
+      .replace(/<\/svg>$/i, '');
+
+    elevationMarkup = `
+    <!-- Building Elevation Viewport -->
+    <g class="sheet-elevation-viewport" id="sheet-elevation-viewport">
+      <rect x="${ev.x}" y="${ev.y}" width="${ev.width}" height="${ev.height}" fill="#0f172a" stroke="#0f172a" stroke-width="0.7" />
+      <rect x="${ev.x}" y="${ev.y}" width="${ev.width}" height="7" fill="#0f172a" />
+      <text x="${ev.x + 4}" y="${ev.y + 4.8}" font-family="system-ui, sans-serif" font-size="2.6" font-weight="bold" fill="#ffffff">2  ${ev.title}</text>
+      <text x="${ev.x + ev.width - 4}" y="${ev.y + 4.8}" font-family="system-ui, sans-serif" font-size="2" fill="#94a3b8" text-anchor="end">1:100</text>
+      <svg x="${ev.x + 1}" y="${ev.y + 7.5}" width="${ev.width - 2}" height="${ev.height - 9}" viewBox="${vb}" preserveAspectRatio="xMidYMid meet">
+        ${innerContent}
+      </svg>
+    </g>`;
+  }
+
+  let sectionMarkup = '';
+  if (layout.layoutMode === 'plan_section' && layout.sectionViewport) {
+    const sv = layout.sectionViewport;
+    const sectSVG = generateSectionSVG(entities, renderOptions.sectionCut || {}, { scale: 30 });
+    let vb = '0 0 800 600';
+    const vbMatch = sectSVG.match(/viewBox="([^"]+)"/);
+    if (vbMatch) vb = vbMatch[1];
+    const innerContent = sectSVG
+      .replace(/^<svg[^>]*>/i, '')
+      .replace(/<\/svg>$/i, '');
+
+    sectionMarkup = `
+    <!-- Building Section Viewport -->
+    <g class="sheet-section-viewport" id="sheet-section-viewport">
+      <rect x="${sv.x}" y="${sv.y}" width="${sv.width}" height="${sv.height}" fill="#0f172a" stroke="#0f172a" stroke-width="0.7" />
+      <rect x="${sv.x}" y="${sv.y}" width="${sv.width}" height="7" fill="#0f172a" />
+      <text x="${sv.x + 4}" y="${sv.y + 4.8}" font-family="system-ui, sans-serif" font-size="2.6" font-weight="bold" fill="#ffffff">2  ${sv.title}</text>
+      <text x="${sv.x + sv.width - 4}" y="${sv.y + 4.8}" font-family="system-ui, sans-serif" font-size="2" fill="#94a3b8" text-anchor="end">1:100</text>
+      <svg x="${sv.x + 1}" y="${sv.y + 7.5}" width="${sv.width - 2}" height="${sv.height - 9}" viewBox="${vb}" preserveAspectRatio="xMidYMid meet">
+        ${innerContent}
+      </svg>
+    </g>`;
+  }
+
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${wMm} ${hMm}" width="${wPx}px" height="${hPx}px">
   <!-- Sheet Background (Paper) -->
   <rect x="0" y="0" width="${wMm}" height="${hMm}" fill="#ffffff" />
@@ -437,6 +517,8 @@ export function generateSheetSVG(arg1, arg2 = [], renderOptions = {}) {
   ${vpTitleMarkup}
   ${vignetteMarkup}
   ${scheduleMarkup}
+  ${elevationMarkup}
+  ${sectionMarkup}
 
   <!-- CAD Title Block -->
   <g class="sheet-title-block" id="title-block" transform="translate(${tbX}, ${tbY})">

@@ -943,6 +943,53 @@ export function createNorthArrow({
 }
 
 /**
+ * Factory for a 2D Plan Section Cut Callout entity ('section_cut').
+ * Includes cut line, directional arrows, and section bubble labels referencing sheet numbers.
+ */
+export function createSectionCut({
+  id,
+  name,
+  p1,
+  p2,
+  x1, y1, x2, y2,
+  label = 'A',
+  direction = 'forward',
+  sheetRef = 'A-201',
+  layerId = 'A-SECT',
+  floorId = 'floor-1'
+} = {}) {
+  const pt1 = p1 || { x: x1 ?? 0, y: y1 ?? 5 };
+  const pt2 = p2 || { x: x2 ?? 15, y: y2 ?? 5 };
+
+  requireFiniteNumber(pt1.x, 'sectionCut.p1.x');
+  requireFiniteNumber(pt1.y, 'sectionCut.p1.y');
+  requireFiniteNumber(pt2.x, 'sectionCut.p2.x');
+  requireFiniteNumber(pt2.y, 'sectionCut.p2.y');
+
+  const minX = Math.min(pt1.x, pt2.x);
+  const maxX = Math.max(pt1.x, pt2.x);
+  const minY = Math.min(pt1.y, pt2.y);
+  const maxY = Math.max(pt1.y, pt2.y);
+
+  return {
+    kind: 'section_cut',
+    id: id || generateEntityId('sec'),
+    name: typeof name === 'string' && name ? name : `Section ${label}-${label}`,
+    p1: { x: pt1.x, y: pt1.y },
+    p2: { x: pt2.x, y: pt2.y },
+    x: minX,
+    y: minY,
+    width: Math.max(0.2, maxX - minX),
+    depth: Math.max(0.2, maxY - minY),
+    label: String(label || 'A'),
+    direction: direction === 'reverse' ? 'reverse' : 'forward',
+    sheetRef: String(sheetRef || 'A-201'),
+    layerId,
+    floorId
+  };
+}
+
+/**
  * Automatically inspects a document's entities and generates tags for all
  * un-tagged rooms, doors, and windows.
  * @param {Array<Object>} entities

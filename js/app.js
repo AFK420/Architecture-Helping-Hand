@@ -10403,8 +10403,15 @@ const DEFAULT_CAD_LAYERS = [
   { id: 'A-FURN', name: 'Furniture', kinds: ['furniture'], color: '#8B5CF6', lineweight: 0.18, visible: true, locked: false, printable: true },
   { id: 'A-DIMS', name: 'Dimensions', kinds: ['dimension'], color: '#38BDF8', lineweight: 0.18, visible: true, locked: false, printable: true },
   { id: 'A-ANNO-TEXT', name: 'Text & Notes', kinds: ['text', 'leader'], color: '#E5E7EB', lineweight: 0.18, visible: true, locked: false, printable: true },
-  { id: 'A-ANNO-TAGS', name: 'Tags & Callouts', kinds: ['room_tag', 'door_tag', 'window_tag', 'north_arrow'], color: '#FBBF24', lineweight: 0.18, visible: true, locked: false, printable: true },
+  { id: 'A-ANNO-TAGS', name: 'Tags & Callouts', kinds: ['room_tag', 'door_tag', 'window_tag', 'north_arrow', 'section_cut'], color: '#FBBF24', lineweight: 0.18, visible: true, locked: false, printable: true },
   { id: 'A-GRID', name: 'Grid & Guidelines', kinds: ['grid', 'grid_line', 'column'], color: '#6B7280', lineweight: 0.13, visible: true, locked: false, printable: true }
+];
+
+const EXTENDED_CAD_LAYERS = [
+  ...DEFAULT_CAD_LAYERS,
+  { id: 'A-SECT', name: 'Building Sections', kinds: ['section_cut'], color: '#F87171', lineweight: 0.50, visible: true, locked: false, printable: true },
+  { id: 'A-ELEV', name: 'Building Elevations', kinds: ['elevation'], color: '#60A5FA', lineweight: 0.25, visible: true, locked: false, printable: true },
+  { id: 'A-LEVL', name: 'Level Datums', kinds: ['datum'], color: '#A78BFA', lineweight: 0.18, visible: true, locked: false, printable: true }
 ];
 
 function cloneDefaultLayers() {
@@ -11997,6 +12004,53 @@ function createNorthArrow({
 }
 
 /**
+ * Factory for a 2D Plan Section Cut Callout entity ('section_cut').
+ * Includes cut line, directional arrows, and section bubble labels referencing sheet numbers.
+ */
+function createSectionCut({
+  id,
+  name,
+  p1,
+  p2,
+  x1, y1, x2, y2,
+  label = 'A',
+  direction = 'forward',
+  sheetRef = 'A-201',
+  layerId = 'A-SECT',
+  floorId = 'floor-1'
+} = {}) {
+  const pt1 = p1 || { x: x1 ?? 0, y: y1 ?? 5 };
+  const pt2 = p2 || { x: x2 ?? 15, y: y2 ?? 5 };
+
+  requireFiniteNumber(pt1.x, 'sectionCut.p1.x');
+  requireFiniteNumber(pt1.y, 'sectionCut.p1.y');
+  requireFiniteNumber(pt2.x, 'sectionCut.p2.x');
+  requireFiniteNumber(pt2.y, 'sectionCut.p2.y');
+
+  const minX = Math.min(pt1.x, pt2.x);
+  const maxX = Math.max(pt1.x, pt2.x);
+  const minY = Math.min(pt1.y, pt2.y);
+  const maxY = Math.max(pt1.y, pt2.y);
+
+  return {
+    kind: 'section_cut',
+    id: id || generateEntityId('sec'),
+    name: typeof name === 'string' && name ? name : `Section ${label}-${label}`,
+    p1: { x: pt1.x, y: pt1.y },
+    p2: { x: pt2.x, y: pt2.y },
+    x: minX,
+    y: minY,
+    width: Math.max(0.2, maxX - minX),
+    depth: Math.max(0.2, maxY - minY),
+    label: String(label || 'A'),
+    direction: direction === 'reverse' ? 'reverse' : 'forward',
+    sheetRef: String(sheetRef || 'A-201'),
+    layerId,
+    floorId
+  };
+}
+
+/**
  * Automatically inspects a document's entities and generates tags for all
  * un-tagged rooms, doors, and windows.
  * @param {Array<Object>} entities
@@ -12923,6 +12977,772 @@ ${titleMarkup}${metricsMarkup}  <g class="massing-faces">
 ${polygonsMarkup}
   </g>
 </svg>`;
+}
+
+
+  // =========================================================================
+  // MODULE: SectionsElevations
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Orthographic Sections & Elevations Engine
+ * Zero-dependency architectural projection and section-slicing engine.
+ * Generates orthographic building elevations (North, South, East, West) and
+ * cross-sectional building cuts with architectural pochè, level datums,
+ * ground grade linework, fenestration details, and vertical dimension strings.
+ */
+
+
+
+
+
+
+
+const ELEVATION_DIRECTIONS = Object.freeze({
+  south: { id: 'south', label: 'South Elevation (Front)', axis: 'x', sign: 1, viewDir: [0, 1] },
+  north: { id: 'north', label: 'North Elevation (Rear)', axis: 'x', sign: -1, viewDir: [0, -1] },
+  east: { id: 'east', label: 'East Elevation (Right)', axis: 'y', sign: 1, viewDir: [-1, 0] },
+  west: { id: 'west', label: 'West Elevation (Left)', axis: 'y', sign: -1, viewDir: [1, 0] }
+});
+
+/**
+ * Helper to normalize input into an array of story objects with elevations.
+ */
+function normalizeStories(entitiesOrDocs, defaultStoryHeight = 3.0) {
+  if (!entitiesOrDocs) return [];
+
+  // Case 1: Array of document tabs
+  if (Array.isArray(entitiesOrDocs) && entitiesOrDocs.some(d => d && (d.type === '2d_plan' || d.type === '2d' || Array.isArray(d.entities)))) {
+    const planDocs = entitiesOrDocs.filter(d => d && (d.type === '2d_plan' || d.type === '2d' || (!d.type && Array.isArray(d.entities))));
+    if (planDocs.length > 0) {
+      let currentZ = 0;
+      return planDocs.map((doc, idx) => {
+        const h = typeof doc.storyHeight === 'number' && doc.storyHeight > 0 ? doc.storyHeight : defaultStoryHeight;
+        const story = {
+          name: doc.name || `Level ${idx + 1}`,
+          index: idx,
+          baseElevation: currentZ,
+          height: h,
+          topElevation: currentZ + h,
+          entities: Array.isArray(doc.entities) ? doc.entities : []
+        };
+        currentZ += h;
+        return story;
+      });
+    }
+  }
+
+  // Case 2: Direct array of entities (single story)
+  const list = Array.isArray(entitiesOrDocs)
+    ? entitiesOrDocs
+    : (entitiesOrDocs && Array.isArray(entitiesOrDocs.entities) ? entitiesOrDocs.entities : []);
+
+  return [{
+    name: 'Ground Floor',
+    index: 0,
+    baseElevation: 0,
+    height: defaultStoryHeight,
+    topElevation: defaultStoryHeight,
+    entities: list
+  }];
+}
+
+/**
+ * Calculates project bounding limits in world meters across all stories.
+ */
+function computeBuildingLimits(stories) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let hasEntities = false;
+
+  for (const s of stories) {
+    for (const e of s.entities) {
+      if (!e) continue;
+      if (e.kind === 'wall' && typeof e.x1 === 'number') {
+        minX = Math.min(minX, e.x1, e.x2);
+        minY = Math.min(minY, e.y1, e.y2);
+        maxX = Math.max(maxX, e.x1, e.x2);
+        maxY = Math.max(maxY, e.y1, e.y2);
+        hasEntities = true;
+      } else if (typeof e.x === 'number' && typeof e.y === 'number') {
+        const w = e.width || (e.radius ? e.radius * 2 : 1);
+        const d = e.depth || (e.radius ? e.radius * 2 : 1);
+        minX = Math.min(minX, e.x);
+        minY = Math.min(minY, e.y);
+        maxX = Math.max(maxX, e.x + w);
+        maxY = Math.max(maxY, e.y + d);
+        hasEntities = true;
+      }
+    }
+  }
+
+  if (!hasEntities) {
+    return { minX: 0, minY: 0, maxX: 12, maxY: 10, width: 12, depth: 10 };
+  }
+
+  return {
+    minX, minY, maxX, maxY,
+    width: Math.max(1, maxX - minX),
+    depth: Math.max(1, maxY - minY)
+  };
+}
+
+/**
+ * Maps a 2D world coordinate (x, y) to a horizontal elevation axis U
+ * according to the cardinal elevation direction.
+ */
+function mapWorldToElevationU(x, y, dirKey, limits) {
+  switch (dirKey) {
+    case 'north':
+      // Looking from North towards South (-Y). Invert X so Left is East, Right is West.
+      return limits.maxX - x;
+    case 'east':
+      // Looking from East towards West (-X). Horizontal axis is Y.
+      return y - limits.minY;
+    case 'west':
+      // Looking from West towards East (+X). Invert Y so Left is North, Right is South.
+      return limits.maxY - y;
+    case 'south':
+    default:
+      // Looking from South towards North (+Y). Horizontal axis is X.
+      return x - limits.minX;
+  }
+}
+
+/**
+ * Generates an orthographic Building Elevation model.
+ *
+ * @param {Array<Object>} entitiesOrDocs - Floor plan entities or array of document tabs
+ * @param {'south'|'north'|'east'|'west'} [direction='south'] - Elevation direction
+ * @param {Object} [options]
+ * @param {number} [options.storyHeight=3.0]
+ * @returns {Object} Elevation projection model
+ */
+function generateBuildingElevation(entitiesOrDocs, direction = 'south', options = {}) {
+  const dirKey = (direction in ELEVATION_DIRECTIONS) ? direction : 'south';
+  const defaultStoryH = typeof options.storyHeight === 'number' && options.storyHeight > 0 ? options.storyHeight : 3.0;
+  const stories = normalizeStories(entitiesOrDocs, defaultStoryH);
+  const limits = computeBuildingLimits(stories);
+
+  // Total building height
+  const totalHeight = stories.length > 0 ? stories[stories.length - 1].topElevation : defaultStoryH;
+
+  // Horizontal span along projection axis
+  let elevationSpan = (dirKey === 'south' || dirKey === 'north') ? limits.width : limits.depth;
+  elevationSpan = Math.max(2, elevationSpan);
+
+  const projectedWalls = [];
+  const projectedOpenings = [];
+  const projectedColumns = [];
+  const datums = [];
+
+  // 1. Build Level Datums
+  stories.forEach((s) => {
+    datums.push({
+      name: s.name.toUpperCase(),
+      elevation: s.baseElevation,
+      label: `EL +${s.baseElevation.toFixed(2)}m`,
+      u1: -1.0,
+      u2: elevationSpan + 2.0
+    });
+  });
+  // Top Roof Datum
+  datums.push({
+    name: 'ROOF',
+    elevation: totalHeight,
+    label: `EL +${totalHeight.toFixed(2)}m`,
+    u1: -1.0,
+    u2: elevationSpan + 2.0
+  });
+
+  // 2. Process each story
+  stories.forEach((story) => {
+    const baseZ = story.baseElevation;
+    const wallH = story.height;
+    const entities = story.entities || [];
+
+    const walls = entities.filter(e => e && e.kind === 'wall');
+    const columns = entities.filter(e => e && e.kind === 'column');
+
+    for (const w of walls) {
+      if (typeof w.x1 !== 'number' || typeof w.x2 !== 'number') continue;
+
+      const u1 = mapWorldToElevationU(w.x1, w.y1, dirKey, limits);
+      const u2 = mapWorldToElevationU(w.x2, w.y2, dirKey, limits);
+      const minU = Math.min(u1, u2);
+      const maxU = Math.max(u1, u2);
+      const width = Math.max(0.1, maxU - minU);
+
+      // Determine face orientation visibility
+      // South elevation looks at walls with normal pointing south (dy < 0 or horizontal)
+      const dx = w.x2 - w.x1;
+      const dy = w.y2 - w.y1;
+      const len = Math.hypot(dx, dy);
+      if (len < 0.05) continue;
+
+      projectedWalls.push({
+        id: w.id,
+        wallAssembly: w.assembly || 'standard',
+        u: minU,
+        z: baseZ,
+        width,
+        height: wallH,
+        u1: minU,
+        u2: maxU,
+        z1: baseZ,
+        z2: baseZ + wallH,
+        storyIndex: story.index
+      });
+
+      // Project hosted openings (doors and windows)
+      const openings = wallOpenings(w, entities);
+      for (const op of openings) {
+        const opPos = typeof op.position === 'number' ? op.position : (typeof op.offset === 'number' ? op.offset : 0);
+        const offsetRatio = opPos / len;
+        const opWidth = op.width || 0.9;
+        const opWidthRatio = opWidth / len;
+
+        const opU1 = minU + offsetRatio * width;
+        const opU2 = opU1 + opWidthRatio * width;
+        const opMinU = Math.min(opU1, opU2);
+        const opW = Math.abs(opU2 - opU1);
+
+        if (op.kind === 'door') {
+          const doorH = op.height || 2.1;
+          projectedOpenings.push({
+            id: op.id,
+            kind: 'door',
+            wallId: w.id,
+            u: opMinU,
+            z: baseZ,
+            width: opW,
+            height: doorH,
+            storyIndex: story.index
+          });
+        } else if (op.kind === 'window') {
+          const sillH = op.sill || 0.9;
+          const winH = op.height || 1.2;
+          projectedOpenings.push({
+            id: op.id,
+            kind: 'window',
+            wallId: w.id,
+            u: opMinU,
+            z: baseZ + sillH,
+            width: opW,
+            height: winH,
+            storyIndex: story.index
+          });
+        }
+      }
+    }
+
+    // Project columns
+    for (const c of columns) {
+      if (typeof c.x !== 'number' || typeof c.y !== 'number') continue;
+      const colU = mapWorldToElevationU(c.x, c.y, dirKey, limits);
+      const colW = c.width || (c.radius ? c.radius * 2 : 0.4);
+      projectedColumns.push({
+        id: c.id,
+        name: c.name || 'Col',
+        u: colU - colW / 2,
+        z: baseZ,
+        width: colW,
+        height: wallH,
+        storyIndex: story.index
+      });
+    }
+  });
+
+  // 3. Ground line & Earth Grade
+  const groundLine = {
+    u1: -2.0,
+    u2: elevationSpan + 2.0,
+    z: 0.0,
+    earthDepth: 1.2
+  };
+
+  // 4. Vertical Dimension Strings
+  const dimensions = [];
+  stories.forEach((s) => {
+    dimensions.push({
+      label: `${s.height.toFixed(2)}m`,
+      z1: s.baseElevation,
+      z2: s.topElevation,
+      u: elevationSpan + 0.8
+    });
+  });
+  if (stories.length > 1) {
+    dimensions.push({
+      label: `TOTAL ${totalHeight.toFixed(2)}m`,
+      z1: 0,
+      z2: totalHeight,
+      u: elevationSpan + 1.8
+    });
+  }
+
+  return {
+    direction: dirKey,
+    title: ELEVATION_DIRECTIONS[dirKey].label,
+    limits,
+    span: elevationSpan,
+    totalHeight,
+    stories,
+    walls: projectedWalls,
+    openings: projectedOpenings,
+    columns: projectedColumns,
+    datums,
+    dimensions,
+    groundLine
+  };
+}
+
+/**
+ * Generates an architectural Building Section model along a cut plane line.
+ *
+ * @param {Array<Object>} entitiesOrDocs - Floor plan entities or array of document tabs
+ * @param {Object} [sectionCut] - Section cut parameters or 'section_cut' entity
+ * @param {Object} [options]
+ * @returns {Object} Section cut model with cut pochè, slabs, background projection, and datums
+ */
+function generateBuildingSection(entitiesOrDocs, sectionCut = {}, options = {}) {
+  const defaultStoryH = typeof options.storyHeight === 'number' && options.storyHeight > 0 ? options.storyHeight : 3.0;
+  const slabThickness = typeof options.slabThickness === 'number' && options.slabThickness > 0 ? options.slabThickness : 0.25;
+  const stories = normalizeStories(entitiesOrDocs, defaultStoryH);
+  const limits = computeBuildingLimits(stories);
+  const totalHeight = stories.length > 0 ? stories[stories.length - 1].topElevation : defaultStoryH;
+
+  // Determine section cut line in world coordinates
+  let p1 = { x: limits.minX - 1.0, y: limits.minY + limits.depth / 2 };
+  let p2 = { x: limits.maxX + 1.0, y: limits.minY + limits.depth / 2 };
+  let sectionLabel = 'A';
+
+  if (sectionCut && sectionCut.p1 && sectionCut.p2) {
+    p1 = { x: sectionCut.p1.x, y: sectionCut.p1.y };
+    p2 = { x: sectionCut.p2.x, y: sectionCut.p2.y };
+    if (sectionCut.label) sectionLabel = sectionCut.label;
+  } else if (typeof sectionCut.coord === 'number') {
+    p1 = { x: limits.minX - 1.0, y: sectionCut.coord };
+    p2 = { x: limits.maxX + 1.0, y: sectionCut.coord };
+  }
+
+  const cutVector = { x: p2.x - p1.x, y: p2.y - p1.y };
+  const cutLength = Math.hypot(cutVector.x, cutVector.y) || 1;
+  const cutUnit = { x: cutVector.x / cutLength, y: cutVector.y / cutLength };
+
+  // Function to project world point along cut line axis U
+  function worldToCutU(x, y) {
+    return (x - p1.x) * cutUnit.x + (y - p1.y) * cutUnit.y;
+  }
+
+  const cutWalls = [];
+  const cutSlabs = [];
+  const cutOpenings = [];
+  const backgroundWalls = [];
+  const datums = [];
+
+  // 1. Build Level Datums
+  stories.forEach((s) => {
+    datums.push({
+      name: s.name.toUpperCase(),
+      elevation: s.baseElevation,
+      label: `EL +${s.baseElevation.toFixed(2)}m`,
+      u1: -1.0,
+      u2: cutLength + 1.0
+    });
+  });
+  datums.push({
+    name: 'ROOF SLAB',
+    elevation: totalHeight,
+    label: `EL +${totalHeight.toFixed(2)}m`,
+    u1: -1.0,
+    u2: cutLength + 1.0
+  });
+
+  // 2. Intersect walls on each story with section cut line
+  stories.forEach((story) => {
+    const baseZ = story.baseElevation;
+    const wallH = story.height;
+    const entities = story.entities || [];
+    const walls = entities.filter(e => e && e.kind === 'wall');
+
+    // Structural floor slab for this story spanning cut extent
+    cutSlabs.push({
+      storyIndex: story.index,
+      name: `${story.name} Slab`,
+      u1: 0.5,
+      u2: cutLength - 0.5,
+      z1: baseZ - slabThickness,
+      z2: baseZ,
+      thickness: slabThickness
+    });
+
+    for (const w of walls) {
+      if (typeof w.x1 !== 'number' || typeof w.x2 !== 'number') continue;
+      const wallSeg = { p1: { x: w.x1, y: w.y1 }, p2: { x: w.x2, y: w.y2 } };
+
+      const hit = intersectSegments(p1, p2, wallSeg.p1, wallSeg.p2);
+      const wThick = w.thickness || 0.20;
+
+      if (hit) {
+        // Cut wall slice
+        const hitU = worldToCutU(hit.x, hit.y);
+        const wLen = wallLength(w) || 1;
+        const openings = wallOpenings(w, entities);
+
+        // Check if cut passed directly through an opening
+        const hitOffset = Math.hypot(hit.x - w.x1, hit.y - w.y1);
+        const hitOpening = openings.find(op => {
+          const p = typeof op.position === 'number' ? op.position : (typeof op.offset === 'number' ? op.offset : 0);
+          return hitOffset >= p && hitOffset <= (p + (op.width || 0.9));
+        });
+
+        if (hitOpening) {
+          if (hitOpening.kind === 'door') {
+            const doorH = hitOpening.height || 2.1;
+            // Cut door: open from floor to door height, cut lintel header above
+            cutOpenings.push({
+              id: hitOpening.id,
+              kind: 'door',
+              u: hitU - wThick / 2,
+              z: baseZ,
+              thickness: wThick,
+              height: doorH,
+              storyIndex: story.index
+            });
+            cutWalls.push({
+              id: w.id,
+              isHeader: true,
+              u: hitU - wThick / 2,
+              z: baseZ + doorH,
+              thickness: wThick,
+              height: wallH - doorH,
+              storyIndex: story.index
+            });
+          } else if (hitOpening.kind === 'window') {
+            const sillH = hitOpening.sill || 0.9;
+            const winH = hitOpening.height || 1.2;
+            // Cut window: cut sill below, opening/glazing in middle, cut lintel above
+            cutWalls.push({
+              id: w.id,
+              isSill: true,
+              u: hitU - wThick / 2,
+              z: baseZ,
+              thickness: wThick,
+              height: sillH,
+              storyIndex: story.index
+            });
+            cutOpenings.push({
+              id: hitOpening.id,
+              kind: 'window',
+              u: hitU - wThick / 2,
+              z: baseZ + sillH,
+              thickness: wThick,
+              height: winH,
+              storyIndex: story.index
+            });
+            cutWalls.push({
+              id: w.id,
+              isHeader: true,
+              u: hitU - wThick / 2,
+              z: baseZ + sillH + winH,
+              thickness: wThick,
+              height: wallH - (sillH + winH),
+              storyIndex: story.index
+            });
+          }
+        } else {
+          // Solid wall cut slice (POCHÈ)
+          cutWalls.push({
+            id: w.id,
+            isSolid: true,
+            u: hitU - wThick / 2,
+            z: baseZ,
+            thickness: wThick,
+            height: wallH,
+            storyIndex: story.index
+          });
+        }
+      } else {
+        // Wall is in projection (background elevation)
+        const u1 = worldToCutU(w.x1, w.y1);
+        const u2 = worldToCutU(w.x2, w.y2);
+        const minU = Math.min(u1, u2);
+        const maxU = Math.max(u1, u2);
+        if (maxU >= 0 && minU <= cutLength) {
+          backgroundWalls.push({
+            id: w.id,
+            u: Math.max(0, minU),
+            z: baseZ,
+            width: Math.min(cutLength, maxU) - Math.max(0, minU),
+            height: wallH,
+            storyIndex: story.index
+          });
+        }
+      }
+    }
+  });
+
+  // Top roof slab cap
+  cutSlabs.push({
+    storyIndex: stories.length,
+    name: 'Roof Slab Cap',
+    u1: 0.5,
+    u2: cutLength - 0.5,
+    z1: totalHeight,
+    z2: totalHeight + slabThickness,
+    thickness: slabThickness
+  });
+
+  // 3. Ground grade linework
+  const groundLine = {
+    u1: -1.5,
+    u2: cutLength + 1.5,
+    z: 0.0,
+    earthDepth: 1.2
+  };
+
+  // 4. Vertical Dimensions (clear height, slab, total)
+  const dimensions = [];
+  stories.forEach((s) => {
+    dimensions.push({
+      label: `CLR ${(s.height - slabThickness).toFixed(2)}m`,
+      z1: s.baseElevation,
+      z2: s.baseElevation + s.height - slabThickness,
+      u: cutLength + 0.6
+    });
+  });
+  dimensions.push({
+    label: `TOTAL ${totalHeight.toFixed(2)}m`,
+    z1: 0,
+    z2: totalHeight,
+    u: cutLength + 1.4
+  });
+
+  return {
+    sectionLabel,
+    title: `Section ${sectionLabel}-${sectionLabel}`,
+    p1,
+    p2,
+    cutLength,
+    totalHeight,
+    stories,
+    cutWalls,
+    cutSlabs,
+    cutOpenings,
+    backgroundWalls,
+    datums,
+    dimensions,
+    groundLine
+  };
+}
+
+/**
+ * Generates standalone clean SVG markup for a Building Elevation.
+ */
+function generateElevationSVG(elevationModelOrEntities, direction = 'south', options = {}) {
+  const model = (elevationModelOrEntities && elevationModelOrEntities.walls && elevationModelOrEntities.datums)
+    ? elevationModelOrEntities
+    : generateBuildingElevation(elevationModelOrEntities, direction, options);
+
+  const scale = options.scale || 40; // pixels per meter
+  const marginX = 80;
+  const marginY = 60;
+
+  const contentW = (model.span + 4.0) * scale;
+  const contentH = (model.totalHeight + 3.0) * scale;
+  const svgW = contentW + marginX * 2;
+  const svgH = contentH + marginY * 2;
+
+  // Coordinate mapper: world meters (u, z) to screen pixels (sx, sy)
+  function toSvg(u, z) {
+    const sx = marginX + (u + 2.0) * scale;
+    const sy = svgH - marginY - (z + 1.2) * scale;
+    return { sx, sy };
+  }
+
+  const parts = [];
+  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgW.toFixed(0)} ${svgH.toFixed(0)}" width="100%" height="100%" style="background:#0f172a; font-family:'Segoe UI',system-ui,sans-serif;">`);
+
+  // Defs & Patterns (Earth hatching)
+  parts.push(`
+    <defs>
+      <pattern id="earth-hatch" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <line x1="0" y1="0" x2="0" y2="12" stroke="#475569" stroke-width="1.2" opacity="0.6"/>
+      </pattern>
+    </defs>
+  `);
+
+  // 1. Earth / Grade Hatch
+  const gP1 = toSvg(model.groundLine.u1, 0);
+  const gP2 = toSvg(model.groundLine.u2, 0);
+  const earthP = toSvg(model.groundLine.u1, -model.groundLine.earthDepth);
+  const earthH = Math.abs(earthP.sy - gP1.sy);
+  parts.push(`<rect x="${gP1.sx.toFixed(1)}" y="${gP1.sy.toFixed(1)}" width="${(gP2.sx - gP1.sx).toFixed(1)}" height="${earthH.toFixed(1)}" fill="url(#earth-hatch)"/>`);
+  parts.push(`<line x1="${gP1.sx.toFixed(1)}" y1="${gP1.sy.toFixed(1)}" x2="${gP2.sx.toFixed(1)}" y2="${gP2.sy.toFixed(1)}" stroke="#94a3b8" stroke-width="2.5"/>`);
+
+  // 2. Projected Exterior Walls
+  for (const w of model.walls) {
+    const pTopLeft = toSvg(w.u, w.z + w.height);
+    const wPx = w.width * scale;
+    const hPx = w.height * scale;
+    parts.push(`<rect x="${pTopLeft.sx.toFixed(1)}" y="${pTopLeft.sy.toFixed(1)}" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}" fill="#1e293b" stroke="#38bdf8" stroke-width="1.8"/>`);
+  }
+
+  // 3. Projected Columns
+  for (const c of model.columns) {
+    const pTop = toSvg(c.u, c.z + c.height);
+    const colW = c.width * scale;
+    const colH = c.height * scale;
+    parts.push(`<rect x="${pTop.sx.toFixed(1)}" y="${pTop.sy.toFixed(1)}" width="${colW.toFixed(1)}" height="${colH.toFixed(1)}" fill="#334155" stroke="#94a3b8" stroke-width="1.4"/>`);
+  }
+
+  // 4. Projected Openings (Doors and Windows)
+  for (const op of model.openings) {
+    const pTop = toSvg(op.u, op.z + op.height);
+    const opW = op.width * scale;
+    const opH = op.height * scale;
+
+    if (op.kind === 'door') {
+      // Door frame & panel
+      parts.push(`<rect x="${pTop.sx.toFixed(1)}" y="${pTop.sy.toFixed(1)}" width="${opW.toFixed(1)}" height="${opH.toFixed(1)}" fill="#78350f" stroke="#fbbf24" stroke-width="1.5"/>`);
+      parts.push(`<circle cx="${(pTop.sx + opW * 0.85).toFixed(1)}" cy="${(pTop.sy + opH * 0.5).toFixed(1)}" r="2" fill="#fbbf24"/>`);
+    } else if (op.kind === 'window') {
+      // Window frame & tinted glass
+      parts.push(`<rect x="${pTop.sx.toFixed(1)}" y="${pTop.sy.toFixed(1)}" width="${opW.toFixed(1)}" height="${opH.toFixed(1)}" fill="#0369a1" fill-opacity="0.45" stroke="#38bdf8" stroke-width="1.5"/>`);
+      // Vertical mullion
+      if (opW > 30) {
+        parts.push(`<line x1="${(pTop.sx + opW / 2).toFixed(1)}" y1="${pTop.sy.toFixed(1)}" x2="${(pTop.sx + opW / 2).toFixed(1)}" y2="${(pTop.sy + opH).toFixed(1)}" stroke="#38bdf8" stroke-width="1"/>`);
+      }
+    }
+  }
+
+  // 5. Level Datums
+  for (const d of model.datums) {
+    const pt1 = toSvg(d.u1, d.elevation);
+    const pt2 = toSvg(d.u2, d.elevation);
+    // Datum line
+    parts.push(`<line x1="${pt1.sx.toFixed(1)}" y1="${pt1.sy.toFixed(1)}" x2="${pt2.sx.toFixed(1)}" y2="${pt2.sy.toFixed(1)}" stroke="#a855f7" stroke-width="1" stroke-dasharray="8 4 2 4" opacity="0.75"/>`);
+    // Elevation target bubble
+    const targetX = pt2.sx + 16;
+    const targetY = pt2.sy;
+    parts.push(`<circle cx="${targetX.toFixed(1)}" cy="${targetY.toFixed(1)}" r="8" fill="#1e1b4b" stroke="#a855f7" stroke-width="1.5"/>`);
+    parts.push(`<line x1="${(targetX - 8).toFixed(1)}" y1="${targetY.toFixed(1)}" x2="${(targetX + 8).toFixed(1)}" y2="${targetY.toFixed(1)}" stroke="#a855f7" stroke-width="1"/>`);
+    parts.push(`<line x1="${targetX.toFixed(1)}" y1="${(targetY - 8).toFixed(1)}" x2="${targetX.toFixed(1)}" y2="${(targetY + 8).toFixed(1)}" stroke="#a855f7" stroke-width="1"/>`);
+    // Text label
+    parts.push(`<text x="${(targetX + 14).toFixed(1)}" y="${(targetY - 2).toFixed(1)}" fill="#e2e8f0" font-size="11" font-weight="700">${d.name}</text>`);
+    parts.push(`<text x="${(targetX + 14).toFixed(1)}" y="${(targetY + 11).toFixed(1)}" fill="#c084fc" font-size="10" font-family="monospace">${d.label}</text>`);
+  }
+
+  // 6. Title and Drawing Label
+  parts.push(`<text x="${marginX}" y="36" fill="#f8fafc" font-size="16" font-weight="700" letter-spacing="1">${model.title.toUpperCase()}</text>`);
+  parts.push(`<text x="${marginX}" y="52" fill="#94a3b8" font-size="11">SCALE 1:${(1000 / scale).toFixed(0)} · ALL LEVELS ORTHOGRAPHIC PROJECTION</text>`);
+
+  parts.push(`</svg>`);
+  return parts.join('\n');
+}
+
+/**
+ * Generates standalone clean SVG markup for a Building Section Cut.
+ */
+function generateSectionSVG(sectionModelOrEntities, sectionCut, options = {}) {
+  const model = (sectionModelOrEntities && sectionModelOrEntities.cutWalls && sectionModelOrEntities.cutSlabs)
+    ? sectionModelOrEntities
+    : generateBuildingSection(sectionModelOrEntities, sectionCut, options);
+
+  const scale = options.scale || 40;
+  const marginX = 80;
+  const marginY = 60;
+
+  const contentW = (model.cutLength + 4.0) * scale;
+  const contentH = (model.totalHeight + 3.0) * scale;
+  const svgW = contentW + marginX * 2;
+  const svgH = contentH + marginY * 2;
+
+  function toSvg(u, z) {
+    const sx = marginX + (u + 1.5) * scale;
+    const sy = svgH - marginY - (z + 1.2) * scale;
+    return { sx, sy };
+  }
+
+  const parts = [];
+  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgW.toFixed(0)} ${svgH.toFixed(0)}" width="100%" height="100%" style="background:#0f172a; font-family:'Segoe UI',system-ui,sans-serif;">`);
+
+  // Defs & Pochè Pattern
+  parts.push(`
+    <defs>
+      <pattern id="poche-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <line x1="0" y1="0" x2="0" y2="8" stroke="#f87171" stroke-width="1.2" opacity="0.5"/>
+      </pattern>
+      <pattern id="concrete-slab-hatch" width="10" height="10" patternUnits="userSpaceOnUse">
+        <line x1="0" y1="0" x2="10" y2="10" stroke="#94a3b8" stroke-width="0.8" opacity="0.3"/>
+        <line x1="10" y1="0" x2="0" y2="10" stroke="#94a3b8" stroke-width="0.8" opacity="0.3"/>
+      </pattern>
+    </defs>
+  `);
+
+  // 1. Earth & Grade
+  const gP1 = toSvg(model.groundLine.u1, 0);
+  const gP2 = toSvg(model.groundLine.u2, 0);
+  parts.push(`<line x1="${gP1.sx.toFixed(1)}" y1="${gP1.sy.toFixed(1)}" x2="${gP2.sx.toFixed(1)}" y2="${gP2.sy.toFixed(1)}" stroke="#94a3b8" stroke-width="2.5"/>`);
+
+  // 2. Background Projection Walls
+  for (const bw of model.backgroundWalls) {
+    const pTop = toSvg(bw.u, bw.z + bw.height);
+    const wPx = bw.width * scale;
+    const hPx = bw.height * scale;
+    parts.push(`<rect x="${pTop.sx.toFixed(1)}" y="${pTop.sy.toFixed(1)}" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}" fill="#1e293b" fill-opacity="0.4" stroke="#475569" stroke-width="1" stroke-dasharray="4 2"/>`);
+  }
+
+  // 3. Cut Slabs (Structural Concrete Floor Slabs)
+  for (const sl of model.cutSlabs) {
+    const pTop = toSvg(sl.u1, sl.z2);
+    const wPx = (sl.u2 - sl.u1) * scale;
+    const hPx = (sl.z2 - sl.z1) * scale;
+    parts.push(`<rect x="${pTop.sx.toFixed(1)}" y="${pTop.sy.toFixed(1)}" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}" fill="#334155" stroke="#cbd5e1" stroke-width="1.8"/>`);
+    parts.push(`<rect x="${pTop.sx.toFixed(1)}" y="${pTop.sy.toFixed(1)}" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}" fill="url(#concrete-slab-hatch)"/>`);
+  }
+
+  // 4. Cut Walls (POCHÈ)
+  for (const cw of model.cutWalls) {
+    const pTop = toSvg(cw.u, cw.z + cw.height);
+    const wPx = cw.thickness * scale;
+    const hPx = cw.height * scale;
+    // Heavy Pochè Fill
+    parts.push(`<rect x="${pTop.sx.toFixed(1)}" y="${pTop.sy.toFixed(1)}" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}" fill="#ef4444" fill-opacity="0.25" stroke="#f87171" stroke-width="2.2"/>`);
+    parts.push(`<rect x="${pTop.sx.toFixed(1)}" y="${pTop.sy.toFixed(1)}" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}" fill="url(#poche-hatch)"/>`);
+  }
+
+  // 5. Cut Openings
+  for (const co of model.cutOpenings) {
+    const pTop = toSvg(co.u, co.z + co.height);
+    const wPx = co.thickness * scale;
+    const hPx = co.height * scale;
+    if (co.kind === 'window') {
+      // Cut double-glazing slice
+      parts.push(`<rect x="${pTop.sx.toFixed(1)}" y="${pTop.sy.toFixed(1)}" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}" fill="#0284c7" fill-opacity="0.3" stroke="#38bdf8" stroke-width="1.2"/>`);
+      parts.push(`<line x1="${(pTop.sx + wPx / 2).toFixed(1)}" y1="${pTop.sy.toFixed(1)}" x2="${(pTop.sx + wPx / 2).toFixed(1)}" y2="${(pTop.sy + hPx).toFixed(1)}" stroke="#38bdf8" stroke-width="1.5"/>`);
+    }
+  }
+
+  // 6. Level Datums
+  for (const d of model.datums) {
+    const pt1 = toSvg(d.u1, d.elevation);
+    const pt2 = toSvg(d.u2, d.elevation);
+    parts.push(`<line x1="${pt1.sx.toFixed(1)}" y1="${pt1.sy.toFixed(1)}" x2="${pt2.sx.toFixed(1)}" y2="${pt2.sy.toFixed(1)}" stroke="#a855f7" stroke-width="1" stroke-dasharray="8 4 2 4" opacity="0.75"/>`);
+    const targetX = pt2.sx + 16;
+    const targetY = pt2.sy;
+    parts.push(`<circle cx="${targetX.toFixed(1)}" cy="${targetY.toFixed(1)}" r="8" fill="#1e1b4b" stroke="#a855f7" stroke-width="1.5"/>`);
+    parts.push(`<line x1="${(targetX - 8).toFixed(1)}" y1="${targetY.toFixed(1)}" x2="${(targetX + 8).toFixed(1)}" y2="${targetY.toFixed(1)}" stroke="#a855f7" stroke-width="1"/>`);
+    parts.push(`<line x1="${targetX.toFixed(1)}" y1="${(targetY - 8).toFixed(1)}" x2="${targetX.toFixed(1)}" y2="${(targetY + 8).toFixed(1)}" stroke="#a855f7" stroke-width="1"/>`);
+    parts.push(`<text x="${(targetX + 14).toFixed(1)}" y="${(targetY - 2).toFixed(1)}" fill="#e2e8f0" font-size="11" font-weight="700">${d.name}</text>`);
+    parts.push(`<text x="${(targetX + 14).toFixed(1)}" y="${(targetY + 11).toFixed(1)}" fill="#c084fc" font-size="10" font-family="monospace">${d.label}</text>`);
+  }
+
+  // 7. Title & Metadata
+  parts.push(`<text x="${marginX}" y="36" fill="#f8fafc" font-size="16" font-weight="700" letter-spacing="1">${model.title.toUpperCase()}</text>`);
+  parts.push(`<text x="${marginX}" y="52" fill="#94a3b8" font-size="11">SCALE 1:${(1000 / scale).toFixed(0)} · ARCHITECTURAL POCHÈ SECTION</text>`);
+
+  parts.push(`</svg>`);
+  return parts.join('\n');
 }
 
 
@@ -13901,6 +14721,7 @@ function generatePlanSVG(geometry, options = {}) {
 
 
 
+
 const SHEET_SIZES = Object.freeze({
   A4: { widthMm: 297, heightMm: 210, name: 'ISO A4 (297 × 210 mm)' },
   A3: { widthMm: 420, heightMm: 297, name: 'ISO A3 (420 × 297 mm)' },
@@ -14058,6 +14879,8 @@ function computeViewportLayout(sheetConfig, entities = []) {
   let vpCenterX, vpCenterY;
   let vignette3D = null;
   let scheduleTable = null;
+  let elevationViewport = null;
+  let sectionViewport = null;
 
   if (layoutMode === 'plan_3d') {
     // 3D Vignette box in upper right quadrant above title block
@@ -14087,6 +14910,32 @@ function computeViewportLayout(sheetConfig, entities = []) {
     const leftRegionW = Math.max(100, tbX - drawAreaX - 10);
     vpCenterX = drawAreaX + leftRegionW / 2;
     vpCenterY = drawAreaY + drawAreaH / 2;
+  } else if (layoutMode === 'plan_elevation') {
+    // Building Elevation viewport in right region above title block
+    const elevH = Math.max(60, tbY - topMargin - 10);
+    elevationViewport = {
+      x: tbX,
+      y: topMargin + 5,
+      width: tbW,
+      height: elevH,
+      title: 'SOUTH ELEVATION'
+    };
+    const leftRegionW = Math.max(100, tbX - drawAreaX - 10);
+    vpCenterX = drawAreaX + leftRegionW / 2;
+    vpCenterY = drawAreaY + drawAreaH / 2;
+  } else if (layoutMode === 'plan_section') {
+    // Building Section viewport in right region above title block
+    const sectH = Math.max(60, tbY - topMargin - 10);
+    sectionViewport = {
+      x: tbX,
+      y: topMargin + 5,
+      width: tbW,
+      height: sectH,
+      title: 'BUILDING SECTION A-A'
+    };
+    const leftRegionW = Math.max(100, tbX - drawAreaX - 10);
+    vpCenterX = drawAreaX + leftRegionW / 2;
+    vpCenterY = drawAreaY + drawAreaH / 2;
   } else {
     // Single viewport centered
     vpCenterX = drawAreaX + drawAreaW / 2;
@@ -14099,6 +14948,8 @@ function computeViewportLayout(sheetConfig, entities = []) {
     layoutMode,
     vignette3D,
     scheduleTable,
+    elevationViewport,
+    sectionViewport,
     mmPerMeter,
     scaleRatio,
     planBounds: bounds,
@@ -14318,6 +15169,55 @@ function generateSheetSVG(arg1, arg2 = [], renderOptions = {}) {
     </g>`;
   }
 
+  let elevationMarkup = '';
+  if (layout.layoutMode === 'plan_elevation' && layout.elevationViewport) {
+    const ev = layout.elevationViewport;
+    const elevDir = renderOptions.elevationDirection || 'south';
+    const elevSVG = generateElevationSVG(entities, elevDir, { scale: 30 });
+    let vb = '0 0 800 600';
+    const vbMatch = elevSVG.match(/viewBox="([^"]+)"/);
+    if (vbMatch) vb = vbMatch[1];
+    const innerContent = elevSVG
+      .replace(/^<svg[^>]*>/i, '')
+      .replace(/<\/svg>$/i, '');
+
+    elevationMarkup = `
+    <!-- Building Elevation Viewport -->
+    <g class="sheet-elevation-viewport" id="sheet-elevation-viewport">
+      <rect x="${ev.x}" y="${ev.y}" width="${ev.width}" height="${ev.height}" fill="#0f172a" stroke="#0f172a" stroke-width="0.7" />
+      <rect x="${ev.x}" y="${ev.y}" width="${ev.width}" height="7" fill="#0f172a" />
+      <text x="${ev.x + 4}" y="${ev.y + 4.8}" font-family="system-ui, sans-serif" font-size="2.6" font-weight="bold" fill="#ffffff">2  ${ev.title}</text>
+      <text x="${ev.x + ev.width - 4}" y="${ev.y + 4.8}" font-family="system-ui, sans-serif" font-size="2" fill="#94a3b8" text-anchor="end">1:100</text>
+      <svg x="${ev.x + 1}" y="${ev.y + 7.5}" width="${ev.width - 2}" height="${ev.height - 9}" viewBox="${vb}" preserveAspectRatio="xMidYMid meet">
+        ${innerContent}
+      </svg>
+    </g>`;
+  }
+
+  let sectionMarkup = '';
+  if (layout.layoutMode === 'plan_section' && layout.sectionViewport) {
+    const sv = layout.sectionViewport;
+    const sectSVG = generateSectionSVG(entities, renderOptions.sectionCut || {}, { scale: 30 });
+    let vb = '0 0 800 600';
+    const vbMatch = sectSVG.match(/viewBox="([^"]+)"/);
+    if (vbMatch) vb = vbMatch[1];
+    const innerContent = sectSVG
+      .replace(/^<svg[^>]*>/i, '')
+      .replace(/<\/svg>$/i, '');
+
+    sectionMarkup = `
+    <!-- Building Section Viewport -->
+    <g class="sheet-section-viewport" id="sheet-section-viewport">
+      <rect x="${sv.x}" y="${sv.y}" width="${sv.width}" height="${sv.height}" fill="#0f172a" stroke="#0f172a" stroke-width="0.7" />
+      <rect x="${sv.x}" y="${sv.y}" width="${sv.width}" height="7" fill="#0f172a" />
+      <text x="${sv.x + 4}" y="${sv.y + 4.8}" font-family="system-ui, sans-serif" font-size="2.6" font-weight="bold" fill="#ffffff">2  ${sv.title}</text>
+      <text x="${sv.x + sv.width - 4}" y="${sv.y + 4.8}" font-family="system-ui, sans-serif" font-size="2" fill="#94a3b8" text-anchor="end">1:100</text>
+      <svg x="${sv.x + 1}" y="${sv.y + 7.5}" width="${sv.width - 2}" height="${sv.height - 9}" viewBox="${vb}" preserveAspectRatio="xMidYMid meet">
+        ${innerContent}
+      </svg>
+    </g>`;
+  }
+
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${wMm} ${hMm}" width="${wPx}px" height="${hPx}px">
   <!-- Sheet Background (Paper) -->
   <rect x="0" y="0" width="${wMm}" height="${hMm}" fill="#ffffff" />
@@ -14336,6 +15236,8 @@ function generateSheetSVG(arg1, arg2 = [], renderOptions = {}) {
   ${vpTitleMarkup}
   ${vignetteMarkup}
   ${scheduleMarkup}
+  ${elevationMarkup}
+  ${sectionMarkup}
 
   <!-- CAD Title Block -->
   <g class="sheet-title-block" id="title-block" transform="translate(${tbX}, ${tbY})">
@@ -27957,6 +28859,7 @@ function createProjectsView(context) {
 
 
 
+
 const PLAN_STATE_KEY = 'archiscale_plan_prefs'; // user preferences only
 
 function createPlanView(context) {
@@ -28006,7 +28909,7 @@ function createPlanView(context) {
       initDocuments();
     }
     const doc = state.plan.documents.find(d => d.id === state.plan.activeDocId) || state.plan.documents[0];
-    if (doc && doc.type !== '3d_massing' && doc.type !== 'sheet') {
+    if (doc && doc.type !== '3d_massing' && doc.type !== 'sheet' && doc.type !== 'elevation' && doc.type !== 'section') {
       normalizeDocumentLayers(doc);
     }
     return doc;
@@ -28054,6 +28957,36 @@ function createPlanView(context) {
         type: '3d_massing',
         camera: { azimuth: 45, elevation: 35.264, zoom: 32, panX: svg.width / 2, panY: svg.height / 2 + 30 },
         massingOptions: { wallHeight: 3.0, doorHeight: 2.1, windowSill: 0.9, windowHeight: 1.2, slabThickness: 0.2, wireframe: false }
+      };
+    } else if (type === 'elevation') {
+      const count = state.plan.documents.filter(d => d.type === 'elevation').length + 1;
+      const dirs = ['south', 'north', 'east', 'west'];
+      const dir = dirs[(count - 1) % dirs.length];
+      const dirLabels = { south: 'South Elevation', north: 'North Elevation', east: 'East Elevation', west: 'West Elevation' };
+      const docName = (typeof name === 'string' && name.trim())
+        ? name.trim()
+        : dirLabels[dir];
+      newDoc = {
+        id: docId,
+        name: docName,
+        type: 'elevation',
+        elevationDirection: dir,
+        multiStory: true
+      };
+    } else if (type === 'section') {
+      const count = state.plan.documents.filter(d => d.type === 'section').length + 1;
+      const labels = ['A', 'B', 'C', 'D'];
+      const lbl = labels[(count - 1) % labels.length];
+      const docName = (typeof name === 'string' && name.trim())
+        ? name.trim()
+        : `Section ${lbl}-${lbl}`;
+      newDoc = {
+        id: docId,
+        name: docName,
+        type: 'section',
+        sectionCut: { label: lbl, direction: 'forward' },
+        multiStory: true,
+        poche: true
       };
     } else if (type === 'sheet') {
       const count = state.plan.documents.filter(d => d.type === 'sheet').length + 1;
@@ -28125,7 +29058,7 @@ function createPlanView(context) {
       tab.className = `plan-doc-tab ${isActive ? 'active' : ''}`;
       tab.dataset.docId = doc.id;
 
-      const typeIcon = doc.type === '3d_massing' ? '🏢 ' : (doc.type === 'sheet' ? '📄 ' : '📐 ');
+      const typeIcon = doc.type === '3d_massing' ? '🏢 ' : (doc.type === 'sheet' ? '📄 ' : (doc.type === 'elevation' ? '🏛️ ' : (doc.type === 'section' ? '✂️ ' : '📐 ')));
       const titleSpan = document.createElement('span');
       titleSpan.className = 'plan-doc-tab-title';
       titleSpan.textContent = `${typeIcon}${doc.name}`;
@@ -29299,6 +30232,8 @@ function createPlanView(context) {
               <option value="single" ${doc.sheetConfig.layoutMode === 'single' ? 'selected' : ''}>Full Plan</option>
               <option value="plan_3d" ${doc.sheetConfig.layoutMode === 'plan_3d' ? 'selected' : ''}>Plan + 3D Axo</option>
               <option value="plan_schedule" ${doc.sheetConfig.layoutMode === 'plan_schedule' ? 'selected' : ''}>Plan + Schedule</option>
+              <option value="plan_elevation" ${doc.sheetConfig.layoutMode === 'plan_elevation' ? 'selected' : ''}>Plan + Elevation</option>
+              <option value="plan_section" ${doc.sheetConfig.layoutMode === 'plan_section' ? 'selected' : ''}>Plan + Section</option>
             </select>
             <select id="sheet-size-select" class="calc-select" style="height: 24px; padding: 0 4px; font-size: 0.7rem; width: 85px;">
               <option value="A4" ${doc.sheetConfig.size === 'A4' ? 'selected' : ''}>A4</option>
@@ -29380,6 +30315,154 @@ function createPlanView(context) {
     if (dom.planStatusBadge) dom.planStatusBadge.textContent = `${doc.sheetConfig.size} · 1:${doc.sheetConfig.viewport.scaleRatio || 100} · ${doc.sheetConfig.layoutMode || 'single'}`;
   }
 
+  function renderElevationView(doc) {
+    const dir = doc.elevationDirection || 'south';
+    const planDocs = state.plan.documents.filter(d => d.type === '2d_plan' || d.type === '2d' || !d.type);
+    const source = doc.multiStory !== false ? planDocs : (planDocs[0] ? planDocs[0].entities : []);
+
+    const model = generateBuildingElevation(source, dir);
+    const elevSvg = generateElevationSVG(model, dir, { scale: 35 });
+
+    const innerMatch = elevSvg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i);
+    const vbMatch = elevSvg.match(/viewBox="([^"]+)"/i);
+    const innerContent = innerMatch ? innerMatch[1] : '';
+    const viewBox = vbMatch ? vbMatch[1] : `0 0 ${svg.width} ${svg.height}`;
+
+    dom.planSvg.setAttribute('viewBox', viewBox);
+    dom.planSvg.innerHTML = innerContent;
+
+    const ctxBar = dom.planContextualToolbar || document.getElementById('plan-contextual-toolbar');
+    if (ctxBar) {
+      ctxBar.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span class="context-tag-badge">BUILDING ELEVATION</span>
+            <div style="display: flex; gap: 4px;">
+              <button type="button" class="result-action-btn ${dir === 'south' ? 'primary' : ''}" data-dir="south" style="font-size: 0.68rem; padding: 2px 6px;">South (Front)</button>
+              <button type="button" class="result-action-btn ${dir === 'north' ? 'primary' : ''}" data-dir="north" style="font-size: 0.68rem; padding: 2px 6px;">North (Rear)</button>
+              <button type="button" class="result-action-btn ${dir === 'east' ? 'primary' : ''}" data-dir="east" style="font-size: 0.68rem; padding: 2px 6px;">East (Right)</button>
+              <button type="button" class="result-action-btn ${dir === 'west' ? 'primary' : ''}" data-dir="west" style="font-size: 0.68rem; padding: 2px 6px;">West (Left)</button>
+            </div>
+            <button type="button" id="btn-elev-multistory" class="result-action-btn ${doc.multiStory !== false ? 'active' : ''}" style="font-size: 0.68rem; padding: 2px 6px;">${doc.multiStory !== false ? '🏢 Stack All Stories' : '📄 Single Floor'}</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" id="btn-elev-export" class="result-action-btn primary" style="font-size: 0.68rem; padding: 2px 8px;">💾 Export Elevation SVG</button>
+          </div>
+        </div>
+      `;
+
+      ctxBar.querySelectorAll('button[data-dir]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          doc.elevationDirection = btn.dataset.dir;
+          const dirNames = { south: 'South Elevation', north: 'North Elevation', east: 'East Elevation', west: 'West Elevation' };
+          doc.name = dirNames[doc.elevationDirection] || 'Building Elevation';
+          renderTabs();
+          render();
+          AudioService.playTick();
+        });
+      });
+
+      ctxBar.querySelector('#btn-elev-multistory')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        doc.multiStory = !doc.multiStory;
+        render();
+        AudioService.playTick();
+      });
+
+      ctxBar.querySelector('#btn-elev-export')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const blob = new Blob([elevSvg], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${(doc.name || 'elevation').toLowerCase().replace(/\s+/g, '-')}.svg`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`Exported ${doc.name} SVG`);
+        AudioService.playSuccess();
+      });
+    }
+
+    if (dom.planModeLabel) dom.planModeLabel.textContent = 'ELEVATION';
+    if (dom.planStatusBadge) {
+      dom.planStatusBadge.textContent = `${model.title} · ${model.totalHeight.toFixed(1)}m H · Span ${model.span.toFixed(1)}m`;
+    }
+  }
+
+  function renderSectionView(doc) {
+    const planDocs = state.plan.documents.filter(d => d.type === '2d_plan' || d.type === '2d' || !d.type);
+    const source = planDocs;
+    const cut = doc.sectionCut || { label: 'A', direction: 'forward' };
+
+    const model = generateBuildingSection(source, cut, { poche: doc.poche !== false });
+    const sectSvg = generateSectionSVG(model, cut, { scale: 35 });
+
+    const innerMatch = sectSvg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i);
+    const vbMatch = sectSvg.match(/viewBox="([^"]+)"/i);
+    const innerContent = innerMatch ? innerMatch[1] : '';
+    const viewBox = vbMatch ? vbMatch[1] : `0 0 ${svg.width} ${svg.height}`;
+
+    dom.planSvg.setAttribute('viewBox', viewBox);
+    dom.planSvg.innerHTML = innerContent;
+
+    const ctxBar = dom.planContextualToolbar || document.getElementById('plan-contextual-toolbar');
+    if (ctxBar) {
+      ctxBar.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span class="context-tag-badge">BUILDING SECTION</span>
+            <div style="display: flex; gap: 4px;">
+              <button type="button" class="result-action-btn ${cut.label === 'A' ? 'primary' : ''}" data-label="A" style="font-size: 0.68rem; padding: 2px 6px;">Section A-A</button>
+              <button type="button" class="result-action-btn ${cut.label === 'B' ? 'primary' : ''}" data-label="B" style="font-size: 0.68rem; padding: 2px 6px;">Section B-B</button>
+            </div>
+            <button type="button" id="btn-sect-poche" class="result-action-btn ${doc.poche !== false ? 'active' : ''}" style="font-size: 0.68rem; padding: 2px 6px;">${doc.poche !== false ? '🧱 Pochè Hatch: ON' : 'Pochè: OFF'}</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" id="btn-sect-export" class="result-action-btn primary" style="font-size: 0.68rem; padding: 2px 8px;">💾 Export Section SVG</button>
+          </div>
+        </div>
+      `;
+
+      ctxBar.querySelectorAll('button[data-label]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const lbl = btn.dataset.label;
+          doc.sectionCut = { ...doc.sectionCut, label: lbl };
+          doc.name = `Section ${lbl}-${lbl}`;
+          renderTabs();
+          render();
+          AudioService.playTick();
+        });
+      });
+
+      ctxBar.querySelector('#btn-sect-poche')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        doc.poche = !doc.poche;
+        render();
+        AudioService.playTick();
+      });
+
+      ctxBar.querySelector('#btn-sect-export')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const blob = new Blob([sectSvg], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${(doc.name || 'section').toLowerCase().replace(/\s+/g, '-')}.svg`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`Exported ${doc.name} SVG`);
+        AudioService.playSuccess();
+      });
+    }
+
+    if (dom.planModeLabel) dom.planModeLabel.textContent = 'SECTION';
+    if (dom.planStatusBadge) {
+      dom.planStatusBadge.textContent = `${model.title} · ${model.totalHeight.toFixed(1)}m H · Cut ${model.cutLength.toFixed(1)}m`;
+    }
+  }
+
   // ------------------------------------------------------------------
   // Rendering
   // ------------------------------------------------------------------
@@ -29394,6 +30477,14 @@ function createPlanView(context) {
     }
     if (doc && doc.type === 'sheet') {
       renderPresentationSheet(doc);
+      return;
+    }
+    if (doc && doc.type === 'elevation') {
+      renderElevationView(doc);
+      return;
+    }
+    if (doc && doc.type === 'section') {
+      renderSectionView(doc);
       return;
     }
 
@@ -29940,6 +31031,38 @@ function createPlanView(context) {
           <text x="${centerSvg.x.toFixed(1)}" y="${(centerSvg.y + cd * transform.zoom / 2 + 12).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="var(--text-muted, #888)" font-family="var(--font-mono)">${escapeHtml(e.name || 'Col')}</text>
         </g>`;
       }
+      if (e.kind === 'section_cut') {
+        const p1 = e.p1 || { x: e.x, y: e.y };
+        const p2 = e.p2 || { x: e.x + (e.width || 10), y: e.y };
+        const sp1 = worldToSvg(transform, p1.x, p1.y);
+        const sp2 = worldToSvg(transform, p2.x, p2.y);
+        const cutStroke = selected ? 'var(--color-warning, #fbbf24)' : (stroke || '#f87171');
+        const lbl = e.label || 'A';
+        const sRef = e.sheetRef || 'A-201';
+
+        const dx = sp2.x - sp1.x;
+        const dy = sp2.y - sp1.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len;
+        const ny = dx / len;
+        const arrowDir = e.direction === 'reverse' ? -1 : 1;
+        const ax = nx * 14 * arrowDir;
+        const ay = ny * 14 * arrowDir;
+
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <line x1="${sp1.x.toFixed(1)}" y1="${sp1.y.toFixed(1)}" x2="${sp2.x.toFixed(1)}" y2="${sp2.y.toFixed(1)}" stroke="${cutStroke}" stroke-width="${selected ? 2.5 : 1.8}" stroke-dasharray="14 4 3 4"/>
+          <line x1="${sp1.x.toFixed(1)}" y1="${sp1.y.toFixed(1)}" x2="${(sp1.x + ax).toFixed(1)}" y2="${(sp1.y + ay).toFixed(1)}" stroke="${cutStroke}" stroke-width="2"/>
+          <circle cx="${sp1.x.toFixed(1)}" cy="${sp1.y.toFixed(1)}" r="14" fill="#1e293b" stroke="${cutStroke}" stroke-width="2"/>
+          <line x1="${(sp1.x - 14).toFixed(1)}" y1="${sp1.y.toFixed(1)}" x2="${(sp1.x + 14).toFixed(1)}" y2="${sp1.y.toFixed(1)}" stroke="${cutStroke}" stroke-width="1"/>
+          <text x="${sp1.x.toFixed(1)}" y="${(sp1.y - 3).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" font-weight="bold" fill="#f8fafc">${escapeHtml(lbl)}</text>
+          <text x="${sp1.x.toFixed(1)}" y="${(sp1.y + 9).toFixed(1)}" text-anchor="middle" font-size="7.5" font-family="var(--font-mono)" fill="#94a3b8">${escapeHtml(sRef)}</text>
+          <line x1="${sp2.x.toFixed(1)}" y1="${sp2.y.toFixed(1)}" x2="${(sp2.x + ax).toFixed(1)}" y2="${(sp2.y + ay).toFixed(1)}" stroke="${cutStroke}" stroke-width="2"/>
+          <circle cx="${sp2.x.toFixed(1)}" cy="${sp2.y.toFixed(1)}" r="14" fill="#1e293b" stroke="${cutStroke}" stroke-width="2"/>
+          <line x1="${(sp2.x - 14).toFixed(1)}" y1="${sp2.y.toFixed(1)}" x2="${(sp2.x + 14).toFixed(1)}" y2="${sp2.y.toFixed(1)}" stroke="${cutStroke}" stroke-width="1"/>
+          <text x="${sp2.x.toFixed(1)}" y="${(sp2.y - 3).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" font-weight="bold" fill="#f8fafc">${escapeHtml(lbl)}</text>
+          <text x="${sp2.x.toFixed(1)}" y="${(sp2.y + 9).toFixed(1)}" text-anchor="middle" font-size="7.5" font-family="var(--font-mono)" fill="#94a3b8">${escapeHtml(sRef)}</text>
+        </g>`;
+      }
       if (e.kind === 'grid_line' && e.p1 && e.p2) {
         const sp1 = worldToSvg(transform, e.p1.x, e.p1.y);
         const sp2 = worldToSvg(transform, e.p2.x, e.p2.y);
@@ -30032,6 +31155,16 @@ function createPlanView(context) {
             <line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="var(--accent-primary, #4989D9)" stroke-width="1.8" stroke-dasharray="8 4 2 4"/>
             <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="12" fill="var(--bg-surface-elevated, #1e293b)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.5"/>
             <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="12" fill="var(--bg-surface-elevated, #1e293b)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.5"/>
+          </g>
+        `;
+      } else if (dragState.tool === 'section_cut') {
+        const a = worldToSvg(transform, dragState.start.x, dragState.start.y);
+        const b = worldToSvg(transform, dragState.current.x, dragState.current.y);
+        dragMarkup = `
+          <g class="drag-preview-section" pointer-events="none">
+            <line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="#f87171" stroke-width="2" stroke-dasharray="12 4 3 4"/>
+            <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="12" fill="var(--bg-surface-elevated, #1e293b)" stroke="#f87171" stroke-width="1.8"/>
+            <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="12" fill="var(--bg-surface-elevated, #1e293b)" stroke="#f87171" stroke-width="1.8"/>
           </g>
         `;
       } else {
@@ -30183,6 +31316,7 @@ function createPlanView(context) {
       else if (e.kind === 'north_arrow') desc = `North · ${Math.round(e.rotation || 0)}°`;
       else if (e.kind === 'column') desc = `Column · ${e.profile || 'rect'} · ${num(e.width)}×${num(e.depth)} m`;
       else if (e.kind === 'grid_line') desc = `Grid · Axis [${escapeHtml(e.name || '')}]`;
+      else if (e.kind === 'section_cut') desc = `Section · [${escapeHtml(e.label || 'A')}-${escapeHtml(e.label || 'A')}] · ${escapeHtml(e.sheetRef || 'A-201')}`;
       else if (e.kind === 'text') desc = `"${escapeHtml(e.text || e.name)}"`;
       else desc = e.kind;
 
@@ -31642,6 +32776,39 @@ function createPlanView(context) {
         const v = parseFloat(e.target.value);
         if (!isNaN(v) && v > 0) { selected.bubbleRadius = v; render(); }
       });
+    } else if (selected.kind === 'section_cut') {
+      dom.planPropContent.innerHTML = `
+        <div class="plan-prop-section">
+          <div class="plan-prop-title">Section Cut Callout</div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Cut Label</span><input type="text" id="prop-section-label" class="text-input" value="${escapeHtml(selected.label || 'A')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row"><span class="plan-prop-label">Sheet Ref</span><input type="text" id="prop-section-sheet" class="text-input" value="${escapeHtml(selected.sheetRef || 'A-201')}" style="width: 140px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">View Direction</span>
+            <select id="prop-section-dir" class="calc-select" style="width: 140px; height: 24px; padding: 0 4px; font-size: 0.74rem;">
+              <option value="forward" ${selected.direction === 'forward' ? 'selected' : ''}>Forward</option>
+              <option value="reverse" ${selected.direction === 'reverse' ? 'selected' : ''}>Reverse</option>
+            </select>
+          </div>
+          ${buildLayerSelectRow(selected)}
+        </div>
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Section Cut</span></button>
+        </div>`;
+
+      dom.planPropContent.querySelector('#prop-section-label')?.addEventListener('change', (e) => {
+        selected.label = e.target.value.trim() || 'A';
+        selected.name = `Section ${selected.label}-${selected.label}`;
+        render();
+        renderEntityList();
+      });
+      dom.planPropContent.querySelector('#prop-section-sheet')?.addEventListener('change', (e) => {
+        selected.sheetRef = e.target.value.trim() || 'A-201';
+        render();
+      });
+      dom.planPropContent.querySelector('#prop-section-dir')?.addEventListener('change', (e) => {
+        selected.direction = e.target.value;
+        render();
+      });
     }
 
     dom.planPropContent.querySelector('#btn-prop-delete')?.addEventListener('click', () => {
@@ -31942,7 +33109,7 @@ function createPlanView(context) {
       render();
       renderContextualToolbar();
       return;
-    } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'leader' || tool === 'measure' || tool === 'grid') {
+    } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'leader' || tool === 'measure' || tool === 'grid' || tool === 'section_cut') {
       if (snapOn) {
         const snapRes = findSnapPoint(world, visible, { snapDistance: 0.25, snapGrid: true, gridMeters: state.plan.grid });
         if (snapRes.snapped) {
@@ -32264,6 +33431,35 @@ function createPlanView(context) {
         history.push(cmd);
         state.plan.selectedIds = new Set([gLine.id]);
         showToast(`Placed Grid Line ${gLine.name}`);
+        AudioService.playTick();
+        setTool('select');
+        render();
+        renderEntityList();
+        renderPropertiesInspector();
+      } else if (dragState.tool === 'section_cut') {
+        const dx = Math.abs(end.x - start.x);
+        const dy = Math.abs(end.y - start.y);
+        if (dx < 0.2 && dy < 0.2) {
+          showToast('Section cut line too short', 'warning');
+          dragState = null;
+          render();
+          return;
+        }
+        const existingSections = entities().filter(e => e.kind === 'section_cut');
+        const labels = ['A', 'B', 'C', 'D', 'E', 'F'];
+        const nextLabel = labels[existingSections.length % labels.length];
+        const sCut = createSectionCut({
+          name: `Section ${nextLabel}-${nextLabel}`,
+          label: nextLabel,
+          p1: start,
+          p2: end,
+          sheetRef: `A-20${existingSections.length + 1}`
+        });
+        const cmd = entityAddRemoveCommand(entities(), sCut, 'add section cut');
+        cmd.redo();
+        history.push(cmd);
+        state.plan.selectedIds = new Set([sCut.id]);
+        showToast(`Placed Section Cut ${sCut.label}-${sCut.label}`);
         AudioService.playTick();
         setTool('select');
         render();
