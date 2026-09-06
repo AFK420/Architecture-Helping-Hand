@@ -857,12 +857,20 @@ body.sidebar-hidden .app-sidebar {
    4. Mode Views & Layout Structure
    ========================================================================== */
 .tool-mode-view {
-  display: none;
+  display: none !important;
   animation: fadeInView 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.tool-mode-view.active {
-  display: block;
+.tool-mode-view.active:not([hidden]) {
+  display: block !important;
+}
+
+.tool-mode-view[hidden],
+.tool-mode-view:not(.active),
+#mode-view-plan[hidden],
+#mode-view-plan:not(.active),
+body:not(.mode-active-plan) #mode-view-plan {
+  display: none !important;
 }
 
 @keyframes fadeInView {
@@ -9599,10 +9607,13 @@ select option {
     display: none !important;
   }
 
-  #mode-view-plan[hidden] {
+  #mode-view-plan[hidden],
+  #mode-view-plan:not(.active),
+  body:not(.mode-active-plan) #mode-view-plan {
     display: none !important;
   }
 
+  body.mode-active-plan #mode-view-plan.active:not([hidden]),
   #mode-view-plan.active:not([hidden]) {
     height: 100% !important;
     max-height: 100% !important;

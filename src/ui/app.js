@@ -1713,18 +1713,37 @@ export function initializeApp() {
     syncNavigationActive();
     closeAllMenuBarDropdowns();
     document.getElementById('app-shell')?.classList.toggle('mode-home', targetMode === 'home');
+    document.body.classList.toggle('mode-active-plan', targetMode === 'plan');
 
-    // Update Tool Views
+    // Update Tool Views with strict display none inline enforcement
     dom.modeViews.forEach(view => {
       const expectedId = `mode-view-${targetMode}`;
       const isTarget = view.id === expectedId;
       view.classList.toggle('active', isTarget);
       if (isTarget) {
         view.removeAttribute('hidden');
+        if (view.style) {
+          if (typeof view.style.removeProperty === 'function') view.style.removeProperty('display');
+          else view.style.display = '';
+        }
       } else {
         view.setAttribute('hidden', '');
+        if (view.style) {
+          if (typeof view.style.setProperty === 'function') view.style.setProperty('display', 'none', 'important');
+          else view.style.display = 'none';
+        }
       }
     });
+
+    const planView = document.getElementById('mode-view-plan');
+    if (planView && targetMode !== 'plan') {
+      planView.setAttribute('hidden', '');
+      planView.classList.remove('active');
+      if (planView.style) {
+        if (typeof planView.style.setProperty === 'function') planView.style.setProperty('display', 'none', 'important');
+        else planView.style.display = 'none';
+      }
+    }
 
     if (targetMode === 'home') {
       renderHome();

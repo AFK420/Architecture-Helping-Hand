@@ -7,8 +7,27 @@
   <title>Architecture Helping Hand — Scaling & Furniture Studio</title>
   
   <!-- CSS Stylesheets -->
-  <link rel="stylesheet" href="css/themes.css?v=2.1.0">
-  <link rel="stylesheet" href="css/main.css?v=2.1.0">
+  <link rel="stylesheet" href="css/themes.css?v=2.2.0">
+  <link rel="stylesheet" href="css/main.css?v=2.2.0">
+  
+  <!-- Fail-safe immediate overrides for mode views & form controls -->
+  <style>
+    .tool-mode-view[hidden],
+    .tool-mode-view:not(.active),
+    #mode-view-plan[hidden],
+    #mode-view-plan:not(.active),
+    body:not(.mode-active-plan) #mode-view-plan {
+      display: none !important;
+    }
+    textarea,
+    .cad-preview-textarea,
+    .form-textarea {
+      background: #121316 !important;
+      color: #f4f4f5 !important;
+      border: 1.5px solid #3f3f46 !important;
+      border-radius: 6px !important;
+    }
+  </style>
   
   <!-- Progressive Web App (PWA) Manifest & Meta Tags -->
   <link rel="manifest" href="manifest.json">
@@ -3792,7 +3811,7 @@
     <!-- ======================================================== -->
     <!-- MODE 19: PLAN CANVAS                                     -->
     <!-- ======================================================== -->
-    <section id="mode-view-plan" class="tool-mode-view" aria-labelledby="heading-plan" hidden>
+    <section id="mode-view-plan" class="tool-mode-view" aria-labelledby="heading-plan" hidden style="display: none;">
       <!-- Top Studio Ribbon Bar Container -->
       <div id="studio-ribbon-container"></div>
 
@@ -4904,6 +4923,6 @@
   </footer>
 
   <!-- Application Script (Standalone, works via file:// and http://) -->
-  <script src="js/app.js?v=2.1.0"></script>
+  <script src="js/app.js?v=2.2.0"></script>
 </body>
 </html>
