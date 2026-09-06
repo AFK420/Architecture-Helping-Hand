@@ -55,6 +55,7 @@ export const BUNDLE_MODULES = [
   { name: 'Layers', file: path.join(srcDir, 'core', 'layers.js') },
   { name: 'GridColumns', file: path.join(srcDir, 'core', 'grid-columns.js') },
   { name: 'Entities', file: path.join(srcDir, 'core', 'entities.js') },
+  { name: 'ZoningSchedule', file: path.join(srcDir, 'core', 'zoning-schedule.js') },
   { name: 'Massing3D', file: path.join(srcDir, 'core', 'massing-3d.js') },
   { name: 'PlanCanvas', file: path.join(srcDir, 'core', 'plan-canvas.js') },
   { name: 'Sheet', file: path.join(srcDir, 'core', 'sheet.js') },

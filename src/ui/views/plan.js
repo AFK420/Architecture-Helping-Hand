@@ -39,11 +39,14 @@ import {
   columnHatchLines, columnSnapPoints, gridLineIntersection, COLUMN_PROFILES, BUBBLE_POSITIONS
 } from '../../core/grid-columns.js';
 import {
-  CAMERA_PRESETS, buildMassing3DModel, projectAndSortFaces, generateMassingSVG, projectPoint3D
+  CAMERA_PRESETS, buildMassing3DModel, buildMultiStoryMassing3DModel, projectAndSortFaces, generateMassingSVG, projectPoint3D
 } from '../../core/massing-3d.js';
 import {
   SHEET_SIZES, ARCHITECTURAL_SCALES, createSheetConfig, computeViewportLayout, generateSheetSVG
 } from '../../core/sheet.js';
+import {
+  calculateRoomSchedule, calculateFloorTotals, formatScheduleCSV, guessZoningFromRoomName
+} from '../../core/zoning-schedule.js';
 import {
   calcWallJunctions, punchWallSpans, calcDoorCADGeometry,
   calcWindowCADGeometry, calcWallPolygon, calcDimensionGeometry
@@ -1225,9 +1228,16 @@ export function createPlanView(context) {
     const planEntities = planDoc ? (planDoc.entities || []) : [];
 
     doc.camera = doc.camera || { azimuth: 45, elevation: 35.264, zoom: 32, panX: svg.width / 2, panY: svg.height / 2 + 30 };
-    doc.massingOptions = doc.massingOptions || { wallHeight: 3.0, doorHeight: 2.1, windowSill: 0.9, windowHeight: 1.2, slabThickness: 0.2, wireframe: false };
+    doc.massingOptions = doc.massingOptions || { wallHeight: 3.0, doorHeight: 2.1, windowSill: 0.9, windowHeight: 1.2, slabThickness: 0.2, wireframe: false, multiStory: false };
 
-    const faces3D = buildMassing3DModel(planEntities, doc.massingOptions);
+    let faces3D = [];
+    let multiStoryMetrics = null;
+    if (doc.massingOptions.multiStory) {
+      multiStoryMetrics = buildMultiStoryMassing3DModel(state.plan.documents || [planDoc], doc.massingOptions);
+      faces3D = multiStoryMetrics.faces;
+    } else {
+      faces3D = buildMassing3DModel(planEntities, doc.massingOptions);
+    }
     const sortedFaces = projectAndSortFaces(faces3D, doc.camera);
 
     const facesMarkup = sortedFaces.map(f => {
@@ -1265,6 +1275,7 @@ export function createPlanView(context) {
 
     const ctxBar = dom.planContextualToolbar || document.getElementById('plan-contextual-toolbar');
     if (ctxBar) {
+      const multiStoryLabel = doc.massingOptions.multiStory ? '🏢 Stack All Stories' : '🏢 Single Story';
       ctxBar.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
           <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
@@ -1272,6 +1283,7 @@ export function createPlanView(context) {
             ${presetsMarkup}
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" id="btn-3d-multistory" class="result-action-btn ${doc.massingOptions.multiStory ? 'primary' : ''}" style="font-size: 0.68rem; padding: 2px 6px;" title="Toggle multi-story building stacking">${multiStoryLabel}</button>
             <button type="button" id="btn-3d-wireframe" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">${doc.massingOptions.wireframe ? 'Shaded' : 'Wireframe'}</button>
             <button type="button" id="btn-3d-height" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">H: ${(doc.massingOptions.wallHeight || 3.0).toFixed(1)}m</button>
             <button type="button" id="btn-3d-export" class="result-action-btn primary" style="font-size: 0.68rem; padding: 2px 8px;">💾 Export 3D SVG</button>
@@ -1290,6 +1302,13 @@ export function createPlanView(context) {
             AudioService.playTick();
           }
         });
+      });
+
+      ctxBar.querySelector('#btn-3d-multistory')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        doc.massingOptions.multiStory = !doc.massingOptions.multiStory;
+        render();
+        AudioService.playTick();
       });
 
       ctxBar.querySelector('#btn-3d-wireframe')?.addEventListener('click', (e) => {
@@ -1311,12 +1330,17 @@ export function createPlanView(context) {
 
       ctxBar.querySelector('#btn-3d-export')?.addEventListener('click', (e) => {
         e.stopPropagation();
-        const svgCode = generateMassingSVG(planEntities, doc.camera, doc.massingOptions);
+        const svgCode = generateMassingSVG(doc.massingOptions.multiStory ? { faces: faces3D } : planEntities, {
+          camera: doc.camera,
+          ...doc.massingOptions,
+          multiStory: doc.massingOptions.multiStory,
+          documents: state.plan.documents
+        });
         const blob = new Blob([svgCode], { type: 'image/svg+xml;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${(planDoc.name || 'plan').toLowerCase().replace(/\s+/g, '-')}-massing-3d.svg`;
+        a.download = `${(planDoc.name || 'massing').toLowerCase().replace(/\s+/g, '-')}-3d.svg`;
         a.click();
         URL.revokeObjectURL(url);
         showToast('Exported 3D Massing SVG');
@@ -1325,17 +1349,30 @@ export function createPlanView(context) {
     }
 
     if (dom.planModeLabel) dom.planModeLabel.textContent = '3D MASSING';
-    if (dom.planStatusBadge) dom.planStatusBadge.textContent = `az ${Math.round(doc.camera.azimuth || 45)}° · el ${Math.round(doc.camera.elevation || 35)}°`;
+    if (dom.planStatusBadge) {
+      if (multiStoryMetrics) {
+        dom.planStatusBadge.textContent = `${multiStoryMetrics.storyCount} Stories · ${multiStoryMetrics.totalHeight.toFixed(1)}m H · ${multiStoryMetrics.grossFloorArea.toFixed(0)}m² GFA`;
+      } else {
+        dom.planStatusBadge.textContent = `az ${Math.round(doc.camera.azimuth || 45)}° · el ${Math.round(doc.camera.elevation || 35)}°`;
+      }
+    }
   }
 
   function renderPresentationSheet(doc) {
     const planDoc = state.plan.documents.find(d => d.type === '2d_plan' || d.type === '2d') || doc;
     const planEntities = planDoc ? (planDoc.entities || []) : [];
 
-    doc.sheetConfig = doc.sheetConfig || createSheetConfig({ sheetNumber: 'A-101', sheetTitle: (planDoc.name || 'GROUND FLOOR PLAN').toUpperCase() });
+    doc.sheetConfig = doc.sheetConfig || createSheetConfig({
+      sheetNumber: 'A-101',
+      sheetTitle: (planDoc.name || 'GROUND FLOOR PLAN').toUpperCase(),
+      layoutMode: 'single'
+    });
+    if (!doc.sheetConfig.layoutMode) doc.sheetConfig.layoutMode = 'single';
 
     const sheetSvg = generateSheetSVG(doc.sheetConfig, planEntities, {
-      pxPerMm: (svg.width / doc.sheetConfig.widthMm) * 0.85
+      pxPerMm: (svg.width / doc.sheetConfig.widthMm) * 0.85,
+      document: planDoc,
+      documents: state.plan.documents
     });
 
     const innerMatch = sheetSvg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i);
@@ -1362,6 +1399,11 @@ export function createPlanView(context) {
         <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
           <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
             <span class="context-tag-badge">PRESENTATION SHEET</span>
+            <select id="sheet-layout-select" class="calc-select" style="height: 24px; padding: 0 4px; font-size: 0.7rem; width: 110px;" title="Sheet presentation layout">
+              <option value="single" ${doc.sheetConfig.layoutMode === 'single' ? 'selected' : ''}>Full Plan</option>
+              <option value="plan_3d" ${doc.sheetConfig.layoutMode === 'plan_3d' ? 'selected' : ''}>Plan + 3D Axo</option>
+              <option value="plan_schedule" ${doc.sheetConfig.layoutMode === 'plan_schedule' ? 'selected' : ''}>Plan + Schedule</option>
+            </select>
             <select id="sheet-size-select" class="calc-select" style="height: 24px; padding: 0 4px; font-size: 0.7rem; width: 85px;">
               <option value="A4" ${doc.sheetConfig.size === 'A4' ? 'selected' : ''}>A4</option>
               <option value="A3" ${doc.sheetConfig.size === 'A3' ? 'selected' : ''}>A3 (Std)</option>
@@ -1382,10 +1424,17 @@ export function createPlanView(context) {
         </div>
       `;
 
+      ctxBar.querySelector('#sheet-layout-select')?.addEventListener('change', (e) => {
+        doc.sheetConfig.layoutMode = e.target.value;
+        render();
+        AudioService.playTick();
+      });
+
       ctxBar.querySelector('#sheet-size-select')?.addEventListener('change', (e) => {
         doc.sheetConfig = createSheetConfig({
           ...doc.sheetConfig,
           size: e.target.value,
+          layoutMode: doc.sheetConfig.layoutMode,
           orientation: doc.sheetConfig.orientation,
           titleBlock: doc.sheetConfig.titleBlock
         });
@@ -1407,6 +1456,7 @@ export function createPlanView(context) {
           ...doc.sheetConfig,
           orientation: nextOri,
           size: doc.sheetConfig.size,
+          layoutMode: doc.sheetConfig.layoutMode,
           titleBlock: doc.sheetConfig.titleBlock
         });
         render();
@@ -1414,7 +1464,10 @@ export function createPlanView(context) {
       });
 
       ctxBar.querySelector('#btn-sheet-export')?.addEventListener('click', () => {
-        const svgCode = generateSheetSVG(doc.sheetConfig, planEntities);
+        const svgCode = generateSheetSVG(doc.sheetConfig, planEntities, {
+          document: planDoc,
+          documents: state.plan.documents
+        });
         const blob = new Blob([svgCode], { type: 'image/svg+xml;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1428,7 +1481,7 @@ export function createPlanView(context) {
     }
 
     if (dom.planModeLabel) dom.planModeLabel.textContent = 'SHEET';
-    if (dom.planStatusBadge) dom.planStatusBadge.textContent = `${doc.sheetConfig.size} · 1:${doc.sheetConfig.viewport.scaleRatio || 100}`;
+    if (dom.planStatusBadge) dom.planStatusBadge.textContent = `${doc.sheetConfig.size} · 1:${doc.sheetConfig.viewport.scaleRatio || 100} · ${doc.sheetConfig.layoutMode || 'single'}`;
   }
 
   // ------------------------------------------------------------------
@@ -2198,6 +2251,7 @@ export function createPlanView(context) {
     }
     renderEntityList();
     renderLayerList();
+    renderScheduleList();
     renderPropertiesInspector();
     renderContextualToolbar();
     updateStatusBar();
@@ -2328,11 +2382,98 @@ export function createPlanView(context) {
     });
   }
 
+  function renderScheduleList() {
+    const listContainer = dom.planScheduleList || document.getElementById('plan-schedule-list');
+    const totalsContainer = dom.planScheduleTotals || document.getElementById('plan-schedule-totals');
+    const countBadge = dom.planScheduleCount || document.getElementById('plan-schedule-count');
+
+    const es = entities();
+    const schedule = calculateRoomSchedule(es);
+    const totals = calculateFloorTotals(schedule);
+
+    if (countBadge) {
+      countBadge.textContent = String(schedule.length);
+    }
+
+    if (totalsContainer) {
+      const nia = (totals && (totals.netInternalArea ?? totals.netInternalAreaM2)) || 0;
+      const gia = (totals && (totals.grossInternalArea ?? totals.grossInternalAreaM2)) || 0;
+      const circRatio = (totals && (totals.circulationRatioPercent ?? totals.circulationRatio)) || 0;
+      const circArea = (totals && (totals.circulationArea ?? totals.circulationAreaM2)) || 0;
+      const occ = (totals && totals.totalOccupants) || 0;
+      const egWidth = (totals && (totals.egressWidthMm ?? totals.minEgressWidthMm)) || 900;
+
+      totalsContainer.innerHTML = `
+        <div style="background: var(--bg-surface-2, #1e293b); padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-color, #334155);">
+          <div style="font-size: 0.62rem; color: var(--text-muted, #888); text-transform: uppercase;">Net Area (NIA)</div>
+          <div style="font-size: 0.82rem; font-weight: 700; color: var(--accent-primary, #38bdf8);">${nia.toFixed(1)} m²</div>
+        </div>
+        <div style="background: var(--bg-surface-2, #1e293b); padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-color, #334155);">
+          <div style="font-size: 0.62rem; color: var(--text-muted, #888); text-transform: uppercase;">Gross Area (GIA)</div>
+          <div style="font-size: 0.82rem; font-weight: 700; color: var(--text-normal, #f8fafc);">${gia.toFixed(1)} m²</div>
+        </div>
+        <div style="background: var(--bg-surface-2, #1e293b); padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-color, #334155);">
+          <div style="font-size: 0.62rem; color: var(--text-muted, #888); text-transform: uppercase;">Circulation</div>
+          <div style="font-size: 0.82rem; font-weight: 700; color: var(--color-warning, #eab308);">${circRatio.toFixed(1)}% <span style="font-size: 0.62rem; font-weight: normal; color: var(--text-muted);">(${circArea.toFixed(1)}m²)</span></div>
+        </div>
+        <div style="background: var(--bg-surface-2, #1e293b); padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-color, #334155);">
+          <div style="font-size: 0.62rem; color: var(--text-muted, #888); text-transform: uppercase;">Occupancy</div>
+          <div style="font-size: 0.82rem; font-weight: 700; color: #10b981;">${occ} P <span style="font-size: 0.62rem; font-weight: normal; color: var(--text-muted);">(Min ${(egWidth / 1000).toFixed(2)}m)</span></div>
+        </div>
+      `;
+    }
+
+    if (!listContainer) return;
+    if (schedule.length === 0) {
+      listContainer.innerHTML = `
+        <div style="padding: 1rem 0.5rem; text-align: center; color: var(--text-muted, #888); font-size: 0.72rem;">
+          No rooms created yet. Use the <strong>Room (R)</strong> tool to add rooms.
+        </div>
+      `;
+      return;
+    }
+
+    listContainer.innerHTML = schedule.map(r => {
+      const isSelected = state.plan.selectedIds.has(r.id);
+      const tagColor = (r.zoningTag && r.zoningTag.color) || '#64748b';
+      const tagName = (r.zoningTag && r.zoningTag.name) || 'General';
+      return `
+        <div class="plan-schedule-row ${isSelected ? 'selected' : ''}" data-entity-id="${escapeHtml(r.id)}" style="display: flex; align-items: center; justify-content: space-between; padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid ${isSelected ? 'var(--accent-primary, #38bdf8)' : 'var(--border-color, #334155)'}; background: ${isSelected ? 'rgba(56, 189, 248, 0.1)' : 'var(--bg-surface-2, #1e293b)'}; cursor: pointer; margin-bottom: 2px;">
+          <div style="display: flex; align-items: center; gap: 6px; overflow: hidden;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: ${tagColor}; flex-shrink: 0;"></span>
+            <span style="font-weight: 700; font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted, #888);">${escapeHtml(r.roomNumber)}</span>
+            <span style="font-size: 0.74rem; font-weight: 600; color: var(--text-normal, #f8fafc); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px;">${escapeHtml(r.name)}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+            <span style="font-size: 0.65rem; padding: 1px 4px; border-radius: 3px; background: rgba(255,255,255,0.06); color: ${tagColor};">${escapeHtml(tagName)}</span>
+            <span style="font-size: 0.74rem; font-family: var(--font-mono); font-weight: 600; color: var(--accent-primary, #38bdf8);">${r.areaM2.toFixed(1)}m²</span>
+            <span style="font-size: 0.68rem; color: var(--text-muted, #888);" title="Estimated occupants">👥 ${r.occupantLoad}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    listContainer.querySelectorAll('.plan-schedule-row').forEach(row => {
+      row.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const eid = row.dataset.entityId;
+        if (eid) {
+          state.plan.selectedIds = new Set([eid]);
+          render();
+          renderScheduleList();
+          AudioService.playTick();
+        }
+      });
+    });
+  }
+
   function setupSidebarTabs() {
     const tabEntities = dom.tabPlanEntities || document.getElementById('tab-plan-entities');
     const tabLayers = dom.tabPlanLayers || document.getElementById('tab-plan-layers');
+    const tabSchedule = dom.tabPlanSchedule || document.getElementById('tab-plan-schedule');
     const viewEntities = dom.planEntitiesView || document.getElementById('plan-entities-view');
     const viewLayers = dom.planLayersView || document.getElementById('plan-layers-view');
+    const viewSchedule = dom.planScheduleView || document.getElementById('plan-schedule-view');
 
     const updateTabUI = () => {
       if (tabEntities) {
@@ -2345,8 +2486,14 @@ export function createPlanView(context) {
         tabLayers.style.borderBottom = activeSidebarTab === 'layers' ? '2px solid var(--accent-primary, #4989D9)' : '2px solid transparent';
         tabLayers.style.color = activeSidebarTab === 'layers' ? 'var(--accent-primary, #4989D9)' : 'var(--text-muted, #888)';
       }
+      if (tabSchedule) {
+        tabSchedule.classList.toggle('active', activeSidebarTab === 'schedule');
+        tabSchedule.style.borderBottom = activeSidebarTab === 'schedule' ? '2px solid var(--accent-primary, #4989D9)' : '2px solid transparent';
+        tabSchedule.style.color = activeSidebarTab === 'schedule' ? 'var(--accent-primary, #4989D9)' : 'var(--text-muted, #888)';
+      }
       if (viewEntities) viewEntities.style.display = activeSidebarTab === 'entities' ? 'block' : 'none';
       if (viewLayers) viewLayers.style.display = activeSidebarTab === 'layers' ? 'block' : 'none';
+      if (viewSchedule) viewSchedule.style.display = activeSidebarTab === 'schedule' ? 'block' : 'none';
     };
 
     if (tabEntities) {
@@ -2360,6 +2507,29 @@ export function createPlanView(context) {
         activeSidebarTab = 'layers';
         updateTabUI();
         renderLayerList();
+      });
+    }
+    if (tabSchedule) {
+      tabSchedule.addEventListener('click', () => {
+        activeSidebarTab = 'schedule';
+        updateTabUI();
+        renderScheduleList();
+      });
+    }
+
+    const btnCopyCsv = dom.btnCopyScheduleCsv || document.getElementById('btn-copy-schedule-csv');
+    if (btnCopyCsv) {
+      btnCopyCsv.addEventListener('click', () => {
+        const schedule = calculateRoomSchedule(entities());
+        const totals = calculateFloorTotals(schedule);
+        const csv = formatScheduleCSV(schedule, totals);
+        if (typeof copyToClipboard === 'function') {
+          copyToClipboard(csv);
+        } else if (navigator.clipboard) {
+          navigator.clipboard.writeText(csv);
+        }
+        showToast('Copied Room & Area Schedule to clipboard as CSV');
+        AudioService.playTick();
       });
     }
 
@@ -4906,7 +5076,7 @@ export function createPlanView(context) {
         renderContextualToolbar, updateStatusBar,
         switchDocument, createDocument, closeDocument, renameDocument,
         finishPolyRoom, cancelPolyRoom, renderTabs,
-        renderLayerList, setupSidebarTabs
+        renderLayerList, setupSidebarTabs, renderScheduleList
       };
     }
   };

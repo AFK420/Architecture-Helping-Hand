@@ -12102,6 +12102,303 @@ function generateEntityId(prefix) {
 
 
   // =========================================================================
+  // MODULE: ZoningSchedule
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Architectural Zoning & Area Schedule Matrix
+ * Provides room scheduling, IBC / NFPA occupant load analysis, department zoning,
+ * and circulation ratio calculations for architectural floor plans.
+ */
+
+
+
+const ZONING_CATEGORIES = Object.freeze({
+  living: { id: 'living', name: 'Living & Social', color: '#3b82f6', tag: 'LIV' },
+  sleeping: { id: 'sleeping', name: 'Sleeping & Private', color: '#8b5cf6', tag: 'SLP' },
+  service: { id: 'service', name: 'Kitchen & Utility', color: '#f59e0b', tag: 'SRV' },
+  sanitary: { id: 'sanitary', name: 'Sanitary & Wet', color: '#06b6d4', tag: 'SAN' },
+  circulation: { id: 'circulation', name: 'Circulation & Stairs', color: '#64748b', tag: 'CIR' },
+  commercial: { id: 'commercial', name: 'Office & Work', color: '#10b981', tag: 'OFF' },
+  outdoor: { id: 'outdoor', name: 'Balcony & Terrace', color: '#84cc16', tag: 'OUT' }
+});
+
+/**
+ * Standard IBC Chapter 10 / NFPA 101 occupant load factors in square meters per person.
+ */
+const OCCUPANCY_FACTORS = Object.freeze({
+  residential: { factorM2: 18.6, label: 'Residential (18.6 m²/person)' },
+  assembly_unconcentrated: { factorM2: 1.4, label: 'Assembly Tables/Chairs (1.4 m²/person)' },
+  assembly_concentrated: { factorM2: 0.65, label: 'Assembly Standing (0.65 m²/person)' },
+  business: { factorM2: 9.3, label: 'Business / Office (9.3 m²/person)' },
+  educational: { factorM2: 1.9, label: 'Classrooms (1.9 m²/person)' },
+  kitchen_commercial: { factorM2: 18.6, label: 'Kitchen / Service (18.6 m²/person)' },
+  storage: { factorM2: 27.9, label: 'Storage / Mech (27.9 m²/person)' },
+  circulation: { factorM2: 9.3, label: 'Circulation (9.3 m²/person)' }
+});
+
+/**
+ * Infers an architectural department zoning category from a room's name.
+ *
+ * @param {string} roomName
+ * @returns {string} Zoning category id
+ */
+function guessZoningFromRoomName(roomName = '') {
+  const name = String(roomName || '').toLowerCase().trim();
+
+  if (/bath|powder|toilet|wc|shower|restroom|en-suite|ensuite|lavatory|washroom/i.test(name)) {
+    return 'sanitary';
+  }
+  if (/bed|master|guest|nursery|dorm|sleeping|\bsuite\b/i.test(name)) {
+    return 'sleeping';
+  }
+  if (/kitchen|pantry|laundry|utility|storage|store|scullery|mech|boiler|hvac|garage/i.test(name)) {
+    return 'service';
+  }
+  if (/hall|corridor|passage|foyer|entry|vestibule|stair|stairway|landing|lobby|circulation/i.test(name)) {
+    return 'circulation';
+  }
+  if (/office|study|work|desk|studio|meeting|conference|library|boardroom/i.test(name)) {
+    return 'commercial';
+  }
+  if (/balcony|terrace|porch|deck|veranda|patio|courtyard|roof/i.test(name)) {
+    return 'outdoor';
+  }
+
+  return 'living';
+}
+
+/**
+ * Infers IBC occupant load classification based on room name and zoning.
+ *
+ * @param {string} roomName
+ * @param {string} zoning
+ * @returns {string} Occupancy factor key in OCCUPANCY_FACTORS
+ */
+function guessOccupancyCategory(roomName = '', zoning = null) {
+  const name = String(roomName || '').toLowerCase();
+  const zone = zoning || guessZoningFromRoomName(roomName);
+
+  if (name.includes('conference') || name.includes('auditorium') || name.includes('lounge') || name.includes('dining')) {
+    return 'assembly_unconcentrated';
+  }
+  if (zone === 'commercial' || name.includes('office') || name.includes('work')) {
+    return 'business';
+  }
+  if (zone === 'circulation' || /corridor|hall|passage|foyer|stair|lobby/i.test(name)) {
+    return 'circulation';
+  }
+  if (name.includes('storage') || name.includes('mech') || name.includes('garage')) {
+    return 'storage';
+  }
+  if (zone === 'service') {
+    return 'kitchen_commercial';
+  }
+
+  return 'residential';
+}
+
+/**
+ * Calculates a room's perimeter in meters.
+ *
+ * @param {Object} room
+ * @returns {number}
+ */
+function calculateRoomPerimeter(room) {
+  if (!room) return 0;
+  return roomPerimeter(room);
+}
+
+/**
+ * Computes the complete room area and occupancy schedule for a floor plan.
+ *
+ * @param {Object|Array} docOrEntities - Document object or entities list
+ * @returns {Array<Object>} List of room schedule entries
+ */
+function calculateRoomSchedule(docOrEntities) {
+  const entities = Array.isArray(docOrEntities)
+    ? docOrEntities
+    : (docOrEntities && Array.isArray(docOrEntities.entities) ? docOrEntities.entities : []);
+
+  const rooms = entities.filter(e => e && e.kind === 'room');
+  if (rooms.length === 0) return [];
+
+  // Total floor net area for percentage calculation
+  const totalNetArea = rooms.reduce((sum, r) => sum + roomArea(r), 0);
+
+  return rooms.map((room, idx) => {
+    const area = roomArea(room);
+    const perimeter = calculateRoomPerimeter(room);
+    const zoningKey = room.zoning || guessZoningFromRoomName(room.name);
+    const zoning = ZONING_CATEGORIES[zoningKey] || ZONING_CATEGORIES.living;
+
+    const occKey = room.occupancyCategory || guessOccupancyCategory(room.name, zoningKey);
+    const occDef = OCCUPANCY_FACTORS[occKey] || OCCUPANCY_FACTORS.residential;
+    const factorM2 = occDef.factorM2;
+
+    // Occupant load: IBC rules state any fraction rounds up to next whole person, minimum 1 person
+    const occupantCount = area > 0 ? Math.max(1, Math.ceil(area / factorM2)) : 0;
+    const pct = totalNetArea > 0 ? (area / totalNetArea) * 100 : 0;
+
+    return {
+      id: room.id,
+      number: room.number || room.roomNumber || String(101 + idx),
+      name: room.name || `Room ${idx + 1}`,
+      areaM2: Number(area.toFixed(2)),
+      areaSqFt: Number((area * 10.7639).toFixed(1)),
+      perimeterM: Number(perimeter.toFixed(2)),
+      zoningKey,
+      zoningName: zoning.name,
+      zoningColor: zoning.color,
+      zoningTag: zoning.tag,
+      occupancyCategory: occKey,
+      occupancyFactorM2: factorM2,
+      occupantCount,
+      percentOfFloor: Number(pct.toFixed(1))
+    };
+  });
+}
+
+/**
+ * Calculates floor totals, gross internal area, circulation ratio, and total occupant load.
+ *
+ * @param {Object|Array} docOrEntities
+ * @returns {Object} Floor summary totals
+ */
+function calculateFloorTotals(docOrEntities) {
+  const schedule = calculateRoomSchedule(docOrEntities);
+  const entities = Array.isArray(docOrEntities)
+    ? docOrEntities
+    : (docOrEntities && Array.isArray(docOrEntities.entities) ? docOrEntities.entities : []);
+
+  const netInternalArea = schedule.reduce((sum, r) => sum + r.areaM2, 0);
+
+  // Estimate wall footprint area if walls are present
+  const walls = entities.filter(e => e && e.kind === 'wall' && typeof e.x1 === 'number');
+  let wallArea = 0;
+  for (const w of walls) {
+    const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
+    const thick = w.thickness || 0.2;
+    wallArea += len * thick;
+  }
+  // GIA = Net Internal Area + Structural Wall Footprint
+  const grossInternalArea = netInternalArea + wallArea;
+
+  const totalOccupants = schedule.reduce((sum, r) => sum + r.occupantCount, 0);
+
+  // Circulation analysis
+  const circulationRooms = schedule.filter(r => r.zoningKey === 'circulation');
+  const circulationArea = circulationRooms.reduce((sum, r) => sum + r.areaM2, 0);
+  const circulationRatio = netInternalArea > 0 ? (circulationArea / netInternalArea) * 100 : 0;
+
+  // Breakdown by zoning department
+  const zoningBreakdown = {};
+  for (const key of Object.keys(ZONING_CATEGORIES)) {
+    const matching = schedule.filter(r => r.zoningKey === key);
+    const area = matching.reduce((sum, r) => sum + r.areaM2, 0);
+    const pct = netInternalArea > 0 ? (area / netInternalArea) * 100 : 0;
+    zoningBreakdown[key] = {
+      name: ZONING_CATEGORIES[key].name,
+      color: ZONING_CATEGORIES[key].color,
+      areaM2: Number(area.toFixed(2)),
+      percentage: Number(pct.toFixed(1)),
+      count: matching.length
+    };
+  }
+
+  // IBC egress corridor minimum width estimate (0.2 inches per occupant = 5.08 mm per occupant, min 900mm)
+  const minEgressWidthMm = Math.max(900, Math.round(totalOccupants * 5.1));
+
+  return {
+    roomCount: schedule.length,
+    netInternalArea: Number(netInternalArea.toFixed(2)),
+    netInternalAreaM2: Number(netInternalArea.toFixed(2)),
+    grossInternalArea: Number(grossInternalArea.toFixed(2)),
+    grossInternalAreaM2: Number(grossInternalArea.toFixed(2)),
+    circulationArea: Number(circulationArea.toFixed(2)),
+    circulationAreaM2: Number(circulationArea.toFixed(2)),
+    circulationRatioPercent: Number(circulationRatio.toFixed(1)),
+    circulationRatio: Number(circulationRatio.toFixed(1)),
+    totalOccupants,
+    minEgressWidthMm,
+    egressWidthMm: minEgressWidthMm,
+    zoningBreakdown
+  };
+}
+
+/**
+ * Formats room schedule as a CSV string.
+ *
+ * @param {Array<Object>} schedule
+ * @param {Object} totals
+ * @returns {string} CSV text
+ */
+function formatScheduleCSV(schedule = [], totals = null) {
+  const rows = [
+    ['Room #', 'Room Name', 'Zoning', 'Area (m2)', 'Area (sq ft)', 'Perimeter (m)', 'Occupants', '% of Floor']
+  ];
+
+  for (const r of schedule) {
+    rows.push([
+      `"${r.number}"`,
+      `"${r.name}"`,
+      `"${r.zoningName}"`,
+      r.areaM2.toFixed(2),
+      r.areaSqFt.toFixed(1),
+      r.perimeterM.toFixed(2),
+      String(r.occupantCount),
+      `${r.percentOfFloor.toFixed(1)}%`
+    ]);
+  }
+
+  if (totals) {
+    rows.push([]);
+    rows.push(['TOTALS', '', '', totals.netInternalAreaM2.toFixed(2), '', '', String(totals.totalOccupants), '100.0%']);
+    rows.push(['Gross Internal Area (GIA)', '', '', totals.grossInternalAreaM2.toFixed(2), '', '', '', '']);
+    rows.push(['Circulation Ratio', '', '', `${totals.circulationRatioPercent}%`, '', '', '', '']);
+  }
+
+  return rows.map(row => row.join(',')).join('\n');
+}
+
+/**
+ * Formats room schedule as a clean monospace ASCII table.
+ *
+ * @param {Array<Object>} schedule
+ * @param {Object} totals
+ * @returns {string} Monospace text
+ */
+function formatScheduleASCII(schedule = [], totals = null) {
+  if (!schedule || schedule.length === 0) return 'No rooms found in floor plan.';
+
+  const pad = (str, len) => String(str).padEnd(len, ' ');
+  const padNum = (num, len) => String(num).padStart(len, ' ');
+
+  const header = `${pad('ROOM #', 8)} | ${pad('NAME', 20)} | ${pad('ZONING', 18)} | ${padNum('AREA (m²)', 10)} | ${padNum('PERIM (m)', 10)} | ${padNum('OCC', 4)} | ${padNum('%', 6)}`;
+  const divider = '-'.repeat(header.length);
+
+  const lines = [header, divider];
+
+  for (const r of schedule) {
+    lines.push(
+      `${pad(r.number, 8)} | ${pad(r.name, 20)} | ${pad(r.zoningName, 18)} | ${padNum(r.areaM2.toFixed(2), 10)} | ${padNum(r.perimeterM.toFixed(2), 10)} | ${padNum(r.occupantCount, 4)} | ${padNum(r.percentOfFloor.toFixed(1) + '%', 6)}`
+    );
+  }
+
+  lines.push(divider);
+
+  if (totals) {
+    lines.push(
+      `${pad('TOTAL NET', 8)} | ${pad(`${schedule.length} Rooms`, 20)} | ${pad('All Zones', 18)} | ${padNum(totals.netInternalAreaM2.toFixed(2), 10)} | ${padNum('-', 10)} | ${padNum(totals.totalOccupants, 4)} | ${padNum('100.0%', 6)}`
+    );
+    lines.push(`Gross Internal Area (GIA): ${totals.grossInternalAreaM2.toFixed(2)} m² · Circulation Ratio: ${totals.circulationRatioPercent}%`);
+  }
+
+  return lines.join('\n');
+}
+
+
+  // =========================================================================
   // MODULE: Massing3D
   // =========================================================================
 
@@ -12292,6 +12589,7 @@ function extrudePolygon(basePoints, zBottom, zTop, baseColor = '#e2e8f0', stroke
  * @returns {Array<Object>} Array of 3D face objects
  */
 function buildMassing3DModel(entities = [], options = {}) {
+  const zBase = typeof options.baseElevation === 'number' ? options.baseElevation : 0;
   const wallH = typeof options.wallHeight === 'number' && options.wallHeight > 0 ? options.wallHeight : 3.0;
   const doorH = Math.min(wallH - 0.2, options.doorHeight || 2.1);
   const winSill = options.windowSill || 0.9;
@@ -12319,7 +12617,7 @@ function buildMassing3DModel(entities = [], options = {}) {
       ];
     }
     if (poly.length >= 3) {
-      const slabFaces = extrudePolygon(poly, -slabThick, 0, '#cbd5e1', '#94a3b8', 1, 'slab');
+      const slabFaces = extrudePolygon(poly, zBase - slabThick, zBase, '#cbd5e1', '#94a3b8', 1, 'slab');
       faces.push(...slabFaces);
     }
   }
@@ -12341,14 +12639,14 @@ function buildMassing3DModel(entities = [], options = {}) {
     const openings = wallOpenings(w, list);
 
     if (openings.length === 0) {
-      // Solid wall: full extrusion from 0 to wallH
+      // Solid wall: full extrusion from zBase to zBase + wallH
       const basePts = [
         [w.x1 + nx, w.y1 + ny],
         [w.x2 + nx, w.y2 + ny],
         [w.x2 - nx, w.y2 - ny],
         [w.x1 - nx, w.y1 - ny]
       ];
-      faces.push(...extrudePolygon(basePts, 0, wallH, '#f1f5f9', '#475569', 1, 'wall'));
+      faces.push(...extrudePolygon(basePts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall'));
     } else {
       // Segmented wall around openings
       let currentPos = 0;
@@ -12358,7 +12656,6 @@ function buildMassing3DModel(entities = [], options = {}) {
 
         // Solid sub-segment before opening
         if (opStart > currentPos + 1e-4) {
-          const segLen = opStart - currentPos;
           const pStart = { x: w.x1 + ux * currentPos, y: w.y1 + uy * currentPos };
           const pEnd = { x: w.x1 + ux * opStart, y: w.y1 + uy * opStart };
           const segPts = [
@@ -12367,7 +12664,7 @@ function buildMassing3DModel(entities = [], options = {}) {
             [pEnd.x - nx, pEnd.y - ny],
             [pStart.x - nx, pStart.y - ny]
           ];
-          faces.push(...extrudePolygon(segPts, 0, wallH, '#f1f5f9', '#475569', 1, 'wall'));
+          faces.push(...extrudePolygon(segPts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall'));
         }
 
         // Opening segment
@@ -12381,20 +12678,20 @@ function buildMassing3DModel(entities = [], options = {}) {
         ];
 
         if (op.kind === 'door') {
-          // Lintel above door (from doorH to wallH)
+          // Lintel above door (from zBase + doorH to zBase + wallH)
           if (wallH > doorH) {
-            faces.push(...extrudePolygon(opPts, doorH, wallH, '#f1f5f9', '#475569', 1, 'lintel'));
+            faces.push(...extrudePolygon(opPts, zBase + doorH, zBase + wallH, '#f1f5f9', '#475569', 1, 'lintel'));
           }
         } else if (op.kind === 'window') {
-          // Parapet / sill below window (from 0 to winSill)
+          // Parapet / sill below window (from zBase to zBase + winSill)
           if (winSill > 0) {
-            faces.push(...extrudePolygon(opPts, 0, winSill, '#f1f5f9', '#475569', 1, 'sill'));
+            faces.push(...extrudePolygon(opPts, zBase, zBase + winSill, '#f1f5f9', '#475569', 1, 'sill'));
           }
-          // Tinted window glass pane in middle (from winSill to winTop)
-          faces.push(...extrudePolygon(opPts, winSill, winTop, '#38bdf8', '#0284c7', 0.55, 'glass'));
-          // Lintel above window (from winTop to wallH)
+          // Tinted window glass pane in middle (from zBase + winSill to zBase + winTop)
+          faces.push(...extrudePolygon(opPts, zBase + winSill, zBase + winTop, '#38bdf8', '#0284c7', 0.55, 'glass'));
+          // Lintel above window (from zBase + winTop to zBase + wallH)
           if (wallH > winTop) {
-            faces.push(...extrudePolygon(opPts, winTop, wallH, '#f1f5f9', '#475569', 1, 'lintel'));
+            faces.push(...extrudePolygon(opPts, zBase + winTop, zBase + wallH, '#f1f5f9', '#475569', 1, 'lintel'));
           }
         }
 
@@ -12411,7 +12708,7 @@ function buildMassing3DModel(entities = [], options = {}) {
           [pEnd.x - nx, pEnd.y - ny],
           [pStart.x - nx, pStart.y - ny]
         ];
-        faces.push(...extrudePolygon(segPts, 0, wallH, '#f1f5f9', '#475569', 1, 'wall'));
+        faces.push(...extrudePolygon(segPts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall'));
       }
     }
   }
@@ -12422,7 +12719,7 @@ function buildMassing3DModel(entities = [], options = {}) {
     const contour = columnContour(c);
     if (contour.length >= 3) {
       const colColor = c.material === 'steel' ? '#64748b' : '#94a3b8';
-      faces.push(...extrudePolygon(contour, 0, wallH, colColor, '#1e293b', 1, 'column'));
+      faces.push(...extrudePolygon(contour, zBase, zBase + wallH, colColor, '#1e293b', 1, 'column'));
     }
   }
 
@@ -12436,8 +12733,8 @@ function buildMassing3DModel(entities = [], options = {}) {
     const treadD = stD / numRisers;
 
     for (let s = 0; s < numRisers; s++) {
-      const stepBottom = 0;
-      const stepTop = (s + 1) * riserH;
+      const stepBottom = zBase + 0;
+      const stepTop = zBase + (s + 1) * riserH;
       const stepY = st.y + s * treadD;
       const stepPts = [
         [st.x, stepY],
@@ -12451,6 +12748,77 @@ function buildMassing3DModel(entities = [], options = {}) {
 
   faces.faces = faces;
   return faces;
+}
+
+/**
+ * Builds a multi-story building massing 3D model by stacking multiple 2D plan levels vertically.
+ *
+ * @param {Array<Object>} documents - Collection of 2D plan documents
+ * @param {Object} [options]
+ * @param {number} [options.storyHeight=3.0] - Default floor-to-floor height in meters
+ * @returns {Array<Object>} Stacked 3D faces array with building metrics
+ */
+function buildMultiStoryMassing3DModel(documents = [], options = {}) {
+  const docs = Array.isArray(documents)
+    ? documents.filter(d => d && (d.type === '2d_plan' || d.type === '2d' || !d.type))
+    : [];
+
+  if (docs.length === 0) {
+    const single = buildMassing3DModel([], options);
+    single.storyCount = 0;
+    single.totalHeight = 0;
+    single.grossFloorArea = 0;
+    single.grossVolume = 0;
+    return single;
+  }
+
+  const defaultStoryH = typeof options.storyHeight === 'number' && options.storyHeight > 0 ? options.storyHeight : 3.0;
+  const allFaces = [];
+  let currentZ = 0;
+  let totalGFA = 0;
+
+  docs.forEach((doc, idx) => {
+    const storyH = typeof doc.storyHeight === 'number' && doc.storyHeight > 0 ? doc.storyHeight : defaultStoryH;
+    const storyFaces = buildMassing3DModel(doc.entities || [], {
+      ...options,
+      wallHeight: storyH,
+      baseElevation: currentZ
+    });
+
+    for (const f of storyFaces) {
+      f.storyIndex = idx;
+      f.baseElevation = currentZ;
+      f.storyName = doc.name || `Level ${idx + 1}`;
+    }
+
+    allFaces.push(...storyFaces);
+
+    // Compute story room area
+    const rooms = (doc.entities || []).filter(e => e && e.kind === 'room');
+    let storyArea = 0;
+    for (const r of rooms) {
+      if (Array.isArray(r.boundary) && r.boundary.length >= 3) {
+        let a = 0;
+        for (let i = 0; i < r.boundary.length; i++) {
+          const j = (i + 1) % r.boundary.length;
+          a += r.boundary[i].x * r.boundary[j].y - r.boundary[j].x * r.boundary[i].y;
+        }
+        storyArea += Math.abs(a) / 2;
+      } else if (typeof r.width === 'number' && typeof r.depth === 'number') {
+        storyArea += r.width * r.depth;
+      }
+    }
+    totalGFA += storyArea;
+    currentZ += storyH;
+  });
+
+  allFaces.faces = allFaces;
+  allFaces.storyCount = docs.length;
+  allFaces.totalHeight = Number(currentZ.toFixed(2));
+  allFaces.grossFloorArea = Number(totalGFA.toFixed(2));
+  allFaces.grossVolume = Number((totalGFA * (currentZ / docs.length)).toFixed(2));
+
+  return allFaces;
 }
 
 /**
@@ -12498,8 +12866,28 @@ function projectAndSortFaces(faces3D, camera) {
  * @param {Object} [options] - Modeling & rendering options
  * @returns {string} Standalone SVG string
  */
-function generateMassingSVG(entities = [], camera = {}, options = {}) {
-  const faces3D = buildMassing3DModel(entities, options);
+function generateMassingSVG(entities = [], arg2 = {}, arg3 = {}) {
+  let camera, options;
+  if (arg2 && (typeof arg2.azimuth === 'number' || typeof arg2.elevation === 'number')) {
+    camera = arg2;
+    options = arg3 || {};
+  } else {
+    options = arg2 || {};
+    camera = options.camera || {};
+  }
+
+  let faces3D;
+  if (Array.isArray(entities) && entities.length > 0 && entities[0] && Array.isArray(entities[0].vertices)) {
+    faces3D = entities;
+  } else if (entities && Array.isArray(entities.faces)) {
+    faces3D = entities.faces;
+  } else if (options.multiStory && Array.isArray(options.documents)) {
+    faces3D = buildMultiStoryMassing3DModel(options.documents, options);
+  } else if (Array.isArray(entities) && entities.length > 0 && entities[0] && Array.isArray(entities[0].entities)) {
+    faces3D = buildMultiStoryMassing3DModel(entities, options);
+  } else {
+    faces3D = buildMassing3DModel(entities, options);
+  }
 
   const width = options.width || 800;
   const height = options.height || 600;
@@ -12507,9 +12895,9 @@ function generateMassingSVG(entities = [], camera = {}, options = {}) {
   const cam = {
     azimuth: camera.azimuth ?? 45,
     elevation: camera.elevation ?? 35.264,
-    zoom: camera.zoom || 32,
+    zoom: camera.zoom || (faces3D.storyCount > 1 ? Math.max(15, 32 / (faces3D.storyCount * 0.7)) : 32),
     panX: camera.panX || width / 2,
-    panY: camera.panY || height / 2 + 50
+    panY: camera.panY || (faces3D.storyCount > 1 ? height / 2 + 80 : height / 2 + 50)
   };
 
   const sortedFaces = projectAndSortFaces(faces3D, cam);
@@ -12525,9 +12913,13 @@ function generateMassingSVG(entities = [], camera = {}, options = {}) {
     ? `  <text id="massing-title" x="24" y="36" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14" font-weight="600">${title}</text>\n`
     : '';
 
+  const metricsMarkup = (faces3D.storyCount && faces3D.storyCount > 1)
+    ? `  <text id="massing-metrics" x="24" y="56" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">${faces3D.storyCount} Stories · Total H: ${faces3D.totalHeight}m · GFA: ${faces3D.grossFloorArea}m²</text>\n`
+    : '';
+
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
   <rect width="100%" height="100%" fill="#0f172a" />
-${titleMarkup}  <g class="massing-faces">
+${titleMarkup}${metricsMarkup}  <g class="massing-faces">
 ${polygonsMarkup}
   </g>
 </svg>`;
@@ -13505,12 +13897,9 @@ function generatePlanSVG(geometry, options = {}) {
   // MODULE: Sheet
   // =========================================================================
 
-/**
- * Architecture Helping Hand - Presentation Sheet & Title Block Engine
- * Generates ISO architectural drawing sheets (A4, A3, A2, A1) with standardized
- * margins, professional CAD title blocks, scaled plan drawing viewports,
- * and print-ready SVG generation.
- */
+
+
+
 
 const SHEET_SIZES = Object.freeze({
   A4: { widthMm: 297, heightMm: 210, name: 'ISO A4 (297 × 210 mm)' },
@@ -13545,6 +13934,7 @@ function createSheetConfig(options = {}) {
   const sTitle = options.sheetTitle || 'GROUND FLOOR PLAN & STRUCTURAL GRID';
   const sNumber = options.sheetNumber || 'A-101';
   const sRatio = options.scaleRatio || 100;
+  const layoutMode = options.layoutMode || 'single';
 
   return {
     size: sizeKey,
@@ -13553,6 +13943,7 @@ function createSheetConfig(options = {}) {
     widthMm,
     heightMm,
     scaleRatio: sRatio,
+    layoutMode,
     projectName: pName,
     sheetTitle: sTitle,
     sheetNumber: sNumber,
@@ -13646,7 +14037,7 @@ function computeViewportLayout(sheetConfig, entities = []) {
   const drawAreaW = cfg.widthMm - leftMargin - rightMargin;
   const drawAreaH = cfg.heightMm - topMargin - bottomMargin;
 
-  const tb = cfg.titleBlock;
+  const tb = cfg.titleBlock || {};
   const tbW = tb.widthMm || 170;
   const tbH = tb.heightMm || 48;
   const tbX = cfg.widthMm - rightMargin - tbW;
@@ -13656,20 +14047,58 @@ function computeViewportLayout(sheetConfig, entities = []) {
   const bounds = (entities && typeof entities.minX === 'number')
     ? entities
     : computePlanBounds(entities);
-  const scaleRatio = cfg.viewport.scaleRatio || 100;
+  const scaleRatio = (cfg.viewport && cfg.viewport.scaleRatio) || cfg.scaleRatio || 100;
   // 1 meter in real world = (1000 / scaleRatio) millimeters on sheet paper
   const mmPerMeter = 1000 / scaleRatio;
 
   const planWidthMm = bounds.widthM * mmPerMeter;
   const planHeightMm = bounds.heightM * mmPerMeter;
 
-  // Viewport center in drawing area
-  const vpCenterX = drawAreaX + drawAreaW / 2;
-  const vpCenterY = drawAreaY + (drawAreaH - tbH * 0.4) / 2;
+  const layoutMode = cfg.layoutMode || 'single';
+  let vpCenterX, vpCenterY;
+  let vignette3D = null;
+  let scheduleTable = null;
+
+  if (layoutMode === 'plan_3d') {
+    // 3D Vignette box in upper right quadrant above title block
+    const vigH = Math.max(60, tbY - topMargin - 10);
+    vignette3D = {
+      x: tbX,
+      y: topMargin + 5,
+      width: tbW,
+      height: vigH,
+      title: '3D AXONOMETRIC MASSING'
+    };
+    // Plan placed in left drawing region to leave right side clear
+    const leftRegionW = Math.max(100, tbX - drawAreaX - 10);
+    vpCenterX = drawAreaX + leftRegionW / 2;
+    vpCenterY = drawAreaY + drawAreaH / 2;
+  } else if (layoutMode === 'plan_schedule') {
+    // CAD Schedule table in right region above title block
+    const schedH = Math.max(60, tbY - topMargin - 10);
+    scheduleTable = {
+      x: tbX,
+      y: topMargin + 5,
+      width: tbW,
+      height: schedH,
+      title: 'ROOM AREA & OCCUPANCY SCHEDULE'
+    };
+    // Plan placed in left drawing region to leave right side clear
+    const leftRegionW = Math.max(100, tbX - drawAreaX - 10);
+    vpCenterX = drawAreaX + leftRegionW / 2;
+    vpCenterY = drawAreaY + drawAreaH / 2;
+  } else {
+    // Single viewport centered
+    vpCenterX = drawAreaX + drawAreaW / 2;
+    vpCenterY = drawAreaY + (drawAreaH - tbH * 0.4) / 2;
+  }
 
   return {
     drawArea: { x: drawAreaX, y: drawAreaY, width: drawAreaW, height: drawAreaH },
     titleBlock: { x: tbX, y: tbY, width: tbW, height: tbH },
+    layoutMode,
+    vignette3D,
+    scheduleTable,
     mmPerMeter,
     scaleRatio,
     planBounds: bounds,
@@ -13786,7 +14215,7 @@ function generateSheetSVG(arg1, arg2 = [], renderOptions = {}) {
   }
 
   // Viewport Title underline mark
-  const vpTitleY = viewportCenterMm.y + layout.planSizeMm.height / 2 + 12;
+  const vpTitleY = Math.min(viewportCenterMm.y + layout.planSizeMm.height / 2 + 12, drawArea.y + drawArea.height - 8);
   const vpTitleMarkup = `
     <!-- Drawing Viewport Title -->
     <g class="sheet-viewport-title">
@@ -13797,6 +14226,97 @@ function generateSheetSVG(arg1, arg2 = [], renderOptions = {}) {
       <line x1="${drawArea.x + 5}" y1="${(vpTitleY + 7).toFixed(2)}" x2="${drawArea.x + 120}" y2="${(vpTitleY + 7).toFixed(2)}" stroke="#0f172a" stroke-width="0.6" />
     </g>
   `;
+
+  let vignetteMarkup = '';
+  if (layout.layoutMode === 'plan_3d' && layout.vignette3D) {
+    const vig = layout.vignette3D;
+    let inner3DSVG = '';
+    if (renderOptions.massingSVG) {
+      inner3DSVG = renderOptions.massingSVG;
+    } else {
+      const docForMassing = renderOptions.document || { entities };
+      const model = renderOptions.massingModel || buildMassing3DModel(docForMassing);
+      inner3DSVG = generateMassingSVG(model, {
+        viewAngle: renderOptions.viewAngle || 'axonometric',
+        colorMode: renderOptions.colorMode || 'department'
+      });
+    }
+
+    let vb = '0 0 800 600';
+    const vbMatch = inner3DSVG.match(/viewBox="([^"]+)"/);
+    if (vbMatch) vb = vbMatch[1];
+    const innerContent = inner3DSVG
+      .replace(/^<svg[^>]*>/i, '')
+      .replace(/<\/svg>$/i, '');
+
+    vignetteMarkup = `
+    <!-- 3D Axonometric Vignette Viewport -->
+    <g class="sheet-vignette-3d" id="sheet-vignette-3d">
+      <rect x="${vig.x}" y="${vig.y}" width="${vig.width}" height="${vig.height}" fill="#f8fafc" stroke="#0f172a" stroke-width="0.7" />
+      <rect x="${vig.x}" y="${vig.y}" width="${vig.width}" height="7" fill="#0f172a" />
+      <text x="${vig.x + 4}" y="${vig.y + 4.8}" font-family="system-ui, sans-serif" font-size="2.6" font-weight="bold" fill="#ffffff">2  3D AXONOMETRIC MASSING</text>
+      <text x="${vig.x + vig.width - 4}" y="${vig.y + 4.8}" font-family="system-ui, sans-serif" font-size="2" fill="#94a3b8" text-anchor="end">NTS</text>
+      <svg x="${vig.x + 1}" y="${vig.y + 7.5}" width="${vig.width - 2}" height="${vig.height - 9}" viewBox="${vb}" preserveAspectRatio="xMidYMid meet">
+        ${innerContent}
+      </svg>
+    </g>`;
+  }
+
+  let scheduleMarkup = '';
+  if (layout.layoutMode === 'plan_schedule' && layout.scheduleTable) {
+    const st = layout.scheduleTable;
+    const schedule = renderOptions.schedule || calculateRoomSchedule(entities);
+    const totals = renderOptions.floorTotals || calculateFloorTotals(schedule);
+
+    const rowH = 5.2;
+    const headerH = 7;
+    const colHeaderH = 5.5;
+    const footerH = 6;
+    const maxDataRows = Math.floor((st.height - headerH - colHeaderH - footerH) / rowH);
+    const visibleRooms = schedule.slice(0, Math.max(1, maxDataRows));
+
+    const rowElements = [];
+    visibleRooms.forEach((r, idx) => {
+      const ry = st.y + headerH + colHeaderH + idx * rowH;
+      const bg = idx % 2 === 1 ? '#f8fafc' : '#ffffff';
+      rowElements.push(`
+        <rect x="${st.x}" y="${ry}" width="${st.width}" height="${rowH}" fill="${bg}" stroke="#e2e8f0" stroke-width="0.25" />
+        <text x="${st.x + 8}" y="${ry + 3.6}" font-family="system-ui, sans-serif" font-size="2.1" fill="#475569" text-anchor="middle">${r.roomNumber}</text>
+        <text x="${st.x + 18}" y="${ry + 3.6}" font-family="system-ui, sans-serif" font-size="2.1" font-weight="600" fill="#0f172a">${r.name}</text>
+        <text x="${st.x + 74}" y="${ry + 3.6}" font-family="system-ui, sans-serif" font-size="2" fill="${(r.zoningTag && r.zoningTag.color) || '#64748b'}">${(r.zoningTag && r.zoningTag.name) || 'General'}</text>
+        <text x="${st.x + 136}" y="${ry + 3.6}" font-family="system-ui, sans-serif" font-size="2.1" fill="#0f172a" text-anchor="end">${r.areaM2.toFixed(1)} m²</text>
+        <text x="${st.x + 155}" y="${ry + 3.6}" font-family="system-ui, sans-serif" font-size="2.1" font-weight="600" fill="#0f172a" text-anchor="middle">${r.occupantLoad}</text>
+      `);
+    });
+
+    const footerY = st.y + st.height - footerH;
+
+    scheduleMarkup = `
+    <!-- CAD Room & Area Schedule Table -->
+    <g class="sheet-schedule-table" id="sheet-schedule-table">
+      <rect x="${st.x}" y="${st.y}" width="${st.width}" height="${st.height}" fill="#ffffff" stroke="#0f172a" stroke-width="0.7" />
+      
+      <!-- Table Header -->
+      <rect x="${st.x}" y="${st.y}" width="${st.width}" height="${headerH}" fill="#0f172a" />
+      <text x="${st.x + st.width / 2}" y="${st.y + 4.8}" font-family="system-ui, sans-serif" font-size="2.6" font-weight="bold" fill="#ffffff" text-anchor="middle">ROOM &amp; AREA SCHEDULE</text>
+
+      <!-- Column Headers -->
+      <rect x="${st.x}" y="${st.y + headerH}" width="${st.width}" height="${colHeaderH}" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="0.3" />
+      <text x="${st.x + 8}" y="${st.y + headerH + 3.8}" font-family="system-ui, sans-serif" font-size="1.9" font-weight="bold" fill="#475569" text-anchor="middle">NO.</text>
+      <text x="${st.x + 18}" y="${st.y + headerH + 3.8}" font-family="system-ui, sans-serif" font-size="1.9" font-weight="bold" fill="#475569">ROOM NAME</text>
+      <text x="${st.x + 74}" y="${st.y + headerH + 3.8}" font-family="system-ui, sans-serif" font-size="1.9" font-weight="bold" fill="#475569">ZONING</text>
+      <text x="${st.x + 136}" y="${st.y + headerH + 3.8}" font-family="system-ui, sans-serif" font-size="1.9" font-weight="bold" fill="#475569" text-anchor="end">AREA</text>
+      <text x="${st.x + 155}" y="${st.y + headerH + 3.8}" font-family="system-ui, sans-serif" font-size="1.9" font-weight="bold" fill="#475569" text-anchor="middle">OCC</text>
+      
+      <!-- Data Rows -->
+      ${rowElements.join('\n')}
+
+      <!-- Summary Footer -->
+      <rect x="${st.x}" y="${footerY}" width="${st.width}" height="${footerH}" fill="#0f172a" />
+      <text x="${st.x + 6}" y="${footerY + 4}" font-family="system-ui, sans-serif" font-size="2.2" font-weight="bold" fill="#ffffff">TOTAL NET AREA: ${totals.netInternalArea.toFixed(1)} m²</text>
+      <text x="${st.x + st.width - 6}" y="${footerY + 4}" font-family="system-ui, sans-serif" font-size="2.2" font-weight="bold" fill="#38bdf8" text-anchor="end">TOTAL OCC: ${totals.totalOccupants} P</text>
+    </g>`;
+  }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${wMm} ${hMm}" width="${wPx}px" height="${hPx}px">
   <!-- Sheet Background (Paper) -->
@@ -13814,6 +14334,8 @@ function generateSheetSVG(arg1, arg2 = [], renderOptions = {}) {
   </g>
 
   ${vpTitleMarkup}
+  ${vignetteMarkup}
+  ${scheduleMarkup}
 
   <!-- CAD Title Block -->
   <g class="sheet-title-block" id="title-block" transform="translate(${tbX}, ${tbY})">
@@ -27434,6 +27956,7 @@ function createProjectsView(context) {
 
 
 
+
 const PLAN_STATE_KEY = 'archiscale_plan_prefs'; // user preferences only
 
 function createPlanView(context) {
@@ -28601,9 +29124,16 @@ function createPlanView(context) {
     const planEntities = planDoc ? (planDoc.entities || []) : [];
 
     doc.camera = doc.camera || { azimuth: 45, elevation: 35.264, zoom: 32, panX: svg.width / 2, panY: svg.height / 2 + 30 };
-    doc.massingOptions = doc.massingOptions || { wallHeight: 3.0, doorHeight: 2.1, windowSill: 0.9, windowHeight: 1.2, slabThickness: 0.2, wireframe: false };
+    doc.massingOptions = doc.massingOptions || { wallHeight: 3.0, doorHeight: 2.1, windowSill: 0.9, windowHeight: 1.2, slabThickness: 0.2, wireframe: false, multiStory: false };
 
-    const faces3D = buildMassing3DModel(planEntities, doc.massingOptions);
+    let faces3D = [];
+    let multiStoryMetrics = null;
+    if (doc.massingOptions.multiStory) {
+      multiStoryMetrics = buildMultiStoryMassing3DModel(state.plan.documents || [planDoc], doc.massingOptions);
+      faces3D = multiStoryMetrics.faces;
+    } else {
+      faces3D = buildMassing3DModel(planEntities, doc.massingOptions);
+    }
     const sortedFaces = projectAndSortFaces(faces3D, doc.camera);
 
     const facesMarkup = sortedFaces.map(f => {
@@ -28641,6 +29171,7 @@ function createPlanView(context) {
 
     const ctxBar = dom.planContextualToolbar || document.getElementById('plan-contextual-toolbar');
     if (ctxBar) {
+      const multiStoryLabel = doc.massingOptions.multiStory ? '🏢 Stack All Stories' : '🏢 Single Story';
       ctxBar.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
           <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
@@ -28648,6 +29179,7 @@ function createPlanView(context) {
             ${presetsMarkup}
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" id="btn-3d-multistory" class="result-action-btn ${doc.massingOptions.multiStory ? 'primary' : ''}" style="font-size: 0.68rem; padding: 2px 6px;" title="Toggle multi-story building stacking">${multiStoryLabel}</button>
             <button type="button" id="btn-3d-wireframe" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">${doc.massingOptions.wireframe ? 'Shaded' : 'Wireframe'}</button>
             <button type="button" id="btn-3d-height" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">H: ${(doc.massingOptions.wallHeight || 3.0).toFixed(1)}m</button>
             <button type="button" id="btn-3d-export" class="result-action-btn primary" style="font-size: 0.68rem; padding: 2px 8px;">💾 Export 3D SVG</button>
@@ -28666,6 +29198,13 @@ function createPlanView(context) {
             AudioService.playTick();
           }
         });
+      });
+
+      ctxBar.querySelector('#btn-3d-multistory')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        doc.massingOptions.multiStory = !doc.massingOptions.multiStory;
+        render();
+        AudioService.playTick();
       });
 
       ctxBar.querySelector('#btn-3d-wireframe')?.addEventListener('click', (e) => {
@@ -28687,12 +29226,17 @@ function createPlanView(context) {
 
       ctxBar.querySelector('#btn-3d-export')?.addEventListener('click', (e) => {
         e.stopPropagation();
-        const svgCode = generateMassingSVG(planEntities, doc.camera, doc.massingOptions);
+        const svgCode = generateMassingSVG(doc.massingOptions.multiStory ? { faces: faces3D } : planEntities, {
+          camera: doc.camera,
+          ...doc.massingOptions,
+          multiStory: doc.massingOptions.multiStory,
+          documents: state.plan.documents
+        });
         const blob = new Blob([svgCode], { type: 'image/svg+xml;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${(planDoc.name || 'plan').toLowerCase().replace(/\s+/g, '-')}-massing-3d.svg`;
+        a.download = `${(planDoc.name || 'massing').toLowerCase().replace(/\s+/g, '-')}-3d.svg`;
         a.click();
         URL.revokeObjectURL(url);
         showToast('Exported 3D Massing SVG');
@@ -28701,17 +29245,30 @@ function createPlanView(context) {
     }
 
     if (dom.planModeLabel) dom.planModeLabel.textContent = '3D MASSING';
-    if (dom.planStatusBadge) dom.planStatusBadge.textContent = `az ${Math.round(doc.camera.azimuth || 45)}° · el ${Math.round(doc.camera.elevation || 35)}°`;
+    if (dom.planStatusBadge) {
+      if (multiStoryMetrics) {
+        dom.planStatusBadge.textContent = `${multiStoryMetrics.storyCount} Stories · ${multiStoryMetrics.totalHeight.toFixed(1)}m H · ${multiStoryMetrics.grossFloorArea.toFixed(0)}m² GFA`;
+      } else {
+        dom.planStatusBadge.textContent = `az ${Math.round(doc.camera.azimuth || 45)}° · el ${Math.round(doc.camera.elevation || 35)}°`;
+      }
+    }
   }
 
   function renderPresentationSheet(doc) {
     const planDoc = state.plan.documents.find(d => d.type === '2d_plan' || d.type === '2d') || doc;
     const planEntities = planDoc ? (planDoc.entities || []) : [];
 
-    doc.sheetConfig = doc.sheetConfig || createSheetConfig({ sheetNumber: 'A-101', sheetTitle: (planDoc.name || 'GROUND FLOOR PLAN').toUpperCase() });
+    doc.sheetConfig = doc.sheetConfig || createSheetConfig({
+      sheetNumber: 'A-101',
+      sheetTitle: (planDoc.name || 'GROUND FLOOR PLAN').toUpperCase(),
+      layoutMode: 'single'
+    });
+    if (!doc.sheetConfig.layoutMode) doc.sheetConfig.layoutMode = 'single';
 
     const sheetSvg = generateSheetSVG(doc.sheetConfig, planEntities, {
-      pxPerMm: (svg.width / doc.sheetConfig.widthMm) * 0.85
+      pxPerMm: (svg.width / doc.sheetConfig.widthMm) * 0.85,
+      document: planDoc,
+      documents: state.plan.documents
     });
 
     const innerMatch = sheetSvg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i);
@@ -28738,6 +29295,11 @@ function createPlanView(context) {
         <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
           <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
             <span class="context-tag-badge">PRESENTATION SHEET</span>
+            <select id="sheet-layout-select" class="calc-select" style="height: 24px; padding: 0 4px; font-size: 0.7rem; width: 110px;" title="Sheet presentation layout">
+              <option value="single" ${doc.sheetConfig.layoutMode === 'single' ? 'selected' : ''}>Full Plan</option>
+              <option value="plan_3d" ${doc.sheetConfig.layoutMode === 'plan_3d' ? 'selected' : ''}>Plan + 3D Axo</option>
+              <option value="plan_schedule" ${doc.sheetConfig.layoutMode === 'plan_schedule' ? 'selected' : ''}>Plan + Schedule</option>
+            </select>
             <select id="sheet-size-select" class="calc-select" style="height: 24px; padding: 0 4px; font-size: 0.7rem; width: 85px;">
               <option value="A4" ${doc.sheetConfig.size === 'A4' ? 'selected' : ''}>A4</option>
               <option value="A3" ${doc.sheetConfig.size === 'A3' ? 'selected' : ''}>A3 (Std)</option>
@@ -28758,10 +29320,17 @@ function createPlanView(context) {
         </div>
       `;
 
+      ctxBar.querySelector('#sheet-layout-select')?.addEventListener('change', (e) => {
+        doc.sheetConfig.layoutMode = e.target.value;
+        render();
+        AudioService.playTick();
+      });
+
       ctxBar.querySelector('#sheet-size-select')?.addEventListener('change', (e) => {
         doc.sheetConfig = createSheetConfig({
           ...doc.sheetConfig,
           size: e.target.value,
+          layoutMode: doc.sheetConfig.layoutMode,
           orientation: doc.sheetConfig.orientation,
           titleBlock: doc.sheetConfig.titleBlock
         });
@@ -28783,6 +29352,7 @@ function createPlanView(context) {
           ...doc.sheetConfig,
           orientation: nextOri,
           size: doc.sheetConfig.size,
+          layoutMode: doc.sheetConfig.layoutMode,
           titleBlock: doc.sheetConfig.titleBlock
         });
         render();
@@ -28790,7 +29360,10 @@ function createPlanView(context) {
       });
 
       ctxBar.querySelector('#btn-sheet-export')?.addEventListener('click', () => {
-        const svgCode = generateSheetSVG(doc.sheetConfig, planEntities);
+        const svgCode = generateSheetSVG(doc.sheetConfig, planEntities, {
+          document: planDoc,
+          documents: state.plan.documents
+        });
         const blob = new Blob([svgCode], { type: 'image/svg+xml;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -28804,7 +29377,7 @@ function createPlanView(context) {
     }
 
     if (dom.planModeLabel) dom.planModeLabel.textContent = 'SHEET';
-    if (dom.planStatusBadge) dom.planStatusBadge.textContent = `${doc.sheetConfig.size} · 1:${doc.sheetConfig.viewport.scaleRatio || 100}`;
+    if (dom.planStatusBadge) dom.planStatusBadge.textContent = `${doc.sheetConfig.size} · 1:${doc.sheetConfig.viewport.scaleRatio || 100} · ${doc.sheetConfig.layoutMode || 'single'}`;
   }
 
   // ------------------------------------------------------------------
@@ -29574,6 +30147,7 @@ function createPlanView(context) {
     }
     renderEntityList();
     renderLayerList();
+    renderScheduleList();
     renderPropertiesInspector();
     renderContextualToolbar();
     updateStatusBar();
@@ -29704,11 +30278,98 @@ function createPlanView(context) {
     });
   }
 
+  function renderScheduleList() {
+    const listContainer = dom.planScheduleList || document.getElementById('plan-schedule-list');
+    const totalsContainer = dom.planScheduleTotals || document.getElementById('plan-schedule-totals');
+    const countBadge = dom.planScheduleCount || document.getElementById('plan-schedule-count');
+
+    const es = entities();
+    const schedule = calculateRoomSchedule(es);
+    const totals = calculateFloorTotals(schedule);
+
+    if (countBadge) {
+      countBadge.textContent = String(schedule.length);
+    }
+
+    if (totalsContainer) {
+      const nia = (totals && (totals.netInternalArea ?? totals.netInternalAreaM2)) || 0;
+      const gia = (totals && (totals.grossInternalArea ?? totals.grossInternalAreaM2)) || 0;
+      const circRatio = (totals && (totals.circulationRatioPercent ?? totals.circulationRatio)) || 0;
+      const circArea = (totals && (totals.circulationArea ?? totals.circulationAreaM2)) || 0;
+      const occ = (totals && totals.totalOccupants) || 0;
+      const egWidth = (totals && (totals.egressWidthMm ?? totals.minEgressWidthMm)) || 900;
+
+      totalsContainer.innerHTML = `
+        <div style="background: var(--bg-surface-2, #1e293b); padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-color, #334155);">
+          <div style="font-size: 0.62rem; color: var(--text-muted, #888); text-transform: uppercase;">Net Area (NIA)</div>
+          <div style="font-size: 0.82rem; font-weight: 700; color: var(--accent-primary, #38bdf8);">${nia.toFixed(1)} m²</div>
+        </div>
+        <div style="background: var(--bg-surface-2, #1e293b); padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-color, #334155);">
+          <div style="font-size: 0.62rem; color: var(--text-muted, #888); text-transform: uppercase;">Gross Area (GIA)</div>
+          <div style="font-size: 0.82rem; font-weight: 700; color: var(--text-normal, #f8fafc);">${gia.toFixed(1)} m²</div>
+        </div>
+        <div style="background: var(--bg-surface-2, #1e293b); padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-color, #334155);">
+          <div style="font-size: 0.62rem; color: var(--text-muted, #888); text-transform: uppercase;">Circulation</div>
+          <div style="font-size: 0.82rem; font-weight: 700; color: var(--color-warning, #eab308);">${circRatio.toFixed(1)}% <span style="font-size: 0.62rem; font-weight: normal; color: var(--text-muted);">(${circArea.toFixed(1)}m²)</span></div>
+        </div>
+        <div style="background: var(--bg-surface-2, #1e293b); padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-color, #334155);">
+          <div style="font-size: 0.62rem; color: var(--text-muted, #888); text-transform: uppercase;">Occupancy</div>
+          <div style="font-size: 0.82rem; font-weight: 700; color: #10b981;">${occ} P <span style="font-size: 0.62rem; font-weight: normal; color: var(--text-muted);">(Min ${(egWidth / 1000).toFixed(2)}m)</span></div>
+        </div>
+      `;
+    }
+
+    if (!listContainer) return;
+    if (schedule.length === 0) {
+      listContainer.innerHTML = `
+        <div style="padding: 1rem 0.5rem; text-align: center; color: var(--text-muted, #888); font-size: 0.72rem;">
+          No rooms created yet. Use the <strong>Room (R)</strong> tool to add rooms.
+        </div>
+      `;
+      return;
+    }
+
+    listContainer.innerHTML = schedule.map(r => {
+      const isSelected = state.plan.selectedIds.has(r.id);
+      const tagColor = (r.zoningTag && r.zoningTag.color) || '#64748b';
+      const tagName = (r.zoningTag && r.zoningTag.name) || 'General';
+      return `
+        <div class="plan-schedule-row ${isSelected ? 'selected' : ''}" data-entity-id="${escapeHtml(r.id)}" style="display: flex; align-items: center; justify-content: space-between; padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid ${isSelected ? 'var(--accent-primary, #38bdf8)' : 'var(--border-color, #334155)'}; background: ${isSelected ? 'rgba(56, 189, 248, 0.1)' : 'var(--bg-surface-2, #1e293b)'}; cursor: pointer; margin-bottom: 2px;">
+          <div style="display: flex; align-items: center; gap: 6px; overflow: hidden;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: ${tagColor}; flex-shrink: 0;"></span>
+            <span style="font-weight: 700; font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted, #888);">${escapeHtml(r.roomNumber)}</span>
+            <span style="font-size: 0.74rem; font-weight: 600; color: var(--text-normal, #f8fafc); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px;">${escapeHtml(r.name)}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+            <span style="font-size: 0.65rem; padding: 1px 4px; border-radius: 3px; background: rgba(255,255,255,0.06); color: ${tagColor};">${escapeHtml(tagName)}</span>
+            <span style="font-size: 0.74rem; font-family: var(--font-mono); font-weight: 600; color: var(--accent-primary, #38bdf8);">${r.areaM2.toFixed(1)}m²</span>
+            <span style="font-size: 0.68rem; color: var(--text-muted, #888);" title="Estimated occupants">👥 ${r.occupantLoad}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    listContainer.querySelectorAll('.plan-schedule-row').forEach(row => {
+      row.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const eid = row.dataset.entityId;
+        if (eid) {
+          state.plan.selectedIds = new Set([eid]);
+          render();
+          renderScheduleList();
+          AudioService.playTick();
+        }
+      });
+    });
+  }
+
   function setupSidebarTabs() {
     const tabEntities = dom.tabPlanEntities || document.getElementById('tab-plan-entities');
     const tabLayers = dom.tabPlanLayers || document.getElementById('tab-plan-layers');
+    const tabSchedule = dom.tabPlanSchedule || document.getElementById('tab-plan-schedule');
     const viewEntities = dom.planEntitiesView || document.getElementById('plan-entities-view');
     const viewLayers = dom.planLayersView || document.getElementById('plan-layers-view');
+    const viewSchedule = dom.planScheduleView || document.getElementById('plan-schedule-view');
 
     const updateTabUI = () => {
       if (tabEntities) {
@@ -29721,8 +30382,14 @@ function createPlanView(context) {
         tabLayers.style.borderBottom = activeSidebarTab === 'layers' ? '2px solid var(--accent-primary, #4989D9)' : '2px solid transparent';
         tabLayers.style.color = activeSidebarTab === 'layers' ? 'var(--accent-primary, #4989D9)' : 'var(--text-muted, #888)';
       }
+      if (tabSchedule) {
+        tabSchedule.classList.toggle('active', activeSidebarTab === 'schedule');
+        tabSchedule.style.borderBottom = activeSidebarTab === 'schedule' ? '2px solid var(--accent-primary, #4989D9)' : '2px solid transparent';
+        tabSchedule.style.color = activeSidebarTab === 'schedule' ? 'var(--accent-primary, #4989D9)' : 'var(--text-muted, #888)';
+      }
       if (viewEntities) viewEntities.style.display = activeSidebarTab === 'entities' ? 'block' : 'none';
       if (viewLayers) viewLayers.style.display = activeSidebarTab === 'layers' ? 'block' : 'none';
+      if (viewSchedule) viewSchedule.style.display = activeSidebarTab === 'schedule' ? 'block' : 'none';
     };
 
     if (tabEntities) {
@@ -29736,6 +30403,29 @@ function createPlanView(context) {
         activeSidebarTab = 'layers';
         updateTabUI();
         renderLayerList();
+      });
+    }
+    if (tabSchedule) {
+      tabSchedule.addEventListener('click', () => {
+        activeSidebarTab = 'schedule';
+        updateTabUI();
+        renderScheduleList();
+      });
+    }
+
+    const btnCopyCsv = dom.btnCopyScheduleCsv || document.getElementById('btn-copy-schedule-csv');
+    if (btnCopyCsv) {
+      btnCopyCsv.addEventListener('click', () => {
+        const schedule = calculateRoomSchedule(entities());
+        const totals = calculateFloorTotals(schedule);
+        const csv = formatScheduleCSV(schedule, totals);
+        if (typeof copyToClipboard === 'function') {
+          copyToClipboard(csv);
+        } else if (navigator.clipboard) {
+          navigator.clipboard.writeText(csv);
+        }
+        showToast('Copied Room & Area Schedule to clipboard as CSV');
+        AudioService.playTick();
       });
     }
 
@@ -32282,7 +32972,7 @@ function createPlanView(context) {
         renderContextualToolbar, updateStatusBar,
         switchDocument, createDocument, closeDocument, renameDocument,
         finishPolyRoom, cancelPolyRoom, renderTabs,
-        renderLayerList, setupSidebarTabs
+        renderLayerList, setupSidebarTabs, renderScheduleList
       };
     }
   };
@@ -34959,12 +35649,18 @@ function initializeApp() {
     planEntityList: document.getElementById('plan-entity-list'),
     tabPlanEntities: document.getElementById('tab-plan-entities'),
     tabPlanLayers: document.getElementById('tab-plan-layers'),
+    tabPlanSchedule: document.getElementById('tab-plan-schedule'),
     planEntitiesView: document.getElementById('plan-entities-view'),
     planLayersView: document.getElementById('plan-layers-view'),
+    planScheduleView: document.getElementById('plan-schedule-view'),
     planLayerList: document.getElementById('plan-layer-list'),
     planLayersCount: document.getElementById('plan-layers-count'),
+    planScheduleList: document.getElementById('plan-schedule-list'),
+    planScheduleCount: document.getElementById('plan-schedule-count'),
+    planScheduleTotals: document.getElementById('plan-schedule-totals'),
     btnAutoTagAll: document.getElementById('btn-auto-tag-all'),
     btnAddLayer: document.getElementById('btn-add-layer'),
+    btnCopyScheduleCsv: document.getElementById('btn-copy-schedule-csv'),
     planResultPanel: document.getElementById('plan-result-panel'),
     planStateBadge: document.getElementById('plan-state-badge'),
     planStatusBadge: document.getElementById('plan-status-badge'),

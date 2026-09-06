@@ -1,9 +1,6 @@
-/**
- * Architecture Helping Hand - Presentation Sheet & Title Block Engine
- * Generates ISO architectural drawing sheets (A4, A3, A2, A1) with standardized
- * margins, professional CAD title blocks, scaled plan drawing viewports,
- * and print-ready SVG generation.
- */
+import { calculateRoomSchedule, calculateFloorTotals } from './zoning-schedule.js';
+import { buildMassing3DModel, generateMassingSVG } from './massing-3d.js';
+
 
 export const SHEET_SIZES = Object.freeze({
   A4: { widthMm: 297, heightMm: 210, name: 'ISO A4 (297 × 210 mm)' },
@@ -38,6 +35,7 @@ export function createSheetConfig(options = {}) {
   const sTitle = options.sheetTitle || 'GROUND FLOOR PLAN & STRUCTURAL GRID';
   const sNumber = options.sheetNumber || 'A-101';
   const sRatio = options.scaleRatio || 100;
+  const layoutMode = options.layoutMode || 'single';
 
   return {
     size: sizeKey,
@@ -46,6 +44,7 @@ export function createSheetConfig(options = {}) {
     widthMm,
     heightMm,
     scaleRatio: sRatio,
+    layoutMode,
     projectName: pName,
     sheetTitle: sTitle,
     sheetNumber: sNumber,
@@ -139,7 +138,7 @@ export function computeViewportLayout(sheetConfig, entities = []) {
   const drawAreaW = cfg.widthMm - leftMargin - rightMargin;
   const drawAreaH = cfg.heightMm - topMargin - bottomMargin;
 
-  const tb = cfg.titleBlock;
+  const tb = cfg.titleBlock || {};
   const tbW = tb.widthMm || 170;
   const tbH = tb.heightMm || 48;
   const tbX = cfg.widthMm - rightMargin - tbW;
@@ -149,20 +148,58 @@ export function computeViewportLayout(sheetConfig, entities = []) {
   const bounds = (entities && typeof entities.minX === 'number')
     ? entities
     : computePlanBounds(entities);
-  const scaleRatio = cfg.viewport.scaleRatio || 100;
+  const scaleRatio = (cfg.viewport && cfg.viewport.scaleRatio) || cfg.scaleRatio || 100;
   // 1 meter in real world = (1000 / scaleRatio) millimeters on sheet paper
   const mmPerMeter = 1000 / scaleRatio;
 
   const planWidthMm = bounds.widthM * mmPerMeter;
   const planHeightMm = bounds.heightM * mmPerMeter;
 
-  // Viewport center in drawing area
-  const vpCenterX = drawAreaX + drawAreaW / 2;
-  const vpCenterY = drawAreaY + (drawAreaH - tbH * 0.4) / 2;
+  const layoutMode = cfg.layoutMode || 'single';
+  let vpCenterX, vpCenterY;
+  let vignette3D = null;
+  let scheduleTable = null;
+
+  if (layoutMode === 'plan_3d') {
+    // 3D Vignette box in upper right quadrant above title block
+    const vigH = Math.max(60, tbY - topMargin - 10);
+    vignette3D = {
+      x: tbX,
+      y: topMargin + 5,
+      width: tbW,
+      height: vigH,
+      title: '3D AXONOMETRIC MASSING'
+    };
+    // Plan placed in left drawing region to leave right side clear
+    const leftRegionW = Math.max(100, tbX - drawAreaX - 10);
+    vpCenterX = drawAreaX + leftRegionW / 2;
+    vpCenterY = drawAreaY + drawAreaH / 2;
+  } else if (layoutMode === 'plan_schedule') {
+    // CAD Schedule table in right region above title block
+    const schedH = Math.max(60, tbY - topMargin - 10);
+    scheduleTable = {
+      x: tbX,
+      y: topMargin + 5,
+      width: tbW,
+      height: schedH,
+      title: 'ROOM AREA & OCCUPANCY SCHEDULE'
+    };
+    // Plan placed in left drawing region to leave right side clear
+    const leftRegionW = Math.max(100, tbX - drawAreaX - 10);
+    vpCenterX = drawAreaX + leftRegionW / 2;
+    vpCenterY = drawAreaY + drawAreaH / 2;
+  } else {
+    // Single viewport centered
+    vpCenterX = drawAreaX + drawAreaW / 2;
+    vpCenterY = drawAreaY + (drawAreaH - tbH * 0.4) / 2;
+  }
 
   return {
     drawArea: { x: drawAreaX, y: drawAreaY, width: drawAreaW, height: drawAreaH },
     titleBlock: { x: tbX, y: tbY, width: tbW, height: tbH },
+    layoutMode,
+    vignette3D,
+    scheduleTable,
     mmPerMeter,
     scaleRatio,
     planBounds: bounds,
@@ -279,7 +316,7 @@ export function generateSheetSVG(arg1, arg2 = [], renderOptions = {}) {
   }
 
   // Viewport Title underline mark
-  const vpTitleY = viewportCenterMm.y + layout.planSizeMm.height / 2 + 12;
+  const vpTitleY = Math.min(viewportCenterMm.y + layout.planSizeMm.height / 2 + 12, drawArea.y + drawArea.height - 8);
   const vpTitleMarkup = `
     <!-- Drawing Viewport Title -->
     <g class="sheet-viewport-title">
@@ -290,6 +327,97 @@ export function generateSheetSVG(arg1, arg2 = [], renderOptions = {}) {
       <line x1="${drawArea.x + 5}" y1="${(vpTitleY + 7).toFixed(2)}" x2="${drawArea.x + 120}" y2="${(vpTitleY + 7).toFixed(2)}" stroke="#0f172a" stroke-width="0.6" />
     </g>
   `;
+
+  let vignetteMarkup = '';
+  if (layout.layoutMode === 'plan_3d' && layout.vignette3D) {
+    const vig = layout.vignette3D;
+    let inner3DSVG = '';
+    if (renderOptions.massingSVG) {
+      inner3DSVG = renderOptions.massingSVG;
+    } else {
+      const docForMassing = renderOptions.document || { entities };
+      const model = renderOptions.massingModel || buildMassing3DModel(docForMassing);
+      inner3DSVG = generateMassingSVG(model, {
+        viewAngle: renderOptions.viewAngle || 'axonometric',
+        colorMode: renderOptions.colorMode || 'department'
+      });
+    }
+
+    let vb = '0 0 800 600';
+    const vbMatch = inner3DSVG.match(/viewBox="([^"]+)"/);
+    if (vbMatch) vb = vbMatch[1];
+    const innerContent = inner3DSVG
+      .replace(/^<svg[^>]*>/i, '')
+      .replace(/<\/svg>$/i, '');
+
+    vignetteMarkup = `
+    <!-- 3D Axonometric Vignette Viewport -->
+    <g class="sheet-vignette-3d" id="sheet-vignette-3d">
+      <rect x="${vig.x}" y="${vig.y}" width="${vig.width}" height="${vig.height}" fill="#f8fafc" stroke="#0f172a" stroke-width="0.7" />
+      <rect x="${vig.x}" y="${vig.y}" width="${vig.width}" height="7" fill="#0f172a" />
+      <text x="${vig.x + 4}" y="${vig.y + 4.8}" font-family="system-ui, sans-serif" font-size="2.6" font-weight="bold" fill="#ffffff">2  3D AXONOMETRIC MASSING</text>
+      <text x="${vig.x + vig.width - 4}" y="${vig.y + 4.8}" font-family="system-ui, sans-serif" font-size="2" fill="#94a3b8" text-anchor="end">NTS</text>
+      <svg x="${vig.x + 1}" y="${vig.y + 7.5}" width="${vig.width - 2}" height="${vig.height - 9}" viewBox="${vb}" preserveAspectRatio="xMidYMid meet">
+        ${innerContent}
+      </svg>
+    </g>`;
+  }
+
+  let scheduleMarkup = '';
+  if (layout.layoutMode === 'plan_schedule' && layout.scheduleTable) {
+    const st = layout.scheduleTable;
+    const schedule = renderOptions.schedule || calculateRoomSchedule(entities);
+    const totals = renderOptions.floorTotals || calculateFloorTotals(schedule);
+
+    const rowH = 5.2;
+    const headerH = 7;
+    const colHeaderH = 5.5;
+    const footerH = 6;
+    const maxDataRows = Math.floor((st.height - headerH - colHeaderH - footerH) / rowH);
+    const visibleRooms = schedule.slice(0, Math.max(1, maxDataRows));
+
+    const rowElements = [];
+    visibleRooms.forEach((r, idx) => {
+      const ry = st.y + headerH + colHeaderH + idx * rowH;
+      const bg = idx % 2 === 1 ? '#f8fafc' : '#ffffff';
+      rowElements.push(`
+        <rect x="${st.x}" y="${ry}" width="${st.width}" height="${rowH}" fill="${bg}" stroke="#e2e8f0" stroke-width="0.25" />
+        <text x="${st.x + 8}" y="${ry + 3.6}" font-family="system-ui, sans-serif" font-size="2.1" fill="#475569" text-anchor="middle">${r.roomNumber}</text>
+        <text x="${st.x + 18}" y="${ry + 3.6}" font-family="system-ui, sans-serif" font-size="2.1" font-weight="600" fill="#0f172a">${r.name}</text>
+        <text x="${st.x + 74}" y="${ry + 3.6}" font-family="system-ui, sans-serif" font-size="2" fill="${(r.zoningTag && r.zoningTag.color) || '#64748b'}">${(r.zoningTag && r.zoningTag.name) || 'General'}</text>
+        <text x="${st.x + 136}" y="${ry + 3.6}" font-family="system-ui, sans-serif" font-size="2.1" fill="#0f172a" text-anchor="end">${r.areaM2.toFixed(1)} m²</text>
+        <text x="${st.x + 155}" y="${ry + 3.6}" font-family="system-ui, sans-serif" font-size="2.1" font-weight="600" fill="#0f172a" text-anchor="middle">${r.occupantLoad}</text>
+      `);
+    });
+
+    const footerY = st.y + st.height - footerH;
+
+    scheduleMarkup = `
+    <!-- CAD Room & Area Schedule Table -->
+    <g class="sheet-schedule-table" id="sheet-schedule-table">
+      <rect x="${st.x}" y="${st.y}" width="${st.width}" height="${st.height}" fill="#ffffff" stroke="#0f172a" stroke-width="0.7" />
+      
+      <!-- Table Header -->
+      <rect x="${st.x}" y="${st.y}" width="${st.width}" height="${headerH}" fill="#0f172a" />
+      <text x="${st.x + st.width / 2}" y="${st.y + 4.8}" font-family="system-ui, sans-serif" font-size="2.6" font-weight="bold" fill="#ffffff" text-anchor="middle">ROOM &amp; AREA SCHEDULE</text>
+
+      <!-- Column Headers -->
+      <rect x="${st.x}" y="${st.y + headerH}" width="${st.width}" height="${colHeaderH}" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="0.3" />
+      <text x="${st.x + 8}" y="${st.y + headerH + 3.8}" font-family="system-ui, sans-serif" font-size="1.9" font-weight="bold" fill="#475569" text-anchor="middle">NO.</text>
+      <text x="${st.x + 18}" y="${st.y + headerH + 3.8}" font-family="system-ui, sans-serif" font-size="1.9" font-weight="bold" fill="#475569">ROOM NAME</text>
+      <text x="${st.x + 74}" y="${st.y + headerH + 3.8}" font-family="system-ui, sans-serif" font-size="1.9" font-weight="bold" fill="#475569">ZONING</text>
+      <text x="${st.x + 136}" y="${st.y + headerH + 3.8}" font-family="system-ui, sans-serif" font-size="1.9" font-weight="bold" fill="#475569" text-anchor="end">AREA</text>
+      <text x="${st.x + 155}" y="${st.y + headerH + 3.8}" font-family="system-ui, sans-serif" font-size="1.9" font-weight="bold" fill="#475569" text-anchor="middle">OCC</text>
+      
+      <!-- Data Rows -->
+      ${rowElements.join('\n')}
+
+      <!-- Summary Footer -->
+      <rect x="${st.x}" y="${footerY}" width="${st.width}" height="${footerH}" fill="#0f172a" />
+      <text x="${st.x + 6}" y="${footerY + 4}" font-family="system-ui, sans-serif" font-size="2.2" font-weight="bold" fill="#ffffff">TOTAL NET AREA: ${totals.netInternalArea.toFixed(1)} m²</text>
+      <text x="${st.x + st.width - 6}" y="${footerY + 4}" font-family="system-ui, sans-serif" font-size="2.2" font-weight="bold" fill="#38bdf8" text-anchor="end">TOTAL OCC: ${totals.totalOccupants} P</text>
+    </g>`;
+  }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${wMm} ${hMm}" width="${wPx}px" height="${hPx}px">
   <!-- Sheet Background (Paper) -->
@@ -307,6 +435,8 @@ export function generateSheetSVG(arg1, arg2 = [], renderOptions = {}) {
   </g>
 
   ${vpTitleMarkup}
+  ${vignetteMarkup}
+  ${scheduleMarkup}
 
   <!-- CAD Title Block -->
   <g class="sheet-title-block" id="title-block" transform="translate(${tbX}, ${tbY})">

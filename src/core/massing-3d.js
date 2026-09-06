@@ -185,6 +185,7 @@ function extrudePolygon(basePoints, zBottom, zTop, baseColor = '#e2e8f0', stroke
  * @returns {Array<Object>} Array of 3D face objects
  */
 export function buildMassing3DModel(entities = [], options = {}) {
+  const zBase = typeof options.baseElevation === 'number' ? options.baseElevation : 0;
   const wallH = typeof options.wallHeight === 'number' && options.wallHeight > 0 ? options.wallHeight : 3.0;
   const doorH = Math.min(wallH - 0.2, options.doorHeight || 2.1);
   const winSill = options.windowSill || 0.9;
@@ -212,7 +213,7 @@ export function buildMassing3DModel(entities = [], options = {}) {
       ];
     }
     if (poly.length >= 3) {
-      const slabFaces = extrudePolygon(poly, -slabThick, 0, '#cbd5e1', '#94a3b8', 1, 'slab');
+      const slabFaces = extrudePolygon(poly, zBase - slabThick, zBase, '#cbd5e1', '#94a3b8', 1, 'slab');
       faces.push(...slabFaces);
     }
   }
@@ -234,14 +235,14 @@ export function buildMassing3DModel(entities = [], options = {}) {
     const openings = wallOpenings(w, list);
 
     if (openings.length === 0) {
-      // Solid wall: full extrusion from 0 to wallH
+      // Solid wall: full extrusion from zBase to zBase + wallH
       const basePts = [
         [w.x1 + nx, w.y1 + ny],
         [w.x2 + nx, w.y2 + ny],
         [w.x2 - nx, w.y2 - ny],
         [w.x1 - nx, w.y1 - ny]
       ];
-      faces.push(...extrudePolygon(basePts, 0, wallH, '#f1f5f9', '#475569', 1, 'wall'));
+      faces.push(...extrudePolygon(basePts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall'));
     } else {
       // Segmented wall around openings
       let currentPos = 0;
@@ -251,7 +252,6 @@ export function buildMassing3DModel(entities = [], options = {}) {
 
         // Solid sub-segment before opening
         if (opStart > currentPos + 1e-4) {
-          const segLen = opStart - currentPos;
           const pStart = { x: w.x1 + ux * currentPos, y: w.y1 + uy * currentPos };
           const pEnd = { x: w.x1 + ux * opStart, y: w.y1 + uy * opStart };
           const segPts = [
@@ -260,7 +260,7 @@ export function buildMassing3DModel(entities = [], options = {}) {
             [pEnd.x - nx, pEnd.y - ny],
             [pStart.x - nx, pStart.y - ny]
           ];
-          faces.push(...extrudePolygon(segPts, 0, wallH, '#f1f5f9', '#475569', 1, 'wall'));
+          faces.push(...extrudePolygon(segPts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall'));
         }
 
         // Opening segment
@@ -274,20 +274,20 @@ export function buildMassing3DModel(entities = [], options = {}) {
         ];
 
         if (op.kind === 'door') {
-          // Lintel above door (from doorH to wallH)
+          // Lintel above door (from zBase + doorH to zBase + wallH)
           if (wallH > doorH) {
-            faces.push(...extrudePolygon(opPts, doorH, wallH, '#f1f5f9', '#475569', 1, 'lintel'));
+            faces.push(...extrudePolygon(opPts, zBase + doorH, zBase + wallH, '#f1f5f9', '#475569', 1, 'lintel'));
           }
         } else if (op.kind === 'window') {
-          // Parapet / sill below window (from 0 to winSill)
+          // Parapet / sill below window (from zBase to zBase + winSill)
           if (winSill > 0) {
-            faces.push(...extrudePolygon(opPts, 0, winSill, '#f1f5f9', '#475569', 1, 'sill'));
+            faces.push(...extrudePolygon(opPts, zBase, zBase + winSill, '#f1f5f9', '#475569', 1, 'sill'));
           }
-          // Tinted window glass pane in middle (from winSill to winTop)
-          faces.push(...extrudePolygon(opPts, winSill, winTop, '#38bdf8', '#0284c7', 0.55, 'glass'));
-          // Lintel above window (from winTop to wallH)
+          // Tinted window glass pane in middle (from zBase + winSill to zBase + winTop)
+          faces.push(...extrudePolygon(opPts, zBase + winSill, zBase + winTop, '#38bdf8', '#0284c7', 0.55, 'glass'));
+          // Lintel above window (from zBase + winTop to zBase + wallH)
           if (wallH > winTop) {
-            faces.push(...extrudePolygon(opPts, winTop, wallH, '#f1f5f9', '#475569', 1, 'lintel'));
+            faces.push(...extrudePolygon(opPts, zBase + winTop, zBase + wallH, '#f1f5f9', '#475569', 1, 'lintel'));
           }
         }
 
@@ -304,7 +304,7 @@ export function buildMassing3DModel(entities = [], options = {}) {
           [pEnd.x - nx, pEnd.y - ny],
           [pStart.x - nx, pStart.y - ny]
         ];
-        faces.push(...extrudePolygon(segPts, 0, wallH, '#f1f5f9', '#475569', 1, 'wall'));
+        faces.push(...extrudePolygon(segPts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall'));
       }
     }
   }
@@ -315,7 +315,7 @@ export function buildMassing3DModel(entities = [], options = {}) {
     const contour = columnContour(c);
     if (contour.length >= 3) {
       const colColor = c.material === 'steel' ? '#64748b' : '#94a3b8';
-      faces.push(...extrudePolygon(contour, 0, wallH, colColor, '#1e293b', 1, 'column'));
+      faces.push(...extrudePolygon(contour, zBase, zBase + wallH, colColor, '#1e293b', 1, 'column'));
     }
   }
 
@@ -329,8 +329,8 @@ export function buildMassing3DModel(entities = [], options = {}) {
     const treadD = stD / numRisers;
 
     for (let s = 0; s < numRisers; s++) {
-      const stepBottom = 0;
-      const stepTop = (s + 1) * riserH;
+      const stepBottom = zBase + 0;
+      const stepTop = zBase + (s + 1) * riserH;
       const stepY = st.y + s * treadD;
       const stepPts = [
         [st.x, stepY],
@@ -344,6 +344,77 @@ export function buildMassing3DModel(entities = [], options = {}) {
 
   faces.faces = faces;
   return faces;
+}
+
+/**
+ * Builds a multi-story building massing 3D model by stacking multiple 2D plan levels vertically.
+ *
+ * @param {Array<Object>} documents - Collection of 2D plan documents
+ * @param {Object} [options]
+ * @param {number} [options.storyHeight=3.0] - Default floor-to-floor height in meters
+ * @returns {Array<Object>} Stacked 3D faces array with building metrics
+ */
+export function buildMultiStoryMassing3DModel(documents = [], options = {}) {
+  const docs = Array.isArray(documents)
+    ? documents.filter(d => d && (d.type === '2d_plan' || d.type === '2d' || !d.type))
+    : [];
+
+  if (docs.length === 0) {
+    const single = buildMassing3DModel([], options);
+    single.storyCount = 0;
+    single.totalHeight = 0;
+    single.grossFloorArea = 0;
+    single.grossVolume = 0;
+    return single;
+  }
+
+  const defaultStoryH = typeof options.storyHeight === 'number' && options.storyHeight > 0 ? options.storyHeight : 3.0;
+  const allFaces = [];
+  let currentZ = 0;
+  let totalGFA = 0;
+
+  docs.forEach((doc, idx) => {
+    const storyH = typeof doc.storyHeight === 'number' && doc.storyHeight > 0 ? doc.storyHeight : defaultStoryH;
+    const storyFaces = buildMassing3DModel(doc.entities || [], {
+      ...options,
+      wallHeight: storyH,
+      baseElevation: currentZ
+    });
+
+    for (const f of storyFaces) {
+      f.storyIndex = idx;
+      f.baseElevation = currentZ;
+      f.storyName = doc.name || `Level ${idx + 1}`;
+    }
+
+    allFaces.push(...storyFaces);
+
+    // Compute story room area
+    const rooms = (doc.entities || []).filter(e => e && e.kind === 'room');
+    let storyArea = 0;
+    for (const r of rooms) {
+      if (Array.isArray(r.boundary) && r.boundary.length >= 3) {
+        let a = 0;
+        for (let i = 0; i < r.boundary.length; i++) {
+          const j = (i + 1) % r.boundary.length;
+          a += r.boundary[i].x * r.boundary[j].y - r.boundary[j].x * r.boundary[i].y;
+        }
+        storyArea += Math.abs(a) / 2;
+      } else if (typeof r.width === 'number' && typeof r.depth === 'number') {
+        storyArea += r.width * r.depth;
+      }
+    }
+    totalGFA += storyArea;
+    currentZ += storyH;
+  });
+
+  allFaces.faces = allFaces;
+  allFaces.storyCount = docs.length;
+  allFaces.totalHeight = Number(currentZ.toFixed(2));
+  allFaces.grossFloorArea = Number(totalGFA.toFixed(2));
+  allFaces.grossVolume = Number((totalGFA * (currentZ / docs.length)).toFixed(2));
+
+  return allFaces;
 }
 
 /**
@@ -391,8 +462,28 @@ export function projectAndSortFaces(faces3D, camera) {
  * @param {Object} [options] - Modeling & rendering options
  * @returns {string} Standalone SVG string
  */
-export function generateMassingSVG(entities = [], camera = {}, options = {}) {
-  const faces3D = buildMassing3DModel(entities, options);
+export function generateMassingSVG(entities = [], arg2 = {}, arg3 = {}) {
+  let camera, options;
+  if (arg2 && (typeof arg2.azimuth === 'number' || typeof arg2.elevation === 'number')) {
+    camera = arg2;
+    options = arg3 || {};
+  } else {
+    options = arg2 || {};
+    camera = options.camera || {};
+  }
+
+  let faces3D;
+  if (Array.isArray(entities) && entities.length > 0 && entities[0] && Array.isArray(entities[0].vertices)) {
+    faces3D = entities;
+  } else if (entities && Array.isArray(entities.faces)) {
+    faces3D = entities.faces;
+  } else if (options.multiStory && Array.isArray(options.documents)) {
+    faces3D = buildMultiStoryMassing3DModel(options.documents, options);
+  } else if (Array.isArray(entities) && entities.length > 0 && entities[0] && Array.isArray(entities[0].entities)) {
+    faces3D = buildMultiStoryMassing3DModel(entities, options);
+  } else {
+    faces3D = buildMassing3DModel(entities, options);
+  }
 
   const width = options.width || 800;
   const height = options.height || 600;
@@ -400,9 +491,9 @@ export function generateMassingSVG(entities = [], camera = {}, options = {}) {
   const cam = {
     azimuth: camera.azimuth ?? 45,
     elevation: camera.elevation ?? 35.264,
-    zoom: camera.zoom || 32,
+    zoom: camera.zoom || (faces3D.storyCount > 1 ? Math.max(15, 32 / (faces3D.storyCount * 0.7)) : 32),
     panX: camera.panX || width / 2,
-    panY: camera.panY || height / 2 + 50
+    panY: camera.panY || (faces3D.storyCount > 1 ? height / 2 + 80 : height / 2 + 50)
   };
 
   const sortedFaces = projectAndSortFaces(faces3D, cam);
@@ -418,9 +509,13 @@ export function generateMassingSVG(entities = [], camera = {}, options = {}) {
     ? `  <text id="massing-title" x="24" y="36" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14" font-weight="600">${title}</text>\n`
     : '';
 
+  const metricsMarkup = (faces3D.storyCount && faces3D.storyCount > 1)
+    ? `  <text id="massing-metrics" x="24" y="56" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">${faces3D.storyCount} Stories · Total H: ${faces3D.totalHeight}m · GFA: ${faces3D.grossFloorArea}m²</text>\n`
+    : '';
+
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
   <rect width="100%" height="100%" fill="#0f172a" />
-${titleMarkup}  <g class="massing-faces">
+${titleMarkup}${metricsMarkup}  <g class="massing-faces">
 ${polygonsMarkup}
   </g>
 </svg>`;
