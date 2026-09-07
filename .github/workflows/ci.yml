@@ -19,6 +19,9 @@ jobs:
       - name: Run full test suite
         run: npm test
 
+      - name: Lint (zero-dependency static checks)
+        run: npm run lint
+
       - name: Verify bundle freshness (build + --check)
         run: |
           npm run build
