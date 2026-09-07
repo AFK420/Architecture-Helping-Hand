@@ -19091,6 +19091,29 @@ class ShortcutsManagerClass {
             item.key = normalizeKeyCombo(customBindings[item.id]);
           }
         }
+        // Resolve collisions between stored bindings (possible from versions
+        // that allowed cross-category duplicates or dropped Shift modifiers).
+        // Policy: defaults always win. All default keys are reserved first,
+        // then a stored custom binding is honored only if it does not collide;
+        // colliding customs reset to their default. This guarantees the loaded
+        // set has no duplicate keys (unlike first-in-order wins, which can
+        // reset a duplicate onto the very key that spawned it).
+        const taken = new Set(this.shortcuts.map(s => s.defaultKey));
+        let mutated = false;
+        for (const item of this.shortcuts) {
+          const custom = customBindings[item.id];
+          if (
+            typeof custom === 'string' && custom.trim().length > 0 &&
+            normalizeKeyCombo(custom) === item.key && item.key !== item.defaultKey &&
+            !taken.has(item.key)
+          ) {
+            taken.add(item.key); // custom binding is collision-free — keep it
+          } else if (item.key !== item.defaultKey) {
+            item.key = item.defaultKey; // colliding/stale custom — discard
+            mutated = true;
+          }
+        }
+        if (mutated) this.saveToStorage();
       }
     } catch {
       // Corrupt storage handled safely
@@ -22230,29 +22253,40 @@ function createProjectStore(options = {}) {
     return projectCopy;
   }
 
+  /**
+   * Oldest snapshots beyond this count are dropped when a new one is created.
+   * Uncapped growth eventually exhausted localStorage quota (failing saves)
+   * on long-running projects.
+   */
+  const MAX_SNAPSHOTS = 25;
+
   function createSnapshot(label) {
     if (!currentProject) return { ok: false, errors: ['no project to snapshot'] };
+    // Enforce the cap BEFORE building anything: drop oldest snapshots first.
+    if (currentProject.snapshots.length >= MAX_SNAPSHOTS) {
+      const excess = currentProject.snapshots.length - (MAX_SNAPSHOTS - 1);
+      currentProject.snapshots = currentProject.snapshots.slice(excess);
+    }
     const snapshot = {
       id: `snap-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
       label: typeof label === 'string' && label ? label : `Snapshot ${currentProject.snapshots.length + 1}`,
       createdAt: nowFn().toISOString(),
       project: null
     };
-    // Phase 1: register the (copy- pending) snapshot in the current doc
+    // Build the full payload copy BEFORE registering so persistence is a
+    // single atomic write — the previous two-phase version durably stored a
+    // payload-less snapshot between the first save and the payload re-attach,
+    // leaving a snapshot that could never be restored if the session died
+    // in between.
+    const docWithSnapshot = cloneProject(currentProject);
+    docWithSnapshot.snapshots.push(snapshot);
+    const embedded = stripEmbeddedSnapshotPayloads(docWithSnapshot);
+    const fullSnapshot = { ...snapshot, project: embedded };
     const registered = updateProject(draft => {
-      draft.snapshots.push(snapshot);
+      draft.snapshots.push(fullSnapshot);
       return draft;
     });
     if (!registered.ok) return registered;
-    // Phase 2: embed a copy of the doc that now CONTAINS this snapshot.
-    // Prior snapshots' payloads are stripped inside the embedded copy to
-    // keep the container linear in document size (see helper above).
-    const embedded = stripEmbeddedSnapshotPayloads(cloneProject(currentProject));
-    currentProject.snapshots = currentProject.snapshots.map(s =>
-      s.id === snapshot.id ? { ...s, project: embedded } : s
-    );
-    const saved = saveProject();
-    if (!saved.ok) return saved;
     notify('snapshot', currentProject);
     return { ok: true, snapshotId: snapshot.id, snapshot: cloneProject(currentProject.snapshots.find(s => s.id === snapshot.id)) };
   }
@@ -35831,32 +35865,61 @@ function createPlanView(context) {
   // ------------------------------------------------------------------
   function render() {
     if (!dom.planSvg) return;
+    if (renderScene()) {
+      renderPanels();
+      updateStatusBar();
+    }
+  }
+
+  /**
+   * Coalesces high-frequency scene redraws (pan/zoom/drag) into one
+   * requestAnimationFrame — pointermove can fire faster than the display
+   * refresh rate, so without coalescing every event rebuilt the whole SVG
+   * plus all five side panels. Panels refresh on pointerup's full render().
+   */
+  let sceneRenderPending = false;
+  function scheduleSceneRender() {
+    if (sceneRenderPending) return;
+    sceneRenderPending = true;
+    requestAnimationFrame(() => {
+      sceneRenderPending = false;
+      renderScene();
+    });
+  }
+
+  /**
+   * Scene-only render: SVG canvas + zoom badge. Returns false for special
+   * document types (3D massing, sheets, elevations, …) that render themselves
+   * and skip the side panels, mirroring the historical render() early-returns.
+   */
+  function renderScene() {
+    if (!dom.planSvg) return false;
     syncSvgSize();
 
     const doc = getActiveDocument();
     if (doc && (doc.type === 'view_4split' || doc.type === '4view')) {
       render4ViewportSplit(doc);
-      return;
+      return false;
     }
     if (doc && doc.type === '3d_massing') {
       render3DMassing(doc);
-      return;
+      return false;
     }
     if (doc && doc.type === 'sheet') {
       renderPresentationSheet(doc);
-      return;
+      return false;
     }
     if (doc && doc.type === 'elevation') {
       renderElevationView(doc);
-      return;
+      return false;
     }
     if (doc && doc.type === 'section') {
       renderSectionView(doc);
-      return;
+      return false;
     }
     if (doc && doc.type === 'detail') {
       renderDetailView(doc);
-      return;
+      return false;
     }
 
     dom.planSvg.setAttribute('viewBox', `0 0 ${svg.width} ${svg.height}`);
@@ -36764,12 +36827,21 @@ function createPlanView(context) {
     if (dom.planStatusBadge) {
       dom.planStatusBadge.textContent = `zoom ${transform.zoom.toFixed(0)} px/m · ${entities().length} entities`;
     }
+    return true;
+  }
+
+  /**
+   * Side panels + inspector (entity list, layers, schedule, properties,
+   * contextual toolbar). Expensive DOM work that does NOT need to run on every
+   * pointermove — callers that only moved the camera should use
+   * scheduleSceneRender() and let onPointerUp's full render() refresh panels.
+   */
+  function renderPanels() {
     renderEntityList();
     renderLayerList();
     renderScheduleList();
     renderPropertiesInspector();
     renderContextualToolbar();
-    updateStatusBar();
   }
 
   function renderEntityList() {
@@ -37216,7 +37288,7 @@ function createPlanView(context) {
       if (rwInput) {
         attachNumericScrubber(rwInput, {
           step: 0.1, min: 0.5, max: 100, precision: 2,
-          onChange: (val) => { selected.width = val; render(); },
+          onChange: (val) => { selected.width = val; renderScene(); },
           onCommit: (val) => { selected.width = val; render(); }
         });
         rwInput.addEventListener('change', (e) => {
@@ -37229,7 +37301,7 @@ function createPlanView(context) {
       if (rdInput) {
         attachNumericScrubber(rdInput, {
           step: 0.1, min: 0.5, max: 100, precision: 2,
-          onChange: (val) => { selected.depth = val; render(); },
+          onChange: (val) => { selected.depth = val; renderScene(); },
           onCommit: (val) => { selected.depth = val; render(); }
         });
         rdInput.addEventListener('change', (e) => {
@@ -37462,19 +37534,19 @@ function createPlanView(context) {
         render();
       });
 
-      function updateStairGeometry() {
+      function updateStairGeometry(keepPanels = false) {
         selected.riserHeight = selected.rise / selected.risers;
         selected.tread = selected.run / Math.max(1, selected.risers - 1);
         selected.blondel = 2 * selected.riserHeight + selected.tread;
         selected.pitchAngle = Math.atan2(selected.rise, selected.run) * (180 / Math.PI);
-        render();
+        if (keepPanels) renderScene(); else render();
       }
 
       const stairWInput = dom.planPropContent.querySelector('#prop-stair-w');
       if (stairWInput) {
         attachNumericScrubber(stairWInput, {
           step: 0.05, min: 0.6, max: 10, precision: 2,
-          onChange: (val) => { selected.width = val; render(); },
+          onChange: (val) => { selected.width = val; renderScene(); },
           onCommit: (val) => { selected.width = val; render(); }
         });
         stairWInput.addEventListener('change', (e) => {
@@ -37487,7 +37559,7 @@ function createPlanView(context) {
       if (stairRunInput) {
         attachNumericScrubber(stairRunInput, {
           step: 0.1, min: 0.5, max: 30, precision: 2,
-          onChange: (val) => { selected.run = val; selected.depth = val; updateStairGeometry(); },
+          onChange: (val) => { selected.run = val; selected.depth = val; updateStairGeometry(true); },
           onCommit: (val) => { selected.run = val; selected.depth = val; updateStairGeometry(); }
         });
         stairRunInput.addEventListener('change', (e) => {
@@ -37501,7 +37573,7 @@ function createPlanView(context) {
       if (stairRiseInput) {
         attachNumericScrubber(stairRiseInput, {
           step: 0.05, min: 0.2, max: 10, precision: 2,
-          onChange: (val) => { selected.rise = val; updateStairGeometry(); },
+          onChange: (val) => { selected.rise = val; updateStairGeometry(true); },
           onCommit: (val) => { selected.rise = val; updateStairGeometry(); }
         });
         stairRiseInput.addEventListener('change', (e) => {
@@ -37514,7 +37586,7 @@ function createPlanView(context) {
       if (stairRisersInput) {
         attachNumericScrubber(stairRisersInput, {
           step: 1, min: 2, max: 50, precision: 0,
-          onChange: (val) => { selected.risers = Math.round(val); updateStairGeometry(); },
+          onChange: (val) => { selected.risers = Math.round(val); updateStairGeometry(true); },
           onCommit: (val) => { selected.risers = Math.round(val); updateStairGeometry(); }
         });
         stairRisersInput.addEventListener('change', (e) => {
@@ -37594,17 +37666,17 @@ function createPlanView(context) {
         render();
       });
 
-      function updateRampGeometry() {
+      function updateRampGeometry(keepPanels = false) {
         selected.slopePercent = (selected.rise / selected.run) * 100;
         selected.slopeRatio = selected.run / selected.rise;
-        render();
+        if (keepPanels) renderScene(); else render();
       }
 
       const rampWInput = dom.planPropContent.querySelector('#prop-ramp-w');
       if (rampWInput) {
         attachNumericScrubber(rampWInput, {
           step: 0.05, min: 0.6, max: 10, precision: 2,
-          onChange: (val) => { selected.width = val; render(); },
+          onChange: (val) => { selected.width = val; renderScene(); },
           onCommit: (val) => { selected.width = val; render(); }
         });
         rampWInput.addEventListener('change', (e) => {
@@ -37617,7 +37689,7 @@ function createPlanView(context) {
       if (rampRunInput) {
         attachNumericScrubber(rampRunInput, {
           step: 0.1, min: 0.5, max: 50, precision: 2,
-          onChange: (val) => { selected.run = val; selected.depth = val; updateRampGeometry(); },
+          onChange: (val) => { selected.run = val; selected.depth = val; updateRampGeometry(true); },
           onCommit: (val) => { selected.run = val; selected.depth = val; updateRampGeometry(); }
         });
         rampRunInput.addEventListener('change', (e) => {
@@ -37631,7 +37703,7 @@ function createPlanView(context) {
       if (rampRiseInput) {
         attachNumericScrubber(rampRiseInput, {
           step: 0.05, min: 0.05, max: 5, precision: 2,
-          onChange: (val) => { selected.rise = val; updateRampGeometry(); },
+          onChange: (val) => { selected.rise = val; updateRampGeometry(true); },
           onCommit: (val) => { selected.rise = val; updateRampGeometry(); }
         });
         rampRiseInput.addEventListener('change', (e) => {
@@ -37717,7 +37789,7 @@ function createPlanView(context) {
       if (wallThickInput) {
         attachNumericScrubber(wallThickInput, {
           step: 0.02, min: 0.05, max: 1.5, precision: 2,
-          onChange: (val) => { selected.thickness = val; render(); },
+          onChange: (val) => { selected.thickness = val; renderScene(); },
           onCommit: (val) => { selected.thickness = val; render(); }
         });
         wallThickInput.addEventListener('change', (e) => {
@@ -37787,7 +37859,7 @@ function createPlanView(context) {
       if (doorWInput) {
         attachNumericScrubber(doorWInput, {
           step: 0.05, min: 0.5, max: 3.0, precision: 2,
-          onChange: (val) => { selected.width = val; render(); },
+          onChange: (val) => { selected.width = val; renderScene(); },
           onCommit: (val) => { selected.width = val; render(); renderContextualToolbar(); }
         });
         doorWInput.addEventListener('change', (e) => {
@@ -37801,7 +37873,7 @@ function createPlanView(context) {
       if (doorPosInput) {
         attachNumericScrubber(doorPosInput, {
           step: 0.1, min: 0, max: 50, precision: 2,
-          onChange: (val) => { selected.position = val; render(); },
+          onChange: (val) => { selected.position = val; renderScene(); },
           onCommit: (val) => { selected.position = val; render(); }
         });
         doorPosInput.addEventListener('change', (e) => {
@@ -37869,7 +37941,7 @@ function createPlanView(context) {
       if (winWInput) {
         attachNumericScrubber(winWInput, {
           step: 0.05, min: 0.4, max: 6.0, precision: 2,
-          onChange: (val) => { selected.width = val; render(); },
+          onChange: (val) => { selected.width = val; renderScene(); },
           onCommit: (val) => { selected.width = val; render(); renderContextualToolbar(); }
         });
         winWInput.addEventListener('change', (e) => {
@@ -37883,7 +37955,7 @@ function createPlanView(context) {
       if (winPosInput) {
         attachNumericScrubber(winPosInput, {
           step: 0.1, min: 0, max: 50, precision: 2,
-          onChange: (val) => { selected.position = val; render(); },
+          onChange: (val) => { selected.position = val; renderScene(); },
           onCommit: (val) => { selected.position = val; render(); }
         });
         winPosInput.addEventListener('change', (e) => {
@@ -37896,7 +37968,7 @@ function createPlanView(context) {
       if (winSillInput) {
         attachNumericScrubber(winSillInput, {
           step: 0.05, min: 0, max: 2.5, precision: 2,
-          onChange: (val) => { selected.sill = val; render(); },
+          onChange: (val) => { selected.sill = val; renderScene(); },
           onCommit: (val) => { selected.sill = val; render(); }
         });
         winSillInput.addEventListener('change', (e) => {
@@ -38013,7 +38085,7 @@ function createPlanView(context) {
       if (offsetInput) {
         attachNumericScrubber(offsetInput, {
           step: 0.1, min: -5, max: 5, precision: 2,
-          onChange: (val) => { selected.offset = val; render(); },
+          onChange: (val) => { selected.offset = val; renderScene(); },
           onCommit: (val) => { selected.offset = val; render(); renderContextualToolbar(); }
         });
         offsetInput.addEventListener('change', (e) => {
@@ -38740,7 +38812,7 @@ function createPlanView(context) {
     currentMouseWorld = world;
     updateStatusBar(world);
     if (polyRoomVertices.length > 0) {
-      render();
+      scheduleSceneRender();
     }
     const snapOn = state.plan.snap !== false;
 
@@ -38754,11 +38826,11 @@ function createPlanView(context) {
         if (snapRes.snapped && snapRes.type !== 'grid') {
           if (!activeSnap || activeSnap.x !== snapRes.x || activeSnap.y !== snapRes.y || activeSnap.type !== snapRes.type) {
             activeSnap = snapRes;
-            render();
+            scheduleSceneRender();
           }
         } else if (activeSnap) {
           activeSnap = null;
-          render();
+          scheduleSceneRender();
         }
       }
       return;
@@ -38771,7 +38843,7 @@ function createPlanView(context) {
       if (!doc.camera) doc.camera = {};
       doc.camera.azimuth = (dragState.startCam.azimuth || 45) + dx * 0.5;
       doc.camera.elevation = Math.max(10, Math.min(85, (dragState.startCam.elevation || 35.264) - dy * 0.5));
-      render();
+      scheduleSceneRender();
       return;
     }
 
@@ -38779,7 +38851,7 @@ function createPlanView(context) {
       const dx = event.clientX - dragState.startClient.x;
       const dy = event.clientY - dragState.startClient.y;
       transform = panBy(dragState.startTransform, dx, dy);
-      render();
+      scheduleSceneRender();
       return;
     }
 
@@ -38812,7 +38884,7 @@ function createPlanView(context) {
           e.depth = Math.abs(e.y2 - e.y1);
           e.name = `${Math.hypot(e.x2 - e.x1, e.y2 - e.y1).toFixed(2)}m`;
         }
-        render();
+        scheduleSceneRender();
         return;
       }
 
@@ -38852,7 +38924,7 @@ function createPlanView(context) {
         e.slopeRatio = e.run / e.rise;
       }
 
-      render();
+      scheduleSceneRender();
       return;
     }
 
@@ -38895,7 +38967,7 @@ function createPlanView(context) {
         const deg = ((Math.atan2(targetPt.y - dragState.start.y, targetPt.x - dragState.start.x) * 180 / Math.PI) + 360) % 360;
         showHud(dM, deg);
       }
-      render();
+      scheduleSceneRender();
     } else if (dragState.mode === 'move' && dragState.entity) {
       const dx = snapped.x - dragState.last.x;
       const dy = snapped.y - dragState.last.y;
@@ -38942,7 +39014,7 @@ function createPlanView(context) {
           }
         }
         dragState.last = snapped;
-        render();
+        scheduleSceneRender();
       }
     }
   }
@@ -39784,12 +39856,12 @@ function createPlanView(context) {
               activeDoc.camera = { azimuth: 45, elevation: 35.264, zoom: 32, panX: svg.width / 2, panY: svg.height / 2 + 30 };
             }
             activeDoc.camera.zoom = Math.max(5, Math.min(250, (activeDoc.camera.zoom || 32) * factor));
-            render();
+            scheduleSceneRender();
             return;
           }
           const sp = clientToSvg(e.clientX, e.clientY);
           transform = zoomAt(transform, e.deltaY < 0 ? 1.15 : 0.87, sp.x, sp.y);
-          render();
+          scheduleSceneRender();
         }, { passive: false });
       }
       document.addEventListener('keydown', onKeyDown);
@@ -40463,6 +40535,22 @@ function createAiControlCenterView(context) {
     });
     dom.aiProvidersList.querySelectorAll('.ai-provider-endpoint').forEach(input => {
       input.addEventListener('change', () => {
+        const svc = ai();
+        const nextHost = (() => { try { return new URL(input.value.trim())?.hostname; } catch { return null; } })();
+        const currentHost = (() => { try { return new URL(input.defaultValue || input.value.trim())?.hostname; } catch { return null; } })();
+        // Your stored API key is sent to whatever endpoint is configured —
+        // changing to a host you have not used before deserves a pause.
+        if (svc?.providerManager?.hasKey?.(input.dataset.provider) && nextHost && nextHost !== currentHost) {
+          const ok = window.confirm(
+            `Send this provider's stored API key to "${nextHost}"?\n\n` +
+            `Previous host: ${currentHost || '(none)'}\n` +
+            `Only continue if you trust this endpoint (official mirrors or your own proxy).`
+          );
+          if (!ok) {
+            input.value = input.defaultValue;
+            return;
+          }
+        }
         const res = svc.providerManager.setEndpoint(input.dataset.provider, input.value);
         if (!res.ok) {
           showError(res.error);
@@ -43140,6 +43228,7 @@ function initializeApp() {
   }
 
   function switchMode(targetMode) {
+    const previousMode = state.currentMode;
     if (targetMode === 'home' || !NAV_CATALOG.some(i => i.id === targetMode) && targetMode !== 'furniture') {
       // unknown ids fall back to home so a stale link never dead-ends
       if (!NAV_CATALOG.some(i => i.id === targetMode)) targetMode = 'home';
@@ -43245,6 +43334,10 @@ function initializeApp() {
     else if (targetMode === 'survey') {
       views.callController('survey', 'renderMeasurements');
     }
+
+    // Documented view lifecycle contract: hooks are optional and skipped
+    // silently by the registry when a view does not define them.
+    views.notifyModeChange(previousMode, targetMode);
   }
 
   // ---------------------------------------------------------------------------

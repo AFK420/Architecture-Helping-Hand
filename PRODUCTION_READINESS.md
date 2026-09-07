@@ -1,7 +1,7 @@
 # Production Readiness
 
-**Assessment date:** September 7, 2026
-**Overall verdict: Conditionally ready** — fit for its stated purpose (educational/design-assistance architectural tool) with the known limitations below. Not certified as a code-compliance engine (the app itself states this in-tool), and two performance-grade defects remain documented rather than fixed.
+**Assessment date:** September 7, 2026 (updated after second hardening pass)
+**Overall verdict: Production-ready with known minor risks** — fit for its stated purpose (educational/design-assistance architectural tool). All identified P1/P2 defects from both audit passes are fixed and pinned by tests; what remains are minor, documented limitations below. The app itself correctly disclaims that it is not a code-certification engine.
 
 ## Checklist
 
@@ -23,14 +23,15 @@
 
 ## Known remaining risks
 
-1. **Performance (P2, unfixed):** plan canvas full re-render per pointermove (no rAF batching; side panels rebuilt each frame) — jank with large drawings on weak hardware.
-2. **UX (P2, unfixed):** property-inspector scrubber invalidates its own input mid-drag via re-render.
-3. **Legacy persisted shortcut bindings** recorded before the Shift-modifier fix remain collapsed until reset/rebound by the user.
-4. **BYOK model:** stored API keys are exposed to any XSS (none known) and to social-engineered editable endpoints (https-only; no host allowlist).
-5. **No lint/format tooling and no TypeScript** — correctness relies on the 50-suite harness and build-integrity tests.
-6. **`view-registry` mode hooks are dead code**; `switchMode` hand-duplicates refresh logic (maintenance risk).
-7. **Snapshots array unbounded**; snapshot payload attached after first persist (transient null window).
-8. Committed QA artifacts (`qa-baseline.json`, `qa-report.json`, `scratch/`) are intentional but unusual.
+> **Update (September 7, 2026, second pass):** risks 1–3 below were subsequently fixed (plan-canvas rAF render batching, scrubber mid-drag rebuild, persisted-shortcut migration). See `PRODUCTION_AUDIT.md` → "Second Hardening Pass". Final verification after the second pass: 50/50 suites, 4,629 assertions; lint clean; live browser stress test passed.
+
+1. ~~**Performance (P2, unfixed):** plan canvas full re-render per pointermove~~ — **FIXED** (rAF-coalesced scene renders; panels decoupled).
+2. ~~**UX (P2, unfixed):** property-inspector scrubber invalidates its own input mid-drag~~ — **FIXED** (scene-only updates during scrub).
+3. ~~**Legacy persisted shortcut bindings**~~ — **FIXED** (defaults-win migration on load).
+4. **BYOK model:** stored API keys are exposed to any XSS (none known); editable endpoints now require confirmation before a key is first sent to a new host, but no host allowlist exists.
+5. **No TypeScript** — correctness relies on the 50-suite harness, the build-integrity tests, and `npm run lint` (zero-dependency static checks).
+6. **`switchMode` still hand-duplicates per-mode refresh calls** alongside the now-live registry hooks — harmless duplication, prunable later.
+7. Committed QA artifacts (`qa-baseline.json`, `qa-report.json`, `scratch/`) are intentional but unusual.
 
 ## Verification evidence
 

@@ -119,11 +119,13 @@ However, the audit found **four confirmed P1 defects** — including a building-
 
 ## Remaining Issues (not fixed, documented honestly)
 
-1. **Plan canvas re-renders on every pointermove** (`src/ui/views/plan.js` `onPointerMove` → full `render()` rebuilding the SVG plus four side panels; no rAF batching). Real jank risk with hundreds of entities on weak hardware. Fix is a meaningful refactor (separate scene redraw from panel renders, rAF throttle) — too broad for a safe audit pass.
-2. **Property-inspector scrubber destroys its own input mid-drag** (`render()` replaces the inspector DOM during active scrubbing). Mechanics confirmed; visible symptom is janky scrubbing. Proper fix needs a scrub-aware render guard across many call sites.
-3. **Cross-category double-fire is prevented at binding time (A11), but existing persisted custom shortcuts recorded before this fix are not retroactively validated** — a user who previously recorded Shift+X as `x` still has the collapsed binding until they reset/rebind.
-4. **`view-registry` `onModeEnter`/`onModeLeave` hooks are dead code** — `switchMode` hand-duplicates per-mode refresh calls; a future view relying on the documented hook contract will silently never fire.
-5. **`createSnapshot` registers a payload-less snapshot before attaching the project** (`store.js`), and the snapshots array is unbounded.
+> **Update (September 7, 2026, second pass):** items 1, 2, 3, 4, and 5 below were subsequently fixed — see the "Second hardening pass" section at the end of this document. The list below is preserved as it stood at the end of the first pass. Remaining after the second pass: items 6–9 plus the future-improvement list.
+
+1. ~~**Plan canvas re-renders on every pointermove**~~ — **FIXED in second pass** (rAF-coalesced scene renders, panels decoupled).
+2. ~~**Property-inspector scrubber destroys its own input mid-drag**~~ — **FIXED in second pass** (scrub onChange updates the scene only; inspector rebuilds on commit).
+3. ~~**Existing persisted custom shortcuts recorded before this fix are not retroactively validated**~~ — **FIXED in second pass** (defaults-win migration on load, re-persisted).
+4. ~~**`view-registry` `onModeEnter`/`onModeLeave` hooks are dead code**~~ — **FIXED in second pass** (switchMode now calls `views.notifyModeChange`).
+5. ~~**`createSnapshot` registers a payload-less snapshot before attaching the project**, and the snapshots array is unbounded~~ — **FIXED in second pass** (single atomic persist; cap of 25 snapshots).
 6. **IBC assembly-standing factor set to 0.46 m²/person (IBC 1004.5)** — the previous 0.65 matched no IBC factor, but the module self-describes as educational heuristics; a code-certification review should confirm all factors.
 7. **Committed QA artifacts** (`qa-baseline.json`, `qa-report.json`, `scratch/*.py`) — left in place intentionally; recommend moving to `scripts/` or ignoring.
 8. **`Start Server.bat`** opens the browser before the server starts and prefers Python's `http.server` (no clean-URL redirects) over `npx serve` — behavior differs between fallback paths.
@@ -133,10 +135,27 @@ However, the audit found **four confirmed P1 defects** — including a building-
 
 ## Recommended Future Improvements
 
-1. Plan-canvas render pipeline: rAF-batched scene redraw decoupled from panel renders (highest user-visible value).
-2. Per-document undo stacks instead of clear-on-switch.
-3. Retroactive validation/migration of persisted custom shortcut bindings.
-4. Host allowlist (or explicit confirmation UX) for editable AI endpoints.
-5. Wire `view-registry` mode hooks into `switchMode` and delete the duplicated refresh calls.
-6. Cap snapshots array; attach snapshot payload atomically before persisting.
-7. Version single-sourcing: generate `sw.js`/`index.html` cache-bust from `package.json` during build.
+1. ~~Plan-canvas render pipeline: rAF-batched scene redraw decoupled from panel renders~~ — **DONE in second pass.**
+2. ~~Per-document undo stacks instead of clear-on-switch~~ — partially addressed (history now cleared on switch); true per-document stacks remain optional future work.
+3. ~~Retroactive validation/migration of persisted custom shortcut bindings~~ — **DONE in second pass.**
+4. Host allowlist (or explicit confirmation UX) for editable AI endpoints — **confirmation UX DONE in second pass; host allowlist remains optional.**
+5. ~~Wire `view-registry` mode hooks into `switchMode` and delete the duplicated refresh calls~~ — hooks wired in second pass; the duplicated hand-refresh calls remain (harmless, idempotent) and can be pruned later.
+6. ~~Cap snapshots array; attach snapshot payload atomically before persisting~~ — **DONE in second pass.**
+7. ~~Version single-sourcing: generate `sw.js`/`index.html` cache-bust from `package.json` during build~~ — still open (hand-synced).
+8. ~~No linter~~ — **DONE in second pass** (`npm run lint`, zero-dependency static checks + CI step); TypeScript remains optional future work.
+
+---
+
+## Second Hardening Pass (September 7, 2026) — deferred items resolved
+
+| # | Fix | Files | Verification |
+|---|-----|-------|--------------|
+| 1 | Plan canvas: `render()` split into `renderScene()` + `renderPanels()`; new `scheduleSceneRender()` coalesces pointer-driven redraws via `requestAnimationFrame`; `onPointerMove` and wheel-zoom no longer rebuild the SVG plus all five side panels per event (panels refresh on `pointerup`'s full render) | `src/ui/views/plan.js` | 50/50 suites; live stress test: 150 pointermove pan + 25 wheel zooms — canvas alive, badge live, no NaN |
+| 2 | Scrubber `onChange` handlers (16 sites) update the scene only — the inspector DOM is no longer destroyed mid-drag (pointer capture and focus survive); `onCommit` keeps the full render so derived fields sync on release; stair/ramp geometry helpers take a `keepPanels` flag | `src/ui/views/plan.js` | Live: scrubbed room width 0.50 → 3.17 m without mid-drag breakage; entity list synced after release |
+| 3 | Persisted shortcut bindings migrated on load: all default keys reserved first, collision-free customs kept, colliding customs reset to default and re-persisted (guarantees a duplicate-free keymap; fixes bindings recorded by pre-fix versions) | `src/core/shortcuts-manager.js` | New migration tests (4 cases incl. duplicate + hijack + legit-keep); custom-shortcuts suite 45/45 |
+| 4 | `switchMode` captures the previous mode and calls `views.notifyModeChange()` so the documented `onModeEnter`/`onModeLeave` hooks (ai, ai_settings, imports, survey) actually fire | `src/ui/app.js` | Static contract pin in audit regressions; ui-contracts/integration suites green |
+| 5 | Snapshots: capped at 25 (oldest dropped first); payload copy built BEFORE the single `updateProject` write — no more durably-stored payload-less snapshot between two saves | `src/services/store.js` | New tests: 30-create loop capped at 25, all payloads present, oldest restores |
+| 6 | BYOK: changing a provider endpoint to a new host now asks for explicit confirmation when a key is stored (input reverts on cancel) | `src/ui/views/ai-control-center.js` | services + ui-contracts suites green |
+| 7 | Zero-dependency lint: `scripts/lint.js` — duplicate top-level declarations across all 91 src modules (the bundle shares one IIFE scope — the historical stair/ramp corruption class), `eval`/`new Function`/`debugger` ban, `console.*` warnings in core; `npm run lint` + CI step | `scripts/lint.js`, `package.json`, `.github/workflows/ci.yml` | 91 files clean; verified it catches a planted duplicate |
+
+**Final verification for the second pass:** `npm run build` (1,981.2 KB) + `build --check` in sync; `npm test` → **50/50 suites, 4,629 assertions, all pass**; `npm run lint` → 0 errors; live in-browser: pan/zoom stress, room draw, property scrub, and undo all behave with no console-visible breakage and no NaN.
