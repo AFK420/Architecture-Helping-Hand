@@ -141,6 +141,29 @@ export class ShortcutsManagerClass {
             item.key = normalizeKeyCombo(customBindings[item.id]);
           }
         }
+        // Resolve collisions between stored bindings (possible from versions
+        // that allowed cross-category duplicates or dropped Shift modifiers).
+        // Policy: defaults always win. All default keys are reserved first,
+        // then a stored custom binding is honored only if it does not collide;
+        // colliding customs reset to their default. This guarantees the loaded
+        // set has no duplicate keys (unlike first-in-order wins, which can
+        // reset a duplicate onto the very key that spawned it).
+        const taken = new Set(this.shortcuts.map(s => s.defaultKey));
+        let mutated = false;
+        for (const item of this.shortcuts) {
+          const custom = customBindings[item.id];
+          if (
+            typeof custom === 'string' && custom.trim().length > 0 &&
+            normalizeKeyCombo(custom) === item.key && item.key !== item.defaultKey &&
+            !taken.has(item.key)
+          ) {
+            taken.add(item.key); // custom binding is collision-free — keep it
+          } else if (item.key !== item.defaultKey) {
+            item.key = item.defaultKey; // colliding/stale custom — discard
+            mutated = true;
+          }
+        }
+        if (mutated) this.saveToStorage();
       }
     } catch {
       // Corrupt storage handled safely

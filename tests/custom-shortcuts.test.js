@@ -155,5 +155,39 @@ console.log('\n--- 5. KeyboardEvent Matching ---');
   assert(!sm.matchesEvent('plan_duplicate', { ctrlKey: false, key: 'd' }), 'matchesEvent rejects D without Ctrl');
 }
 
+// --- 7. Legacy binding migration (defaults win, no duplicates) ---
+console.log('\n--- 7. Legacy binding migration on load ---');
+{
+  function makeManager(stored) {
+    const store = {
+      data: JSON.stringify(stored),
+      getItem: () => store.data,
+      setItem: (k, v) => { store.data = v; },
+      removeItem: () => { store.data = ''; }
+    };
+    const sm = new ShortcutsManagerClass();
+    sm.setStorage(store);
+    return { sm, store };
+  }
+
+  // Legacy duplicate: two customs collapsed onto the same key
+  const c1 = makeManager({ tool_room: 'm', tool_measure: 'm' });
+  assertEqual(c1.sm.getKeyForAction('tool_room'), 'r', 'Colliding custom resets to its default (room)');
+  assertEqual(c1.sm.getKeyForAction('tool_measure'), 'm', 'Custom matching its default stays (measure)');
+  assert(!c1.store.data.includes('tool_room'), 'Discarded binding removed from persisted storage');
+
+  // Custom colliding with another action's default is discarded
+  const c2 = makeManager({ tool_room: 'w' });
+  assertEqual(c2.sm.getKeyForAction('tool_room'), 'r', 'Custom that hijacks another default is discarded');
+
+  // Collision-free custom survives
+  const c3 = makeManager({ tool_measure: 'shift+m' });
+  assertEqual(c3.sm.getKeyForAction('tool_measure'), 'shift+m', 'Collision-free custom binding is preserved');
+
+  // Loaded set never contains duplicates
+  const keys = c3.sm.getAllShortcuts().map(s => s.key);
+  assert(keys.length === new Set(keys).size, 'Loaded bindings are duplicate-free');
+}
+
 console.log(`\nSummary: ${passed} passed, ${failed} failed.\n`);
 if (failed > 0) process.exit(1);
