@@ -2532,32 +2532,61 @@ export function createPlanView(context) {
   // ------------------------------------------------------------------
   function render() {
     if (!dom.planSvg) return;
+    if (renderScene()) {
+      renderPanels();
+      updateStatusBar();
+    }
+  }
+
+  /**
+   * Coalesces high-frequency scene redraws (pan/zoom/drag) into one
+   * requestAnimationFrame — pointermove can fire faster than the display
+   * refresh rate, so without coalescing every event rebuilt the whole SVG
+   * plus all five side panels. Panels refresh on pointerup's full render().
+   */
+  let sceneRenderPending = false;
+  function scheduleSceneRender() {
+    if (sceneRenderPending) return;
+    sceneRenderPending = true;
+    requestAnimationFrame(() => {
+      sceneRenderPending = false;
+      renderScene();
+    });
+  }
+
+  /**
+   * Scene-only render: SVG canvas + zoom badge. Returns false for special
+   * document types (3D massing, sheets, elevations, …) that render themselves
+   * and skip the side panels, mirroring the historical render() early-returns.
+   */
+  function renderScene() {
+    if (!dom.planSvg) return false;
     syncSvgSize();
 
     const doc = getActiveDocument();
     if (doc && (doc.type === 'view_4split' || doc.type === '4view')) {
       render4ViewportSplit(doc);
-      return;
+      return false;
     }
     if (doc && doc.type === '3d_massing') {
       render3DMassing(doc);
-      return;
+      return false;
     }
     if (doc && doc.type === 'sheet') {
       renderPresentationSheet(doc);
-      return;
+      return false;
     }
     if (doc && doc.type === 'elevation') {
       renderElevationView(doc);
-      return;
+      return false;
     }
     if (doc && doc.type === 'section') {
       renderSectionView(doc);
-      return;
+      return false;
     }
     if (doc && doc.type === 'detail') {
       renderDetailView(doc);
-      return;
+      return false;
     }
 
     dom.planSvg.setAttribute('viewBox', `0 0 ${svg.width} ${svg.height}`);
@@ -3465,12 +3494,21 @@ export function createPlanView(context) {
     if (dom.planStatusBadge) {
       dom.planStatusBadge.textContent = `zoom ${transform.zoom.toFixed(0)} px/m · ${entities().length} entities`;
     }
+    return true;
+  }
+
+  /**
+   * Side panels + inspector (entity list, layers, schedule, properties,
+   * contextual toolbar). Expensive DOM work that does NOT need to run on every
+   * pointermove — callers that only moved the camera should use
+   * scheduleSceneRender() and let onPointerUp's full render() refresh panels.
+   */
+  function renderPanels() {
     renderEntityList();
     renderLayerList();
     renderScheduleList();
     renderPropertiesInspector();
     renderContextualToolbar();
-    updateStatusBar();
   }
 
   function renderEntityList() {
@@ -3917,7 +3955,7 @@ export function createPlanView(context) {
       if (rwInput) {
         attachNumericScrubber(rwInput, {
           step: 0.1, min: 0.5, max: 100, precision: 2,
-          onChange: (val) => { selected.width = val; render(); },
+          onChange: (val) => { selected.width = val; renderScene(); },
           onCommit: (val) => { selected.width = val; render(); }
         });
         rwInput.addEventListener('change', (e) => {
@@ -3930,7 +3968,7 @@ export function createPlanView(context) {
       if (rdInput) {
         attachNumericScrubber(rdInput, {
           step: 0.1, min: 0.5, max: 100, precision: 2,
-          onChange: (val) => { selected.depth = val; render(); },
+          onChange: (val) => { selected.depth = val; renderScene(); },
           onCommit: (val) => { selected.depth = val; render(); }
         });
         rdInput.addEventListener('change', (e) => {
@@ -4163,19 +4201,19 @@ export function createPlanView(context) {
         render();
       });
 
-      function updateStairGeometry() {
+      function updateStairGeometry(keepPanels = false) {
         selected.riserHeight = selected.rise / selected.risers;
         selected.tread = selected.run / Math.max(1, selected.risers - 1);
         selected.blondel = 2 * selected.riserHeight + selected.tread;
         selected.pitchAngle = Math.atan2(selected.rise, selected.run) * (180 / Math.PI);
-        render();
+        if (keepPanels) renderScene(); else render();
       }
 
       const stairWInput = dom.planPropContent.querySelector('#prop-stair-w');
       if (stairWInput) {
         attachNumericScrubber(stairWInput, {
           step: 0.05, min: 0.6, max: 10, precision: 2,
-          onChange: (val) => { selected.width = val; render(); },
+          onChange: (val) => { selected.width = val; renderScene(); },
           onCommit: (val) => { selected.width = val; render(); }
         });
         stairWInput.addEventListener('change', (e) => {
@@ -4188,7 +4226,7 @@ export function createPlanView(context) {
       if (stairRunInput) {
         attachNumericScrubber(stairRunInput, {
           step: 0.1, min: 0.5, max: 30, precision: 2,
-          onChange: (val) => { selected.run = val; selected.depth = val; updateStairGeometry(); },
+          onChange: (val) => { selected.run = val; selected.depth = val; updateStairGeometry(true); },
           onCommit: (val) => { selected.run = val; selected.depth = val; updateStairGeometry(); }
         });
         stairRunInput.addEventListener('change', (e) => {
@@ -4202,7 +4240,7 @@ export function createPlanView(context) {
       if (stairRiseInput) {
         attachNumericScrubber(stairRiseInput, {
           step: 0.05, min: 0.2, max: 10, precision: 2,
-          onChange: (val) => { selected.rise = val; updateStairGeometry(); },
+          onChange: (val) => { selected.rise = val; updateStairGeometry(true); },
           onCommit: (val) => { selected.rise = val; updateStairGeometry(); }
         });
         stairRiseInput.addEventListener('change', (e) => {
@@ -4215,7 +4253,7 @@ export function createPlanView(context) {
       if (stairRisersInput) {
         attachNumericScrubber(stairRisersInput, {
           step: 1, min: 2, max: 50, precision: 0,
-          onChange: (val) => { selected.risers = Math.round(val); updateStairGeometry(); },
+          onChange: (val) => { selected.risers = Math.round(val); updateStairGeometry(true); },
           onCommit: (val) => { selected.risers = Math.round(val); updateStairGeometry(); }
         });
         stairRisersInput.addEventListener('change', (e) => {
@@ -4295,17 +4333,17 @@ export function createPlanView(context) {
         render();
       });
 
-      function updateRampGeometry() {
+      function updateRampGeometry(keepPanels = false) {
         selected.slopePercent = (selected.rise / selected.run) * 100;
         selected.slopeRatio = selected.run / selected.rise;
-        render();
+        if (keepPanels) renderScene(); else render();
       }
 
       const rampWInput = dom.planPropContent.querySelector('#prop-ramp-w');
       if (rampWInput) {
         attachNumericScrubber(rampWInput, {
           step: 0.05, min: 0.6, max: 10, precision: 2,
-          onChange: (val) => { selected.width = val; render(); },
+          onChange: (val) => { selected.width = val; renderScene(); },
           onCommit: (val) => { selected.width = val; render(); }
         });
         rampWInput.addEventListener('change', (e) => {
@@ -4318,7 +4356,7 @@ export function createPlanView(context) {
       if (rampRunInput) {
         attachNumericScrubber(rampRunInput, {
           step: 0.1, min: 0.5, max: 50, precision: 2,
-          onChange: (val) => { selected.run = val; selected.depth = val; updateRampGeometry(); },
+          onChange: (val) => { selected.run = val; selected.depth = val; updateRampGeometry(true); },
           onCommit: (val) => { selected.run = val; selected.depth = val; updateRampGeometry(); }
         });
         rampRunInput.addEventListener('change', (e) => {
@@ -4332,7 +4370,7 @@ export function createPlanView(context) {
       if (rampRiseInput) {
         attachNumericScrubber(rampRiseInput, {
           step: 0.05, min: 0.05, max: 5, precision: 2,
-          onChange: (val) => { selected.rise = val; updateRampGeometry(); },
+          onChange: (val) => { selected.rise = val; updateRampGeometry(true); },
           onCommit: (val) => { selected.rise = val; updateRampGeometry(); }
         });
         rampRiseInput.addEventListener('change', (e) => {
@@ -4418,7 +4456,7 @@ export function createPlanView(context) {
       if (wallThickInput) {
         attachNumericScrubber(wallThickInput, {
           step: 0.02, min: 0.05, max: 1.5, precision: 2,
-          onChange: (val) => { selected.thickness = val; render(); },
+          onChange: (val) => { selected.thickness = val; renderScene(); },
           onCommit: (val) => { selected.thickness = val; render(); }
         });
         wallThickInput.addEventListener('change', (e) => {
@@ -4488,7 +4526,7 @@ export function createPlanView(context) {
       if (doorWInput) {
         attachNumericScrubber(doorWInput, {
           step: 0.05, min: 0.5, max: 3.0, precision: 2,
-          onChange: (val) => { selected.width = val; render(); },
+          onChange: (val) => { selected.width = val; renderScene(); },
           onCommit: (val) => { selected.width = val; render(); renderContextualToolbar(); }
         });
         doorWInput.addEventListener('change', (e) => {
@@ -4502,7 +4540,7 @@ export function createPlanView(context) {
       if (doorPosInput) {
         attachNumericScrubber(doorPosInput, {
           step: 0.1, min: 0, max: 50, precision: 2,
-          onChange: (val) => { selected.position = val; render(); },
+          onChange: (val) => { selected.position = val; renderScene(); },
           onCommit: (val) => { selected.position = val; render(); }
         });
         doorPosInput.addEventListener('change', (e) => {
@@ -4570,7 +4608,7 @@ export function createPlanView(context) {
       if (winWInput) {
         attachNumericScrubber(winWInput, {
           step: 0.05, min: 0.4, max: 6.0, precision: 2,
-          onChange: (val) => { selected.width = val; render(); },
+          onChange: (val) => { selected.width = val; renderScene(); },
           onCommit: (val) => { selected.width = val; render(); renderContextualToolbar(); }
         });
         winWInput.addEventListener('change', (e) => {
@@ -4584,7 +4622,7 @@ export function createPlanView(context) {
       if (winPosInput) {
         attachNumericScrubber(winPosInput, {
           step: 0.1, min: 0, max: 50, precision: 2,
-          onChange: (val) => { selected.position = val; render(); },
+          onChange: (val) => { selected.position = val; renderScene(); },
           onCommit: (val) => { selected.position = val; render(); }
         });
         winPosInput.addEventListener('change', (e) => {
@@ -4597,7 +4635,7 @@ export function createPlanView(context) {
       if (winSillInput) {
         attachNumericScrubber(winSillInput, {
           step: 0.05, min: 0, max: 2.5, precision: 2,
-          onChange: (val) => { selected.sill = val; render(); },
+          onChange: (val) => { selected.sill = val; renderScene(); },
           onCommit: (val) => { selected.sill = val; render(); }
         });
         winSillInput.addEventListener('change', (e) => {
@@ -4714,7 +4752,7 @@ export function createPlanView(context) {
       if (offsetInput) {
         attachNumericScrubber(offsetInput, {
           step: 0.1, min: -5, max: 5, precision: 2,
-          onChange: (val) => { selected.offset = val; render(); },
+          onChange: (val) => { selected.offset = val; renderScene(); },
           onCommit: (val) => { selected.offset = val; render(); renderContextualToolbar(); }
         });
         offsetInput.addEventListener('change', (e) => {
@@ -5441,7 +5479,7 @@ export function createPlanView(context) {
     currentMouseWorld = world;
     updateStatusBar(world);
     if (polyRoomVertices.length > 0) {
-      render();
+      scheduleSceneRender();
     }
     const snapOn = state.plan.snap !== false;
 
@@ -5455,11 +5493,11 @@ export function createPlanView(context) {
         if (snapRes.snapped && snapRes.type !== 'grid') {
           if (!activeSnap || activeSnap.x !== snapRes.x || activeSnap.y !== snapRes.y || activeSnap.type !== snapRes.type) {
             activeSnap = snapRes;
-            render();
+            scheduleSceneRender();
           }
         } else if (activeSnap) {
           activeSnap = null;
-          render();
+          scheduleSceneRender();
         }
       }
       return;
@@ -5472,7 +5510,7 @@ export function createPlanView(context) {
       if (!doc.camera) doc.camera = {};
       doc.camera.azimuth = (dragState.startCam.azimuth || 45) + dx * 0.5;
       doc.camera.elevation = Math.max(10, Math.min(85, (dragState.startCam.elevation || 35.264) - dy * 0.5));
-      render();
+      scheduleSceneRender();
       return;
     }
 
@@ -5480,7 +5518,7 @@ export function createPlanView(context) {
       const dx = event.clientX - dragState.startClient.x;
       const dy = event.clientY - dragState.startClient.y;
       transform = panBy(dragState.startTransform, dx, dy);
-      render();
+      scheduleSceneRender();
       return;
     }
 
@@ -5513,7 +5551,7 @@ export function createPlanView(context) {
           e.depth = Math.abs(e.y2 - e.y1);
           e.name = `${Math.hypot(e.x2 - e.x1, e.y2 - e.y1).toFixed(2)}m`;
         }
-        render();
+        scheduleSceneRender();
         return;
       }
 
@@ -5553,7 +5591,7 @@ export function createPlanView(context) {
         e.slopeRatio = e.run / e.rise;
       }
 
-      render();
+      scheduleSceneRender();
       return;
     }
 
@@ -5596,7 +5634,7 @@ export function createPlanView(context) {
         const deg = ((Math.atan2(targetPt.y - dragState.start.y, targetPt.x - dragState.start.x) * 180 / Math.PI) + 360) % 360;
         showHud(dM, deg);
       }
-      render();
+      scheduleSceneRender();
     } else if (dragState.mode === 'move' && dragState.entity) {
       const dx = snapped.x - dragState.last.x;
       const dy = snapped.y - dragState.last.y;
@@ -5643,7 +5681,7 @@ export function createPlanView(context) {
           }
         }
         dragState.last = snapped;
-        render();
+        scheduleSceneRender();
       }
     }
   }
@@ -6485,12 +6523,12 @@ export function createPlanView(context) {
               activeDoc.camera = { azimuth: 45, elevation: 35.264, zoom: 32, panX: svg.width / 2, panY: svg.height / 2 + 30 };
             }
             activeDoc.camera.zoom = Math.max(5, Math.min(250, (activeDoc.camera.zoom || 32) * factor));
-            render();
+            scheduleSceneRender();
             return;
           }
           const sp = clientToSvg(e.clientX, e.clientY);
           transform = zoomAt(transform, e.deltaY < 0 ? 1.15 : 0.87, sp.x, sp.y);
-          render();
+          scheduleSceneRender();
         }, { passive: false });
       }
       document.addEventListener('keydown', onKeyDown);

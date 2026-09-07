@@ -10,7 +10,12 @@
  *   A7 — calculateMultiSegmentRamp accepted rise/slope ≤ 0 → Infinity footprint
  *   A8 — shortcuts: Shift+<letter> collapsed onto the bare letter
  *   A9 — shortcuts: cross-category duplicate combos were accepted
+ *   A10 — plan canvas: pointermove rebuilt the whole SVG + panels per event;
+ *          scrubber onChange rebuilt the inspector out from under the drag
  */
+
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 
 import {
   parseInput
@@ -168,16 +173,28 @@ console.log('\n--- A8. normalizeKeyCombo keeps Shift for uppercase letters ---')
   assertEqual(normalizeKeyCombo(punctuation), '?', 'Shifted punctuation keeps its existing shape');
 }
 
+// --- A10. Plan canvas hot paths use coalesced scene renders ---
+console.log('\n--- A10. Plan canvas render decoupling (static contract) ---');
+{
+  const planSrc = fs.readFileSync(fileURLToPath(new URL('../src/ui/views/plan.js', import.meta.url)), 'utf-8');
+  const moveStart = planSrc.indexOf('function onPointerMove(event) {');
+  const moveEnd = planSrc.indexOf('function onPointerUp(event) {');
+  const pointerMoveBody = planSrc.slice(moveStart, moveEnd);
+  assert(!/[^a-zA-Z]render\(\);/.test(pointerMoveBody.replace(/scheduleSceneRender\(\);/g, '')),
+    'onPointerMove no longer calls full render() (uses scheduleSceneRender)');
+  assert(planSrc.includes('function scheduleSceneRender()'), 'scheduleSceneRender coalescing helper exists');
+  assert(planSrc.includes('function renderScene()') && planSrc.includes('function renderPanels()'),
+    'render is split into scene and panel phases');
+  const scrubChanges = planSrc.match(/onChange: \(val\) => \{ [^}]*\}/g) || [];
+  assert(scrubChanges.length > 0 && scrubChanges.every(c => !/render\(\)/.test(c)),
+    'scrubber onChange handlers never trigger a full inspector rebuild');
+  console.log(`  ℹ (checked ${scrubChanges.length} scrubber onChange handlers)`);
+}
+
 // --- A9. Cross-category shortcut conflicts rejected ---
 console.log('\n--- A9. bindShortcut rejects duplicates across categories ---');
 {
   const sm = new ShortcutsManagerClass();
-  const defaultWall = sm.getKeyForAction('tool_wall');
-  const studioOwner = sm.shortcuts.find(s => s.key === defaultWall && s.id !== 'tool_wall');
-  if (studioOwner) {
-    // If a cross-category default duplicate existed this would be a A9 finding;
-    // defaults are currently unique, so simulate by binding first.
-  }
   const res1 = sm.bindShortcut('tool_wall', 'k');
   assert(res1.success, 'Binds tool_wall to K');
   const res2 = sm.bindShortcut('tool_measure', 'k');
