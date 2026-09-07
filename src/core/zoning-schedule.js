@@ -22,7 +22,8 @@ export const ZONING_CATEGORIES = Object.freeze({
 export const OCCUPANCY_FACTORS = Object.freeze({
   residential: { factorM2: 18.6, label: 'Residential (18.6 m²/person)' },
   assembly_unconcentrated: { factorM2: 1.4, label: 'Assembly Tables/Chairs (1.4 m²/person)' },
-  assembly_concentrated: { factorM2: 0.65, label: 'Assembly Standing (0.65 m²/person)' },
+  // IBC 1004.5 standing space: 5 net ft²/person ≈ 0.46 m²/person
+  assembly_concentrated: { factorM2: 0.46, label: 'Assembly Standing (0.46 m²/person)' },
   business: { factorM2: 9.3, label: 'Business / Office (9.3 m²/person)' },
   educational: { factorM2: 1.9, label: 'Classrooms (1.9 m²/person)' },
   kitchen_commercial: { factorM2: 18.6, label: 'Kitchen / Service (18.6 m²/person)' },
@@ -164,7 +165,10 @@ export function calculateFloorTotals(docOrEntities) {
     ? docOrEntities
     : (docOrEntities && Array.isArray(docOrEntities.entities) ? docOrEntities.entities : []);
 
-  const netInternalArea = schedule.reduce((sum, r) => sum + r.areaM2, 0);
+  // Sum RAW room areas (schedule entries carry display-rounded values; summing
+  // those accumulates rounding error across large floors)
+  const rooms = entities.filter(e => e && e.kind === 'room');
+  const netInternalArea = rooms.reduce((sum, r) => sum + roomArea(r), 0);
 
   // Estimate wall footprint area if walls are present
   const walls = entities.filter(e => e && e.kind === 'wall' && typeof e.x1 === 'number');
@@ -179,16 +183,19 @@ export function calculateFloorTotals(docOrEntities) {
 
   const totalOccupants = schedule.reduce((sum, r) => sum + r.occupantCount, 0);
 
-  // Circulation analysis
-  const circulationRooms = schedule.filter(r => r.zoningKey === 'circulation');
-  const circulationArea = circulationRooms.reduce((sum, r) => sum + r.areaM2, 0);
+  // Circulation analysis (raw areas, like netInternalArea)
+  const circulationRooms = rooms.filter(r => {
+    const key = r.zoning || guessZoningFromRoomName(r.name);
+    return key === 'circulation';
+  });
+  const circulationArea = circulationRooms.reduce((sum, r) => sum + roomArea(r), 0);
   const circulationRatio = netInternalArea > 0 ? (circulationArea / netInternalArea) * 100 : 0;
 
   // Breakdown by zoning department
   const zoningBreakdown = {};
   for (const key of Object.keys(ZONING_CATEGORIES)) {
-    const matching = schedule.filter(r => r.zoningKey === key);
-    const area = matching.reduce((sum, r) => sum + r.areaM2, 0);
+    const matching = rooms.filter(r => (r.zoning || guessZoningFromRoomName(r.name)) === key);
+    const area = matching.reduce((sum, r) => sum + roomArea(r), 0);
     const pct = netInternalArea > 0 ? (area / netInternalArea) * 100 : 0;
     zoningBreakdown[key] = {
       name: ZONING_CATEGORIES[key].name,

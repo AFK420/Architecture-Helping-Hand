@@ -6,6 +6,39 @@
 import { UNITS } from './units.js';
 
 /**
+ * Disambiguates commas before numeric parsing.
+ * - "1,234.5" / "1,234,567"  → thousands separators (strip)
+ * - "1,5" / "2,40"           → decimal comma (convert to '.') — a bare "1,5"
+ *   previously parsed as 15, a silent 10× error for decimal-comma locales.
+ * - "1.234,5"                → European mixed notation (strip dots, comma → '.')
+ * Ambiguous ",ddd" (exactly three digits) follows English thousands convention.
+ * @private
+ */
+function normalizeDecimalCommas(s) {
+  if (!s.includes(',')) return s;
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if (lastDot > lastComma) {
+    // "1,234.5" — comma(s) before the decimal point are grouping separators
+    return s.replace(/,/g, '');
+  }
+  if (lastDot !== -1) {
+    // "1.234,5" — European mixed: dot groups, comma decimal
+    return s.replace(/\./g, '').replace(/,/g, '.');
+  }
+  if (/^-?\d{1,3}(,\d{3})+(\s*\D.*)?$/.test(s)) {
+    return s.replace(/,/g, ''); // unambiguous thousands grouping ("1,234" / "1,234 mm")
+  }
+  // Decimal comma — any grouped digit count other than exactly three
+  // ("1,5", "2,40 m", "3,1416"); exactly-three digits stay thousands
+  // (handled by the rule above).
+  if (/^-?\d+,\d+(\s*\D.*)?$/.test(s)) {
+    return s.replace(',', '.');
+  }
+  return s.replace(/,/g, ''); // leave anything else to the numeric regexes
+}
+
+/**
  * Normalized Parse Result Structure
  * @typedef {Object} ParseResult
  * @property {number} value - Numeric value in the recognized or default unit
@@ -38,7 +71,7 @@ export function parseInput(input, options = {}) {
     return { value: 0, detectedUnit: null, isValid: false, error: 'Empty or invalid input type' };
   }
 
-  const trimmed = input.trim().replace(/,/g, '');
+  const trimmed = normalizeDecimalCommas(input.trim());
   if (trimmed === '') {
     return { value: 0, detectedUnit: null, isValid: false, error: 'Input is empty' };
   }

@@ -327,9 +327,23 @@ export function inspectStairCompliance(stairResult, codeId = 'jnbc', buildingTyp
   }
 
   const geom = stairResult.geometry;
-  const riserMm = Math.round(geom.riserHeightMeters * 1000 * 10) / 10;
-  const treadMm = Math.round(geom.treadDepthMeters * 1000 * 10) / 10;
-  const blondelMm = Math.round(geom.blondelMeters * 1000 * 10) / 10;
+  // calculateStair() carries riser/tread/Blondel values on risers/treads/proportion,
+  // not on geometry; accept the flat legacy aliases for hand-built fixtures.
+  const riserMeters = stairResult.risers?.heightMeters ?? geom.riserHeightMeters;
+  const treadMeters = stairResult.treads?.depthMeters ?? geom.treadDepthMeters;
+  const blondelMeters = stairResult.proportion?.twoRPlusTMeters ?? geom.blondelMeters;
+  if (!Number.isFinite(riserMeters) || !Number.isFinite(treadMeters)) {
+    return {
+      code,
+      overallStatus: 'warn',
+      summaryText: 'Incomplete stair geometry — riser/tread values missing, compliance cannot be evaluated.',
+      summaryArabic: 'بيانات هندسية للقلبة غير مكتملة — لا يمكن إجراء الفحص.',
+      checks: []
+    };
+  }
+  const riserMm = Math.round(riserMeters * 1000 * 10) / 10;
+  const treadMm = Math.round(treadMeters * 1000 * 10) / 10;
+  const blondelMm = Number.isFinite(blondelMeters) ? Math.round(blondelMeters * 1000 * 10) / 10 : null;
   const riserCount = stairResult.risers?.count || 0;
 
   const minTreadAllowed = buildingType === 'residential' ? cfg.treadResidentialMinMm : cfg.treadMinMm;
@@ -477,9 +491,21 @@ export function inspectRampCompliance(rampResult, codeId = 'jnbc') {
 
   const geom = rampResult.geometry;
   const slopePercent = Math.round(geom.slopePercent * 100) / 100;
-  const ratioVal = Math.round(geom.ratio * 10) / 10;
+  // buildRampGeometry() exposes the run/rise ratio as `ratioValue`; the flat
+  // `ratio` alias is accepted for hand-built legacy fixtures.
+  const ratioSource = Number.isFinite(geom.ratioValue) ? geom.ratioValue : geom.ratio;
+  const ratioVal = Number.isFinite(ratioSource) ? Math.round(ratioSource * 10) / 10 : null;
   const riseMeters = geom.riseMeters;
   const runMeters = geom.runMeters;
+  if (!Number.isFinite(slopePercent)) {
+    return {
+      code,
+      overallStatus: 'warn',
+      summaryText: 'Incomplete ramp geometry — slope values missing, compliance cannot be evaluated.',
+      summaryArabic: 'بيانات هندسية للمنحدر غير مكتملة — لا يمكن إجراء الفحص.',
+      checks: []
+    };
+  }
 
   const checks = [];
 

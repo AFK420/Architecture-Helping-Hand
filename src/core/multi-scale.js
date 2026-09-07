@@ -181,7 +181,9 @@ export function calculateAtScale(canonicalMeters, scaleRatio, options = {}) {
   // Determine drawing unit: if imperial real unit, default drawing unit is inches ('in'), otherwise millimeters ('mm')
   const isImperial = (displayUnit === 'ft' || displayUnit === 'in' || displayUnit === 'ft_in' || displayUnit === 'yd');
   const targetDrawingUnit = drawingUnit || (isImperial ? 'in' : 'mm');
-  const drawUnitDef = UNITS[targetDrawingUnit] || UNITS.mm;
+  // 'ft_in' is a display format, not a UNITS key — its machine value is inches
+  // (previously it silently fell back to mm while reporting drawingUnit 'ft_in')
+  const drawUnitDef = UNITS[targetDrawingUnit] || UNITS.in;
 
   const drawingValue = drawingMeters / drawUnitDef.toMeters;
   const isNegative = canonicalMeters < 0;

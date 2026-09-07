@@ -534,6 +534,19 @@ export function calculateMultiSegmentRamp(totalRiseMeters, slopePercent, options
   const rampWidth = options.rampWidthMeters && options.rampWidthMeters > 0 ? options.rampWidthMeters : 1.2;
   const landingLength = options.landingLengthMeters && options.landingLengthMeters > 0 ? options.landingLengthMeters : 1.5;
 
+  // Guard the same input contract as the single-flight modes — without this,
+  // slopePercent = 0 propagated Infinity through every footprint value.
+  if (typeof totalRiseMeters !== 'number' || !isFinite(totalRiseMeters) || totalRiseMeters <= 0) {
+    const err = new Error('Total rise must be a finite number greater than zero.');
+    err.code = RAMP_ERROR_CODES.INVALID_RISE;
+    throw err;
+  }
+  if (typeof slopePercent !== 'number' || !isFinite(slopePercent) || slopePercent <= 0) {
+    const err = new Error('Slope must be a finite number greater than zero.');
+    err.code = RAMP_ERROR_CODES.INVALID_SLOPE;
+    throw err;
+  }
+
   const totalRunMeters = totalRiseMeters / (slopePercent / 100);
   const ratioValue = 100 / slopePercent;
 

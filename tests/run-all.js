@@ -59,7 +59,8 @@ const testFiles = [
   'studio-phase6.test.js',
   'studio-phase7.test.js',
   'studio-phase8.test.js',
-  'studio-personas.test.js'
+  'studio-personas.test.js',
+  'audit-regressions.test.js'
 ];
 
 console.log('=================================================================');
