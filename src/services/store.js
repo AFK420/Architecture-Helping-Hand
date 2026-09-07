@@ -453,29 +453,40 @@ export function createProjectStore(options = {}) {
     return projectCopy;
   }
 
+  /**
+   * Oldest snapshots beyond this count are dropped when a new one is created.
+   * Uncapped growth eventually exhausted localStorage quota (failing saves)
+   * on long-running projects.
+   */
+  const MAX_SNAPSHOTS = 25;
+
   function createSnapshot(label) {
     if (!currentProject) return { ok: false, errors: ['no project to snapshot'] };
+    // Enforce the cap BEFORE building anything: drop oldest snapshots first.
+    if (currentProject.snapshots.length >= MAX_SNAPSHOTS) {
+      const excess = currentProject.snapshots.length - (MAX_SNAPSHOTS - 1);
+      currentProject.snapshots = currentProject.snapshots.slice(excess);
+    }
     const snapshot = {
       id: `snap-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
       label: typeof label === 'string' && label ? label : `Snapshot ${currentProject.snapshots.length + 1}`,
       createdAt: nowFn().toISOString(),
       project: null
     };
-    // Phase 1: register the (copy- pending) snapshot in the current doc
+    // Build the full payload copy BEFORE registering so persistence is a
+    // single atomic write — the previous two-phase version durably stored a
+    // payload-less snapshot between the first save and the payload re-attach,
+    // leaving a snapshot that could never be restored if the session died
+    // in between.
+    const docWithSnapshot = cloneProject(currentProject);
+    docWithSnapshot.snapshots.push(snapshot);
+    const embedded = stripEmbeddedSnapshotPayloads(docWithSnapshot);
+    const fullSnapshot = { ...snapshot, project: embedded };
     const registered = updateProject(draft => {
-      draft.snapshots.push(snapshot);
+      draft.snapshots.push(fullSnapshot);
       return draft;
     });
     if (!registered.ok) return registered;
-    // Phase 2: embed a copy of the doc that now CONTAINS this snapshot.
-    // Prior snapshots' payloads are stripped inside the embedded copy to
-    // keep the container linear in document size (see helper above).
-    const embedded = stripEmbeddedSnapshotPayloads(cloneProject(currentProject));
-    currentProject.snapshots = currentProject.snapshots.map(s =>
-      s.id === snapshot.id ? { ...s, project: embedded } : s
-    );
-    const saved = saveProject();
-    if (!saved.ok) return saved;
     notify('snapshot', currentProject);
     return { ok: true, snapshotId: snapshot.id, snapshot: cloneProject(currentProject.snapshots.find(s => s.id === snapshot.id)) };
   }

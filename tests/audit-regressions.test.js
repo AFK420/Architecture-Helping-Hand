@@ -213,6 +213,31 @@ console.log('\n--- A11b. view lifecycle hooks wired ---');
   assert(regSrc.includes('function notifyModeChange'), 'registry exposes notifyModeChange');
 }
 
+// --- A12. Snapshots: capped and payload-atomic ---
+console.log('\n--- A12. snapshot cap + atomic payload attach ---');
+{
+  const map = new Map();
+  const storage = {
+    getItem: k => (map.has(k) ? map.get(k) : null),
+    setItem: (k, v) => { map.set(k, String(v)); },
+    removeItem: k => { map.delete(k); }
+  };
+  const store = createProjectStore({ storage });
+  store.getProject({ name: 'Snapshot Cap Probe' });
+  let allCreated = true;
+  for (let i = 0; i < 30; i++) {
+    const res = store.createSnapshot(`s${i}`);
+    if (!res.ok) { allCreated = false; break; }
+  }
+  const project = store.getProject();
+  assert(allCreated, 'all 30 snapshot calls succeed');
+  assert(project.snapshots.length <= 25, `snapshot container is capped (got ${project.snapshots.length}, cap 25)`);
+  assert(project.snapshots.every(s => s.project && typeof s.project === 'object'),
+    'every persisted snapshot carries its payload (no null-project phase)');
+  const restored = store.restoreSnapshot(project.snapshots[0].id);
+  assert(restored.ok, 'oldest surviving snapshot restores cleanly');
+}
+
 console.log(`\n========================================`);
 console.log(`Audit Regression Test Summary: ${passed} passed, ${failed} failed.`);
 console.log(`========================================`);
