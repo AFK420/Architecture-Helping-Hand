@@ -92,6 +92,7 @@ import {
   createQuickHandoffPayload
 } from '../core/quick-dimension.js';
 import { createViewRegistry, validateViewContext } from './view-registry.js';
+import { navIcon, commandIcon } from '../core/icons.js';
 import { createConverterView } from './views/converter.js';
 import { createRescalerView } from './views/rescaler.js';
 import { createDetectorView } from './views/detector.js';
@@ -1400,7 +1401,7 @@ export function initializeApp() {
             ${items.map(item => `
               <button type="button" class="sidebar-item ${state.currentMode === item.id ? 'active' : ''}" data-mode="${item.id}"
                 title="${item.desc}" aria-label="${item.label} — ${item.desc}">
-                <span class="sidebar-item-icon" aria-hidden="true">${item.icon}</span>
+                <span class="sidebar-item-icon" aria-hidden="true">${navIcon(item.id, { size: 18 })}</span>
                 <span class="sidebar-item-text">
                   <span class="sidebar-item-label">${item.label}</span>
                   <span class="sidebar-item-desc">${item.desc}</span>
@@ -1491,7 +1492,7 @@ export function initializeApp() {
               </button>
               ${items.map(item => `
                 <button type="button" class="menubar-dropdown-item ${state.currentMode === item.id ? 'active' : ''}" data-mode="${item.id}" role="menuitem" title="${item.desc}">
-                  <span class="menubar-item-icon" aria-hidden="true">${item.icon}</span>
+                  <span class="menubar-item-icon" aria-hidden="true">${navIcon(item.id, { size: 15 })}</span>
                   <span class="menubar-item-text">
                     <span class="menubar-item-title-row">
                       <span class="menubar-item-label">${item.label}</span>
@@ -1518,7 +1519,7 @@ export function initializeApp() {
             <div class="menubar-menu-header">${section} Tools</div>
             ${items.map(item => `
               <button type="button" class="menubar-dropdown-item ${state.currentMode === item.id ? 'active' : ''}" data-mode="${item.id}" role="menuitem" title="${item.desc}">
-                <span class="menubar-item-icon" aria-hidden="true">${item.icon}</span>
+                <span class="menubar-item-icon" aria-hidden="true">${navIcon(item.id, { size: 15 })}</span>
                 <span class="menubar-item-text">
                   <span class="menubar-item-title-row">
                     <span class="menubar-item-label">${item.label}</span>
@@ -3336,7 +3337,7 @@ export function initializeApp() {
         aria-selected="${isSelected ? 'true' : 'false'}"
       >
         <div class="command-item-left">
-          <span class="command-icon">${cmd.icon || '⚡'}</span>
+          <span class="command-icon">${commandIcon(cmd.id, { size: 15 })}</span>
           <div class="command-text-group">
             <div class="command-title">
               <span>${cmd.title}</span>
@@ -6286,7 +6287,8 @@ export function initializeApp() {
       buildFactsPack: (args = {}) => buildScopedFactsPack({
         project: projectStore.getProject(),
         planEntities: state.plan.entities,
-        request: { scopeHint: args.request?.scopeHint || args.options?.scopeHint || '' }
+        request: { scopeHint: args.request?.scopeHint || args.options?.scopeHint || '' },
+        selectionPackets: args.request?.selectionPackets || state.aiSelectionContext || null
       })
     });
     aiServices = { http, transports, providerManager, modelCatalog, router };
@@ -6296,6 +6298,9 @@ export function initializeApp() {
     aiServices = null;
   }
   state.ai = aiServices;
+  // Selection evidence packets set by the Plan workspace AI Query tool;
+  // consumed by the facts-pack builder so AI answers the exact selection.
+  state.aiSelectionContext = null;
 
   const viewContext = Object.freeze({
     state,

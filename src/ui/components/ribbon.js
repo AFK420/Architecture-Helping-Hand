@@ -9,6 +9,7 @@ import {
   PERSONA_RIBBON_CONFIGS,
   STUDIO_TOOL_CATALOG
 } from '../../core/personas.js';
+import { toolIcon, personaIcon } from '../../core/icons.js';
 
 export function renderStudioRibbon(container, options = {}) {
   if (!container) return;
@@ -33,7 +34,7 @@ export function renderStudioRibbon(container, options = {}) {
             const isActive = k === currentPersona;
             return `
               <button type="button" class="persona-pill-btn ${isActive ? 'active' : ''}" data-persona="${p.id}" title="${p.name} — ${p.description}">
-                <span class="persona-icon">${p.icon}</span>
+                <span class="persona-icon">${personaIcon(p.id, { size: 14 })}</span>
                 <span class="persona-label">${p.shortLabel}</span>
               </button>
             `;
@@ -68,7 +69,7 @@ export function renderStudioRibbon(container, options = {}) {
                   return `
                     <div class="ribbon-tool-wrap ${hasFlyout ? 'has-flyout' : ''}">
                       <button type="button" class="ribbon-tool-btn ${isActive ? 'active' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}">
-                        <span class="ribbon-tool-icon">${tool.icon}</span>
+                        <span class="ribbon-tool-icon">${toolIcon(tool, { size: 20 })}</span>
                         <span class="ribbon-tool-name">${tool.name}</span>
                         ${tool.shortcut ? `<kbd class="ribbon-tool-kbd">${tool.shortcut}</kbd>` : ''}
                         ${hasFlyout ? `<span class="flyout-arrow">▾</span>` : ''}
@@ -77,7 +78,7 @@ export function renderStudioRibbon(container, options = {}) {
                         <div class="ribbon-flyout-popover" style="display: none;">
                           ${tool.flyout.map(sub => `
                             <button type="button" class="flyout-item-btn" data-tool="${sub.id}">
-                              <span class="flyout-item-icon">${sub.icon}</span>
+                              <span class="flyout-item-icon">${toolIcon(sub, { size: 14 })}</span>
                               <span class="flyout-item-name">${sub.name}</span>
                               ${sub.shortcut ? `<kbd class="flyout-item-kbd">${sub.shortcut}</kbd>` : ''}
                             </button>

@@ -8,6 +8,7 @@ import {
   TOOL_CATEGORIES,
   searchStudioTools
 } from '../../core/personas.js';
+import { toolIcon, categoryIcon, icon } from '../../core/icons.js';
 
 export function renderStudioPalette(container, options = {}) {
   if (!container) return;
@@ -30,7 +31,7 @@ export function renderStudioPalette(container, options = {}) {
       <!-- Universal Tool Search Header -->
       <div class="palette-search-wrap">
         <div class="palette-search-input-box" title="Search tools by name, hotkey or command (e.g. 'stair', 'W', 'loft')">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon">${icon("search", { size: 14 })}</span>
           <input type="text" id="palette-tool-search" class="palette-search-input" placeholder="Find…" autocomplete="off" spellcheck="false" />
         </div>
         <div id="palette-search-results" class="palette-search-dropdown" style="display: none;"></div>
@@ -44,7 +45,7 @@ export function renderStudioPalette(container, options = {}) {
           return `
             <div class="palette-category-group iconic-group" data-category="${cat.id}">
               <div class="palette-category-divider" title="${cat.name}">
-                <span class="divider-icon">${cat.icon}</span>
+                <span class="divider-icon">${categoryIcon(cat.id, { size: 14 })}</span>
               </div>
               <div class="palette-tools-grid iconic-grid">
                 ${toolsInCat.map(tool => {
@@ -57,7 +58,7 @@ export function renderStudioPalette(container, options = {}) {
                   return `
                     <div class="palette-tool-wrapper iconic-wrapper ${hasFlyout ? 'has-flyout' : ''}">
                       <button type="button" class="palette-tool-btn iconic-tool-btn ${isActive ? 'active' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}">
-                        <span class="tool-icon">${tool.icon}</span>
+                        <span class="tool-icon">${toolIcon(tool, { size: 18 })}</span>
                         ${badge ? `<kbd class="tool-badge">${badge}</kbd>` : ''}
                         ${hasFlyout ? `<span class="tool-flyout-indicator">▾</span>` : ''}
                       </button>
@@ -65,7 +66,7 @@ export function renderStudioPalette(container, options = {}) {
                         <div class="palette-flyout-menu iconic-flyout-menu" style="display: none;">
                           ${tool.flyout.map(sub => `
                             <button type="button" class="flyout-sub-btn" data-tool="${sub.id}" title="${sub.name}">
-                              <span class="sub-icon">${sub.icon}</span>
+                              <span class="sub-icon">${toolIcon(sub, { size: 14 })}</span>
                               <span class="sub-label">${sub.name}</span>
                               ${sub.shortcut ? `<kbd class="sub-kbd">${sub.shortcut}</kbd>` : ''}
                             </button>
@@ -134,7 +135,7 @@ export function renderStudioPalette(container, options = {}) {
             }
           } else if (isCat) {
             const catId = itemBtn.dataset.catId;
-            const catSection = container.querySelector(`.palette-category-section[data-category="${catId}"]`);
+            const catSection = container.querySelector(`.palette-category-group[data-category="${catId}"]`);
             if (catSection) {
               catSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
