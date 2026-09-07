@@ -9667,6 +9667,45 @@ select option {
     box-sizing: border-box !important;
   }
 
+  /* The palette container MUST be height-bounded inside the fixed card,
+     otherwise .palette-categories-scroll can never scroll and tools beyond
+     the card edge are clipped (the 'tools are hidden' defect). */
+  #mode-view-plan #studio-palette-container {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  #mode-view-plan .studio-vertical-toolstrip {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  #mode-view-plan .palette-search-wrap {
+    flex: 0 0 auto !important;
+  }
+
+  #mode-view-plan .palette-categories-scroll,
+  #mode-view-plan .palette-categories-scroll.iconic-scroll {
+    flex: 1 1 0 !important;
+    min-height: 60px !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    scrollbar-width: thin !important;
+    scrollbar-color: var(--border-color, #475569) transparent !important;
+  }
+
+  #mode-view-plan .palette-categories-scroll::-webkit-scrollbar {
+    width: 8px !important;
+  }
+  #mode-view-plan .palette-categories-scroll::-webkit-scrollbar-thumb {
+    background: var(--border-color, #475569) !important;
+    border-radius: 4px !important;
+  }
+
   #mode-view-plan .plan-canvas-panel {
     height: 100% !important;
     max-height: 100% !important;

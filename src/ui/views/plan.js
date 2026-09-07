@@ -118,6 +118,8 @@ export function createPlanView(context) {
   let catalogById = new Map(); // catalog id -> item (footprint symbols)
   let resizeObserver = null;
   let polyRoomVertices = []; // [{x, y}, ...]
+  let polyLineVertices = []; // polyline tool: chained vertices, one line entity per segment
+  let polyLineCursor = null; // live cursor position for the rubber preview
   let currentMouseWorld = { x: 0, y: 0 };
   let activeSidebarTab = 'entities'; // 'entities' | 'layers'
 
@@ -728,6 +730,56 @@ export function createPlanView(context) {
     showToast('Polygonal room cancelled');
   }
 
+  /**
+   * Polyline tool: finishes the click chain. Every consecutive vertex pair
+   * becomes one line entity (N clicks → N−1 segments), so the entity model
+   * stays primitive and each segment is individually selectable/editable.
+   * Keyboard: Esc cancels · Enter finishes the open chain.
+   */
+  function finishPolyline() {
+    if (polyLineVertices.length < 2) {
+      polyLineVertices = [];
+      render();
+      renderContextualToolbar();
+      return;
+    }
+    const created = [];
+    const cmds = [];
+    for (let i = 0; i < polyLineVertices.length - 1; i++) {
+      const a = polyLineVertices[i];
+      const b = polyLineVertices[i + 1];
+      if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-4) continue;
+      try {
+        const line = createLineEntity({ p1: a, p2: b, name: `Polyline ${i + 1}` });
+        const cmd = entityAddRemoveCommand(entities(), line, `polyline segment ${i + 1}`);
+        cmds.push({ cmd, line });
+      } catch (e) {
+        showToast(e.message, 'warning');
+      }
+    }
+    polyLineVertices = [];
+    for (const { cmd, line } of cmds) {
+      cmd.redo();
+      history.push(cmd);
+      created.push(line.id);
+    }
+    if (created.length > 0) {
+      state.plan.selectedIds = new Set(created);
+      showToast(`Polyline added: ${created.length} segment(s)`, 'success');
+    }
+    AudioService.playTick();
+    render();
+    renderContextualToolbar();
+  }
+
+  function cancelPolyline() {
+    polyLineVertices = [];
+    polyLineCursor = null;
+    render();
+    renderContextualToolbar();
+    showToast('Polyline cancelled');
+  }
+
   /** Keeps svg.width/height synced to the element's real box so the
    * viewBox always equals the pixel box — pointer mapping then never
    * drifts (QA bug: clicks landed away from the cursor). */
@@ -1308,6 +1360,23 @@ export function createPlanView(context) {
     const sel = selectedId ? entities().find(e => e.id === selectedId) : null;
 
     if (!sel || selCount === 0) {
+      if (polyLineVertices.length > 0) {
+        toolbar.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <span class="context-tag-badge" style="background: rgba(56, 189, 248, 0.18); color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);">POLYLINE</span>
+              <span style="font-size: 0.75rem; color: var(--text-primary); font-weight: 600;">${polyLineVertices.length} point${polyLineVertices.length === 1 ? '' : 's'} placed</span>
+              <span style="font-size: 0.70rem; color: var(--text-muted);">Click to chain segments · Enter finishes the open chain · Esc cancels</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              ${polyLineVertices.length >= 2 ? '<button type="button" class="result-action-btn primary" id="ctx-finish-polyline" style="font-size: 0.68rem; padding: 2px 8px;">✓ Finish Polyline</button>' : ''}
+              <button type="button" class="result-action-btn" id="ctx-cancel-polyline" style="font-size: 0.68rem; padding: 2px 8px;">✕ Cancel</button>
+            </div>
+          </div>`;
+        toolbar.querySelector('#ctx-finish-polyline')?.addEventListener('click', finishPolyline);
+        toolbar.querySelector('#ctx-cancel-polyline')?.addEventListener('click', cancelPolyline);
+        return;
+      }
       if (polyRoomVertices.length > 0) {
         bar.innerHTML = `
           <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
@@ -3409,6 +3478,22 @@ export function createPlanView(context) {
 
     // Rubber-band rectangle / line while creating
     let dragMarkup = '';
+    if (dragState && dragState.mode === 'marqueeOrPan' && dragState.marquee && dragState.current) {
+      // Rubber-band box pick preview
+      const ax = Math.min(dragState.startWorld.x, dragState.current.x);
+      const ay = Math.min(dragState.startWorld.y, dragState.current.y);
+      const bx = Math.max(dragState.startWorld.x, dragState.current.x);
+      const by = Math.max(dragState.startWorld.y, dragState.current.y);
+      const p1 = worldToSvg(transform, ax, by);
+      const p2 = worldToSvg(transform, bx, ay);
+      dragMarkup = `
+        <g class="marquee-preview" pointer-events="none">
+          <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${(p2.x - p1.x).toFixed(1)}" height="${(p1.y - p2.y).toFixed(1)}"
+            fill="rgba(73,137,217,0.10)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <text x="${p1.x.toFixed(1)}" y="${(p2.y - 5).toFixed(1)}" font-size="9" font-family="var(--font-mono)"
+            fill="var(--accent-primary, #4989D9)">${dragState.additive ? '+ADD' : 'SELECT'} ${(Math.abs(bx - ax) * Math.abs(by - ay)).toFixed(1)}m²</text>
+        </g>`;
+    }
     if (dragState && dragState.mode === 'create' && dragState.current) {
       if (dragState.tool === 'measure') {
         const a = worldToSvg(transform, dragState.start.x, dragState.start.y);
@@ -3435,7 +3520,7 @@ export function createPlanView(context) {
           <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="3.5" fill="${col}"/>
           <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="3.5" fill="${col}"/>
           <text x="${(b.x + 6).toFixed(1)}" y="${(b.y - 4).toFixed(1)}" font-size="10" font-family="var(--font-mono)" fill="${col}">Note</text>`;
-      } else if (dragState.tool === 'wall' || dragState.tool === 'dimension') {
+      } else if (dragState.tool === 'wall' || dragState.tool === 'dimension' || dragState.tool === 'line') {
         const a = worldToSvg(transform, dragState.start.x, dragState.start.y);
         const b = worldToSvg(transform, dragState.current.x, dragState.current.y);
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
@@ -3525,6 +3610,24 @@ export function createPlanView(context) {
         ${dotsStr}
         ${closeIndicator}
       `;
+    }
+
+    if (polyLineVertices.length > 0) {
+      const cur = polyLineCursor || currentMouseWorld;
+      const ptsSvg = polyLineVertices.map(pt => worldToSvg(transform, pt.x, pt.y));
+      const curSvg = worldToSvg(transform, cur.x, cur.y);
+      const polylineStr = [...ptsSvg, curSvg].map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+      const dotsStr = ptsSvg.map((p, idx) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" fill="var(--accent-primary, #38bdf8)" stroke="#ffffff" stroke-width="1.5"/>`).join('');
+      let total = 0;
+      for (let i = 1; i < polyLineVertices.length; i++) total += Math.hypot(polyLineVertices[i].x - polyLineVertices[i - 1].x, polyLineVertices[i].y - polyLineVertices[i - 1].y);
+      total += Math.hypot(cur.x - polyLineVertices[polyLineVertices.length - 1].x, cur.y - polyLineVertices[polyLineVertices.length - 1].y);
+      dragMarkup += `
+        <g pointer-events="none">
+          <polyline points="${polylineStr}" fill="none" stroke="var(--accent-primary, #38bdf8)" stroke-width="2" stroke-dasharray="5 3"/>
+          ${dotsStr}
+          <circle cx="${curSvg.x.toFixed(1)}" cy="${curSvg.y.toFixed(1)}" r="3.5" fill="var(--color-warning, #fbbf24)"/>
+          <text x="${(curSvg.x + 8).toFixed(1)}" y="${(curSvg.y - 8).toFixed(1)}" font-size="9" font-family="var(--font-mono)" fill="var(--text-secondary,#9aa)">${total.toFixed(2)}m · Enter/Esc ends</text>
+        </g>`;
     }
 
     let guidesMarkup = '';
@@ -5476,8 +5579,17 @@ export function createPlanView(context) {
         state.plan.selectedIds = new Set([hitId]);
         dragState = { mode: 'move', entity: e, start: initialPt, last: initialPt, initial: JSON.parse(JSON.stringify(e)) };
       } else {
-        state.plan.selectedIds = new Set();
-        dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
+        // Empty-space drag = rubber-band box pick (Shift adds to the current
+        // selection); plain click-drag pans. Selection clears only when the
+        // drag resolves as a non-additive marquee or a plain click.
+        dragState = {
+          mode: 'marqueeOrPan',
+          startClient: { x: event.clientX, y: event.clientY },
+          startTransform: { ...transform },
+          startWorld: initialPt,
+          additive: event.shiftKey,
+          hadSelection: state.plan.selectedIds.size > 0
+        };
       }
       render();
     } else if (tool === 'hatch' || tool === 'material_paint' || tool === 'watercolor_brush') {
@@ -5554,6 +5666,24 @@ export function createPlanView(context) {
     } else if (tool === 'column') {
       dropColumn(initialPt);
       return;
+    } else if (tool === 'polyline') {
+      let targetPt = initialPt;
+      if (snapOn) {
+        const snapRes = findSnapPoint(world, visible, { snapDistance: 0.25, snapGrid: true, gridMeters: state.plan.grid });
+        if (snapRes.snapped) targetPt = { x: snapRes.x, y: snapRes.y };
+      }
+      if (polyLineVertices.length >= 2) {
+        const first = polyLineVertices[0];
+        if (Math.hypot(targetPt.x - first.x, targetPt.y - first.y) <= Math.max(0.4, state.plan.grid)) {
+          finishPolyline();
+          return;
+        }
+      }
+      polyLineVertices.push(targetPt);
+      AudioService.playTick();
+      render();
+      renderContextualToolbar();
+      return;
     } else if (tool === 'polyroom') {
       let targetPt = initialPt;
       if (snapOn) {
@@ -5575,7 +5705,7 @@ export function createPlanView(context) {
       render();
       renderContextualToolbar();
       return;
-    } else if (tool === 'room' || tool === 'wall' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'leader' || tool === 'measure' || tool === 'grid' || tool === 'section_cut' || tool === 'detail_callout') {
+    } else if (tool === 'room' || tool === 'wall' || tool === 'line' || tool === 'stair' || tool === 'ramp' || tool === 'dimension' || tool === 'leader' || tool === 'measure' || tool === 'grid' || tool === 'section_cut' || tool === 'detail_callout') {
       if (snapOn) {
         const snapRes = findSnapPoint(world, visible, { snapDistance: 0.25, snapGrid: true, gridMeters: state.plan.grid });
         if (snapRes.snapped) {
@@ -5603,13 +5733,14 @@ export function createPlanView(context) {
     const world = svgPoint(event);
     currentMouseWorld = world;
     updateStatusBar(world);
-    if (polyRoomVertices.length > 0) {
+    if (polyRoomVertices.length > 0 || (polyLineVertices.length > 0 && !dragState)) {
+      if (polyLineVertices.length > 0) polyLineCursor = { x: world.x, y: world.y };
       scheduleSceneRender();
     }
     const snapOn = state.plan.snap !== false;
 
     if (!dragState) {
-      if (snapOn && (state.plan.tool === 'wall' || state.plan.tool === 'dimension' || state.plan.tool === 'measure' || state.plan.tool === 'room' || state.plan.tool === 'polyroom')) {
+      if (snapOn && (state.plan.tool === 'wall' || state.plan.tool === 'line' || state.plan.tool === 'dimension' || state.plan.tool === 'measure' || state.plan.tool === 'room' || state.plan.tool === 'polyroom')) {
         const snapRes = findSnapPoint(world, entities(), {
           snapDistance: 0.25,
           snapGrid: false,
@@ -5644,6 +5775,24 @@ export function createPlanView(context) {
       const dy = event.clientY - dragState.startClient.y;
       transform = panBy(dragState.startTransform, dx, dy);
       scheduleSceneRender();
+      return;
+    }
+
+    if (dragState.mode === 'marqueeOrPan') {
+      const dx = event.clientX - dragState.startClient.x;
+      const dy = event.clientY - dragState.startClient.y;
+      if (!dragState.marquee && Math.hypot(dx, dy) > 5) {
+        // Real drag: switch from pan-candidate to rubber-band box pick.
+        dragState.marquee = true;
+        dragState.current = { ...dragState.startWorld };
+      }
+      if (dragState.marquee) {
+        dragState.current = { x: world.x, y: world.y };
+        scheduleSceneRender();
+      } else {
+        transform = panBy(dragState.startTransform, dx, dy);
+        scheduleSceneRender();
+      }
       return;
     }
 
@@ -5868,11 +6017,49 @@ export function createPlanView(context) {
       dragState = null;
       render();
       return;
+    } else if (dragState.mode === 'marqueeOrPan') {
+      const wasMarquee = dragState.marquee;
+      const visible = entities().filter(x => isEntityVisible(x, getActiveDocument()));
+      const additive = dragState.additive;
+      const hadSelection = dragState.hadSelection;
+      const box = wasMarquee ? {
+        x: Math.min(dragState.startWorld.x, dragState.current.x),
+        y: Math.min(dragState.startWorld.y, dragState.current.y),
+        width: Math.abs(dragState.current.x - dragState.startWorld.x),
+        depth: Math.abs(dragState.current.y - dragState.startWorld.y)
+      } : null;
+      dragState = null;
+      if (wasMarquee && box && (box.width > 0.05 || box.depth > 0.05)) {
+        const hits = new Set(pickEntities(visible, box));
+        state.plan.selectedIds = additive
+          ? new Set([...state.plan.selectedIds, ...hits])
+          : hits;
+        updateStatusBar();
+        showToast(`${state.plan.selectedIds.size} selected${additive ? ' (added)' : ''}`, state.plan.selectedIds.size ? 'success' : 'info');
+      } else if (!additive) {
+        // Plain click (or a pure pan gesture): clear unless Shift is held.
+        state.plan.selectedIds = new Set();
+      }
+      render();
+      return;
     } else if (dragState.mode === 'create') {
       const start = dragState.start;
       const end = dragState.current;
       if (dragState.tool === 'room') {
         createRoomEntity(start, end);
+      } else if (dragState.tool === 'line') {
+        if (Math.hypot(end.x - start.x, end.y - start.y) < state.plan.grid * 0.5) {
+          showToast('Line too short — drag a longer distance', 'warning');
+        } else {
+          try {
+            const line = createLineEntity({ p1: start, p2: end });
+            commitEntity(line, 'create line');
+            showToast(`Line: ${line.length.toFixed(2)} m · ${Math.round(line.angleDegrees)}°`, 'success');
+            AudioService.playTick();
+          } catch (err) {
+            showToast(err.message, 'warning');
+          }
+        }
       } else if (dragState.tool === 'wall') {
         createWallEntity(start, end);
       } else if (dragState.tool === 'grid') {
@@ -6537,6 +6724,18 @@ export function createPlanView(context) {
 
     if (event.key === ' ') {
       spaceHeld = true; // hold space + drag = pan (CAD convention)
+      return;
+    }
+
+    // Polyline chain: Enter finishes the open chain, Esc cancels.
+    if (polyLineVertices.length > 0 && event.key === 'Enter') {
+      event.preventDefault();
+      finishPolyline();
+      return;
+    }
+    if (polyLineVertices.length > 0 && event.key === 'Escape') {
+      event.preventDefault();
+      cancelPolyline();
       return;
     }
 
