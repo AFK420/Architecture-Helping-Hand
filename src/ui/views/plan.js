@@ -75,7 +75,8 @@ import {
   STUDIO_TOOL_CATALOG,
   searchStudioTools,
   parseStudioCommand,
-  PERSONA_RIBBON_CONFIGS
+  PERSONA_RIBBON_CONFIGS,
+  PLANNED_TOOLS
 } from '../../core/personas.js';
 import { renderStudioRibbon } from '../components/ribbon.js';
 import { renderStudioPalette } from '../components/palette.js';
@@ -933,6 +934,15 @@ export function createPlanView(context) {
 
   function setTool(newTool) {
     if (!newTool) return;
+    // Switching tools cancels any dangling click-chain (polyroom/polyline)
+    // so a half-drawn chain can never silently survive a tool change.
+    if (newTool !== 'polyroom' && polyRoomVertices.length > 0) {
+      polyRoomVertices = [];
+    }
+    if (newTool !== 'polyline' && polyLineVertices.length > 0) {
+      polyLineVertices = [];
+      polyLineCursor = null;
+    }
     state.plan.tool = newTool;
     const palette = dom.planToolPalette || document.getElementById('plan-tool-palette');
     if (palette) {
@@ -1024,6 +1034,14 @@ export function createPlanView(context) {
 
   function handleStudioToolAction(toolId) {
     if (!toolId) return;
+    // Ghost-tool contract: tools with no implementation behind them answer
+    // honestly instead of silently activating and doing nothing.
+    if (PLANNED_TOOLS.has(toolId)) {
+      const def = STUDIO_TOOL_CATALOG.find(t => t.id === toolId);
+      showToast(`"${def ? def.name : toolId}" is planned but not implemented yet — nothing was activated.`, 'warning');
+      AudioService.playTick();
+      return;
+    }
     updateInspectorGuide(toolId);
 
     if (toolId === 'undo') {
@@ -1150,7 +1168,7 @@ export function createPlanView(context) {
     if (toolId.startsWith('flyout_')) {
       if (toolId === 'flyout_stairs') setTool('stair');
       else if (toolId === 'flyout_hatching') setTool('hatch');
-      else if (toolId === 'flyout_marquee') setTool('marquee');
+      else if (toolId === 'flyout_marquee') setTool('select'); // box-select lives on the Select tool
       showToast(`Flyout cascade activated: ${toolId}`);
       return;
     }
@@ -1160,6 +1178,34 @@ export function createPlanView(context) {
       showToast(`Ribbon panel focused: ${toolId}`);
       return;
     }
+
+    // Tools that map onto an existing capability under a different name
+    const ALIASED_ROUTES = {
+      marquee: 'select',          // box-select lives on the Select tool
+      marquee_rect: 'select', marquee_ellip: 'select', marquee_single_row: 'select',
+      dim_aligned: 'dimension',   // aligned dimension = the dimension tool
+      area_calc: 'measure',       // area/perimeter inquiry = the measure tool
+      paint_bucket: 'material_paint',
+      stair_l_shape: 'stair', stair_u_shape: 'stair',
+      hatch_concrete: 'hatch', hatch_earth: 'hatch', hatch_insulation: 'hatch', hatch_brick: 'hatch',
+      zoom_extents: 'zoom_extents'
+    };
+    if (ALIASED_ROUTES[toolId] && ALIASED_ROUTES[toolId] !== toolId) {
+      const target = ALIASED_ROUTES[toolId];
+      if (target === 'material_paint') {
+        state.activeMaterial = state.activeMaterial || 'brick';
+        setTool('material_paint');
+        showToast('Material Paint active — click a room to apply the material.', 'info');
+      } else {
+        setTool(target);
+      }
+      return;
+    }
+
+    // pan: real viewport-drag tool
+    if (toolId === 'pan') { setTool('pan'); return; }
+    // orbit: 3D camera drag lives on the massing document
+    if (toolId === 'orbit') { executeCadCommand('view_perspective'); return; }
 
     // Standard drawing/editing tool selection
     setTool(toolId);
@@ -2724,10 +2770,23 @@ export function createPlanView(context) {
   function scheduleSceneRender() {
     if (sceneRenderPending) return;
     sceneRenderPending = true;
-    requestAnimationFrame(() => {
+    // rAF coalesces to the display refresh when the tab is visible; the
+    // timeout fallback guarantees the scene still renders in environments
+    // where rAF is throttled or suspended (hidden panes, background tabs).
+    let done = false;
+    const run = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(fallbackTimer);
       sceneRenderPending = false;
       renderScene();
-    });
+    };
+    const fallbackTimer = setTimeout(run, 60);
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(run);
+    } else {
+      setTimeout(run, 16);
+    }
   }
 
   /**
@@ -3489,9 +3548,11 @@ export function createPlanView(context) {
       dragMarkup = `
         <g class="marquee-preview" pointer-events="none">
           <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${(p2.x - p1.x).toFixed(1)}" height="${(p1.y - p2.y).toFixed(1)}"
-            fill="rgba(73,137,217,0.10)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.2" stroke-dasharray="4 3"/>
-          <text x="${p1.x.toFixed(1)}" y="${(p2.y - 5).toFixed(1)}" font-size="9" font-family="var(--font-mono)"
-            fill="var(--accent-primary, #4989D9)">${dragState.additive ? '+ADD' : 'SELECT'} ${(Math.abs(bx - ax) * Math.abs(by - ay)).toFixed(1)}m²</text>
+            fill="rgba(73,137,217,0.14)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.6" stroke-dasharray="5 3"/>
+          <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${(p2.x - p1.x).toFixed(1)}" height="${(p1.y - p2.y).toFixed(1)}"
+            fill="none" stroke="rgba(73,137,217,0.35)" stroke-width="3"/>
+          <text x="${(p1.x + 5).toFixed(1)}" y="${(p2.y + 14).toFixed(1)}" font-size="10" font-family="var(--font-mono)"
+            fill="#ffffff" font-weight="700" style="paint-order: stroke; stroke: rgba(0,0,0,0.75); stroke-width: 3px;">${dragState.additive ? '+ADD ' : ''}${Math.abs(bx - ax).toFixed(2)} × ${Math.abs(by - ay).toFixed(2)} m</text>
         </g>`;
     }
     if (dragState && dragState.mode === 'create' && dragState.current) {
@@ -5557,6 +5618,11 @@ export function createPlanView(context) {
       }
     }
 
+    if (tool === 'pan') {
+      dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
+      event.preventDefault();
+      return;
+    }
     if (tool === 'select') {
       const entityEl = event.target.closest ? event.target.closest('.plan-entity') : null;
       let hitId = entityEl ? entityEl.dataset.entityId : null;

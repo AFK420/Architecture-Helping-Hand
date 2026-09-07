@@ -63,7 +63,8 @@ const testFiles = [
   'audit-regressions.test.js',
   'cad-commands.test.js',
   'icon-system.test.js',
-  'ai-context.test.js'
+  'ai-context.test.js',
+  'ghost-tools.test.js'
 ];
 
 console.log('=================================================================');

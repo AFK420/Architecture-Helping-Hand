@@ -16049,6 +16049,20 @@ const STUDIO_TOOL_CATALOG = [
   }
 ];
 
+/**
+ * Tools that have NO implementation behind them yet. Palette/search render
+ * them dimmed with a "Planned" badge, and activating one shows an honest
+ * "planned" toast instead of silently doing nothing (ghost-tool contract).
+ * Anything implemented must be REMOVED from this list — tests enforce that
+ * every catalog tool either has a handler or is listed here.
+ */
+const PLANNED_TOOLS = Object.freeze(new Set([
+  'lasso', 'lasso_poly', 'lasso_magnetic', 'crop_tool', 'dim_chain', 'curve_nurbs', 'curve_fillet', 'curve_offset',
+  'curve_boolean', 'surface_planar', 'surface_extrude', 'surface_loft',
+  'surface_revolve', 'solid_box', 'boolean_union', 'boolean_diff',
+  'mesh_from_srf', 'quad_remesh', 'subd_box', 'subd_crease', 'block_create'
+]));
+
 // ---------------------------------------------------------------------------
 // 4. Universal Studio Search Engine & CLI Command Parser
 // ---------------------------------------------------------------------------
@@ -33332,6 +33346,7 @@ function createProjectsView(context) {
 
 
 
+
 function renderStudioRibbon(container, options = {}) {
   if (!container) return;
 
@@ -33387,9 +33402,10 @@ function renderStudioRibbon(container, options = {}) {
                   if (!tool) return '';
                   const isActive = tool.id === activeToolId;
                   const hasFlyout = Array.isArray(tool.flyout) && tool.flyout.length > 0;
+                  const isPlanned = PLANNED_TOOLS.has(tool.id);
                   return `
-                    <div class="ribbon-tool-wrap ${hasFlyout ? 'has-flyout' : ''}">
-                      <button type="button" class="ribbon-tool-btn ${isActive ? 'active' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}">
+                    <div class="ribbon-tool-wrap ${hasFlyout ? 'has-flyout' : ''} ${isPlanned ? 'planned-tool' : ''}">
+                      <button type="button" class="ribbon-tool-btn ${isActive ? 'active' : ''} ${isPlanned ? 'planned' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}${isPlanned ? ' — PLANNED (not implemented yet)' : ''}">
                         <span class="ribbon-tool-icon">${toolIcon(tool, { size: 20 })}</span>
                         <span class="ribbon-tool-name">${tool.name}</span>
                         ${tool.shortcut ? `<kbd class="ribbon-tool-kbd">${tool.shortcut}</kbd>` : ''}
@@ -33488,6 +33504,7 @@ function renderStudioRibbon(container, options = {}) {
 
 
 
+
 function renderStudioPalette(container, options = {}) {
   if (!container) return;
 
@@ -33529,13 +33546,16 @@ function renderStudioPalette(container, options = {}) {
                 ${toolsInCat.map(tool => {
                   const isActive = tool.id === activeToolId;
                   const hasFlyout = Array.isArray(tool.flyout) && tool.flyout.length > 0;
+                  const isPlanned = PLANNED_TOOLS.has(tool.id);
                   let badge = tool.shortcut || (tool.commandAlias ? tool.commandAlias.slice(0, 3) : '');
                   if (badge === 'Space+Drag') badge = 'Pan';
                   if (badge === 'Z+E') badge = 'ZE';
-                  if (badge === 'Shift+R') badge = '⬡';
+                  if (badge === 'Shift+R') badge = '';
+                  if (isPlanned) badge = '⏳';
+                  const plannedTitle = isPlanned ? ' — PLANNED (not implemented yet)' : '';
                   return `
-                    <div class="palette-tool-wrapper iconic-wrapper ${hasFlyout ? 'has-flyout' : ''}">
-                      <button type="button" class="palette-tool-btn iconic-tool-btn ${isActive ? 'active' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}">
+                    <div class="palette-tool-wrapper iconic-wrapper ${hasFlyout ? 'has-flyout' : ''} ${isPlanned ? 'planned-tool' : ''}">
+                      <button type="button" class="palette-tool-btn iconic-tool-btn ${isActive ? 'active' : ''} ${isPlanned ? 'planned' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}${plannedTitle}">
                         <span class="tool-icon">${toolIcon(tool, { size: 18 })}</span>
                         ${badge ? `<kbd class="tool-badge">${badge}</kbd>` : ''}
                         ${hasFlyout ? `<span class="tool-flyout-indicator">▾</span>` : ''}
@@ -33543,7 +33563,7 @@ function renderStudioPalette(container, options = {}) {
                       ${hasFlyout ? `
                         <div class="palette-flyout-menu iconic-flyout-menu" style="display: none;">
                           ${tool.flyout.map(sub => `
-                            <button type="button" class="flyout-sub-btn" data-tool="${sub.id}" title="${sub.name}">
+                            <button type="button" class="flyout-sub-btn ${PLANNED_TOOLS.has(sub.id) ? 'planned' : ''}" data-tool="${sub.id}" title="${sub.name}${PLANNED_TOOLS.has(sub.id) ? ' — PLANNED' : ''}">
                               <span class="sub-icon">${toolIcon(sub, { size: 14 })}</span>
                               <span class="sub-label">${sub.name}</span>
                               ${sub.shortcut ? `<kbd class="sub-kbd">${sub.shortcut}</kbd>` : ''}
@@ -35819,6 +35839,15 @@ function createPlanView(context) {
 
   function setTool(newTool) {
     if (!newTool) return;
+    // Switching tools cancels any dangling click-chain (polyroom/polyline)
+    // so a half-drawn chain can never silently survive a tool change.
+    if (newTool !== 'polyroom' && polyRoomVertices.length > 0) {
+      polyRoomVertices = [];
+    }
+    if (newTool !== 'polyline' && polyLineVertices.length > 0) {
+      polyLineVertices = [];
+      polyLineCursor = null;
+    }
     state.plan.tool = newTool;
     const palette = dom.planToolPalette || document.getElementById('plan-tool-palette');
     if (palette) {
@@ -35910,6 +35939,14 @@ function createPlanView(context) {
 
   function handleStudioToolAction(toolId) {
     if (!toolId) return;
+    // Ghost-tool contract: tools with no implementation behind them answer
+    // honestly instead of silently activating and doing nothing.
+    if (PLANNED_TOOLS.has(toolId)) {
+      const def = STUDIO_TOOL_CATALOG.find(t => t.id === toolId);
+      showToast(`"${def ? def.name : toolId}" is planned but not implemented yet — nothing was activated.`, 'warning');
+      AudioService.playTick();
+      return;
+    }
     updateInspectorGuide(toolId);
 
     if (toolId === 'undo') {
@@ -36036,7 +36073,7 @@ function createPlanView(context) {
     if (toolId.startsWith('flyout_')) {
       if (toolId === 'flyout_stairs') setTool('stair');
       else if (toolId === 'flyout_hatching') setTool('hatch');
-      else if (toolId === 'flyout_marquee') setTool('marquee');
+      else if (toolId === 'flyout_marquee') setTool('select'); // box-select lives on the Select tool
       showToast(`Flyout cascade activated: ${toolId}`);
       return;
     }
@@ -36046,6 +36083,34 @@ function createPlanView(context) {
       showToast(`Ribbon panel focused: ${toolId}`);
       return;
     }
+
+    // Tools that map onto an existing capability under a different name
+    const ALIASED_ROUTES = {
+      marquee: 'select',          // box-select lives on the Select tool
+      marquee_rect: 'select', marquee_ellip: 'select', marquee_single_row: 'select',
+      dim_aligned: 'dimension',   // aligned dimension = the dimension tool
+      area_calc: 'measure',       // area/perimeter inquiry = the measure tool
+      paint_bucket: 'material_paint',
+      stair_l_shape: 'stair', stair_u_shape: 'stair',
+      hatch_concrete: 'hatch', hatch_earth: 'hatch', hatch_insulation: 'hatch', hatch_brick: 'hatch',
+      zoom_extents: 'zoom_extents'
+    };
+    if (ALIASED_ROUTES[toolId] && ALIASED_ROUTES[toolId] !== toolId) {
+      const target = ALIASED_ROUTES[toolId];
+      if (target === 'material_paint') {
+        state.activeMaterial = state.activeMaterial || 'brick';
+        setTool('material_paint');
+        showToast('Material Paint active — click a room to apply the material.', 'info');
+      } else {
+        setTool(target);
+      }
+      return;
+    }
+
+    // pan: real viewport-drag tool
+    if (toolId === 'pan') { setTool('pan'); return; }
+    // orbit: 3D camera drag lives on the massing document
+    if (toolId === 'orbit') { executeCadCommand('view_perspective'); return; }
 
     // Standard drawing/editing tool selection
     setTool(toolId);
@@ -37610,10 +37675,23 @@ function createPlanView(context) {
   function scheduleSceneRender() {
     if (sceneRenderPending) return;
     sceneRenderPending = true;
-    requestAnimationFrame(() => {
+    // rAF coalesces to the display refresh when the tab is visible; the
+    // timeout fallback guarantees the scene still renders in environments
+    // where rAF is throttled or suspended (hidden panes, background tabs).
+    let done = false;
+    const run = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(fallbackTimer);
       sceneRenderPending = false;
       renderScene();
-    });
+    };
+    const fallbackTimer = setTimeout(run, 60);
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(run);
+    } else {
+      setTimeout(run, 16);
+    }
   }
 
   /**
@@ -38375,9 +38453,11 @@ function createPlanView(context) {
       dragMarkup = `
         <g class="marquee-preview" pointer-events="none">
           <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${(p2.x - p1.x).toFixed(1)}" height="${(p1.y - p2.y).toFixed(1)}"
-            fill="rgba(73,137,217,0.10)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.2" stroke-dasharray="4 3"/>
-          <text x="${p1.x.toFixed(1)}" y="${(p2.y - 5).toFixed(1)}" font-size="9" font-family="var(--font-mono)"
-            fill="var(--accent-primary, #4989D9)">${dragState.additive ? '+ADD' : 'SELECT'} ${(Math.abs(bx - ax) * Math.abs(by - ay)).toFixed(1)}m²</text>
+            fill="rgba(73,137,217,0.14)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.6" stroke-dasharray="5 3"/>
+          <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${(p2.x - p1.x).toFixed(1)}" height="${(p1.y - p2.y).toFixed(1)}"
+            fill="none" stroke="rgba(73,137,217,0.35)" stroke-width="3"/>
+          <text x="${(p1.x + 5).toFixed(1)}" y="${(p2.y + 14).toFixed(1)}" font-size="10" font-family="var(--font-mono)"
+            fill="#ffffff" font-weight="700" style="paint-order: stroke; stroke: rgba(0,0,0,0.75); stroke-width: 3px;">${dragState.additive ? '+ADD ' : ''}${Math.abs(bx - ax).toFixed(2)} × ${Math.abs(by - ay).toFixed(2)} m</text>
         </g>`;
     }
     if (dragState && dragState.mode === 'create' && dragState.current) {
@@ -40443,6 +40523,11 @@ function createPlanView(context) {
       }
     }
 
+    if (tool === 'pan') {
+      dragState = { mode: 'pan', startClient: { x: event.clientX, y: event.clientY }, startTransform: { ...transform } };
+      event.preventDefault();
+      return;
+    }
     if (tool === 'select') {
       const entityEl = event.target.closest ? event.target.closest('.plan-entity') : null;
       let hitId = entityEl ? entityEl.dataset.entityId : null;

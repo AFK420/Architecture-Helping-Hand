@@ -9897,3 +9897,14 @@ select option {
 
 /* --- Tab icon alignment --- */
 .plan-doc-tab-title .ahh-icon { margin-right: 4px; opacity: 0.85; }
+
+/* ==========================================================================
+   Section 23: Planned (unimplemented) tool honesty styling
+   ========================================================================== */
+.palette-tool-btn.planned, .ribbon-tool-btn.planned, .flyout-sub-btn.planned {
+  opacity: 0.38;
+}
+.palette-tool-btn.planned .tool-badge,
+.flyout-sub-btn .sub-kbd { filter: saturate(0.4); }
+.planned-tool .tool-flyout-indicator { opacity: 0.4; }
+.palette-tool-btn.planned:hover, .ribbon-tool-btn.planned:hover { opacity: 0.6; cursor: help; }

@@ -10,6 +10,7 @@ import {
   STUDIO_TOOL_CATALOG
 } from '../../core/personas.js';
 import { toolIcon, personaIcon } from '../../core/icons.js';
+import { PLANNED_TOOLS } from '../../core/personas.js';
 
 export function renderStudioRibbon(container, options = {}) {
   if (!container) return;
@@ -66,9 +67,10 @@ export function renderStudioRibbon(container, options = {}) {
                   if (!tool) return '';
                   const isActive = tool.id === activeToolId;
                   const hasFlyout = Array.isArray(tool.flyout) && tool.flyout.length > 0;
+                  const isPlanned = PLANNED_TOOLS.has(tool.id);
                   return `
-                    <div class="ribbon-tool-wrap ${hasFlyout ? 'has-flyout' : ''}">
-                      <button type="button" class="ribbon-tool-btn ${isActive ? 'active' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}">
+                    <div class="ribbon-tool-wrap ${hasFlyout ? 'has-flyout' : ''} ${isPlanned ? 'planned-tool' : ''}">
+                      <button type="button" class="ribbon-tool-btn ${isActive ? 'active' : ''} ${isPlanned ? 'planned' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}${isPlanned ? ' — PLANNED (not implemented yet)' : ''}">
                         <span class="ribbon-tool-icon">${toolIcon(tool, { size: 20 })}</span>
                         <span class="ribbon-tool-name">${tool.name}</span>
                         ${tool.shortcut ? `<kbd class="ribbon-tool-kbd">${tool.shortcut}</kbd>` : ''}

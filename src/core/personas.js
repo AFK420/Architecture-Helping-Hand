@@ -801,6 +801,20 @@ export const STUDIO_TOOL_CATALOG = [
   }
 ];
 
+/**
+ * Tools that have NO implementation behind them yet. Palette/search render
+ * them dimmed with a "Planned" badge, and activating one shows an honest
+ * "planned" toast instead of silently doing nothing (ghost-tool contract).
+ * Anything implemented must be REMOVED from this list — tests enforce that
+ * every catalog tool either has a handler or is listed here.
+ */
+export const PLANNED_TOOLS = Object.freeze(new Set([
+  'lasso', 'lasso_poly', 'lasso_magnetic', 'crop_tool', 'dim_chain', 'curve_nurbs', 'curve_fillet', 'curve_offset',
+  'curve_boolean', 'surface_planar', 'surface_extrude', 'surface_loft',
+  'surface_revolve', 'solid_box', 'boolean_union', 'boolean_diff',
+  'mesh_from_srf', 'quad_remesh', 'subd_box', 'subd_crease', 'block_create'
+]));
+
 // ---------------------------------------------------------------------------
 // 4. Universal Studio Search Engine & CLI Command Parser
 // ---------------------------------------------------------------------------

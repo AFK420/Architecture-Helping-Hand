@@ -9,6 +9,7 @@ import {
   searchStudioTools
 } from '../../core/personas.js';
 import { toolIcon, categoryIcon, icon } from '../../core/icons.js';
+import { PLANNED_TOOLS } from '../../core/personas.js';
 
 export function renderStudioPalette(container, options = {}) {
   if (!container) return;
@@ -51,13 +52,16 @@ export function renderStudioPalette(container, options = {}) {
                 ${toolsInCat.map(tool => {
                   const isActive = tool.id === activeToolId;
                   const hasFlyout = Array.isArray(tool.flyout) && tool.flyout.length > 0;
+                  const isPlanned = PLANNED_TOOLS.has(tool.id);
                   let badge = tool.shortcut || (tool.commandAlias ? tool.commandAlias.slice(0, 3) : '');
                   if (badge === 'Space+Drag') badge = 'Pan';
                   if (badge === 'Z+E') badge = 'ZE';
-                  if (badge === 'Shift+R') badge = '⬡';
+                  if (badge === 'Shift+R') badge = '';
+                  if (isPlanned) badge = '⏳';
+                  const plannedTitle = isPlanned ? ' — PLANNED (not implemented yet)' : '';
                   return `
-                    <div class="palette-tool-wrapper iconic-wrapper ${hasFlyout ? 'has-flyout' : ''}">
-                      <button type="button" class="palette-tool-btn iconic-tool-btn ${isActive ? 'active' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}">
+                    <div class="palette-tool-wrapper iconic-wrapper ${hasFlyout ? 'has-flyout' : ''} ${isPlanned ? 'planned-tool' : ''}">
+                      <button type="button" class="palette-tool-btn iconic-tool-btn ${isActive ? 'active' : ''} ${isPlanned ? 'planned' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}${plannedTitle}">
                         <span class="tool-icon">${toolIcon(tool, { size: 18 })}</span>
                         ${badge ? `<kbd class="tool-badge">${badge}</kbd>` : ''}
                         ${hasFlyout ? `<span class="tool-flyout-indicator">▾</span>` : ''}
@@ -65,7 +69,7 @@ export function renderStudioPalette(container, options = {}) {
                       ${hasFlyout ? `
                         <div class="palette-flyout-menu iconic-flyout-menu" style="display: none;">
                           ${tool.flyout.map(sub => `
-                            <button type="button" class="flyout-sub-btn" data-tool="${sub.id}" title="${sub.name}">
+                            <button type="button" class="flyout-sub-btn ${PLANNED_TOOLS.has(sub.id) ? 'planned' : ''}" data-tool="${sub.id}" title="${sub.name}${PLANNED_TOOLS.has(sub.id) ? ' — PLANNED' : ''}">
                               <span class="sub-icon">${toolIcon(sub, { size: 14 })}</span>
                               <span class="sub-label">${sub.name}</span>
                               ${sub.shortcut ? `<kbd class="sub-kbd">${sub.shortcut}</kbd>` : ''}
