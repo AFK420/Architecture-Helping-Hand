@@ -22,7 +22,10 @@
  * Bump when the envelope changes, and add a migration in
  * src/core/project-migrations.js (Stabilization 3).
  */
-export const PROJECT_SCHEMA_VERSION = 1;
+export const PROJECT_SCHEMA_VERSION = 2;
+
+/** Historical schema versions (kept for migration tooling/tests). */
+export const PROJECT_SCHEMA_VERSION_V1 = 1;
 
 /** Storage envelope key for the versioned project store. */
 export const PROJECT_STORE_KEY = 'archiscale_project_store';

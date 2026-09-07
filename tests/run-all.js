@@ -64,7 +64,8 @@ const testFiles = [
   'cad-commands.test.js',
   'icon-system.test.js',
   'ai-context.test.js',
-  'ghost-tools.test.js'
+  'ghost-tools.test.js',
+  'project-model.test.js'
 ];
 
 console.log('=================================================================');

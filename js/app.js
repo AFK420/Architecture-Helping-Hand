@@ -10294,7 +10294,10 @@ function inspectSlopeCompliance(slopeResult, codeId = 'jnbc') {
  * Bump when the envelope changes, and add a migration in
  * src/core/project-migrations.js (Stabilization 3).
  */
-const PROJECT_SCHEMA_VERSION = 1;
+const PROJECT_SCHEMA_VERSION = 2;
+
+/** Historical schema versions (kept for migration tooling/tests). */
+const PROJECT_SCHEMA_VERSION_V1 = 1;
 
 /** Storage envelope key for the versioned project store. */
 const PROJECT_STORE_KEY = 'archiscale_project_store';
@@ -11259,6 +11262,169 @@ function generateGridSystem({
 
 
   // =========================================================================
+  // MODULE: EntityIdentity
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — Entity Identity & Model Event Contract (leaf)
+ *
+ * Dependency-free: imported by entities.js (factories) and project-schema.js.
+ * Must never import other core modules (bundle + cycle safety).
+ */
+
+/** Valid provenance tags (Absolute Rule #5: fact classes). */
+const PROVENANCE = Object.freeze({
+  USER_INPUT: 'user_input',       // typed or clicked by the user
+  DERIVED: 'derived',             // computed from stored facts (not persisted)
+  IMPORTED: 'imported',           // arrived via DXF/SVG/CSV import
+  AI_SUGGESTION: 'ai_suggestion', // proposed by AI, applied after approval
+  AI_APPLIED: 'ai_applied',       // AI proposal the user accepted
+  MIGRATED: 'migrated'            // transformed by a schema migration
+});
+
+/** Bounded domain event names. */
+const MODEL_EVENTS = Object.freeze([
+  'entity.created', 'entity.updated', 'entity.deleted',
+  'selection.changed', 'document.changed', 'view.changed',
+  'layer.changed', 'requirement.changed', 'model.migrated'
+]);
+
+/**
+ * Attaches the v2 identity contract to an entity (mutates + returns it).
+ * Existing _meta is preserved (revision bumped) — factories call this with
+ * fresh entities; migrations call it with stripped v1 entities.
+ */
+function attachIdentity(entity, { provenance = PROVENANCE.USER_INPUT, now = null } = {}) {
+  if (!entity || typeof entity !== 'object') {
+    throw new Error('attachIdentity requires an entity object');
+  }
+  const ts = now || new Date().toISOString();
+  if (!entity._meta) {
+    entity._meta = {
+      createdAt: ts,
+      updatedAt: ts,
+      revision: 1,
+      provenance: Object.values(PROVENANCE).includes(provenance) ? provenance : PROVENANCE.USER_INPUT
+    };
+  } else {
+    entity._meta.updatedAt = ts;
+    entity._meta.revision = (entity._meta.revision || 1) + 1;
+    if (!Object.values(PROVENANCE).includes(entity._meta.provenance)) {
+      entity._meta.provenance = PROVENANCE.USER_INPUT;
+    }
+  }
+  return entity;
+}
+
+/**
+ * Ensures an entity has a stable id (v1 fixtures may lack one).
+ * @param {object} entity - target entity (mutated)
+ * @param {string} [kind] - id prefix (falls back to entity.kind / 'ent')
+ * @param {Function} [idGenerator] - id factory; defaults to a local
+ *   timestamp+random generator so this leaf module stays dependency-free.
+ */
+function ensureEntityId(entity, kind, idGenerator = null) {
+  if (!entity.id || typeof entity.id !== 'string') {
+    const rand = Math.random().toString(36).slice(2, 7);
+    const gen = idGenerator || ((k) => `${k || 'ent'}-${Date.now().toString(36)}-${rand}`);
+    entity.id = gen(kind || entity.kind || 'ent');
+  }
+  return entity;
+}
+
+// ---------------------------------------------------------------------------
+// Relationships (single project-level index — no duplicated back-pointers)
+// ---------------------------------------------------------------------------
+
+const RELATION_TYPES = Object.freeze({
+  CONTAINS: 'contains',        // room contains furniture
+  HOSTS: 'hosts',              // wall hosts door/window
+  BOUNDS: 'bounds',            // wall bounds room
+  MEASURES: 'measures',        // dimension measures geometry
+  CONNECTS: 'connects',        // stair connects levels
+  REFERENCES: 'references',    // section/detail references geometry
+  ON_SHEET: 'on_sheet'         // sheet contains views
+});
+
+/** Creates the empty relationship index for a project. */
+function createRelationshipIndex() {
+  return { bySource: {}, byTarget: {} };
+}
+
+/** Records relationship: source —[type]→ target. Idempotent. */
+function addRelationship(index, type, sourceId, targetId) {
+  if (!index || !type || !sourceId || !targetId) return index;
+  const link = `${type}:${targetId}`;
+  index.bySource[sourceId] = index.bySource[sourceId] || [];
+  if (!index.bySource[sourceId].includes(link)) index.bySource[sourceId].push(link);
+  const back = `${type}:${sourceId}`;
+  index.byTarget[targetId] = index.byTarget[targetId] || [];
+  if (!index.byTarget[targetId].includes(back)) index.byTarget[targetId].push(back);
+  return index;
+}
+
+/** Removes every relationship touching an entity (call on delete). */
+function removeEntityRelationships(index, entityId) {
+  if (!index || !entityId) return index;
+  delete index.bySource[entityId];
+  delete index.byTarget[entityId];
+  // purge dangling back-references
+  for (const key of Object.keys(index.bySource)) {
+    index.bySource[key] = index.bySource[key].filter(link => {
+      const target = link.split(':')[1];
+      return index.bySource[target] !== undefined || !index.byTarget[entityId];
+    });
+  }
+  return index;
+}
+
+/** Outgoing relationships of an entity: [{ type, targetId }] */
+function relationshipsOf(index, entityId) {
+  if (!index || !index.bySource[entityId]) return [];
+  return index.bySource[entityId].map(link => {
+    const sep = link.indexOf(':');
+    return { type: link.slice(0, sep), targetId: link.slice(sep + 1) };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Bounded domain event bus
+// ---------------------------------------------------------------------------
+
+/** Creates a named-event emitter restricted to MODEL_EVENTS. */
+function createModelEventBus() {
+  const listeners = new Map();
+  return {
+    on(event, fn) {
+      if (!MODEL_EVENTS.includes(event)) throw new Error(`Unknown model event "${event}" — allowed: ${MODEL_EVENTS.join(', ')}`);
+      if (typeof fn !== 'function') throw new Error('Event listener must be a function');
+      if (!listeners.has(event)) listeners.set(event, new Set());
+      listeners.get(event).add(fn);
+      return () => listeners.get(event)?.delete(fn);
+    },
+    emit(event, payload) {
+      if (!MODEL_EVENTS.includes(event)) throw new Error(`Unknown model event "${event}"`);
+      for (const fn of listeners.get(event) || []) {
+        try {
+          fn(payload);
+        } catch (e) {
+          // a faulty listener must never break the emitter
+        }
+      }
+    },
+    listenerCount(event) {
+      return event ? (listeners.get(event)?.size || 0) : [...listeners.values()].reduce((s, l) => s + l.size, 0);
+    },
+    clear(event) {
+      if (event) listeners.delete(event);
+      else listeners.clear();
+    }
+  };
+}
+
+
+
+  // =========================================================================
   // MODULE: Entities
   // =========================================================================
 
@@ -11277,6 +11443,7 @@ function generateGridSystem({
  *  - The existing furniture dataset (core/furniture.js) remains the single
  *    source of furniture dimensions; placement wraps it, never duplicates it.
  */
+
 
 
 
@@ -12583,6 +12750,15 @@ function createBlockInstanceEntity(props = {}) {
 
 
 
+
+
+// ---------------------------------------------------------------------------
+// Schema v2 identity note: entities receive their identity contract
+// (_meta.createdAt/updatedAt/revision/provenance) when they enter the project
+// model — stamped at the plan-workspace commit boundary and in the v1→v2
+// migration (core/project-schema.attachIdentity). Keeping this pure-geometry
+// module free of persistence concerns was a deliberate design decision.
+// ---------------------------------------------------------------------------
 
 
   // =========================================================================
@@ -16553,6 +16729,158 @@ const PERSONA_RIBBON_CONFIGS = {
     ]
   }
 };
+
+
+  // =========================================================================
+  // MODULE: ProjectSchema
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — Canonical Project Model (schema v2)
+ *
+ * The project model is the single source of truth:
+ *   - geometry is stored (wall endpoints, room boundaries, points);
+ *   - measurements (length, angle, area, perimeter) are DERIVED on demand —
+ *     never trusted from storage;
+ *   - every entity carries an identity contract (_meta) with timestamps,
+ *     revision, and provenance;
+ *   - relationships are indexed in one project-level map (no duplicated
+ *     per-entity back-pointers that can drift);
+ *   - domain events are emitted through a bounded, named-event bus.
+ *
+ * Migration contract: v1 projects upgrade in place via store.MIGRATIONS[0].
+ * Fields removed by v2 are re-derived on access; nothing is silently lost.
+ */
+
+
+
+
+/** Schema version this module produces. */
+const PROJECT_SCHEMA_VERSION_V2 = 2;
+
+// PROVENANCE / MODEL_EVENTS / identity / relationships / event bus live in
+// the leaf module entity-identity.js and are re-exported below.
+
+
+// ---------------------------------------------------------------------------
+// Identity contract
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Derived facts (computed on demand — never trusted from storage)
+// ---------------------------------------------------------------------------
+
+/** Derived geometry facts for any supported entity. Returns null when N/A. */
+function deriveFacts(entity, allEntities = []) {
+  if (!entity || typeof entity !== 'object') return null;
+  switch (entity.kind) {
+    case 'wall':
+    case 'line': {
+      const p1 = entity.p1 || { x: entity.x1, y: entity.y1 };
+      const p2 = entity.p2 || { x: entity.x2, y: entity.y2 };
+      if (typeof p1?.x !== 'number' || typeof p2?.x !== 'number') return null;
+      const length = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      const angleDegrees = (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI;
+      return {
+        length: { value: length, class: 'CALCULATED', unit: 'm' },
+        angleDegrees: { value: (angleDegrees + 360) % 360, class: 'CALCULATED', unit: '°' },
+        direction: entity.kind === 'wall'
+          ? { value: typeof wallDirection === 'function' ? wallDirection(entity) : null, class: 'DERIVED' }
+          : null
+      };
+    }
+    case 'room': {
+      const area = roomArea(entity);
+      const perimeter = roomPerimeter(entity);
+      return {
+        area: { value: area, class: 'CALCULATED', unit: 'm²' },
+        perimeter: { value: perimeter, class: 'CALCULATED', unit: 'm' },
+        centroid: entity.boundary?.length >= 3
+          ? {
+              value: {
+                x: entity.boundary.reduce((s, p) => s + p.x, 0) / entity.boundary.length,
+                y: entity.boundary.reduce((s, p) => s + p.y, 0) / entity.boundary.length
+              },
+              class: 'CALCULATED'
+            }
+          : null
+      };
+    }
+    case 'dimension': {
+      const p1 = entity.p1 || { x: entity.x1, y: entity.y1 };
+      const p2 = entity.p2 || { x: entity.x2, y: entity.y2 };
+      if (typeof p1?.x !== 'number' || typeof p2?.x !== 'number') return null;
+      return {
+        measuredLength: {
+          value: Math.hypot(p2.x - p1.x, p2.y - p1.y),
+          class: 'CALCULATED',
+          unit: entity.unit || 'm'
+        }
+      };
+    }
+    case 'stair': {
+      const riser = typeof entity.riserHeight === 'number' ? entity.riserHeight : null;
+      const tread = typeof entity.tread === 'number' ? entity.tread : null;
+      return riser && tread
+        ? { blondel: { value: 2 * riser + tread, class: 'CALCULATED', unit: 'm' } }
+        : null;
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * Strips persisted derived shadow fields from an entity (v2 storage keeps
+ * only stored facts). Callers that need measurements use deriveFacts().
+ */
+function stripDerivedShadows(entity) {
+  if (!entity || typeof entity !== 'object') return entity;
+  if (entity.kind === 'line' || entity.kind === 'wall') {
+    delete entity.length;
+    delete entity.angleDegrees;
+  }
+  if (entity.kind === 'room') {
+    delete entity.area;
+    delete entity.perimeter;
+  }
+  return entity;
+}
+
+// ---------------------------------------------------------------------------
+// v1 → v2 migration (pure; registered in services/store.js MIGRATIONS)
+// ---------------------------------------------------------------------------
+
+/**
+ * Migrates a schemaVersion 1 project to 2:
+ *  - ensures entity ids
+ *  - strips stored derived shadows (length/angleDegrees/area/perimeter)
+ *  - attaches _meta identity with provenance 'migrated'
+ *  - creates empty relationships index (rebuilt on demand)
+ * Fails loudly on non-object input; never corrupts.
+ */
+function migrateProjectV1toV2(project) {
+  if (!project || typeof project !== 'object' || Array.isArray(project)) {
+    throw new Error('Cannot migrate project: document must be an object');
+  }
+  const migrated = project;
+  migrated.schemaVersion = 2;
+
+  const docs = Array.isArray(migrated.documents) ? migrated.documents : [];
+  for (const doc of docs) {
+    if (!Array.isArray(doc.entities)) continue;
+    for (const e of doc.entities) {
+      if (!e || typeof e !== 'object') continue;
+      ensureEntityId(e, e.kind, generateEntityId);
+      stripDerivedShadows(e);
+      attachIdentity(e, { provenance: PROVENANCE.MIGRATED, now: new Date().toISOString() });
+    }
+  }
+  if (!migrated.relationships || typeof migrated.relationships !== 'object') {
+    migrated.relationships = createRelationshipIndex();
+  }
+  return migrated;
+}
 
 
   // =========================================================================
@@ -23180,15 +23508,28 @@ function printExport(title, content) {
  */
 
 
+
 /**
  * Migration chain: each entry upgrades a document from its index+1 to the
  * next version. Register future migrations here, e.g. MIGRATIONS[1] = v2->v3.
  * An empty chain means version 1 is current.
  */
-const MIGRATIONS = Object.freeze([]);
+const MIGRATIONS = Object.freeze([
+  /**
+   * v1 → v2 (project model foundation):
+   *  - stable ids on every entity
+   *  - identity contract (_meta: createdAt/updatedAt/revision/provenance)
+   *  - stored derived shadows (length/angleDegrees/area/perimeter) stripped —
+   *    measurements are derived on demand via core/project-schema.deriveFacts
+   *  - empty relationship index created (rebuilt on demand)
+   */
+  (project) => migrateProjectV1toV2(project)
+]);
 
 /** Highest version this build understands. */
-const CURRENT_STORE_VERSION = PROJECT_SCHEMA_VERSION + MIGRATIONS.length;
+const CURRENT_STORE_VERSION = PROJECT_SCHEMA_VERSION;
+// Invariant: MIGRATIONS.length === PROJECT_SCHEMA_VERSION - 1 (one migration
+// per version step below the target), enforced by tests/store.test.js.
 
 /**
  * Runs the migration chain on a raw store envelope.
@@ -23539,15 +23880,19 @@ function createProjectStore(options = {}) {
     }
     const res = readLibrary();
     if (!res.ok) return { ok: false, errors: res.errors };
-    const doc = res.library.projects[id];
+    let doc = res.library.projects[id];
     if (!doc) return { ok: false, errors: [`project "${id}" not found in library`] };
-    // Future individual documents are refused loudly (same contract as the
-    // active envelope) — never silently normalized down to the current schema.
-    if (Number.isInteger(doc.schemaVersion) && doc.schemaVersion > PROJECT_SCHEMA_VERSION) {
+    // Older library documents are migrated through the same chain as the
+    // active envelope; future documents are refused loudly (never silently
+    // normalized down to the current schema).
+    if (Number.isInteger(doc.schemaVersion) && doc.schemaVersion < CURRENT_STORE_VERSION) {
+      const migrated = migrateEnvelope({ version: doc.schemaVersion, project: doc });
+      doc = migrated.project;
+    } else if (Number.isInteger(doc.schemaVersion) && doc.schemaVersion > CURRENT_STORE_VERSION) {
       return {
         ok: false,
         errors: [
-          `Library project "${id}" has schema version ${doc.schemaVersion}, newer than this app understands (${PROJECT_SCHEMA_VERSION}). ` +
+          `Library project "${id}" has schema version ${doc.schemaVersion}, newer than this app understands (${CURRENT_STORE_VERSION}). ` +
           'Refusing to open it to avoid data loss. Please update the application.'
         ]
       };
@@ -34236,10 +34581,10 @@ function renderStudioCPanels(container, options = {}) {
                   <span class="prop-val">${selectedEntity.width.toFixed(2)} m</span>
                 </div>
               ` : ''}
-              ${typeof selectedEntity.depth === 'number' || typeof selectedEntity.run === 'number' ? `
+              ${(typeof selectedEntity.depth === 'number' || typeof selectedEntity.run === 'number') ? `
                 <div class="cpanel-prop-row">
                   <span class="prop-key">Length / Run</span>
-                  <span class="prop-val">${(selectedEntity.depth || selectedEntity.run).toFixed(2)} m</span>
+                  <span class="prop-val">${(typeof selectedEntity.depth === 'number' ? selectedEntity.depth : selectedEntity.run ?? 0).toFixed(2)} m</span>
                 </div>
               ` : ''}
               ${selectedEntity.kind === 'stair' ? `
@@ -34993,6 +35338,7 @@ function generateArchitecturalAiResponse(prompt, ctx) {
 
 
 
+
 const svgIconClose = icon('delete', { size: 10 });
 const svgIconPlus = icon('command', { size: 12 });
 const TOOL_ICON_BY_TOOL = {
@@ -35037,10 +35383,13 @@ function createPlanView(context) {
   // ------------------------------------------------------------------
   function commitEntity(entity, label) {
     const firstEntity = entities().length === 0;
+    // Schema v2 identity contract stamped as the entity enters the model.
+    attachIdentity(entity);
     const cmd = entityAddRemoveCommand(entities(), entity, label);
     cmd.redo();
     history.push(cmd);
     state.plan.selectedIds = new Set([entity.id]);
+    modelEvents.emit('entity.created', { id: entity.id, kind: entity.kind, label });
     render();
     updateStudioCPanels();
     // Keep the drawing visible: frame the first entity, and re-frame whenever
@@ -35071,7 +35420,8 @@ function createPlanView(context) {
         const [p1, p2] = args.points;
         const line = createLineEntity({ p1, p2 });
         commitEntity(line, 'create line');
-        return { ok: true, message: `Line ${line.length.toFixed(2)} m · ${Math.round(line.angleDegrees)}°` };
+        const facts = deriveFacts(line);
+        return { ok: true, message: `Line ${facts.length.value.toFixed(2)} m · ${Math.round(facts.angleDegrees.value)}°` };
       }
       case 'create_wall_points': {
         const [p1, p2] = args.points;
@@ -35184,6 +35534,41 @@ function createPlanView(context) {
     execute: executeCadCommand,
     storage: (typeof window !== 'undefined' && window.localStorage) ? window.localStorage : null
   });
+
+  // ------------------------------------------------------------------
+  // Project model integration (schema v2): bounded domain events +
+  // identity-stamped, transactional entity mutation.
+  // ------------------------------------------------------------------
+  const modelEvents = createModelEventBus();
+
+  /**
+   * Runs one project mutation as a transaction: stamps identity on affected
+   * entities, executes, emits a bounded domain event, and rolls the affected
+   * entity states back if the mutator throws (all-or-nothing).
+   * @param {Array<Object>} affected - entities this transaction touches
+   * @param {string} event - MODEL_EVENTS name to emit on success
+   * @param {Function} mutator - the mutation itself
+   * @returns {Function} undo closure restoring pre-transaction state
+   */
+  function transact(affected, event, mutator) {
+    const snapshots = affected.map(e => ({ entity: e, before: JSON.parse(JSON.stringify(e)) }));
+    try {
+      for (const e of affected) attachIdentity(e);
+      mutator();
+    } catch (err) {
+      for (const s of snapshots) Object.assign(s.entity, JSON.parse(JSON.stringify(s.before)));
+      throw err;
+    }
+    for (const s of snapshots) s.after = JSON.parse(JSON.stringify(s.entity));
+    modelEvents.emit(event, {
+      entities: affected.map(e => e.id),
+      at: new Date().toISOString()
+    });
+    return function undoTransaction() {
+      for (const s of snapshots) Object.assign(s.entity, JSON.parse(JSON.stringify(s.before)));
+      modelEvents.emit('entity.updated', { entities: affected.map(e => e.id), reason: 'transaction-undo' });
+    };
+  }
 
   /** Legacy parametric command executor (REC w d · WALL len · STAIR r w · HATCH · INSERT). */
   function onExecuteParsedCommand(parsed) {
@@ -38531,7 +38916,7 @@ function createPlanView(context) {
             <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="4" fill="${col}"/>
             <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="4" fill="${col}"/>
             <rect x="${(mid.x - 48).toFixed(1)}" y="${(mid.y - 20).toFixed(1)}" width="96" height="20" rx="3" fill="var(--bg-surface-elevated, #222327)" stroke="${col}" stroke-width="1.2"/>
-            <text x="${mid.x.toFixed(1)}" y="${(mid.y - 6).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="#ffffff" font-weight="700">${meas.distance.toFixed(2)}m · ${meas.angleDeg.toFixed(0)}°</text>
+            <text x="${mid.x.toFixed(1)}" y="${(mid.y - 6).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="#ffffff" font-weight="700">${meas.distanceMeters.toFixed(2)}m · ${meas.angleDegrees.toFixed(0)}°</text>
           </g>`;
       } else if (dragState.tool === 'leader') {
         const a = worldToSvg(transform, dragState.start.x, dragState.start.y);
@@ -38780,7 +39165,10 @@ function createPlanView(context) {
       else if (e.kind === 'door_tag') desc = `Badge [${escapeHtml(e.tag || '')}]`;
       else if (e.kind === 'window_tag') desc = `Badge <${escapeHtml(e.tag || '')}>`;
       else if (e.kind === 'leader') desc = `Leader · "${escapeHtml(e.text || '')}"`;
-      else if (e.kind === 'line') desc = `Line · ${(typeof e.length === 'number' ? e.length : 0).toFixed(2)} m · ${Math.round(e.angleDegrees || 0)}°`;
+      else if (e.kind === 'line') {
+        const lf = deriveFacts(e);
+        desc = `Line · ${(lf ? lf.length.value : 0).toFixed(2)} m · ${lf ? Math.round(lf.angleDegrees.value) : 0}°`;
+      }
       else if (e.kind === 'north_arrow') desc = `North · ${Math.round(e.rotation || 0)}°`;
       else if (e.kind === 'column') desc = `Column · ${e.profile || 'rect'} · ${num(e.width)}×${num(e.depth)} m`;
       else if (e.kind === 'grid_line') desc = `Grid · Axis [${escapeHtml(e.name || '')}]`;
@@ -40922,7 +41310,7 @@ function createPlanView(context) {
       if (dragState.tool === 'measure') {
         const m = computeMeasurement(dragState.start, dragState.current);
         if (dom.planStatusBadge) {
-          dom.planStatusBadge.textContent = m.formatted;
+          dom.planStatusBadge.textContent = `${m.formattedM} · ${m.formattedAngle}`;
         }
       } else if (dragState.tool === 'room') {
         const curRect = {

@@ -65,10 +65,10 @@ export function renderStudioCPanels(container, options = {}) {
                   <span class="prop-val">${selectedEntity.width.toFixed(2)} m</span>
                 </div>
               ` : ''}
-              ${typeof selectedEntity.depth === 'number' || typeof selectedEntity.run === 'number' ? `
+              ${(typeof selectedEntity.depth === 'number' || typeof selectedEntity.run === 'number') ? `
                 <div class="cpanel-prop-row">
                   <span class="prop-key">Length / Run</span>
-                  <span class="prop-val">${(selectedEntity.depth || selectedEntity.run).toFixed(2)} m</span>
+                  <span class="prop-val">${(typeof selectedEntity.depth === 'number' ? selectedEntity.depth : selectedEntity.run ?? 0).toFixed(2)} m</span>
                 </div>
               ` : ''}
               ${selectedEntity.kind === 'stair' ? `

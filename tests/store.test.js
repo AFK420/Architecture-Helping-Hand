@@ -75,13 +75,24 @@ const fixedClock = () => new Date(1700000000000 + (clockTick++) * 1000);
 // ---------------------------------------------------------------------------
 console.log('\n--- 1. Migration chain ---');
 
-assertEqual(CURRENT_STORE_VERSION, PROJECT_SCHEMA_VERSION + MIGRATIONS.length, 'CURRENT_STORE_VERSION = schema + migrations');
-assertEqual(CURRENT_STORE_VERSION, 1, 'Version 1 is current (empty migration chain)');
+assertEqual(MIGRATIONS.length, PROJECT_SCHEMA_VERSION - 1, 'exactly one migration per version step below the target');
+assertEqual(CURRENT_STORE_VERSION, 2, 'Version 2 is current (project model foundation migration registered)');
 
 {
   const env = { version: 1, project: createProject({ id: 'proj-m1' }) };
+  // Note: createProject now produces v2; force a genuine v1 fixture.
+  env.version = 1;
+  env.project.schemaVersion = 1;
+  env.project.documents = [{
+    id: 'doc-1', name: 'Ground Floor', type: '2d',
+    entities: [{ kind: 'line', x1: 0, y1: 0, x2: 2, y2: 0, length: 2, angleDegrees: 0 }]
+  }];
   const out = migrateEnvelope(env);
-  assertEqual(out.version, 1, 'v1 envelope passes through unchanged');
+  assertEqual(out.version, 2, 'v1 envelope migrates to v2');
+  const migratedLine = out.project.documents[0].entities[0];
+  assert(migratedLine._meta && migratedLine._meta.provenance === 'migrated', 'migrated entity carries _meta identity (provenance migrated)');
+  assert(migratedLine.length === undefined, 'stored derived shadow (length) stripped by migration');
+  assert(!out.project.documents[0].entities.some(e => e.length !== undefined || e.area !== undefined), 'no derived shadows survive migration');
 }
 
 {
@@ -113,7 +124,7 @@ console.log('\n--- 2. Store basics ---');
   assert(saved.ok, 'saveProject persists successfully');
 
   const raw = JSON.parse(storage.getItem(PROJECT_STORE_KEY));
-  assertEqual(raw.version, 1, 'Persisted envelope carries version 1');
+  assertEqual(raw.version, CURRENT_STORE_VERSION, 'Persisted envelope carries the current store version');
   assertEqual(raw.project.id, 'proj-store-1', 'Persisted envelope carries the project');
 
   // New store instance over the same storage round-trips

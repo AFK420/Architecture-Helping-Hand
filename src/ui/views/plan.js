@@ -85,6 +85,7 @@ import { renderStudioCommandBar, updatePrompt } from '../components/commandbar.j
 import { initToolGuidance, updateInspectorGuide } from '../components/tooltip.js';
 import { buildCommandRegistry, createCommandSession } from '../../core/cad-commands.js';
 import { suggestForEntity, suggestForDocument } from '../../core/suggestions.js';
+import { attachIdentity, createModelEventBus, deriveFacts } from '../../core/project-schema.js';
 import { serializeDrawingContext, serializeSelection, serializeToolCapabilities } from '../../core/ai-bridge.js';
 import { docTypeIcon, icon } from '../../core/icons.js';
 const svgIconClose = icon('delete', { size: 10 });
@@ -131,10 +132,13 @@ export function createPlanView(context) {
   // ------------------------------------------------------------------
   function commitEntity(entity, label) {
     const firstEntity = entities().length === 0;
+    // Schema v2 identity contract stamped as the entity enters the model.
+    attachIdentity(entity);
     const cmd = entityAddRemoveCommand(entities(), entity, label);
     cmd.redo();
     history.push(cmd);
     state.plan.selectedIds = new Set([entity.id]);
+    modelEvents.emit('entity.created', { id: entity.id, kind: entity.kind, label });
     render();
     updateStudioCPanels();
     // Keep the drawing visible: frame the first entity, and re-frame whenever
@@ -165,7 +169,8 @@ export function createPlanView(context) {
         const [p1, p2] = args.points;
         const line = createLineEntity({ p1, p2 });
         commitEntity(line, 'create line');
-        return { ok: true, message: `Line ${line.length.toFixed(2)} m · ${Math.round(line.angleDegrees)}°` };
+        const facts = deriveFacts(line);
+        return { ok: true, message: `Line ${facts.length.value.toFixed(2)} m · ${Math.round(facts.angleDegrees.value)}°` };
       }
       case 'create_wall_points': {
         const [p1, p2] = args.points;
@@ -278,6 +283,41 @@ export function createPlanView(context) {
     execute: executeCadCommand,
     storage: (typeof window !== 'undefined' && window.localStorage) ? window.localStorage : null
   });
+
+  // ------------------------------------------------------------------
+  // Project model integration (schema v2): bounded domain events +
+  // identity-stamped, transactional entity mutation.
+  // ------------------------------------------------------------------
+  const modelEvents = createModelEventBus();
+
+  /**
+   * Runs one project mutation as a transaction: stamps identity on affected
+   * entities, executes, emits a bounded domain event, and rolls the affected
+   * entity states back if the mutator throws (all-or-nothing).
+   * @param {Array<Object>} affected - entities this transaction touches
+   * @param {string} event - MODEL_EVENTS name to emit on success
+   * @param {Function} mutator - the mutation itself
+   * @returns {Function} undo closure restoring pre-transaction state
+   */
+  function transact(affected, event, mutator) {
+    const snapshots = affected.map(e => ({ entity: e, before: JSON.parse(JSON.stringify(e)) }));
+    try {
+      for (const e of affected) attachIdentity(e);
+      mutator();
+    } catch (err) {
+      for (const s of snapshots) Object.assign(s.entity, JSON.parse(JSON.stringify(s.before)));
+      throw err;
+    }
+    for (const s of snapshots) s.after = JSON.parse(JSON.stringify(s.entity));
+    modelEvents.emit(event, {
+      entities: affected.map(e => e.id),
+      at: new Date().toISOString()
+    });
+    return function undoTransaction() {
+      for (const s of snapshots) Object.assign(s.entity, JSON.parse(JSON.stringify(s.before)));
+      modelEvents.emit('entity.updated', { entities: affected.map(e => e.id), reason: 'transaction-undo' });
+    };
+  }
 
   /** Legacy parametric command executor (REC w d · WALL len · STAIR r w · HATCH · INSERT). */
   function onExecuteParsedCommand(parsed) {
@@ -3625,7 +3665,7 @@ export function createPlanView(context) {
             <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="4" fill="${col}"/>
             <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="4" fill="${col}"/>
             <rect x="${(mid.x - 48).toFixed(1)}" y="${(mid.y - 20).toFixed(1)}" width="96" height="20" rx="3" fill="var(--bg-surface-elevated, #222327)" stroke="${col}" stroke-width="1.2"/>
-            <text x="${mid.x.toFixed(1)}" y="${(mid.y - 6).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="#ffffff" font-weight="700">${meas.distance.toFixed(2)}m · ${meas.angleDeg.toFixed(0)}°</text>
+            <text x="${mid.x.toFixed(1)}" y="${(mid.y - 6).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" fill="#ffffff" font-weight="700">${meas.distanceMeters.toFixed(2)}m · ${meas.angleDegrees.toFixed(0)}°</text>
           </g>`;
       } else if (dragState.tool === 'leader') {
         const a = worldToSvg(transform, dragState.start.x, dragState.start.y);
@@ -3874,7 +3914,10 @@ export function createPlanView(context) {
       else if (e.kind === 'door_tag') desc = `Badge [${escapeHtml(e.tag || '')}]`;
       else if (e.kind === 'window_tag') desc = `Badge <${escapeHtml(e.tag || '')}>`;
       else if (e.kind === 'leader') desc = `Leader · "${escapeHtml(e.text || '')}"`;
-      else if (e.kind === 'line') desc = `Line · ${(typeof e.length === 'number' ? e.length : 0).toFixed(2)} m · ${Math.round(e.angleDegrees || 0)}°`;
+      else if (e.kind === 'line') {
+        const lf = deriveFacts(e);
+        desc = `Line · ${(lf ? lf.length.value : 0).toFixed(2)} m · ${lf ? Math.round(lf.angleDegrees.value) : 0}°`;
+      }
       else if (e.kind === 'north_arrow') desc = `North · ${Math.round(e.rotation || 0)}°`;
       else if (e.kind === 'column') desc = `Column · ${e.profile || 'rect'} · ${num(e.width)}×${num(e.depth)} m`;
       else if (e.kind === 'grid_line') desc = `Grid · Axis [${escapeHtml(e.name || '')}]`;
@@ -6016,7 +6059,7 @@ export function createPlanView(context) {
       if (dragState.tool === 'measure') {
         const m = computeMeasurement(dragState.start, dragState.current);
         if (dom.planStatusBadge) {
-          dom.planStatusBadge.textContent = m.formatted;
+          dom.planStatusBadge.textContent = `${m.formattedM} · ${m.formattedAngle}`;
         }
       } else if (dragState.tool === 'room') {
         const curRect = {

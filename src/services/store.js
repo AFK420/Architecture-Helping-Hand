@@ -28,15 +28,28 @@ import {
   cloneProject,
   touchProject
 } from '../core/project.js';
+import { migrateProjectV1toV2 } from '../core/project-schema.js';
 /**
  * Migration chain: each entry upgrades a document from its index+1 to the
  * next version. Register future migrations here, e.g. MIGRATIONS[1] = v2->v3.
  * An empty chain means version 1 is current.
  */
-export const MIGRATIONS = Object.freeze([]);
+export const MIGRATIONS = Object.freeze([
+  /**
+   * v1 → v2 (project model foundation):
+   *  - stable ids on every entity
+   *  - identity contract (_meta: createdAt/updatedAt/revision/provenance)
+   *  - stored derived shadows (length/angleDegrees/area/perimeter) stripped —
+   *    measurements are derived on demand via core/project-schema.deriveFacts
+   *  - empty relationship index created (rebuilt on demand)
+   */
+  (project) => migrateProjectV1toV2(project)
+]);
 
 /** Highest version this build understands. */
-export const CURRENT_STORE_VERSION = PROJECT_SCHEMA_VERSION + MIGRATIONS.length;
+export const CURRENT_STORE_VERSION = PROJECT_SCHEMA_VERSION;
+// Invariant: MIGRATIONS.length === PROJECT_SCHEMA_VERSION - 1 (one migration
+// per version step below the target), enforced by tests/store.test.js.
 
 /**
  * Runs the migration chain on a raw store envelope.
@@ -387,15 +400,19 @@ export function createProjectStore(options = {}) {
     }
     const res = readLibrary();
     if (!res.ok) return { ok: false, errors: res.errors };
-    const doc = res.library.projects[id];
+    let doc = res.library.projects[id];
     if (!doc) return { ok: false, errors: [`project "${id}" not found in library`] };
-    // Future individual documents are refused loudly (same contract as the
-    // active envelope) — never silently normalized down to the current schema.
-    if (Number.isInteger(doc.schemaVersion) && doc.schemaVersion > PROJECT_SCHEMA_VERSION) {
+    // Older library documents are migrated through the same chain as the
+    // active envelope; future documents are refused loudly (never silently
+    // normalized down to the current schema).
+    if (Number.isInteger(doc.schemaVersion) && doc.schemaVersion < CURRENT_STORE_VERSION) {
+      const migrated = migrateEnvelope({ version: doc.schemaVersion, project: doc });
+      doc = migrated.project;
+    } else if (Number.isInteger(doc.schemaVersion) && doc.schemaVersion > CURRENT_STORE_VERSION) {
       return {
         ok: false,
         errors: [
-          `Library project "${id}" has schema version ${doc.schemaVersion}, newer than this app understands (${PROJECT_SCHEMA_VERSION}). ` +
+          `Library project "${id}" has schema version ${doc.schemaVersion}, newer than this app understands (${CURRENT_STORE_VERSION}). ` +
           'Refusing to open it to avoid data loss. Please update the application.'
         ]
       };

@@ -15,6 +15,7 @@
  */
 
 import { requireFiniteNumber } from './calculator.js';
+import { attachIdentity } from './entity-identity.js';
 import { calcPolygon, pointInPolygon } from './geometry.js';
 export {
   COLUMN_PROFILES,
@@ -1329,3 +1330,12 @@ export function createBlockInstanceEntity(props = {}) {
 
 
 
+
+
+// ---------------------------------------------------------------------------
+// Schema v2 identity note: entities receive their identity contract
+// (_meta.createdAt/updatedAt/revision/provenance) when they enter the project
+// model — stamped at the plan-workspace commit boundary and in the v1→v2
+// migration (core/project-schema.attachIdentity). Keeping this pure-geometry
+// module free of persistence concerns was a deliberate design decision.
+// ---------------------------------------------------------------------------
