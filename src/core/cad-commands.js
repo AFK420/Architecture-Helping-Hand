@@ -106,6 +106,7 @@ const SIMPLE = [
   { name: 'PERSPECTIVE', aliases: ['PERSP', '3D', 'MASSING'], description: 'Switch to the 3D massing view', category: 'view', run: 'view_perspective' },
   { name: '4VIEW', aliases: ['SPLIT', 'QUAD'], description: 'Switch to the 4-viewport workspace', category: 'view', run: 'view_4split' },
   { name: 'SELECT', aliases: ['SEL', 'V'], description: 'Activate the selection tool', category: 'tool', run: 'tool:select' },
+  { name: 'SELECTALL', aliases: ['ALL', 'CTRLA'], description: 'Select every entity in the document', category: 'tool', run: 'select_all' },
   { name: 'PROPERTIES', aliases: ['PROPS', 'CH'], description: 'Inspect the current selection in the properties panel', category: 'inquiry', run: 'properties' },
   { name: 'INFO', aliases: ['INSPECT'], description: 'Show detailed information about the current selection', category: 'inquiry', run: 'info' },
   { name: 'SUGGEST', aliases: ['SUGGESTIONS'], description: 'Ranked, evidence-backed suggestions for the current selection or document', category: 'ai', run: 'suggest' },

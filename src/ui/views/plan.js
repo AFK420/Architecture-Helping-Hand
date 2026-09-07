@@ -137,12 +137,26 @@ export function createPlanView(context) {
     state.plan.selectedIds = new Set([entity.id]);
     render();
     updateStudioCPanels();
-    // First drawing on an empty canvas: frame it so the user immediately
-    // sees the drawn result instead of hunting for it at the default zoom.
-    if (firstEntity) {
+    // Keep the drawing visible: frame the first entity, and re-frame whenever
+    // newly drawn geometry falls outside the current viewport.
+    if (firstEntity || !entityVisibleInViewport(entity)) {
       fitToContent();
     }
     return entity;
+  }
+
+  /** True when the entity's bounding box is fully inside the visible world window. */
+  function entityVisibleInViewport(entity) {
+    const e = entity.kind === 'wall' || entity.kind === 'line'
+      ? { x: Math.min(entity.x1, entity.x2), y: Math.min(entity.y1, entity.y2),
+          width: Math.abs(entity.x2 - entity.x1), depth: Math.abs(entity.y2 - entity.y1) }
+      : entity;
+    if (typeof e.x !== 'number' || typeof e.y !== 'number') return true;
+    const tl = svgToWorld(transform, 0, 0);
+    const br = svgToWorld(transform, svg.width, svg.height);
+    const pad = 0.5;
+    return e.x >= tl.x - pad && e.x + (e.width || 0) <= br.x + pad &&
+           e.y >= br.y - pad && e.y + (e.depth || 0) <= tl.y + pad;
   }
 
   function executeCadCommand(run, args = {}) {
@@ -221,6 +235,12 @@ export function createPlanView(context) {
       case 'view_perspective': handleStudioToolAction('view_perspective'); return { ok: true, message: '3D massing view.' };
       case 'view_4split': handleStudioToolAction('view_4split'); return { ok: true, message: '4-viewport workspace.' };
       case 'tool:select': setTool('select'); return { ok: true, message: 'Selection tool active.' };
+      case 'select_all': {
+        state.plan.selectedIds = new Set(entities().map(e => e.id));
+        render();
+        updateStatusBar();
+        return { ok: true, message: `${state.plan.selectedIds.size} selected (all)` };
+      }
       case 'properties': renderPropertiesInspector(); updateStudioCPanels(); return { ok: true, message: 'Properties panel focused on the current selection.' };
       case 'info': {
         const sel = selectedEntities();
@@ -6829,6 +6849,16 @@ export function createPlanView(context) {
 
     if (event.key === ' ') {
       spaceHeld = true; // hold space + drag = pan (CAD convention)
+      return;
+    }
+
+    // Ctrl/Cmd+A: select all entities in the active document
+    if ((event.ctrlKey || event.metaKey) && event.key === 'a') {
+      event.preventDefault();
+      state.plan.selectedIds = new Set(entities().map(e => e.id));
+      render();
+      updateStatusBar();
+      showToast(`${state.plan.selectedIds.size} selected (all)`, 'info');
       return;
     }
 
