@@ -130,12 +130,18 @@ export function createPlanView(context) {
   // deterministic core all meet here.
   // ------------------------------------------------------------------
   function commitEntity(entity, label) {
+    const firstEntity = entities().length === 0;
     const cmd = entityAddRemoveCommand(entities(), entity, label);
     cmd.redo();
     history.push(cmd);
     state.plan.selectedIds = new Set([entity.id]);
     render();
     updateStudioCPanels();
+    // First drawing on an empty canvas: frame it so the user immediately
+    // sees the drawn result instead of hunting for it at the default zoom.
+    if (firstEntity) {
+      fitToContent();
+    }
     return entity;
   }
 
@@ -794,6 +800,7 @@ export function createPlanView(context) {
   }
 
   function fitToContent() {
+    syncSvgSize(); // fit against the REAL current panel size, not a stale cached box
     const es = entities();
     if (es.length === 0) {
       // Sensible default framing: a 12m-wide view centered near origin
@@ -851,9 +858,10 @@ export function createPlanView(context) {
     }
     const wM = Math.max(maxX - minX, 0.5);
     const dM = Math.max(maxY - minY, 0.5);
-    const padFactor = 1.35;
+    // Small padding so strokes/handles at the edges are not clipped
+    const padFactor = 1.12;
     const zoom = Math.min((svg.width / (wM * padFactor)), (svg.height / (dM * padFactor)));
-    const finalZoom = Number.isFinite(zoom) ? Math.max(10, Math.min(160, zoom)) : 40;
+    const finalZoom = Number.isFinite(zoom) ? Math.max(4, Math.min(400, zoom)) : 40;
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
     transform = {
@@ -2767,6 +2775,35 @@ export function createPlanView(context) {
    * plus all five side panels. Panels refresh on pointerup's full render().
    */
   let sceneRenderPending = false;
+  /**
+   * Marquee overlay: updated synchronously on every pointermove (no rAF, no
+   * render pass) so the selection rectangle is always visible while dragging.
+   */
+  function updateMarqueeOverlay(clientX, clientY) {
+    const wrap = dom.planSvgWrap || document.getElementById('plan-svg-wrap');
+    const box = document.getElementById('plan-marquee-overlay');
+    if (!wrap || !box || !dragState || !dragState.marquee) return;
+    const wrapRect = wrap.getBoundingClientRect();
+    const left = Math.min(dragState.startClient.x, clientX) - wrapRect.left;
+    const top = Math.min(dragState.startClient.y, clientY) - wrapRect.top;
+    const w = Math.abs(clientX - dragState.startClient.x);
+    const h = Math.abs(clientY - dragState.startClient.y);
+    box.hidden = false;
+    box.style.left = `${left}px`;
+    box.style.top = `${top}px`;
+    box.style.width = `${w}px`;
+    box.style.height = `${h}px`;
+    const wM = Math.abs(dragState.current.x - dragState.startWorld.x);
+    const hM = Math.abs(dragState.current.y - dragState.startWorld.y);
+    const label = box.querySelector('#plan-marquee-overlay-label');
+    if (label) label.textContent = `${dragState.additive ? '+ADD ' : ''}${wM.toFixed(2)} × ${hM.toFixed(2)} m`;
+  }
+
+  function hideMarqueeOverlay() {
+    const box = document.getElementById('plan-marquee-overlay');
+    if (box) { box.hidden = true; box.style.width = '0'; box.style.height = '0'; }
+  }
+
   function scheduleSceneRender() {
     if (sceneRenderPending) return;
     sceneRenderPending = true;
@@ -5854,6 +5891,7 @@ export function createPlanView(context) {
       }
       if (dragState.marquee) {
         dragState.current = { x: world.x, y: world.y };
+        updateMarqueeOverlay(event.clientX, event.clientY);
         scheduleSceneRender();
       } else {
         transform = panBy(dragState.startTransform, dx, dy);
@@ -6088,6 +6126,7 @@ export function createPlanView(context) {
       const visible = entities().filter(x => isEntityVisible(x, getActiveDocument()));
       const additive = dragState.additive;
       const hadSelection = dragState.hadSelection;
+      hideMarqueeOverlay();
       const box = wasMarquee ? {
         x: Math.min(dragState.startWorld.x, dragState.current.x),
         y: Math.min(dragState.startWorld.y, dragState.current.y),

@@ -7,8 +7,8 @@
   <title>Architecture Helping Hand — Scaling & Furniture Studio</title>
   
   <!-- CSS Stylesheets -->
-  <link rel="stylesheet" href="css/themes.css?v=2.3.1">
-  <link rel="stylesheet" href="css/main.css?v=2.3.1">
+  <link rel="stylesheet" href="css/themes.css?v=2.3.2">
+  <link rel="stylesheet" href="css/main.css?v=2.3.2">
   
   <!-- Fail-safe immediate overrides for mode views & form controls -->
   <style>
@@ -4103,6 +4103,15 @@
                 <span class="navc-axis navc-z">Z</span>
               </div>
             </div>
+
+            <!-- Marquee box-select overlay: a plain absolutely-positioned div
+                 updated directly on pointermove — never coalesced, never
+                 dropped, always visible while dragging. -->
+            <div id="plan-marquee-overlay" hidden
+              style="position: absolute; z-index: 45; pointer-events: none; border: 1.5px dashed var(--accent-primary, #4989D9); background: rgba(73, 137, 217, 0.14); box-shadow: 0 0 0 1.5px rgba(73, 137, 217, 0.25);">
+              <span id="plan-marquee-overlay-label"
+                style="position: absolute; left: 0; top: 0; transform: translateY(-130%); font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700; color: #ffffff; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--accent-primary, #4989D9); border-radius: 3px; padding: 1px 5px; white-space: nowrap;"></span>
+            </div>
           </div>
 
           <!-- Bottom CAD Drafting Status Bar -->
@@ -4939,6 +4948,6 @@
   </footer>
 
   <!-- Application Script (Standalone, works via file:// and http://) -->
-  <script src="js/app.js?v=2.3.1"></script>
+  <script src="js/app.js?v=2.3.2"></script>
 </body>
 </html>
