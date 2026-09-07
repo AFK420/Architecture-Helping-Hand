@@ -189,9 +189,13 @@ export function initAiDropdownDrawer(container, state, options = {}) {
     }
   }
 
-  // Keyboard shortcut Ctrl + Space
+  // Keyboard shortcut Ctrl + Space (skipped while typing — Ctrl+Space is an
+  // IME toggle / completion chord in many editors)
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
+      const t = e.target;
+      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+      if (typing) return;
       e.preventDefault();
       toggle();
     }

@@ -67,17 +67,19 @@ export function createProjectsView(context) {
       return;
     }
     const activeId = currentProject()?.id;
-    dom.projectsLibraryList.innerHTML = res.projects.map(p => `
+    dom.projectsLibraryList.innerHTML = res.projects.map(p => {
+      const safeId = escapeHtml(p.id);
+      return `
       <div class="projects-library-row" role="listitem" style="display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; padding: 0.45rem 0.6rem; border: 1px solid var(--border-color-light); border-radius: 5px; background: ${p.id === activeId ? 'var(--bg-chip)' : 'transparent'};">
-        <button type="button" class="projects-open-btn" data-id="${p.id}" title="Open this project"
+        <button type="button" class="projects-open-btn" data-id="${safeId}" title="Open this project"
           style="text-align: left; background: none; border: none; cursor: pointer; color: var(--text-primary); font-family: var(--font-family-mono); font-size: 0.78rem;">
           <strong style="color: var(--accent-primary);">${escapeHtml(p.name)}</strong>
-          <span style="color: var(--text-muted);"> · ${p.id}</span>
+          <span style="color: var(--text-muted);"> · ${safeId}</span>
         </button>
-        <button type="button" class="projects-delete-lib-btn" data-id="${p.id}" title="Delete this library copy" aria-label="Delete ${escapeHtml(p.name)} from library"
+        <button type="button" class="projects-delete-lib-btn" data-id="${safeId}" title="Delete this library copy" aria-label="Delete ${escapeHtml(p.name)} from library"
           style="background: none; border: none; color: var(--text-muted); cursor: pointer;">✕</button>
       </div>
-    `).join('');
+    `; }).join('');
 
     dom.projectsLibraryList.querySelectorAll('.projects-open-btn').forEach(btn => {
       btn.addEventListener('click', () => openProject(btn.dataset.id));

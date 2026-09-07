@@ -258,20 +258,32 @@ export function createRampsView(context) {
     if (dom.rampsMultisegmentWrap) {
       const selectedCodeId = dom.rampsCodeSelect?.value || 'jnbc';
       const code = getBuildingCode(selectedCodeId);
-      const maxRisePerFlight = (code?.ramp?.maxRisePerRunMm || 750) / 1000;
-      const minWidth = (code?.ramp?.minWidthMm || 1200) / 1000;
-      const minLanding = (code?.ramp?.landingLengthMinMm || 1500) / 1000;
+      // Field names match BUILDING_CODES ramp config (the previous names —
+      // maxRisePerRunMm/minWidthMm/landingLengthMinMm — never existed, so every
+      // jurisdiction silently fell back to the same generic defaults)
+      const maxRisePerFlight = code?.ramp?.maxRunRiseMeters || 0.75;
+      const minWidth = (code?.ramp?.minLandingWidthMm || 1200) / 1000;
+      const minLanding = (code?.ramp?.minLandingLengthMm || 1500) / 1000;
 
-      const multi = calculateMultiSegmentRamp(
-        result.geometry.riseMeters,
-        result.geometry.slopePercent,
-        {
-          maxRisePerRunMeters: maxRisePerFlight,
-          rampWidthMeters: minWidth,
-          landingLengthMeters: minLanding
+      const multi = (() => {
+        try {
+          return calculateMultiSegmentRamp(
+            result.geometry.riseMeters,
+            result.geometry.slopePercent,
+            {
+              maxRisePerRunMeters: maxRisePerFlight,
+              rampWidthMeters: minWidth,
+              landingLengthMeters: minLanding
+            }
+          );
+        } catch (err) {
+          return null; // validation failure degrades to the fallback message below
         }
-      );
+      })();
 
+      if (!multi) {
+        dom.rampsMultisegmentWrap.innerHTML = '<div class="multisegment-card"><div class="multisegment-title">📐 Multi-Flight layouts unavailable for this input.</div></div>';
+      } else {
       dom.rampsMultisegmentWrap.innerHTML = `
         <div class="multisegment-card">
           <div class="multisegment-header">
@@ -324,6 +336,7 @@ export function createRampsView(context) {
           </div>
         </div>
       `;
+      }
     }
 
     // Available-run analysis for modes with an explicit available run

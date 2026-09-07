@@ -99,7 +99,8 @@ export function renderStudioPalette(container, options = {}) {
       }
       const matches = searchStudioTools(q, { persona: currentPersona });
       if (matches.length === 0) {
-        searchResults.innerHTML = `<div class="search-empty-hint">No tools found matching "${q}"</div>`;
+        const safeQ = q.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        searchResults.innerHTML = `<div class="search-empty-hint">No tools found matching "${safeQ}"</div>`;
         searchResults.style.display = 'block';
         return;
       }

@@ -60,7 +60,9 @@ export function normalizeKeyCombo(input) {
     const parts = [];
     if (input.ctrlKey || input.metaKey) parts.push('ctrl');
     if (input.altKey) parts.push('alt');
-    if (input.shiftKey && rawKey.length > 1) parts.push('shift');
+    // Shift+<letter> arrives as an uppercase key ('M'); without this guard the
+    // Shift modifier is dropped and Shift+M collapses onto bare 'm'.
+    if (input.shiftKey && (rawKey.length > 1 || /^[A-Z]$/.test(rawKey))) parts.push('shift');
 
     let keyName = rawKey.toLowerCase();
     if (keyName === 'escape' || keyName === 'esc') keyName = 'escape';
@@ -213,8 +215,10 @@ export class ShortcutsManagerClass {
       return { success: false, error: 'Invalid key combination.' };
     }
 
-    // Check for conflict in the same category or overall
-    const conflict = this.shortcuts.find(x => x.id !== id && x.key === normalized && (x.category === target.category || ['escape', 'delete', 'ctrl+k'].includes(normalized)));
+    // Check for conflict against ANY existing binding. Cross-category
+    // duplicates previously slipped through, and since no handler stops
+    // propagation both actions would fire on a single keypress.
+    const conflict = this.shortcuts.find(x => x.id !== id && x.key === normalized);
     if (conflict) {
       return {
         success: false,

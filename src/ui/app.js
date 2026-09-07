@@ -1247,8 +1247,10 @@ export function initializeApp() {
     }
 
     if (contextStrip && context) {
+      // Values are escaped here so a future caller passing user-derived text
+      // cannot become an XSS sink; numeric/formatter output is unaffected.
       contextStrip.innerHTML = Object.entries(context)
-        .map(([k, v]) => `<span class="context-pill"><strong>${k}:</strong> ${v}</span>`)
+        .map(([k, v]) => `<span class="context-pill"><strong>${escapeHtml(String(k))}:</strong> ${escapeHtml(String(v))}</span>`)
         .join('');
     }
   }
@@ -1875,19 +1877,16 @@ export function initializeApp() {
       dom.refScaleSelect.value = String(state.refScaleRatio || 50);
     }
 
-    // Area & Volume unit selects
+    // Area & Volume unit selects (the else-branch that filled volume units
+    // dereferenced the null element that selected that branch — dead code removed)
     if (dom.areavolInputUnit) {
       const opts = Object.entries(AREA_UNITS).map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
       dom.areavolInputUnit.innerHTML = opts;
-      dom.areavolOutputUnit.innerHTML = opts;
+      if (dom.areavolOutputUnit) {
+        dom.areavolOutputUnit.innerHTML = opts;
+        dom.areavolOutputUnit.value = 'm2';
+      }
       dom.areavolInputUnit.value = 'cm2';
-      dom.areavolOutputUnit.value = 'm2';
-    } else {
-      const opts = Object.entries(VOLUME_UNITS).map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
-      dom.areavolInputUnit.innerHTML = opts;
-      dom.areavolOutputUnit.innerHTML = opts;
-      dom.areavolInputUnit.value = 'cm3';
-      dom.areavolOutputUnit.value = 'm3';
     }
   }
 
@@ -6105,7 +6104,10 @@ export function initializeApp() {
           views.callController('scratchpad', 'toggleDrawer', false);
           return;
         }
-        if (dom.historyDrawer?.classList.contains('open')) views.callController('history', 'toggleHistoryDrawer');
+        if (dom.historyDrawer?.classList.contains('open')) {
+          views.callController('history', 'toggleHistoryDrawer');
+          return; // one Esc press performs exactly one action
+        }
         if (dom.shortcutsModal?.classList.contains('open')) {
           listeningActionId = null;
           dom.shortcutsModal.classList.remove('open');
