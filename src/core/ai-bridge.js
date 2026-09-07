@@ -9,8 +9,10 @@ import {
   createWall,
   createStairEntity,
   createDetailCallout,
-  createSectionCut
+  createSectionCut,
+  wallOpenings
 } from './entities.js';
+import { STUDIO_TOOL_CATALOG } from './personas.js';
 
 /**
  * Serializes the current active drawing viewport, persona, scale, and entities
@@ -60,8 +62,179 @@ export function serializeDrawingContext(state = {}) {
     stairCount: stairs.length,
     dimensionCount: dims.length,
     rooms: rooms.map(r => ({ name: r.name, width: r.width, depth: r.depth, area: Math.round((r.width * r.depth) * 10) / 10 })),
-    selectedCount: plan.selectedIds ? plan.selectedIds.size : 0
+    selectedCount: plan.selectedIds ? plan.selectedIds.size : 0,
+    selection: serializeSelection(entities, plan.selectedIds),
+    availableTools: serializeToolCapabilities()
   };
+}
+
+/**
+ * Serializes the CURRENT SELECTION with full deterministic geometry,
+ * relationships, and per-type measurements. This is what makes "AI answers
+ * about the exact selected entity" possible: the model receives verified
+ * numbers, not a request to guess.
+ *
+ * @param {Array<Object>} entities - active document entities
+ * @param {Set<string>|Array<string>} selectedIds
+ * @returns {Array<Object>} per-entity evidence packets (empty when nothing selected)
+ */
+export function serializeSelection(entities = [], selectedIds = null) {
+  const ids = selectedIds instanceof Set ? [...selectedIds] : (Array.isArray(selectedIds) ? selectedIds : []);
+  if (ids.length === 0) return [];
+  const byId = new Map(entities.map(e => [e.id, e]));
+  const packets = [];
+  for (const id of ids) {
+    const e = byId.get(id);
+    if (!e) continue;
+    const packet = {
+      id: e.id,
+      kind: e.kind,
+      name: e.name || e.id,
+      layerId: e.layerId || null
+    };
+    switch (e.kind) {
+      case 'wall': {
+        const len = Math.hypot(e.x2 - e.x1, e.y2 - e.y1);
+        packet.length = round(len);
+        packet.thickness = e.thickness ?? null;
+        packet.assemblyId = e.assemblyId || null;
+        packet.angleDegrees = round((Math.atan2(e.y2 - e.y1, e.x2 - e.x1) * 180) / Math.PI);
+        packet.p1 = { x: round(e.x1), y: round(e.y1) };
+        packet.p2 = { x: round(e.x2), y: round(e.y2) };
+        packet.openings = (typeof wallOpenings === 'function' ? wallOpenings(entities, e) : []).map(o => ({
+          id: o.id, kind: o.kind, name: o.name, width: o.width
+        }));
+        packet.dimensions = entities
+          .filter(d => d.kind === 'dimension' && dimensionTouchesSegment(d, e))
+          .map(d => ({ id: d.id, value: round(dimensionValue(d)) }));
+        break;
+      }
+      case 'line': {
+        packet.length = round(typeof e.length === 'number' ? e.length : Math.hypot(e.x2 - e.x1, e.y2 - e.y1));
+        packet.angleDegrees = round(e.angleDegrees ?? 0);
+        packet.p1 = { x: round(e.x1), y: round(e.y1) };
+        packet.p2 = { x: round(e.x2), y: round(e.y2) };
+        break;
+      }
+      case 'room': {
+        const area = typeof e.width === 'number' && typeof e.depth === 'number' ? e.width * e.depth : 0;
+        packet.width = round(e.width ?? 0);
+        packet.depth = round(e.depth ?? 0);
+        packet.area = round(area);
+        packet.perimeter = round(e.width && e.depth ? 2 * (e.width + e.depth) : 0);
+        packet.aspectRatio = e.width && e.depth ? round(Math.max(e.width, e.depth) / Math.min(e.width, e.depth), 2) : null;
+        packet.furniture = entities.filter(f => f.kind === 'furniture' &&
+          typeof f.x === 'number' && f.x >= e.x - 0.01 && f.x <= e.x + e.width + 0.01 &&
+          f.y >= e.y - 0.01 && f.y <= e.y + e.depth + 0.01
+        ).map(f => ({ id: f.id, name: f.name, width: round(f.width), depth: round(f.depth) }));
+        packet.doors = entities.filter(d => d.kind === 'door' &&
+          typeof d.x === 'number' && d.x >= e.x - 0.3 && d.x <= e.x + e.width + 0.3 &&
+          d.y >= e.y - 0.3 && d.y <= e.y + e.depth + 0.3
+        ).map(d => ({ id: d.id, name: d.name, width: round(d.width) }));
+        packet.dimensions = entities.filter(d => d.kind === 'dimension' &&
+          Math.abs(dimensionValue(d) - e.width) < 0.02 || Math.abs(dimensionValue(d) - e.depth) < 0.02
+        ).map(d => ({ id: d.id, value: round(dimensionValue(d)) }));
+        break;
+      }
+      case 'dimension': {
+        packet.measuredLength = round(dimensionValue(e));
+        packet.p1 = e.p1 ? { x: round(e.p1.x), y: round(e.p1.y) } : null;
+        packet.p2 = e.p2 ? { x: round(e.p2.x), y: round(e.p2.y) } : null;
+        packet.unit = e.unit || 'm';
+        packet.textOverride = e.textOverride || null;
+        // Verification: is a wall/room edge actually this long?
+        const matches = entities.filter(t => (t.kind === 'wall' || t.kind === 'line' || t.kind === 'room') &&
+          Math.abs(entityPrimaryLength(t) - dimensionValue(e)) < 0.02
+        ).map(t => ({ id: t.id, kind: t.kind, name: t.name, length: round(entityPrimaryLength(t)) }));
+        packet.matchesGeometry = matches.length > 0;
+        packet.matchingEntities = matches.slice(0, 5);
+        break;
+      }
+      case 'stair': {
+        packet.risers = e.risers ?? null;
+        packet.width = round(e.width ?? 0);
+        packet.riserHeight = e.riserHeight ?? null;
+        packet.tread = e.tread ?? null;
+        packet.blondel = e.blondel ?? null;
+        packet.pitchAngle = e.pitchAngle ?? null;
+        break;
+      }
+      case 'ramp': {
+        packet.slopePercent = e.slopePercent ?? null;
+        packet.slopeRatio = e.slopeRatio ?? null;
+        packet.width = round(e.width ?? 0);
+        packet.length = round(e.depth ?? 0);
+        break;
+      }
+      case 'door':
+      case 'window': {
+        packet.width = round(e.width ?? 0);
+        packet.hostWallId = e.wallId || e.hostWallId || null;
+        packet.swing = e.swing || null;
+        break;
+      }
+      case 'furniture': {
+        packet.width = round(e.width ?? 0);
+        packet.depth = round(e.depth ?? 0);
+        packet.catalogId = e.catalogId || e.templateId || null;
+        packet.hostRoom = entities.find(r => r.kind === 'room' &&
+          typeof e.x === 'number' && e.x >= r.x && e.x <= r.x + r.width &&
+          e.y >= r.y && e.y <= r.y + r.depth
+        )?.name || null;
+        break;
+      }
+      default: {
+        packet.width = round(e.width ?? 0);
+        packet.depth = round(e.depth ?? 0);
+      }
+    }
+    packets.push(packet);
+  }
+  return packets;
+}
+
+/**
+ * Tool-awareness capabilities for "what can I do with this?" answers:
+ * the real registered catalog (single source of truth: personas.js).
+ */
+export function serializeToolCapabilities(toolCatalog = STUDIO_TOOL_CATALOG) {
+  const tools = (toolCatalog || []).map(t => ({
+    id: t.id,
+    name: t.name,
+    description: t.description || '',
+    command: t.commandAlias || null,
+    shortcut: t.shortcut || null,
+    category: t.category,
+    personas: t.personas || []
+  }));
+  return { count: tools.length, tools };
+}
+
+function round(v, digits = 3) {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+  const f = Math.pow(10, digits);
+  return Math.round(v * f) / f;
+}
+
+function dimensionValue(d) {
+  const p1 = d.p1 || { x: d.x1, y: d.y1 };
+  const p2 = d.p2 || { x: d.x2, y: d.y2 };
+  if (typeof p1?.x !== 'number' || typeof p2?.x !== 'number') return NaN;
+  return Math.hypot(p2.x - p1.x, p2.y - p1.y);
+}
+
+function dimensionTouchesSegment(dim, wall) {
+  const p1 = dim.p1 || { x: dim.x1, y: dim.y1 };
+  const p2 = dim.p2 || { x: dim.x2, y: dim.y2 };
+  const near = (p, q) => Math.hypot(p.x - q.x, p.y - q.y) < 0.05;
+  return (near(p1, { x: wall.x1, y: wall.y1 }) && near(p2, { x: wall.x2, y: wall.y2 })) ||
+         (near(p1, { x: wall.x2, y: wall.y2 }) && near(p2, { x: wall.x1, y: wall.y1 }));
+}
+
+function entityPrimaryLength(e) {
+  if (e.kind === 'wall' || e.kind === 'line') return Math.hypot(e.x2 - e.x1, e.y2 - e.y1);
+  if (e.kind === 'room') return typeof e.width === 'number' ? e.width : 0;
+  return 0;
 }
 
 /**

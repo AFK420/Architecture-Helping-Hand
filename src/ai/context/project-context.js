@@ -121,7 +121,7 @@ export function selectProjectScope({ project, planEntities, request = {} }) {
  * Builds the facts-pack shape the job router expects from a scoped view.
  * Deterministic text + data + numeric fact checks (room areas).
  */
-export function buildScopedFactsPack({ project, planEntities, request = {} }) {
+export function buildScopedFactsPack({ project, planEntities, request = {}, selectionPackets = null }) {
   const scope = selectProjectScope({ project, planEntities, request });
   const isNum = v => typeof v === 'number' && isFinite(v);
   const round2 = v => (isNum(v) ? Number(v.toFixed(2)) : null);
@@ -160,6 +160,12 @@ export function buildScopedFactsPack({ project, planEntities, request = {} }) {
     dropped: scope.dropped
   };
 
+  // Selection evidence: exact deterministic geometry of the user's current
+  // selection, when the caller provided packets (AI Query / Ask-AI paths).
+  // Never send unrelated context when only one entity is selected.
+  const selectionPacketsResolved = Array.isArray(selectionPackets) ? selectionPackets.filter(Boolean) : [];
+  data.selection = selectionPacketsResolved;
+
   const lines = [];
   lines.push(`PROJECT: ${data.project.name}`);
   if (data.project.description) lines.push(`INTENT: ${data.project.description}`);
@@ -180,6 +186,18 @@ export function buildScopedFactsPack({ project, planEntities, request = {} }) {
   }
   if (data.measurements.length > 0) {
     lines.push(`MEASUREMENTS: ${data.measurements.map(m => `${m.label}=${m.value}${m.unit}(${m.status})`).join('; ')}`);
+  }
+  if (selectionPacketsResolved.length > 0) {
+    lines.push(`SELECTED ENTITIES (${selectionPacketsResolved.length}) — verified deterministic facts; quote these numbers exactly:`);
+    for (const p of selectionPacketsResolved.slice(0, 8)) {
+      const facts = Object.entries(p)
+        .filter(([k, v]) => !['id', 'kind', 'name'].includes(k) && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0))
+        .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`)
+        .slice(0, 10)
+        .join(' · ');
+      lines.push(`  [${p.kind}] "${p.name}" (${p.id}): ${facts}`);
+    }
+    lines.push(`Answer specifically about the selected entity/entities. Distinguish fact (from this pack) from inference. Do not invent dimensions.`);
   }
   for (const n of scope.notes.slice(0, SCOPE_LIMITS.notes)) {
     const title = typeof n?.title === 'string' ? n.title : 'note';
