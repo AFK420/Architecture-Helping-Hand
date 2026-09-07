@@ -142,7 +142,7 @@ console.log('\n--- 1. Key management ---');
 console.log('\n--- 2. Gemini transport (mocked HTTP) ---');
 
 {
-  // Request shape: correct endpoint, key as query param, JSON body
+  // Request shape: correct endpoint, key in header (not URL), JSON body
   const calls = [];
   const http = createAiHttp({
     fetchImpl: async (url, init) => {
@@ -158,7 +158,8 @@ console.log('\n--- 2. Gemini transport (mocked HTTP) ---');
   assert(res.ok, 'Gemini connection test succeeds (mocked)');
   assertEqual(calls.length, 1, 'Exactly one HTTP call for the test');
   assert(calls[0].url.includes('/models/gemini-2.0-flash:generateContent'), 'Official generateContent endpoint used');
-  assert(calls[0].url.includes('key=AIza-test'), 'API key passed as documented query param');
+  assert(calls[0].init.headers['x-goog-api-key'] === 'AIza-test', 'API key sent via x-goog-api-key header');
+  assert(!calls[0].url.includes('key='), 'API key never appears in the URL (log-leak protection)');
   assert(!JSON.stringify(calls[0].init.body).includes('Studio House'), 'Connection test sends NO project data');
 
   const gen = await transport.sendPrompt({

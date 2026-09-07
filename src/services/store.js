@@ -152,7 +152,13 @@ export function createProjectStore(options = {}) {
 
   function writeEnvelope(envelope) {
     try {
-      storage.setItem(PROJECT_STORE_KEY, JSON.stringify(envelope));
+      // StorageService signals a localStorage failure (quota/private mode) via
+      // its return value rather than throwing — a false return must surface
+      // to the caller just like a thrown error, otherwise saves are reported
+      // as successful while data only lives in the in-memory fallback.
+      if (storage.setItem(PROJECT_STORE_KEY, JSON.stringify(envelope)) === false) {
+        return false;
+      }
       return true;
     } catch (e) {
       // Quota failures and private-mode write errors surface to the caller

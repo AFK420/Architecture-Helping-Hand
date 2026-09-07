@@ -148,6 +148,9 @@ export function createPlanView(context) {
     state.plan.activeDocId = target.id;
     state.plan.entities = target.entities || [];
     state.plan.selectedIds = new Set();
+    // Undo commands close over the previous document's entity objects; keeping
+    // them would let a later Ctrl+Z mutate the now-hidden document.
+    history.clear();
     if (target.viewport && typeof target.viewport.zoom === 'number') {
       transform = {
         zoom: target.viewport.zoom,

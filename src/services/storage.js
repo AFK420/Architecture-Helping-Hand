@@ -18,14 +18,23 @@ export const StorageService = {
   },
 
   setItem(key, value) {
+    let persisted = true;
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem(key, value);
+        persisted = true;
       }
+      // No localStorage at all (Node/sandboxed): the memory fallback is the
+      // designed behavior, not a persistence failure — report success so
+      // durability-aware callers don't false-alarm.
     } catch (e) {
-      // Fallback to memory store
+      // Quota exceeded / private mode: fall back to memory and report failure
+      persisted = false;
     }
     memoryStore.set(key, String(value));
+    // Callers that need durability guarantees (e.g. the project store) use
+    // this return value; fire-and-forget callers may ignore it.
+    return persisted;
   },
 
   removeItem(key) {

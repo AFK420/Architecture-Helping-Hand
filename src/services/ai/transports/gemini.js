@@ -3,8 +3,8 @@
  * Real Google Gemini API adapter over the injected AI HTTP boundary.
  *
  * Endpoint mechanics (official REST, v1beta):
- *  - Generate:  POST {endpoint}/models/{model}:generateContent?key=API_KEY
- *  - Models:    GET  {endpoint}/models?key=API_KEY (paginated ListModels)
+ *  - Generate:  POST {endpoint}/models/{model}:generateContent  (x-goog-api-key header)
+ *  - Models:    GET  {endpoint}/models  (x-goog-api-key header, paginated ListModels)
  *  - Vision:    inline_data { mime_type, data(base64) } part
  *  - Structured: generationConfig.responseMimeType = "application/json"
  *
@@ -154,10 +154,10 @@ export function createGeminiTransport({ http }) {
     const model = modelId || 'gemini-2.0-flash';
     const started = Date.now();
     const res = await http.request({
-      url: `${endpoint}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      url: `${endpoint}/models/${encodeURIComponent(model)}:generateContent`,
       init: {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify(buildGenerateBody({ userPrompt: GEMINI_TEST_PROMPT, options: { maxOutputTokens: 16 } }))
       },
       timeoutMs: 20000
@@ -180,10 +180,9 @@ export function createGeminiTransport({ http }) {
     // Bound the pagination loop defensively (provider bug protection).
     for (let page = 0; page < 10; page++) {
       const url = new URL(`${endpoint}/models`);
-      url.searchParams.set('key', apiKey);
       url.searchParams.set('pageSize', '200');
       if (pageToken) url.searchParams.set('pageToken', pageToken);
-      const res = await http.request({ url: url.toString(), timeoutMs: 20000 });
+      const res = await http.request({ url: url.toString(), init: { headers: { 'x-goog-api-key': apiKey } }, timeoutMs: 20000 });
       if (!res.ok) {
         return { ok: false, ...mapGeminiError(res), partial: out };
       }
@@ -211,10 +210,10 @@ export function createGeminiTransport({ http }) {
     const { endpoint, apiKey, modelId, systemPrompt, userPrompt, options = {} } = req || {};
     if (!modelId) return { ok: false, errorCode: AI_ERROR_CODES.INVALID_MODEL, message: 'No model selected for this request.' };
     const res = await http.request({
-      url: `${endpoint}/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      url: `${endpoint}/models/${encodeURIComponent(modelId)}:generateContent`,
       init: {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify(buildGenerateBody({ systemPrompt, userPrompt, options }))
       }
     });
@@ -246,10 +245,10 @@ export function createGeminiTransport({ http }) {
     const { endpoint, apiKey, modelId, prompt, options = {} } = req || {};
     if (!modelId) return { ok: false, errorCode: AI_ERROR_CODES.INVALID_MODEL, message: 'No image model selected.' };
     const res = await http.request({
-      url: `${endpoint}/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      url: `${endpoint}/models/${encodeURIComponent(modelId)}:generateContent`,
       init: {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt || 'Conceptual architectural massing study' }] }],
           generationConfig: {
