@@ -12205,6 +12205,56 @@ function createLeaderNote({
 }
 
 /**
+ * Factory for a pure 2-point line-segment entity (a drafting line, distinct
+ * from a wall: no thickness, no assembly — pure geometry annotation).
+ */
+function createLineEntity({
+  id,
+  name,
+  p1,
+  p2,
+  x1, y1, x2, y2,
+  layerId = 'A-ANNO-LINES',
+  floorId = 'floor-1',
+  metadata = {}
+} = {}) {
+  const actualP1 = p1 || { x: x1, y: y1 };
+  const actualP2 = p2 || { x: x2, y: y2 };
+
+  requireFiniteNumber(actualP1.x, 'line.p1.x');
+  requireFiniteNumber(actualP1.y, 'line.p1.y');
+  requireFiniteNumber(actualP2.x, 'line.p2.x');
+  requireFiniteNumber(actualP2.y, 'line.p2.y');
+
+  const dx = actualP2.x - actualP1.x;
+  const dy = actualP2.y - actualP1.y;
+  if (Math.hypot(dx, dy) < 1e-4) {
+    throw new Error('Line start and end points cannot be identical (length must be > 0)');
+  }
+
+  return {
+    kind: 'line',
+    id: id || generateEntityId('line'),
+    name: typeof name === 'string' && name ? name : 'Line',
+    p1: { x: actualP1.x, y: actualP1.y },
+    p2: { x: actualP2.x, y: actualP2.y },
+    x1: actualP1.x,
+    y1: actualP1.y,
+    x2: actualP2.x,
+    y2: actualP2.y,
+    x: Math.min(actualP1.x, actualP2.x),
+    y: Math.min(actualP1.y, actualP2.y),
+    width: Math.max(0.001, Math.abs(dx)),
+    depth: Math.max(0.001, Math.abs(dy)),
+    length: Math.hypot(dx, dy),
+    angleDegrees: (Math.atan2(dy, dx) * 180) / Math.PI,
+    layerId,
+    floorId,
+    metadata
+  };
+}
+
+/**
  * Factory for a CAD North Arrow symbol.
  */
 function createNorthArrow({
@@ -16492,6 +16542,1103 @@ const PERSONA_RIBBON_CONFIGS = {
 
 
   // =========================================================================
+  // MODULE: Icons
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — Original SVG Icon Registry
+ *
+ * A dedicated, original architectural/CAD visual language. No emoji, no
+ * third-party icon sets: every glyph is a simple 24×24 stroke drawing drawn
+ * specifically for this application's tool semantics (selection geometry,
+ * wall sections, hinge swings, witness lines, cut planes, …).
+ *
+ * Contract:
+ *   icon(name, { size })            -> inline <svg> markup (or '' if unknown)
+ *   toolIcon(tool, { size })        -> resolves a STUDIO_TOOL_CATALOG entry by
+ *                                      id, falling back tool.iconName → tool.id
+ *                                      → category → generic
+ *   docTypeIcon(type, { size })     -> plan document tab icons
+ *   navIcon(id, { size })           -> sidebar navigation icons
+ *   commandIcon(id, { size })       -> command palette icons
+ *
+ * All paths use stroke="currentColor" so themes and active states work.
+ */
+
+const P = {
+  select: '<path d="M6 3l12 7.5-5.2 1.1L15 18l-2.4 1-2.2-6.3L6 15z"/>',
+  marquee: '<rect x="4" y="6" width="13" height="11" rx="1" stroke-dasharray="3 2.4"/><path d="M19 4v3M21 5.5h-4" stroke-linecap="round"/>',
+  lasso: '<path d="M12 5c4.4 0 8 2.2 8 5s-3.6 5-8 5c-1.5 0-2.9-.2-4.1-.7"/><path d="M8 14.5c-1.9 2.6-2.6 4.6-1.6 5.4 1.2 1 3.6-1 5.1-4"/>',
+  line: '<circle cx="5" cy="19" r="1.8"/><circle cx="19" cy="5" r="1.8"/><path d="M6.3 17.7L17.7 6.3"/>',
+  polyline: '<circle cx="4" cy="18" r="1.7"/><circle cx="12" cy="6" r="1.7"/><circle cx="20" cy="14" r="1.7"/><path d="M5.4 16.9L10.8 7.5M13.4 7.1l5.2 5.8"/>',
+  wall: '<rect x="3" y="9" width="18" height="6" rx="0.5"/><path d="M9 9v6M15 9v6M3 12h6M15 12h6" stroke-width="1"/>',
+  door: '<path d="M6 20V5.5A1.5 1.5 0 017.5 4H17"/><path d="M17 4a11 11 0 01-9.6 11.4" stroke-dasharray="2.6 2.4"/><circle cx="6" cy="20" r="1.4"/>',
+  window: '<rect x="4" y="8" width="16" height="9" rx="0.6"/><path d="M4 12.5h16M12 8v9" stroke-width="1"/><path d="M12 8V4.5M7 8V6M17 8V6" stroke-linecap="round"/>',
+  measure: '<circle cx="4.5" cy="19" r="1.5"/><circle cx="19.5" cy="19" r="1.5"/><path d="M6 19h12M6 16.5v5M18 16.5v5" stroke-width="1.2"/><path d="M9.5 17.2v1.6M12 17.2v1.6M14.5 17.2v1.6" stroke-width="1"/>',
+  dimension: '<path d="M4 8v8M20 8v8" stroke-linecap="round"/><path d="M4 12h16M6.5 9.5L4 12l2.5 2.5M17.5 9.5L20 12l-2.5 2.5" stroke-width="1.2"/>',
+  room: '<rect x="5" y="5" width="14" height="14" rx="1"/><path d="M9.5 9.5h5v5h-5z" stroke-width="1" stroke-dasharray="2.2 1.8"/>',
+  polyroom: '<path d="M5 9l5-4 9 3v7l-6 4-8-3z" stroke-linejoin="round"/><circle cx="5" cy="9" r="1.1"/><circle cx="10" cy="5" r="1.1"/><circle cx="19" cy="8" r="1.1"/><circle cx="19" cy="15" r="1.1"/><circle cx="13" cy="19" r="1.1"/><circle cx="5" cy="16" r="1.1"/>',
+  furniture: '<path d="M5 11V7.5A1.5 1.5 0 016.5 6h11A1.5 1.5 0 0119 7.5V11"/><path d="M4 11h16a1 1 0 011 1v3h-18v-3a1 1 0 011-1zM6 15v3M18 15v3" stroke-width="1.2"/>',
+  column: '<rect x="9" y="4" width="6" height="16" rx="0.8"/><path d="M7 4h10M7 20h10M9 8v8M12 8v8M15 8v8" stroke-width="1"/>',
+  grid: '<path d="M4 9h16M4 15h16M9 4v16M15 4v16" stroke-width="1.2" stroke-linecap="round"/><circle cx="9" cy="9" r="0.9" fill="currentColor" stroke="none"/>',
+  stair: '<path d="M4 20h4v-4h4v-4h4V8h4" stroke-linejoin="round"/><path d="M4 20L20 8" stroke-dasharray="2.4 2.2" stroke-width="1"/>',
+  ramp: '<path d="M3 19h18M4 19L20 9" stroke-linecap="round"/><path d="M8.5 14.8l0 2.4M12.5 12.4v2.4M16.5 10v2.4" stroke-width="1"/><circle cx="4" cy="19" r="1.2"/>',
+  section: '<rect x="4" y="5" width="16" height="14" rx="1" stroke-dasharray="4 2.4"/><path d="M12 3v18" stroke-linecap="round"/><path d="M12 3l-2.4 2.6M12 3l2.4 2.6" stroke-width="1.1" stroke-linecap="round"/>',
+  elevation: '<path d="M4 20V8l8-4 8 4v12" stroke-linejoin="round"/><path d="M4 20h16M9 20v-5h6v5" stroke-width="1.1"/>',
+  hatch: '<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 12l8-8M4 20L20 4M12 20l8-8" stroke-width="0.9"/>',
+  north: '<circle cx="12" cy="12" r="8.5"/><path d="M12 5.5l2.8 9-2.8-2-2.8 2z" fill="currentColor" stroke="none"/><path d="M12 15.5v3" stroke-width="1"/>',
+  curve: '<path d="M4 19c8 0 12-6 16-15" stroke-linecap="round"/><circle cx="4" cy="19" r="1.5"/><circle cx="20" cy="4" r="1.5"/>',
+  fillet: '<path d="M4 20V10C4 6.7 6.7 4 10 4h10" stroke-linecap="round"/><path d="M4 20l2.5-2.5M20 4l-2.5 2.5" stroke-width="1"/>',
+  offset: '<path d="M4 18L18 4M8 20L20 8" stroke-linecap="round"/><path d="M14 4h4v4" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>',
+  move: '<path d="M12 3v18M3 12h18" stroke-linecap="round"/><path d="M12 3l-2.2 2.2M12 3l2.2 2.2M12 21l-2.2-2.2M12 21l2.2-2.2M3 12l2.2-2.2M3 12l2.2 2.2M21 12l-2.2-2.2M21 12l-2.2 2.2" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>',
+  rotate: '<path d="M20 12a8 8 0 11-2.3-5.6" stroke-linecap="round"/><path d="M20 3v4h-4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
+  scale: '<rect x="4" y="10" width="7" height="7" rx="0.8"/><rect x="13" y="4" width="10" height="10" rx="0.8" stroke-dasharray="2.6 2" /><path d="M9.5 15.5L16 9M16 9h-3.4M16 9v3.4" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>',
+  trim: '<path d="M5 19L15 9" stroke-linecap="round"/><path d="M9 5h10v10" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 2.2"/><path d="M15 9l4 4M15 9l-4 4" stroke-width="1.1" stroke-linecap="round"/>',
+  extend: '<path d="M4 19L12 11" stroke-linecap="round"/><path d="M12 11l8-8M14 3h6v6" stroke-dasharray="3 2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+  join: '<circle cx="5" cy="19" r="1.7"/><circle cx="19" cy="5" r="1.7"/><path d="M6.5 17.5C10 14 14 10 17.5 6.5M12 4.5l3.8 1M19.5 12l-1-3.8" stroke-width="1.1" stroke-linecap="round"/>',
+  explode: '<rect x="8" y="8" width="8" height="8" rx="0.8" stroke-dasharray="2.4 2"/><path d="M10.5 5.5L12 8l1.5-2.5M18.5 10.5L16 12l2.5 1.5M13.5 18.5L12 16l-1.5 2.5M5.5 13.5L8 12l-2.5-1.5" stroke-width="1.1" stroke-linecap="round"/>',
+  layer: '<path d="M12 4l8 4-8 4-8-4z" stroke-linejoin="round"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4" stroke-width="1.1" stroke-linejoin="round"/>',
+  properties: '<path d="M5 7h14M5 12h14M5 17h14" stroke-linecap="round"/><circle cx="9" cy="7" r="1.8" fill="var(--bg, #18181b)"/><circle cx="15" cy="12" r="1.8" fill="var(--bg, #18181b)"/><circle cx="8" cy="17" r="1.8" fill="var(--bg, #18181b)"/>',
+  info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5" stroke-linecap="round"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/>',
+  zoom_in: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5M8 10.5h5M10.5 8v5" stroke-linecap="round"/>',
+  zoom_out: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5M8 10.5h5" stroke-linecap="round"/>',
+  fit: '<path d="M4 9V5.5A1.5 1.5 0 015.5 4H9M15 4h3.5A1.5 1.5 0 0120 5.5V9M20 15v3.5a1.5 1.5 0 01-1.5 1.5H15M9 20H5.5A1.5 1.5 0 014 18.5V15" stroke-linecap="round"/><rect x="9.5" y="9.5" width="5" height="5" rx="0.6" stroke-width="1"/>',
+  top: '<rect x="4" y="4" width="16" height="16" rx="1" transform="skewX(0)"/><path d="M4 4l4-2h12l-4 2M20 4l-4-2" stroke-width="1" stroke-linejoin="round" opacity="0.55"/>',
+  front: '<rect x="5" y="6" width="14" height="13" rx="0.8"/><path d="M5 10h14M9 10v9M15 10v9" stroke-width="1"/><path d="M5 6l2.5-2h14L19 6" stroke-width="1" stroke-linejoin="round" opacity="0.55"/>',
+  right: '<path d="M4 6h11l5 4v10H4z" stroke-linejoin="round"/><path d="M15 6v4h5M4 10h11M8 6v4" stroke-width="1" opacity="0.9"/>',
+  perspective: '<path d="M4 18L8 6h8l4 12z" stroke-linejoin="round"/><path d="M8 6l3 12M16 6l-3 12M4 18h16" stroke-width="0.9" opacity="0.7"/>',
+  view4: '<rect x="4" y="4" width="7" height="7" rx="0.8"/><rect x="13" y="4" width="7" height="7" rx="0.8" stroke-dasharray="2.4 1.8"/><rect x="4" y="13" width="7" height="7" rx="0.8" stroke-dasharray="2.4 1.8"/><rect x="13" y="13" width="7" height="7" rx="0.8"/>',
+  pan: '<path d="M9 11V5.8a1.4 1.4 0 012.8 0V11m0-3.2a1.4 1.4 0 012.8 0V11m0-2.2a1.4 1.4 0 012.8 0V14c0 3.3-2.2 6-5.6 6-2.6 0-4-1-5.4-3.2L4.6 14c-.8-1.2.8-2.6 2-1.6l1.6 1.4" stroke-linejoin="round" stroke-linecap="round"/>',
+  orbit: '<circle cx="12" cy="12" r="3.2"/><path d="M2.5 12c0-2 4.3-3.6 9.5-3.6s9.5 1.6 9.5 3.6-4.3 3.6-9.5 3.6S2.5 14 2.5 12z" transform="rotate(-24 12 12)" stroke-width="1.1"/>',
+  undo: '<path d="M8 6L4 10l4 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 10h10a6 6 0 016 6v0" stroke-linecap="round"/>',
+  redo: '<path d="M16 6l4 4-4 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 10H10a6 6 0 00-6 6v0" stroke-linecap="round"/>',
+  delete: '<path d="M5 7h14M10 7V5.5A1.5 1.5 0 0111.5 4h1A1.5 1.5 0 0114 5.5V7M7 7l1 12a1.5 1.5 0 001.5 1.4h5A1.5 1.5 0 0016 19l1-12M10.2 10.5l.4 6M13.8 10.5l-.4 6" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.15"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="1.4"/><path d="M5 15H4.5A1.5 1.5 0 013 13.5v-9A1.5 1.5 0 014.5 3h9A1.5 1.5 0 0115 4.5V5" stroke-linecap="round" stroke-width="1.1"/>',
+  command: '<path d="M8 5L3.5 12 8 19M16 5l4.5 7L16 19" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.5 6.5l-3 11" stroke-linecap="round" stroke-width="1.1"/>',
+  history: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3.2 2" stroke-linecap="round"/><path d="M3.5 12a8.5 8.5 0 011.4-4.7" opacity="0.5"/>',
+  ai: '<path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4z" stroke-linejoin="round"/><circle cx="18.5" cy="16.5" r="1.6"/><circle cx="6" cy="17.5" r="1.2"/><path d="M7.4 16.8l2.6-1.4M15.2 15.9l1.8.4" stroke-width="1" opacity="0.7"/>',
+  suggest: '<path d="M12 4v3M5.6 6.6l2.1 2.1M4 13h3M17.5 8.7l2.1-2.1M20 13h-3" stroke-linecap="round"/><path d="M9.5 13a2.5 2.5 0 115 0c0 1.4-1 2-1 3.4h-3c0-1.4-1-2-1-3.4z" stroke-linejoin="round"/><path d="M10.5 19h3M11 21h2" stroke-linecap="round" stroke-width="1"/>',
+  sheet: '<path d="M6 3h9l4 4v14H6z" stroke-linejoin="round"/><path d="M15 3v4h4M9 12h7M9 15.5h7M9 8.5h3" stroke-width="1" stroke-linecap="round"/>',
+  detail: '<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3" stroke-width="1"/><path d="M12 2v3.5M12 18.5V22M2 12h3.5M18.5 12H22" stroke-linecap="round"/>',
+  home: '<path d="M4 11l8-7 8 7" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 9.5V20h11V9.5M10 20v-5.5h4V20" stroke-width="1.1" stroke-linejoin="round"/>',
+  converter: '<path d="M4 8h13M14 4.5L17.5 8 14 11.5M20 16H7M10 12.5L6.5 16l3.5 3.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  rescale: '<path d="M4 14l5-5 4 4 7-7" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 6h5v5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-width="1" opacity="0.5"/>',
+  detector: '<circle cx="10" cy="10" r="6"/><path d="M14.5 14.5L20 20" stroke-linecap="round"/><path d="M7.5 10a2.5 2.5 0 012.5-2.5" stroke-width="1" stroke-linecap="round" opacity="0.7"/>',
+  area: '<rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="3.4 2.4"/><path d="M8 16v-3.5M8 12.5h3M13 8h3.5v8" stroke-width="1.2" stroke-linecap="round"/>',
+  volume: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" stroke-linejoin="round"/><path d="M12 12l8-4.5M12 12L4 7.5M12 12v9" stroke-width="0.9" opacity="0.7"/>',
+  workspace: '<rect x="3.5" y="5" width="17" height="12" rx="1.2"/><path d="M3.5 8.5h17M7 5v3.5" stroke-width="1"/><path d="M8 20h8" stroke-linecap="round"/>',
+  expression: '<path d="M5 7h6M8 4.5v5M14 5.5l5 5M19 5.5l-5 5" stroke-linecap="round"/><path d="M5 17h2.5l1.5 3 2-6 1.5 3H19" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.15"/>',
+  multiscale: '<path d="M4 18h16M4 13h10M4 8h5" stroke-linecap="round"/><path d="M17 4v10M17 14l-2.5-2.5M17 14l2.5-2.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  chains: '<circle cx="7" cy="12" r="3"/><circle cx="17" cy="12" r="3"/><path d="M10 12h4" stroke-linecap="round"/>',
+  clipboard: '<rect x="5" y="5" width="14" height="16" rx="1.4"/><path d="M9 5V3.8A1.3 1.3 0 0110.3 2.5h3.4A1.3 1.3 0 0115 3.8V5M8.5 10.5h7M8.5 14h7M8.5 17.5h4.5" stroke-linecap="round" stroke-width="1.1"/>',
+  batch: '<path d="M4 6h10M4 10h7M4 14h10M4 18h7" stroke-linecap="round"/><path d="M16.5 4.5l4 3.5-4 3.5M20.5 8H13" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.15"/>',
+  handoff: '<path d="M4 7h9l3 3-3 3H4z" stroke-linejoin="round"/><path d="M13 10h7M17 7.5L20 10l-3 2.5" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.1"/><path d="M4 16h16" stroke-width="1" opacity="0.5" stroke-dasharray="2.6 2"/>',
+  reference: '<path d="M5 4h6a2 2 0 012 2v13a1.6 1.6 0 00-1.6-1.6H5z" stroke-linejoin="round"/><path d="M19 4h-6a2 2 0 00-2 2v13a1.6 1.6 0 011.6-1.6H19z" stroke-linejoin="round" stroke-width="0.9" opacity="0.75"/>',
+  projects: '<path d="M3.5 7.5A1.5 1.5 0 015 6h4l2 2.5h8A1.5 1.5 0 0120.5 10v7A1.5 1.5 0 0119 18.5H5A1.5 1.5 0 013.5 17z" stroke-linejoin="round"/>',
+  survey: '<path d="M4 20L14.5 9.5M4 20h16" stroke-linecap="round"/><path d="M4 20L4 6M4 6l10.5 3.5" stroke-dasharray="2.6 2" stroke-width="0.9"/><circle cx="16.5" cy="7.5" r="2.5"/><path d="M18.5 9.5L20.5 11.5" stroke-linecap="round"/>',
+  imports: '<rect x="4" y="4" width="16" height="16" rx="1.4"/><path d="M12 7.5v7M12 14.5L9 11.5M12 14.5l3-3" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 17h9" stroke-width="1" opacity="0.6" stroke-linecap="round"/>',
+  export: '<rect x="4" y="4" width="16" height="16" rx="1.4"/><path d="M12 16.5v-7M12 9.5L9 12.5M12 9.5l3 3" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 7h9" stroke-width="1" opacity="0.6" stroke-linecap="round"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1" stroke-linecap="round"/>',
+  save: '<path d="M5 4h11l3 3v13H5z" stroke-linejoin="round"/><path d="M8 4v5h7V4M8 20v-6h8v6" stroke-width="1.1" stroke-linejoin="round"/>',
+  studio: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 16l3-8 2.5 5 1.5-3 1.5 6" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2"/>',
+  generic: '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9z" stroke-width="1"/>'
+};
+
+const ICONS = {
+  select: P.select, marquee: P.marquee, lasso: P.lasso, line: P.line, polyline: P.polyline,
+  wall: P.wall, door: P.door, window: P.window, measure: P.measure, dimension: P.dimension,
+  room: P.room, polyroom: P.polyroom, furniture: P.furniture, column: P.column, grid: P.grid,
+  stair: P.stair, ramp: P.ramp, section: P.section, elevation: P.elevation, hatch: P.hatch,
+  north: P.north, curve: P.curve, fillet: P.fillet, offset: P.offset, move: P.move,
+  rotate: P.rotate, scale: P.scale, trim: P.trim, extend: P.extend, join: P.join,
+  explode: P.explode, layer: P.layer, properties: P.properties, info: P.info,
+  zoom_in: P.zoom_in, zoom_out: P.zoom_out, fit: P.fit, top: P.top, front: P.front,
+  right: P.right, perspective: P.perspective, view4: P.view4, pan: P.pan, orbit: P.orbit,
+  undo: P.undo, redo: P.redo, delete: P.delete, copy: P.copy, command: P.command,
+  history: P.history, ai: P.ai, suggest: P.suggest, sheet: P.sheet, detail: P.detail,
+  home: P.home, converter: P.converter, rescale: P.rescale, detector: P.detector,
+  area: P.area, volume: P.volume, workspace: P.workspace, expression: P.expression,
+  multiscale: P.multiscale, chains: P.chains, clipboard: P.clipboard, batch: P.batch,
+  handoff: P.handoff, reference: P.reference, projects: P.projects, survey: P.survey,
+  imports: P.imports, export: P.export, settings: P.settings, save: P.save,
+  studio: P.studio,
+  search: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5" stroke-linecap="round"/>',
+  surface: '<path d="M3 14l9-5 9 5-9 5z" stroke-linejoin="round"/><path d="M3 14v3l9 5 9-5v-3M12 9v9" stroke-width="0.9" stroke-linejoin="round" opacity="0.7"/>',
+  solid: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" stroke-linejoin="round"/><path d="M12 12l8-4.5M12 12L4 7.5M12 12v9" stroke-width="0.9" opacity="0.7"/>',
+  boolean: '<circle cx="9.5" cy="12" r="5.5"/><circle cx="14.5" cy="12" r="5.5" stroke-dasharray="2.6 2"/><path d="M12 7.2a5.5 5.5 0 010 9.6" stroke-width="1.4"/>',
+  pushpull: '<path d="M5 14l7-4 7 4-7 4z" stroke-linejoin="round"/><path d="M12 10V4M12 4l-2.2 2.2M12 4l2.2 2.2" stroke-linecap="round"/>',
+  mesh: '<path d="M4 18L8 7l4 11 4-11 4 11z" stroke-linejoin="round"/><path d="M6.2 14.5h11.6M8 7l2.2 7.5L12 7l1.8 7.5L16 7" stroke-width="0.8" opacity="0.7"/>',
+  subd: '<rect x="6" y="6" width="12" height="12" rx="4"/><rect x="3.5" y="3.5" width="17" height="17" rx="6" stroke-dasharray="2.8 2.2" stroke-width="1"/>',
+  block: '<rect x="4" y="4" width="10" height="10" rx="1.2"/><rect x="10" y="10" width="10" height="10" rx="1.2" stroke-dasharray="2.6 2"/><path d="M4 4l6 6" stroke-width="0.9" opacity="0.7"/>',
+  visible: '<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.6"/>',
+  persona_studio: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16" stroke-width="1"/><path d="M4 4l16 16" stroke-width="0.8" opacity="0.6"/>',
+  persona_autocad: '<path d="M4 18L12 4l8 14" stroke-linejoin="round"/><path d="M8 13h8" stroke-linecap="round"/><path d="M4 21h16" stroke-width="1" opacity="0.6"/>',
+  persona_rhino: '<path d="M4 18V8a4 4 0 014-4h4a4 4 0 014 4v10" stroke-linejoin="round"/><path d="M8 18v-6h8v6" stroke-width="1" opacity="0.8"/><path d="M20 18v3" stroke-linecap="round"/>',
+  persona_photoshop: '<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M8.5 16.5v-9h2.8a2.4 2.4 0 010 4.8H8.5M13.5 13.5a2.75 2.75 0 105.5 0c0-2.2-5.5-1.4-5.5-3.6" stroke-width="1.1" opacity="0"/>',
+  persona_sketchup: '<path d="M4 17l8-4 8 4-8 4z" stroke-linejoin="round"/><path d="M12 13V4M4 17l8-9 8 9" stroke-width="0.9" stroke-linejoin="round" opacity="0.7"/>',
+  hidden: '<path d="M4 4l16 16" stroke-linecap="round"/><path d="M9.9 5.2A10 10 0 0112 5c6 0 9.5 7 9.5 7a17 17 0 01-2.9 3.5M6.2 6.9A16.6 16.6 0 002.5 12s3.5 7 9.5 7a10 10 0 004-.8" stroke-width="1.1"/>',
+  lock: '<rect x="5.5" y="10.5" width="13" height="9" rx="1.4"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5" stroke-width="1.2"/>',
+  unlock: '<rect x="5.5" y="10.5" width="13" height="9" rx="1.4"/><path d="M8.5 10.5V8a3.5 3.5 0 016.6-1.7" stroke-width="1.2"/>',
+  generic: '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9z" stroke-width="1"/>'
+};
+
+/**
+ * Tool-catalog ids that do not have a glyph of their own map onto the closest
+ * semantic icon (dim_aligned → dimension, view_south → front, …). Tool ids
+ * present in ICONS resolve directly.
+ */
+const TOOL_ALIASES = {
+  dim_aligned: 'dimension', dim_chain: 'chains', area_calc: 'area',
+  crop_tool: 'marquee', paint_bucket: 'hatch', watercolor_brush: 'hatch',
+  zoom_extents: 'fit', view_top: 'top', view_south: 'front',
+  view_perspective: 'perspective', view_4split: 'view4',
+  curve_nurbs: 'curve', curve_fillet: 'fillet', curve_offset: 'offset',
+  curve_boolean: 'boolean', surface_planar: 'surface', surface_extrude: 'pushpull',
+  surface_loft: 'surface', surface_revolve: 'surface',
+  solid_box: 'solid', boolean_union: 'boolean', boolean_diff: 'boolean',
+  pushpull: 'pushpull', mesh_from_srf: 'mesh', quad_remesh: 'mesh',
+  subd_box: 'subd', subd_crease: 'subd', block_create: 'block',
+  cpanel_properties: 'properties', cpanel_layers: 'layer',
+  cpanel_validation: 'info', cpanel_details: 'detail',
+  flyout_stairs: 'stair', flyout_hatching: 'hatch', flyout_marquee: 'marquee',
+  stair_l_shape: 'stair', stair_u_shape: 'stair',
+  hatch_concrete: 'hatch', hatch_earth: 'hatch', hatch_insulation: 'hatch', hatch_brick: 'hatch',
+  marquee_rect: 'marquee', marquee_ellip: 'marquee', marquee_single_row: 'marquee',
+  lasso_poly: 'lasso', lasso_magnetic: 'lasso',
+  section_cut: 'section', detail_callout: 'detail',
+  north: 'north'
+};
+
+/** Persona ids → icon names. */
+const PERSONA = {
+  studio: 'persona_studio', autocad: 'persona_autocad', rhino: 'persona_rhino',
+  photoshop: 'persona_photoshop', sketchup: 'persona_sketchup'
+};
+
+/** Tool-category ids → icon names. */
+const CATEGORY = {
+  measuring: 'measure', selection_cropping: 'marquee', retouching_painting: 'hatch',
+  selection_navigation: 'pan', drawing: 'line', standard_cpanels: 'properties',
+  set_view: 'perspective', curve_tools: 'curve', surface_tools: 'surface',
+  solid_tools: 'solid', mesh_tools: 'mesh', subd: 'subd', containers: 'block',
+  cascades_flyouts: 'layer', ribbon_tabs: 'workspace', ribbon_panels: 'workspace'
+};
+
+/** Map plan document types to icon names. */
+const DOC_TYPES = {
+  '2d_plan': 'room',
+  '3d_massing': 'perspective',
+  'elevation': 'elevation',
+  'section': 'section',
+  'detail': 'detail',
+  'sheet': 'sheet',
+  'view_4split': 'view4',
+  '4view': 'view4'
+};
+
+/** Sidebar navigation ids -> icon names. */
+const NAV = {
+  home: 'home', converter: 'converter', rescale: 'rescale', detector: 'detector',
+  area_volume: 'area', workspace: 'workspace', expression: 'expression',
+  multiscale: 'multiscale', chains: 'chains', cad_clipboard: 'clipboard',
+  batch_cad: 'batch', cad_handoff: 'handoff', stairs: 'stair', ramps: 'ramp',
+  slopes: 'measure', furniture: 'furniture', reference: 'reference',
+  projects: 'projects', plan: 'room', survey: 'survey', imports: 'imports',
+  export: 'export', ai: 'ai', ai_settings: 'settings'
+};
+
+/** Command palette command ids -> icon names (fallback: generic). */
+const COMMANDS = {
+  nav_home: 'home', nav_converter: 'converter', nav_plan: 'room', nav_ai: 'ai',
+  nav_stairs: 'stair', nav_ramps: 'ramp', nav_projects: 'projects',
+  nav_export: 'export', nav_imports: 'imports', nav_survey: 'survey',
+  nav_furniture: 'furniture', nav_reference: 'reference',
+  tool_palette: 'select', zoom_fit: 'fit', undo: 'undo', redo: 'redo',
+  save_project: 'save', export_report: 'export', analyze_plan: 'ai'
+};
+
+const cache = new Map();
+
+function icon(name, options = {}) {
+  const body = ICONS[name] || ICONS.generic;
+  const size = options.size || 24;
+  const key = `${name}@${size}`;
+  if (!cache.has(key)) {
+    cache.set(key, `<svg class="ahh-icon ahh-icon-${name}" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${body}</svg>`);
+  }
+  return cache.get(key);
+}
+
+/**
+ * Resolve the icon for a tool-catalog entry: explicit iconName, then the
+ * tool's own id, then a semantic alias, then a generic glyph. Never emoji.
+ */
+function toolIcon(tool, options = {}) {
+  if (!tool || typeof tool !== 'object') return icon('generic', options);
+  const name = ICONS[tool.iconName] ? tool.iconName
+    : ICONS[tool.id] ? tool.id
+    : TOOL_ALIASES[tool.id] || null;
+  return icon(name || 'generic', options);
+}
+
+function categoryIcon(id, options = {}) {
+  return icon(CATEGORY[id] || 'generic', options);
+}
+
+function personaIcon(id, options = {}) {
+  return icon(PERSONA[id] || 'generic', options);
+}
+
+function docTypeIcon(type, options = {}) {
+  return icon(DOC_TYPES[type] || 'sheet', options);
+}
+
+function navIcon(id, options = {}) {
+  return icon(NAV[id] || 'generic', options);
+}
+
+function commandIcon(id, options = {}) {
+  return icon(COMMANDS[id] || 'generic', options);
+}
+
+function hasIcon(name) {
+  return Object.prototype.hasOwnProperty.call(ICONS, name);
+}
+
+
+
+
+  // =========================================================================
+  // MODULE: CadCommands
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — CAD Command Engine
+ *
+ * A real, interactive command system for the Plan workspace, in the spirit of
+ * professional CAD command lines but built entirely on this project's own
+ * deterministic engines:
+ *
+ *   - Command REGISTRY derives from the live STUDIO_TOOL_CATALOG (personas.js)
+ *     plus drafting/view/system commands, so the AI, palette, shortcuts and
+ *     command line all share one source of truth.
+ *   - Interactive multi-step commands (LINE, WALL, RECT, DIST, …) run as an
+ *     explicit prompt state machine: each step accepts a canvas point, a
+ *     coordinate string ("10,20", "@5,0", "@5<90"), a unit-bearing length
+ *     ("2400mm", "8'"), or an option token ("Width=0.3").
+ *   - Coordinate/length input reuses src/core/parser.js — there is exactly one
+ *     unit engine in the application.
+ *   - Autocomplete ranks prefix/alias/fuzzy matches and boosts recent history.
+ *   - History supports up/down replay, search, clear, and session persistence
+ *     through an injected storage adapter.
+ *
+ * The engine is pure: it never touches the DOM. The UI (commandbar.js/plan.js)
+ * supplies an executor and receives state transitions from step()/submit().
+ */
+
+
+
+
+// ---------------------------------------------------------------------------
+// Command definitions
+// ---------------------------------------------------------------------------
+
+/**
+ * Interactive drafting commands. steps describe the prompts in order:
+ *   point  — a canvas/coordinate input
+ *   length — a unit-bearing numeric input
+ *   index  — an integer
+ * Options are named settings the user can set mid-command ("Width=0.3").
+ */
+const INTERACTIVE = [
+  {
+    name: 'LINE', aliases: ['L', 'LINESEG'],
+    description: 'Draw a straight line between two points',
+    category: 'draw',
+    steps: [
+      { kind: 'point', prompt: 'First point' },
+      { kind: 'point', prompt: 'Second point', relative: true, preview: 'line' }
+    ],
+    result: 'create_line'
+  },
+  {
+    name: 'WALL', aliases: ['W'],
+    description: 'Draw an architectural wall (option: Width=<m>)',
+    category: 'draw',
+    options: [
+      { token: 'WIDTH', label: 'Width', kind: 'length', min: 0.05, max: 2, fallback: 0.2 }
+    ],
+    steps: [
+      { kind: 'point', prompt: 'Wall start point' },
+      { kind: 'point', prompt: 'Wall end point', relative: true, preview: 'wall' }
+    ],
+    result: 'create_wall_points'
+  },
+  {
+    name: 'RECTANGLE', aliases: ['REC', 'RECT'],
+    description: 'Draw a rectangular room from two corners',
+    category: 'draw',
+    steps: [
+      { kind: 'point', prompt: 'First corner' },
+      { kind: 'point', prompt: 'Opposite corner', relative: true, preview: 'rect' }
+    ],
+    result: 'create_room_points'
+  },
+  {
+    name: 'DIST', aliases: ['DI', 'MEASURE'],
+    description: 'Measure the distance and angle between two points',
+    category: 'inquiry',
+    steps: [
+      { kind: 'point', prompt: 'First point' },
+      { kind: 'point', prompt: 'Second point', relative: true }
+    ],
+    result: 'measure_points'
+  },
+  {
+    name: 'DIMLIN', aliases: ['DIM', 'DAL', 'DCO'],
+    description: 'Place a linear dimension between two points',
+    category: 'annotate',
+    steps: [
+      { kind: 'point', prompt: 'Dimension start' },
+      { kind: 'point', prompt: 'Dimension end', relative: true }
+    ],
+    result: 'create_dimension'
+  }
+];
+
+/** Non-interactive commands executed in one shot. args: [] = none accepted. */
+const SIMPLE = [
+  { name: 'UNDO', aliases: ['U'], description: 'Undo the last action', category: 'edit', run: 'undo' },
+  { name: 'REDO', aliases: ['R'], description: 'Redo the previously undone action', category: 'edit', run: 'redo' },
+  { name: 'DELETE', aliases: ['E', 'ERASE', 'DEL'], description: 'Delete the current selection', category: 'edit', run: 'delete' },
+  { name: 'ZOOM', aliases: ['Z'], description: 'Zoom: ZOOM E (extents), ZOOM 100, ZOOM IN, ZOOM OUT', category: 'view', run: 'zoom' },
+  { name: 'PAN', aliases: ['P'], description: 'Activate the pan tool (drag to pan)', category: 'view', run: 'pan' },
+  { name: 'FIT', aliases: ['ZE', 'ZOOMEXTENTS'], description: 'Zoom to fit all content', category: 'view', run: 'zoom_extents' },
+  { name: 'TOP', aliases: ['PLAN'], description: 'Switch to the plan (top) view', category: 'view', run: 'view_top' },
+  { name: 'FRONT', aliases: ['ELEV', 'SOUTH'], description: 'Switch to the front (south) elevation', category: 'view', run: 'view_front' },
+  { name: 'RIGHT', aliases: ['EAST'], description: 'Switch to the right (east) elevation', category: 'view', run: 'view_right' },
+  { name: 'PERSPECTIVE', aliases: ['PERSP', '3D', 'MASSING'], description: 'Switch to the 3D massing view', category: 'view', run: 'view_perspective' },
+  { name: '4VIEW', aliases: ['SPLIT', 'QUAD'], description: 'Switch to the 4-viewport workspace', category: 'view', run: 'view_4split' },
+  { name: 'SELECT', aliases: ['SEL', 'V'], description: 'Activate the selection tool', category: 'tool', run: 'tool:select' },
+  { name: 'PROPERTIES', aliases: ['PROPS', 'CH'], description: 'Inspect the current selection in the properties panel', category: 'inquiry', run: 'properties' },
+  { name: 'INFO', aliases: ['INSPECT'], description: 'Show detailed information about the current selection', category: 'inquiry', run: 'info' },
+  { name: 'SUGGEST', aliases: ['SUGGESTIONS'], description: 'Ranked, evidence-backed suggestions for the current selection or document', category: 'ai', run: 'suggest' },
+  { name: 'AI', aliases: ['ASK', 'AIQUERY'], description: 'Ask the AI about the current selection: AI <question…>', category: 'ai', run: 'ai_query' },
+  { name: 'ANALYZE', aliases: ['AICRITIQUE'], description: 'Project-wide AI review with deterministic evidence', category: 'ai', run: 'ai_analyze' },
+  { name: 'LAYER', aliases: ['LA'], description: 'Open the layers panel', category: 'organize', run: 'panel:layers' },
+  { name: 'HELP', aliases: ['?'], description: 'List commands: HELP [search…]', category: 'system', run: 'help' }
+];
+
+/**
+ * Builds the full command registry. toolCatalog entries that expose a
+ * commandAlias become instant tool-activation commands, so the palette,
+ * shortcuts and the command line stay a single source of truth.
+ */
+function buildCommandRegistry(toolCatalog = []) {
+  const commands = new Map();
+  const aliasIndex = new Map();
+
+  function register(def) {
+    commands.set(def.name, def);
+    aliasIndex.set(def.name.toLowerCase(), def.name);
+    for (const a of def.aliases || []) aliasIndex.set(a.toLowerCase(), def.name);
+  }
+
+  for (const def of INTERACTIVE) {
+    register({ ...def, interactive: true, aliases: [...(def.aliases || [])] });
+  }
+  for (const def of SIMPLE) register({ ...def, interactive: false, aliases: [...(def.aliases || [])] });
+
+  for (const tool of toolCatalog) {
+    if (!tool || !tool.commandAlias) continue;
+    const alias = String(tool.commandAlias).toUpperCase();
+    if (aliasIndex.has(alias.toLowerCase())) continue;
+    register({
+      name: alias,
+      aliases: [],
+      description: tool.description || `Activate ${tool.name} tool`,
+      category: 'tool',
+      run: `tool:${tool.id}`,
+      toolId: tool.id,
+      toolName: tool.name,
+      shortcut: tool.shortcut || null
+    });
+  }
+
+  return { commands, aliasIndex };
+}
+
+// ---------------------------------------------------------------------------
+// Coordinate & numeric input (single unit engine: parseInput)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parses a point token: "10,20", "10,20,0", "@5,0" (relative), "@5<90"
+ * (polar relative), or a bare unit-bearing length for guided entry.
+ * @returns {{ value: {x,y}, relative: boolean } | { error: string }}
+ */
+function parsePointToken(token, lastPoint = null) {
+  if (!token || typeof token !== 'string') return { error: 'Enter a coordinate like 10,20 or @5<90.' };
+  const t = token.trim();
+  if (!t) return { error: 'Enter a coordinate like 10,20 or @5<90.' };
+
+  if (t.startsWith('@')) {
+    const rest = t.slice(1);
+    const polar = rest.match(/^([^<]+)<(.+)$/);
+    if (polar) {
+      const dist = parseLengthToken(polar[1]);
+      if (dist.error) return { error: dist.error };
+      const ang = parseInput(polar[2].replace(/°|deg|°/gi, ''));
+      if (!ang.isValid) return { error: `Invalid angle "${polar[2]}" — try @5<90.` };
+      const rad = (ang.value * Math.PI) / 180;
+      return { value: { x: dist.value * Math.cos(rad), y: dist.value * Math.sin(rad) }, relative: true };
+    }
+    const parts = rest.split(',');
+    if (parts.length < 2) return { error: 'Relative entry needs @dx,dy (or @dist<angle).' };
+    const dx = parseLengthToken(parts[0]);
+    const dy = parseLengthToken(parts[1]);
+    if (dx.error) return { error: dx.error };
+    if (dy.error) return { error: dy.error };
+    return { value: { x: dx.value, y: dy.value }, relative: true };
+  }
+
+  const parts = t.split(',');
+  if (parts.length >= 2) {
+    const x = parseLengthToken(parts[0]);
+    const y = parseLengthToken(parts[1]);
+    if (x.error) return { error: x.error };
+    if (y.error) return { error: y.error };
+    return { value: { x: x.value, y: y.value }, relative: false };
+  }
+
+  if (lastPoint) {
+    // Guided length entry while the cursor previews a direction.
+    const len = parseLengthToken(t);
+    if (!len.error) return { value: { x: len.value, y: 0 }, relative: true, guided: true };
+  }
+  return { error: `"${t}" is not a coordinate — try 10,20 · @5,0 · @5<90 · 2400mm.` };
+}
+
+/** Parses a unit-bearing length via the shared parser ("2400mm", "2.4m", "8'"). */
+function parseLengthToken(token) {
+  const res = parseInput(token, { allowNegative: true });
+  if (!res.isValid) return { error: `"${token}" is not a valid length — try 2400mm, 2.4m or 8'.` };
+  // parseInput returns the value in the DETECTED unit ("2400mm" → 2400 mm);
+  // the command engine's canonical unit is meters (canvas world space).
+  let meters = res.value;
+  if (res.detectedUnit && UNITS[res.detectedUnit]?.toMeters) {
+    meters = res.value * UNITS[res.detectedUnit].toMeters;
+  }
+  return { value: meters };
+}
+
+// ---------------------------------------------------------------------------
+// Session: interactive multi-step state machine
+// ---------------------------------------------------------------------------
+
+function createCommandSession({ registry, execute, storage = null, historyLimit = 100 } = {}) {
+  if (!registry || !registry.commands) throw new Error('createCommandSession requires a registry');
+  if (typeof execute !== 'function') throw new Error('createCommandSession requires an execute(command, args) function');
+
+  let history = [];
+  let historyCursor = -1;
+  let draft = null; // active interactive command state
+  let recents = [];
+
+  // Restore session history
+  if (storage) {
+    try {
+      const raw = storage.getItem('ahh_command_history');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) history = parsed.filter(x => typeof x === 'string').slice(-historyLimit);
+      }
+      const rawRecents = storage.getItem('ahh_command_recents');
+      if (rawRecents) {
+        const parsed = JSON.parse(rawRecents);
+        if (Array.isArray(parsed)) recents = parsed.filter(x => typeof x === 'string').slice(0, 12);
+      }
+    } catch { /* corrupt storage is ignored by design */ }
+  }
+
+  function persist() {
+    if (!storage) return;
+    try {
+      storage.setItem('ahh_command_history', JSON.stringify(history.slice(-historyLimit)));
+      storage.setItem('ahh_command_recents', JSON.stringify(recents.slice(0, 12)));
+    } catch { /* quota — session history is best-effort */ }
+  }
+
+  function remember(raw) {
+    // Consecutive duplicates collapse; cursor always restarts at the newest.
+    if (history[history.length - 1] !== raw) {
+      history.push(raw);
+      if (history.length > historyLimit) history.shift();
+    }
+    historyCursor = -1;
+    const verb = raw.trim().split(/\s+/)[0].toUpperCase();
+    recents = [verb, ...recents.filter(r => r !== verb)].slice(0, 12);
+    persist();
+  }
+
+  /**
+   * Begin an interactive command programmatically (e.g. from a palette click).
+   */
+  function start(name) {
+    const def = registry.commands.get(String(name).toUpperCase());
+    if (!def || !def.interactive) return { ok: false, error: `"${name}" is not an interactive command.` };
+    draft = { def, stepIndex: 0, points: [], options: {} };
+    for (const opt of def.options || []) draft.options[opt.token] = opt.fallback;
+    return { ok: true, state: state() };
+  }
+
+  function state() {
+    if (!draft) return { active: false };
+    const def = draft.def;
+    const step = def.steps[draft.stepIndex];
+    return {
+      active: true,
+      command: def.name,
+      stepIndex: draft.stepIndex,
+      stepCount: def.steps.length,
+      prompt: `${step.prompt}:`,
+      options: (def.options || []).map(o => ({ ...o, value: draft.options[o.token] })),
+      collected: draft.points.length
+    };
+  }
+
+  function cancel(reason = 'canceled') {
+    const name = draft ? draft.def.name : null;
+    draft = null;
+    return { ok: true, message: name ? `${name} ${reason}.` : 'Nothing to cancel.' };
+  }
+
+  /**
+   * Feed one line of input into the session. Handles: option tokens
+   * ("Width=0.3"), point/length tokens for the current step, and completion.
+   * @param {string} text - raw user text for this step
+   * @param {{ currentPoint?: {x,y}, snap?: (p:{x,y})=>{x,y} }} ctx
+   */
+  function submit(text, ctx = {}) {
+    if (!draft) return { ok: false, error: 'No active command.' };
+    const def = draft.def;
+    const trimmed = String(text || '').trim();
+    if (!trimmed) return { ok: false, error: `${def.steps[draft.stepIndex].prompt}:` };
+
+    // Option token? "WIDTH=0.3" / "W 0.3"
+    const optMatch = trimmed.match(/^([A-Za-z]+)\s*=?\s*(.+)$/);
+    if (optMatch && def.options) {
+      const opt = def.options.find(o => o.token === optMatch[1].toUpperCase());
+      if (opt) {
+        const val = parseLengthToken(optMatch[2]);
+        if (val.error) return { ok: false, error: `${opt.label}: ${val.error}` };
+        const clamped = Math.max(opt.min, Math.min(opt.max, val.value));
+        draft.options[opt.token] = clamped;
+        return { ok: true, optionSet: { token: opt.token, value: clamped }, state: state() };
+      }
+    }
+
+    const step = def.steps[draft.stepIndex];
+    let point = null;
+    if (step.kind === 'point') {
+      const parsed = parsePointToken(trimmed, ctx.currentPoint || draft.points[draft.points.length - 1] || null);
+      if (parsed.error) return { ok: false, error: parsed.error };
+      point = parsed.relative
+        ? {
+            x: (draft.points.length ? draft.points[draft.points.length - 1].x : (ctx.currentPoint ? ctx.currentPoint.x : 0)) + parsed.value.x,
+            y: (draft.points.length ? draft.points[draft.points.length - 1].y : (ctx.currentPoint ? ctx.currentPoint.y : 0)) + parsed.value.y
+          }
+        : parsed.value;
+      if (typeof ctx.snap === 'function') point = ctx.snap(point);
+    } else if (step.kind === 'length') {
+      const len = parseLengthToken(trimmed);
+      if (len.error) return { ok: false, error: len.error };
+      point = { value: len.value };
+    } else {
+      return { ok: false, error: `Unsupported step kind "${step.kind}".` };
+    }
+
+    draft.points.push(point);
+    if (draft.stepIndex < def.steps.length - 1) {
+      draft.stepIndex += 1;
+      return { ok: true, accepted: true, state: state() };
+    }
+
+    // Command complete — build args and hand to the executor.
+    const args = {
+      command: def.name,
+      result: def.result,
+      points: draft.points.map(p => ({ x: p.x, y: p.y })),
+      options: { ...draft.options }
+    };
+    const wasCommand = def.name;
+    draft = null;
+    let outcome;
+    try {
+      outcome = execute(def.result, args);
+    } catch (e) {
+      outcome = { ok: false, error: e.message };
+    }
+    return {
+      ok: true,
+      completed: wasCommand,
+      outcome: outcome || { ok: true },
+      state: state()
+    };
+  }
+
+  /**
+   * Feeds a canvas point directly into the active step (pointer input path).
+   * @param {{x,y}} point - resolved world coordinate (already un-projected)
+   * @param {{ snap?: Function }} [ctx]
+   */
+  function submitPoint(point, ctx = {}) {
+    if (!draft) return { ok: false, error: 'No active command.' };
+    const def = draft.def;
+    const step = def.steps[draft.stepIndex];
+    if (!step || step.kind !== 'point') {
+      return { ok: false, error: `${def.name}: the current step does not accept a canvas point.` };
+    }
+    if (!point || typeof point.x !== 'number' || typeof point.y !== 'number' ||
+        !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+      return { ok: false, error: 'Invalid canvas point.' };
+    }
+    let pt = { x: point.x, y: point.y };
+    if (typeof ctx.snap === 'function') pt = ctx.snap(pt);
+    draft.points.push(pt);
+    if (draft.stepIndex < def.steps.length - 1) {
+      draft.stepIndex += 1;
+      return { ok: true, accepted: true, state: state() };
+    }
+    const args = {
+      command: def.name,
+      result: def.result,
+      points: draft.points.map(p => ({ x: p.x, y: p.y })),
+      options: { ...draft.options }
+    };
+    const wasCommand = def.name;
+    draft = null;
+    let outcome;
+    try {
+      outcome = execute(def.result, args);
+    } catch (e) {
+      outcome = { ok: false, error: e.message };
+    }
+    return { ok: true, completed: wasCommand, outcome: outcome || { ok: true }, state: state() };
+  }
+
+  // ---------------------------------------------------------------------------
+  // One-shot execution + autocomplete + history navigation
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Executes a full command line. Returns a structured outcome:
+   *   { handled, kind: 'interactive'|'simple'|'tool'|'unknown', ... }
+   */
+  function run(rawLine, ctx = {}) {
+    const raw = String(rawLine || '').trim();
+    if (!raw) return { handled: false, kind: 'empty', message: '' };
+    const tokens = raw.split(/\s+/);
+    const verb = tokens[0].toUpperCase();
+    const rest = tokens.slice(1);
+    remember(raw);
+
+    const name = registry.aliasIndex.get(verb.toLowerCase());
+    if (!name) {
+      const suggestion = suggestCommands(verb, { registry, limit: 1 })[0];
+      return {
+        handled: false,
+        kind: 'unknown',
+        command: verb,
+        message: suggestion
+          ? `Unknown command "${verb}". Did you mean ${suggestion.name}?`
+          : `Unknown command "${verb}". Type HELP for the command list.`
+      };
+    }
+    const def = registry.commands.get(name);
+
+    if (def.interactive) {
+      const started = start(name);
+      if (!started.ok) return { handled: false, kind: 'error', message: started.error };
+      // Remaining tokens feed the interactive steps (e.g. "LINE 0,0 2.4,0").
+      for (const token of rest) {
+        const stepRes = submit(token, ctx);
+        if (!stepRes.ok) return { handled: true, kind: 'interactive', command: def.name, error: stepRes.error, state: state() };
+        if (stepRes.completed) return { handled: true, kind: 'interactive', command: def.name, completed: def.name, outcome: stepRes.outcome, state: state() };
+      }
+      return { handled: true, kind: 'interactive', command: def.name, state: state() };
+    }
+
+    let outcome;
+    try {
+      outcome = execute(def.run, { command: def.name, args: rest, raw });
+    } catch (e) {
+      outcome = { ok: false, error: e.message };
+    }
+    return { handled: true, kind: 'simple', command: def.name, run: def.run, outcome: outcome || { ok: true } };
+  }
+
+  function historyStep(direction) {
+    if (history.length === 0) return { ok: false, message: 'No command history yet.' };
+    if (direction === 'up') {
+      historyCursor = historyCursor === -1 ? history.length - 1 : Math.max(0, historyCursor - 1);
+    } else {
+      if (historyCursor === -1) return { ok: false, message: 'Already at the newest command.' };
+      historyCursor += 1;
+      if (historyCursor >= history.length) { historyCursor = -1; return { ok: true, value: '' }; }
+    }
+    return { ok: true, value: history[historyCursor] };
+  }
+
+  function historySearch(query, limit = 10) {
+    const q = String(query || '').toLowerCase();
+    if (!q) return history.slice(-limit).reverse();
+    return history.filter(h => h.toLowerCase().includes(q)).slice(-limit).reverse();
+  }
+
+  function clearHistory() {
+    history = [];
+    historyCursor = -1;
+    persist();
+    return { ok: true, message: 'Command history cleared.' };
+  }
+
+  return {
+    run, submit, submitPoint, start, cancel, state,
+    autocomplete: (q, opts) => suggestCommands(q, { registry, recents, ...opts }),
+    historyStep, historySearch, clearHistory,
+    getHistory: () => history.slice(),
+    getRecents: () => recents.slice()
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Autocomplete
+// ---------------------------------------------------------------------------
+
+function fuzzySubsequence(query, target) {
+  let i = 0;
+  for (const ch of target) {
+    if (ch === query[i]) i += 1;
+    if (i === query.length) return true;
+  }
+  return false;
+}
+
+/**
+ * Ranks commands for a query: exact > prefix (name) > prefix (alias) >
+ * substring > fuzzy. Recent history and catalog metadata boost ordering.
+ */
+function suggestCommands(query, { registry, recents = [], limit = 8 } = {}) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) {
+    return [...registry.commands.values()].slice(0, limit).map(def => describeCommand(def));
+  }
+  const results = [];
+  for (const def of registry.commands.values()) {
+    const name = def.name.toLowerCase();
+    const aliases = (def.aliases || []).map(a => a.toLowerCase());
+    let score = -1;
+    if (name === q) score = 120;
+    else if (aliases.includes(q)) score = 110;
+    else if (name.startsWith(q)) score = 100 - name.length;
+    else if (aliases.some(a => a.startsWith(q))) score = 90 - name.length;
+    else if (name.includes(q) || aliases.some(a => a.includes(q))) score = 60;
+    else if (fuzzySubsequence(q, name) || fuzzySubsequence(q, def.description?.toLowerCase() || '')) score = 40;
+    if (score < 0) continue;
+    if (recents.includes(def.name)) score += 15;
+    results.push({ def, score });
+  }
+  results.sort((a, b) => b.score - a.score || a.def.name.localeCompare(b.def.name));
+  return results.slice(0, limit).map(({ def }) => describeCommand(def));
+}
+
+function describeCommand(def) {
+  return {
+    name: def.name,
+    aliases: def.aliases || [],
+    description: def.description || '',
+    category: def.category,
+    interactive: !!def.interactive,
+    shortcut: def.shortcut || null,
+    toolId: def.toolId || null
+  };
+}
+
+
+  // =========================================================================
+  // MODULE: Suggestions
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — Deterministic Suggestion Engine
+ *
+ * Evidence-backed, ranked suggestions for a selected entity or a whole
+ * document. NO AI involved: every finding is computed from real geometry with
+ * a citable number, so the AI layer can quote them and the user can trust
+ * them. Severity: critical > high > medium > low > informational.
+ */
+
+
+
+const BLONDEL_MIN = 0.6;
+const BLONDEL_MAX = 0.66;
+const RAMP_MAX_SLOPE = 8.33;
+
+function sev(level) {
+  return { critical: 0, high: 1, medium: 2, low: 3, informational: 4 }[level] ?? 4;
+}
+
+/**
+ * Suggestions for one selected entity.
+ * @returns {Array<{severity, problem, evidence, recommendation, toolId}>}
+ */
+function suggestForEntity(entity, entities = []) {
+  if (!entity) return [];
+  const out = [];
+  const push = (severity, problem, evidence, recommendation, toolId) =>
+    out.push({ severity, problem, evidence, recommendation, toolId });
+
+  switch (entity.kind) {
+    case 'wall': {
+      const len = wallLength(entity);
+      const touching = entities.filter(d => d.kind === 'dimension' && dimensionOnWall(d, entity));
+      if (touching.length === 0) {
+        push('medium', 'Wall has no dimension annotation',
+          `Wall "${entity.name}" is ${len.toFixed(2)} m long; no dimension entity references its endpoints.`,
+          'Place a linear dimension (DIMLIN) so the drawing communicates its length.', 'dimension');
+      }
+      const thickness = entity.thickness ?? 0.2;
+      if (thickness < 0.1) {
+        push('high', 'Wall thickness below light-frame minimum',
+          `Thickness ${thickness.toFixed(3)} m is thinner than a 100 mm partition.`,
+          'Verify the assembly — most buildable partitions are ≥ 0.10 m.', 'properties');
+      }
+      const openings = wallOpenings(entity, entities);
+      for (const o of openings) {
+        if (typeof o.width === 'number' && o.width > len - 0.1) {
+          push('high', 'Opening wider than the wall segment',
+            `"${o.name}" is ${o.width.toFixed(2)} m in a ${len.toFixed(2)} m wall segment.`,
+            'Shorten the opening, lengthen the wall, or split the wall.', 'window');
+        }
+      }
+      const junctions = entities.filter(w => w.kind === 'wall' && w.id !== entity.id && sharesEndpoint(w, entity)).length;
+      if (junctions === 0) {
+        push('low', 'Wall is disconnected',
+          `"${entity.name}" shares no endpoint with any other wall.`,
+          'Join it to the wall network (WALL command snaps to endpoints).', 'wall');
+      }
+      break;
+    }
+    case 'room': {
+      const area = roomArea(entity);
+      const ratio = roomAspectRatio(entity);
+      if (ratio > 2.5) {
+        push('medium', 'Room proportions are extreme',
+          `Aspect ratio ${ratio.toFixed(2)}:1 (${entity.width?.toFixed(2)} × ${entity.depth?.toFixed(2)} m).`,
+          'Consider an L-shape, an internal partition, or re-proportioning.', 'room');
+      }
+      const furniture = entities.filter(f => f.kind === 'furniture' &&
+        f.x >= entity.x - 0.01 && f.x <= entity.x + entity.width + 0.01 &&
+        f.y >= entity.y - 0.01 && f.y <= entity.y + entity.depth + 0.01);
+      if (furniture.length > 0) {
+        const furnitureArea = furniture.reduce((s, f) => s + (f.width * f.depth || 0), 0);
+        const density = area > 0 ? furnitureArea / area : 0;
+        if (density > 0.45) {
+          push('high', 'Furniture density very high',
+            `Furniture occupies ${(density * 100).toFixed(0)}% of the ${(area).toFixed(1)} m² room floor.`,
+            'Reduce furniture, enlarge the room, or check circulation with a clearance test.', 'select');
+        } else if (density > 0.32) {
+          push('medium', 'Furniture density above comfortable range',
+            `Furniture occupies ${(density * 100).toFixed(0)}% of the floor; comfortable plans stay under ~32%.`,
+            'Verify clearances around each piece.', 'select');
+        }
+      }
+      const name = String(entity.name || '').toLowerCase();
+      if (/bed/.test(name) && area > 0 && area < 7.5) {
+        push('medium', 'Bedroom below common minimum',
+          `Named bedroom is ${area.toFixed(1)} m²; many codes/standards expect ≥ 7.5 m² for a habitable bedroom.`,
+          'Enlarge the room or rename it to match its actual function.', 'room');
+      }
+      const dims = entities.filter(d => d.kind === 'dimension' && dimensionNearRoom(d, entity));
+      if (dims.length === 0) {
+        push('low', 'Room is undimensioned',
+          `No dimension entities sit on the boundaries of "${entity.name}".`,
+          'Add dimension chains for construction layout (DIMCHAIN tool).', 'dimension');
+      }
+      break;
+    }
+    case 'stair': {
+      const blondel = typeof entity.blondel === 'number' ? entity.blondel : 2 * (entity.riserHeight || 0) + (entity.tread || 0);
+      if (blondel > 0 && (blondel < BLONDEL_MIN || blondel > BLONDEL_MAX)) {
+        push('medium', 'Stair proportion outside the Blondel band',
+          `2R+T = ${(blondel * 1000).toFixed(0)} mm (comfort band 600–660 mm).`,
+          'Adjust riser/tread with the Stair Calculator (STAIR command or the studio tool).', 'stair');
+      }
+      const risers = entity.risers ?? 0;
+      if (risers > 16) {
+        push('informational', 'Flight exceeds 16 risers',
+          `${risers} risers in one flight — many codes require an intermediate landing beyond 16.`,
+          'Split the flight with a landing.', 'stair');
+      }
+      break;
+    }
+    case 'ramp': {
+      const slope = typeof entity.slopePercent === 'number' ? entity.slopePercent : null;
+      if (slope !== null && slope > RAMP_MAX_SLOPE + 0.05) {
+        push('high', 'Ramp steeper than the 1:12 accessibility maximum',
+          `Slope ${slope.toFixed(2)}% (1:${(entity.slopeRatio || 100 / slope).toFixed(1)}).`,
+          'Lengthen the run or add switchbacks (Ramp Calculator).', 'ramp');
+      }
+      break;
+    }
+    case 'dimension': {
+      const val = suggestDimensionValue(entity);
+      const match = entities.find(t => (t.kind === 'wall' || t.kind === 'line' || t.kind === 'room') &&
+        Math.abs(suggestEntityPrimaryLength(t) - val) < 0.02);
+      if (!match) {
+        push('medium', 'Dimension does not match any nearby geometry',
+          `Dimension measures ${val.toFixed(2)} m; no wall/line/room edge of that exact length exists in the document.`,
+          'Re-measure with DIST and re-place the dimension, or update the geometry.', 'measure');
+      } else {
+        push('informational', 'Dimension verified against geometry',
+          `${val.toFixed(2)} m matches ${match.kind} "${match.name}" (${suggestEntityPrimaryLength(match).toFixed(2)} m).`,
+          'No action needed.', null);
+      }
+      break;
+    }
+    case 'door': {
+      const host = entity.wallId ? entities.find(w => w.id === entity.wallId) : null;
+      if (!host) {
+        push('low', 'Door has no verified host wall',
+          `"${entity.name}" is not linked to a wall segment in this document.`,
+          'Re-place it on a wall so swing and clearance stay valid.', 'door');
+      }
+      break;
+    }
+    case 'furniture': {
+      const hostRoom = entities.find(r => r.kind === 'room' &&
+        entity.x >= r.x - 0.01 && entity.x <= r.x + r.width + 0.01 &&
+        entity.y >= r.y - 0.01 && entity.y <= r.y + r.depth + 0.01);
+      if (!hostRoom) {
+        push('low', 'Furniture placed outside any room',
+          `"${entity.name}" does not sit inside a room boundary.`,
+          'Move it into a room for clearance and density checks.', 'move');
+      }
+      break;
+    }
+    default:
+      break;
+  }
+  return out.sort((a, b) => sev(a.severity) - sev(b.severity));
+}
+
+/**
+ * Whole-document suggestions: overlaps, undimensioned walls, extreme rooms,
+ * non-compliant stairs/ramps, unplaced furniture.
+ */
+function suggestForDocument(entities = []) {
+  const out = [];
+  const push = (severity, problem, evidence, recommendation, toolId) =>
+    out.push({ severity, problem, evidence, recommendation, toolId });
+
+  const rooms = entities.filter(e => e.kind === 'room');
+  const walls = entities.filter(e => e.kind === 'wall');
+  const stairs = entities.filter(e => e.kind === 'stair');
+  const ramps = entities.filter(e => e.kind === 'ramp');
+
+  const roomOverlaps = [];
+  for (let i = 0; i < rooms.length; i++) {
+    for (let j = i + 1; j < rooms.length; j++) {
+      const a = rooms[i], b = rooms[j];
+      const ox = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+      const oy = Math.min(a.y + a.depth, b.y + b.depth) - Math.max(a.y, b.y);
+      if (ox > 0.02 && oy > 0.02) roomOverlaps.push({ a, b, ox, oy });
+    }
+  }
+  if (roomOverlaps.length > 0) {
+    push('high', 'Room footprints overlap',
+      `${roomOverlaps.length} overlapping room pair(s), e.g. "${roomOverlaps[0].a.name}" × "${roomOverlaps[0].b.name}" (${(roomOverlaps[0].ox * roomOverlaps[0].oy).toFixed(1)} m² shared).`,
+      'Resolve the overlap before area schedules are trusted.', 'select');
+  }
+
+  const undimensioned = walls.filter(w => !entities.some(d => d.kind === 'dimension' && dimensionOnWall(d, w)));
+  if (walls.length > 2 && undimensioned.length > walls.length / 2) {
+    push('medium', 'Most walls are undimensioned',
+      `${undimensioned.length} of ${walls.length} walls carry no dimension on their endpoints.`,
+      'Run dimension chains or DIMLIN per wall for layout.', 'dimension');
+  }
+
+  for (const s of stairs) {
+    const blondel = typeof s.blondel === 'number' ? s.blondel : 2 * (s.riserHeight || 0) + (s.tread || 0);
+    if (blondel > 0 && (blondel < BLONDEL_MIN || blondel > BLONDEL_MAX)) {
+      out.push(...suggestForEntity(s, entities));
+      break; // one representative stair finding keeps the list scannable
+    }
+  }
+  for (const r of ramps) {
+    if (typeof r.slopePercent === 'number' && r.slopePercent > RAMP_MAX_SLOPE + 0.05) {
+      out.push(...suggestForEntity(r, entities));
+      break;
+    }
+  }
+
+  const orphanFurniture = entities.filter(f => f.kind === 'furniture' &&
+    !rooms.some(r => f.x >= r.x - 0.01 && f.x <= r.x + r.width + 0.01 && f.y >= r.y - 0.01 && f.y <= r.y + r.depth + 0.01));
+  if (orphanFurniture.length > 0) {
+    push('low', 'Furniture outside room boundaries',
+      `${orphanFurniture.length} piece(s) not inside any room (e.g. "${orphanFurniture[0].name}").`,
+      'Move into rooms so clearance/density checks apply.', 'move');
+  }
+
+  if (rooms.length > 0 && entities.filter(e => e.kind === 'dimension').length === 0) {
+    push('medium', 'Plan has zero dimensions',
+      `${rooms.length} room(s) but no dimension entities anywhere in the document.`,
+      'Add overall + room dimensions before issuing the plan.', 'dimension');
+  }
+
+  return out.sort((a, b) => sev(a.severity) - sev(b.severity));
+}
+
+// --- helpers ---------------------------------------------------------------
+
+function suggestDimensionValue(d) {
+  const p1 = d.p1 || { x: d.x1, y: d.y1 };
+  const p2 = d.p2 || { x: d.x2, y: d.y2 };
+  if (typeof p1?.x !== 'number' || typeof p2?.x !== 'number') return NaN;
+  return Math.hypot(p2.x - p1.x, p2.y - p1.y);
+}
+
+function dimensionOnWall(d, wall) {
+  const p1 = d.p1 || { x: d.x1, y: d.y1 };
+  const p2 = d.p2 || { x: d.x2, y: d.y2 };
+  const near = (p, q) => Math.hypot(p.x - q.x, p.y - q.y) < 0.05;
+  return (near(p1, { x: wall.x1, y: wall.y1 }) && near(p2, { x: wall.x2, y: wall.y2 })) ||
+         (near(p1, { x: wall.x2, y: wall.y2 }) && near(p2, { x: wall.x1, y: wall.y1 }));
+}
+
+function dimensionNearRoom(d, room) {
+  const p1 = d.p1 || { x: d.x1, y: d.y1 };
+  const p2 = d.p2 || { x: d.x2, y: d.y2 };
+  const nearEdge = p => Math.abs(p.x - room.x) < 0.05 || Math.abs(p.x - (room.x + room.width)) < 0.05 ||
+                        Math.abs(p.y - room.y) < 0.05 || Math.abs(p.y - (room.y + room.depth)) < 0.05;
+  return nearEdge(p1) && nearEdge(p2);
+}
+
+function sharesEndpoint(w, other) {
+  const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) < 0.05;
+  const pts = [{ x: other.x1, y: other.y1 }, { x: other.x2, y: other.y2 }];
+  return [{ x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 }].some(p => pts.some(q => near(p, q)));
+}
+
+function suggestEntityPrimaryLength(e) {
+  if (e.kind === 'wall' || e.kind === 'line') return wallLength(e);
+  if (e.kind === 'room') return typeof e.width === 'number' ? e.width : 0;
+  return 0;
+}
+
+
+  // =========================================================================
   // MODULE: AiBridge
   // =========================================================================
 
@@ -16500,6 +17647,7 @@ const PERSONA_RIBBON_CONFIGS = {
  * Serializes live drawing canvas context, formats architectural prompt envelopes,
  * parses structured generative actions, and dispatches them into the active document.
  */
+
 
 
 
@@ -16551,8 +17699,179 @@ function serializeDrawingContext(state = {}) {
     stairCount: stairs.length,
     dimensionCount: dims.length,
     rooms: rooms.map(r => ({ name: r.name, width: r.width, depth: r.depth, area: Math.round((r.width * r.depth) * 10) / 10 })),
-    selectedCount: plan.selectedIds ? plan.selectedIds.size : 0
+    selectedCount: plan.selectedIds ? plan.selectedIds.size : 0,
+    selection: serializeSelection(entities, plan.selectedIds),
+    availableTools: serializeToolCapabilities()
   };
+}
+
+/**
+ * Serializes the CURRENT SELECTION with full deterministic geometry,
+ * relationships, and per-type measurements. This is what makes "AI answers
+ * about the exact selected entity" possible: the model receives verified
+ * numbers, not a request to guess.
+ *
+ * @param {Array<Object>} entities - active document entities
+ * @param {Set<string>|Array<string>} selectedIds
+ * @returns {Array<Object>} per-entity evidence packets (empty when nothing selected)
+ */
+function serializeSelection(entities = [], selectedIds = null) {
+  const ids = selectedIds instanceof Set ? [...selectedIds] : (Array.isArray(selectedIds) ? selectedIds : []);
+  if (ids.length === 0) return [];
+  const byId = new Map(entities.map(e => [e.id, e]));
+  const packets = [];
+  for (const id of ids) {
+    const e = byId.get(id);
+    if (!e) continue;
+    const packet = {
+      id: e.id,
+      kind: e.kind,
+      name: e.name || e.id,
+      layerId: e.layerId || null
+    };
+    switch (e.kind) {
+      case 'wall': {
+        const len = Math.hypot(e.x2 - e.x1, e.y2 - e.y1);
+        packet.length = round(len);
+        packet.thickness = e.thickness ?? null;
+        packet.assemblyId = e.assemblyId || null;
+        packet.angleDegrees = round((Math.atan2(e.y2 - e.y1, e.x2 - e.x1) * 180) / Math.PI);
+        packet.p1 = { x: round(e.x1), y: round(e.y1) };
+        packet.p2 = { x: round(e.x2), y: round(e.y2) };
+        packet.openings = (typeof wallOpenings === 'function' ? wallOpenings(entities, e) : []).map(o => ({
+          id: o.id, kind: o.kind, name: o.name, width: o.width
+        }));
+        packet.dimensions = entities
+          .filter(d => d.kind === 'dimension' && dimensionTouchesSegment(d, e))
+          .map(d => ({ id: d.id, value: round(dimensionValue(d)) }));
+        break;
+      }
+      case 'line': {
+        packet.length = round(typeof e.length === 'number' ? e.length : Math.hypot(e.x2 - e.x1, e.y2 - e.y1));
+        packet.angleDegrees = round(e.angleDegrees ?? 0);
+        packet.p1 = { x: round(e.x1), y: round(e.y1) };
+        packet.p2 = { x: round(e.x2), y: round(e.y2) };
+        break;
+      }
+      case 'room': {
+        const area = typeof e.width === 'number' && typeof e.depth === 'number' ? e.width * e.depth : 0;
+        packet.width = round(e.width ?? 0);
+        packet.depth = round(e.depth ?? 0);
+        packet.area = round(area);
+        packet.perimeter = round(e.width && e.depth ? 2 * (e.width + e.depth) : 0);
+        packet.aspectRatio = e.width && e.depth ? round(Math.max(e.width, e.depth) / Math.min(e.width, e.depth), 2) : null;
+        packet.furniture = entities.filter(f => f.kind === 'furniture' &&
+          typeof f.x === 'number' && f.x >= e.x - 0.01 && f.x <= e.x + e.width + 0.01 &&
+          f.y >= e.y - 0.01 && f.y <= e.y + e.depth + 0.01
+        ).map(f => ({ id: f.id, name: f.name, width: round(f.width), depth: round(f.depth) }));
+        packet.doors = entities.filter(d => d.kind === 'door' &&
+          typeof d.x === 'number' && d.x >= e.x - 0.3 && d.x <= e.x + e.width + 0.3 &&
+          d.y >= e.y - 0.3 && d.y <= e.y + e.depth + 0.3
+        ).map(d => ({ id: d.id, name: d.name, width: round(d.width) }));
+        packet.dimensions = entities.filter(d => d.kind === 'dimension' &&
+          Math.abs(dimensionValue(d) - e.width) < 0.02 || Math.abs(dimensionValue(d) - e.depth) < 0.02
+        ).map(d => ({ id: d.id, value: round(dimensionValue(d)) }));
+        break;
+      }
+      case 'dimension': {
+        packet.measuredLength = round(dimensionValue(e));
+        packet.p1 = e.p1 ? { x: round(e.p1.x), y: round(e.p1.y) } : null;
+        packet.p2 = e.p2 ? { x: round(e.p2.x), y: round(e.p2.y) } : null;
+        packet.unit = e.unit || 'm';
+        packet.textOverride = e.textOverride || null;
+        // Verification: is a wall/room edge actually this long?
+        const matches = entities.filter(t => (t.kind === 'wall' || t.kind === 'line' || t.kind === 'room') &&
+          Math.abs(entityPrimaryLength(t) - dimensionValue(e)) < 0.02
+        ).map(t => ({ id: t.id, kind: t.kind, name: t.name, length: round(entityPrimaryLength(t)) }));
+        packet.matchesGeometry = matches.length > 0;
+        packet.matchingEntities = matches.slice(0, 5);
+        break;
+      }
+      case 'stair': {
+        packet.risers = e.risers ?? null;
+        packet.width = round(e.width ?? 0);
+        packet.riserHeight = e.riserHeight ?? null;
+        packet.tread = e.tread ?? null;
+        packet.blondel = e.blondel ?? null;
+        packet.pitchAngle = e.pitchAngle ?? null;
+        break;
+      }
+      case 'ramp': {
+        packet.slopePercent = e.slopePercent ?? null;
+        packet.slopeRatio = e.slopeRatio ?? null;
+        packet.width = round(e.width ?? 0);
+        packet.length = round(e.depth ?? 0);
+        break;
+      }
+      case 'door':
+      case 'window': {
+        packet.width = round(e.width ?? 0);
+        packet.hostWallId = e.wallId || e.hostWallId || null;
+        packet.swing = e.swing || null;
+        break;
+      }
+      case 'furniture': {
+        packet.width = round(e.width ?? 0);
+        packet.depth = round(e.depth ?? 0);
+        packet.catalogId = e.catalogId || e.templateId || null;
+        packet.hostRoom = entities.find(r => r.kind === 'room' &&
+          typeof e.x === 'number' && e.x >= r.x && e.x <= r.x + r.width &&
+          e.y >= r.y && e.y <= r.y + r.depth
+        )?.name || null;
+        break;
+      }
+      default: {
+        packet.width = round(e.width ?? 0);
+        packet.depth = round(e.depth ?? 0);
+      }
+    }
+    packets.push(packet);
+  }
+  return packets;
+}
+
+/**
+ * Tool-awareness capabilities for "what can I do with this?" answers:
+ * the real registered catalog (single source of truth: personas.js).
+ */
+function serializeToolCapabilities(toolCatalog = STUDIO_TOOL_CATALOG) {
+  const tools = (toolCatalog || []).map(t => ({
+    id: t.id,
+    name: t.name,
+    description: t.description || '',
+    command: t.commandAlias || null,
+    shortcut: t.shortcut || null,
+    category: t.category,
+    personas: t.personas || []
+  }));
+  return { count: tools.length, tools };
+}
+
+function round(v, digits = 3) {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+  const f = Math.pow(10, digits);
+  return Math.round(v * f) / f;
+}
+
+function dimensionValue(d) {
+  const p1 = d.p1 || { x: d.x1, y: d.y1 };
+  const p2 = d.p2 || { x: d.x2, y: d.y2 };
+  if (typeof p1?.x !== 'number' || typeof p2?.x !== 'number') return NaN;
+  return Math.hypot(p2.x - p1.x, p2.y - p1.y);
+}
+
+function dimensionTouchesSegment(dim, wall) {
+  const p1 = dim.p1 || { x: dim.x1, y: dim.y1 };
+  const p2 = dim.p2 || { x: dim.x2, y: dim.y2 };
+  const near = (p, q) => Math.hypot(p.x - q.x, p.y - q.y) < 0.05;
+  return (near(p1, { x: wall.x1, y: wall.y1 }) && near(p2, { x: wall.x2, y: wall.y2 })) ||
+         (near(p1, { x: wall.x2, y: wall.y2 }) && near(p2, { x: wall.x1, y: wall.y1 }));
+}
+
+function entityPrimaryLength(e) {
+  if (e.kind === 'wall' || e.kind === 'line') return Math.hypot(e.x2 - e.x1, e.y2 - e.y1);
+  if (e.kind === 'room') return typeof e.width === 'number' ? e.width : 0;
+  return 0;
 }
 
 /**
@@ -20715,7 +22034,7 @@ function selectProjectScope({ project, planEntities, request = {} }) {
  * Builds the facts-pack shape the job router expects from a scoped view.
  * Deterministic text + data + numeric fact checks (room areas).
  */
-function buildScopedFactsPack({ project, planEntities, request = {} }) {
+function buildScopedFactsPack({ project, planEntities, request = {}, selectionPackets = null }) {
   const scope = selectProjectScope({ project, planEntities, request });
   const isNum = v => typeof v === 'number' && isFinite(v);
   const round2 = v => (isNum(v) ? Number(v.toFixed(2)) : null);
@@ -20754,6 +22073,12 @@ function buildScopedFactsPack({ project, planEntities, request = {} }) {
     dropped: scope.dropped
   };
 
+  // Selection evidence: exact deterministic geometry of the user's current
+  // selection, when the caller provided packets (AI Query / Ask-AI paths).
+  // Never send unrelated context when only one entity is selected.
+  const selectionPacketsResolved = Array.isArray(selectionPackets) ? selectionPackets.filter(Boolean) : [];
+  data.selection = selectionPacketsResolved;
+
   const lines = [];
   lines.push(`PROJECT: ${data.project.name}`);
   if (data.project.description) lines.push(`INTENT: ${data.project.description}`);
@@ -20774,6 +22099,18 @@ function buildScopedFactsPack({ project, planEntities, request = {} }) {
   }
   if (data.measurements.length > 0) {
     lines.push(`MEASUREMENTS: ${data.measurements.map(m => `${m.label}=${m.value}${m.unit}(${m.status})`).join('; ')}`);
+  }
+  if (selectionPacketsResolved.length > 0) {
+    lines.push(`SELECTED ENTITIES (${selectionPacketsResolved.length}) — verified deterministic facts; quote these numbers exactly:`);
+    for (const p of selectionPacketsResolved.slice(0, 8)) {
+      const facts = Object.entries(p)
+        .filter(([k, v]) => !['id', 'kind', 'name'].includes(k) && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0))
+        .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`)
+        .slice(0, 10)
+        .join(' · ');
+      lines.push(`  [${p.kind}] "${p.name}" (${p.id}): ${facts}`);
+    }
+    lines.push(`Answer specifically about the selected entity/entities. Distinguish fact (from this pack) from inference. Do not invent dimensions.`);
   }
   for (const n of scope.notes.slice(0, SCOPE_LIMITS.notes)) {
     const title = typeof n?.title === 'string' ? n.title : 'note';
@@ -31994,6 +33331,7 @@ function createProjectsView(context) {
 
 
 
+
 function renderStudioRibbon(container, options = {}) {
   if (!container) return;
 
@@ -32017,7 +33355,7 @@ function renderStudioRibbon(container, options = {}) {
             const isActive = k === currentPersona;
             return `
               <button type="button" class="persona-pill-btn ${isActive ? 'active' : ''}" data-persona="${p.id}" title="${p.name} — ${p.description}">
-                <span class="persona-icon">${p.icon}</span>
+                <span class="persona-icon">${personaIcon(p.id, { size: 14 })}</span>
                 <span class="persona-label">${p.shortLabel}</span>
               </button>
             `;
@@ -32052,7 +33390,7 @@ function renderStudioRibbon(container, options = {}) {
                   return `
                     <div class="ribbon-tool-wrap ${hasFlyout ? 'has-flyout' : ''}">
                       <button type="button" class="ribbon-tool-btn ${isActive ? 'active' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}">
-                        <span class="ribbon-tool-icon">${tool.icon}</span>
+                        <span class="ribbon-tool-icon">${toolIcon(tool, { size: 20 })}</span>
                         <span class="ribbon-tool-name">${tool.name}</span>
                         ${tool.shortcut ? `<kbd class="ribbon-tool-kbd">${tool.shortcut}</kbd>` : ''}
                         ${hasFlyout ? `<span class="flyout-arrow">▾</span>` : ''}
@@ -32061,7 +33399,7 @@ function renderStudioRibbon(container, options = {}) {
                         <div class="ribbon-flyout-popover" style="display: none;">
                           ${tool.flyout.map(sub => `
                             <button type="button" class="flyout-item-btn" data-tool="${sub.id}">
-                              <span class="flyout-item-icon">${sub.icon}</span>
+                              <span class="flyout-item-icon">${toolIcon(sub, { size: 14 })}</span>
                               <span class="flyout-item-name">${sub.name}</span>
                               ${sub.shortcut ? `<kbd class="flyout-item-kbd">${sub.shortcut}</kbd>` : ''}
                             </button>
@@ -32149,6 +33487,7 @@ function renderStudioRibbon(container, options = {}) {
 
 
 
+
 function renderStudioPalette(container, options = {}) {
   if (!container) return;
 
@@ -32170,7 +33509,7 @@ function renderStudioPalette(container, options = {}) {
       <!-- Universal Tool Search Header -->
       <div class="palette-search-wrap">
         <div class="palette-search-input-box" title="Search tools by name, hotkey or command (e.g. 'stair', 'W', 'loft')">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon">${icon("search", { size: 14 })}</span>
           <input type="text" id="palette-tool-search" class="palette-search-input" placeholder="Find…" autocomplete="off" spellcheck="false" />
         </div>
         <div id="palette-search-results" class="palette-search-dropdown" style="display: none;"></div>
@@ -32184,7 +33523,7 @@ function renderStudioPalette(container, options = {}) {
           return `
             <div class="palette-category-group iconic-group" data-category="${cat.id}">
               <div class="palette-category-divider" title="${cat.name}">
-                <span class="divider-icon">${cat.icon}</span>
+                <span class="divider-icon">${categoryIcon(cat.id, { size: 14 })}</span>
               </div>
               <div class="palette-tools-grid iconic-grid">
                 ${toolsInCat.map(tool => {
@@ -32197,7 +33536,7 @@ function renderStudioPalette(container, options = {}) {
                   return `
                     <div class="palette-tool-wrapper iconic-wrapper ${hasFlyout ? 'has-flyout' : ''}">
                       <button type="button" class="palette-tool-btn iconic-tool-btn ${isActive ? 'active' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}">
-                        <span class="tool-icon">${tool.icon}</span>
+                        <span class="tool-icon">${toolIcon(tool, { size: 18 })}</span>
                         ${badge ? `<kbd class="tool-badge">${badge}</kbd>` : ''}
                         ${hasFlyout ? `<span class="tool-flyout-indicator">▾</span>` : ''}
                       </button>
@@ -32205,7 +33544,7 @@ function renderStudioPalette(container, options = {}) {
                         <div class="palette-flyout-menu iconic-flyout-menu" style="display: none;">
                           ${tool.flyout.map(sub => `
                             <button type="button" class="flyout-sub-btn" data-tool="${sub.id}" title="${sub.name}">
-                              <span class="sub-icon">${sub.icon}</span>
+                              <span class="sub-icon">${toolIcon(sub, { size: 14 })}</span>
                               <span class="sub-label">${sub.name}</span>
                               ${sub.shortcut ? `<kbd class="sub-kbd">${sub.shortcut}</kbd>` : ''}
                             </button>
@@ -32274,7 +33613,7 @@ function renderStudioPalette(container, options = {}) {
             }
           } else if (isCat) {
             const catId = itemBtn.dataset.catId;
-            const catSection = container.querySelector(`.palette-category-section[data-category="${catId}"]`);
+            const catSection = container.querySelector(`.palette-category-group[data-category="${catId}"]`);
             if (catSection) {
               catSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
@@ -33020,93 +34359,308 @@ function renderStudioCPanels(container, options = {}) {
   // =========================================================================
 
 /**
- * Architecture Helping Hand - Bottom CAD Command Bar & Drafting Aids Component
- * Features CLI prompt, Osnap toggles (End, Mid, Cen, Int, Perp), Ortho, and coordinate readout.
+ * Architecture Helping Hand - Bottom CAD Command Bar (real command engine UI)
+ *
+ * Backed by src/core/cad-commands.js: live autocomplete, up/down history
+ * replay, multi-step interactive prompts (LINE/WALL/RECTANGLE/DIST/DIMLIN),
+ * clickable command options, coordinate entry (10,20 · @5,0 · @5<90 ·
+ * 2400mm), and a persistent result log. The engine is the single source of
+ * truth; this component only renders its state.
  */
 
 
 
 function renderStudioCommandBar(container, options = {}) {
   if (!container) return;
-
+  const session = options.session || null;
   const currentCoords = options.coords || { x: 0, y: 0 };
   const currentGrid = options.grid || 0.5;
   const isOrtho = options.ortho !== false;
   const isSnap = options.snap !== false;
 
-  let html = `
+  // Rebuild-safe: if the bar already exists, update dynamic parts only so the
+  // input keeps focus while a command is being typed.
+  if (container.querySelector('#commandbar-input')) {
+    updateCoords(container, currentCoords);
+    updatePrompt(container, session);
+    return;
+  }
+
+  container.innerHTML = `
     <div class="studio-bottom-commandbar">
-      <!-- AutoCAD / Rhino Command Prompt -->
       <div class="commandbar-cli-wrap">
-        <label for="commandbar-input" class="commandbar-label">Command:</label>
-        <input type="text" id="commandbar-input" class="commandbar-input" placeholder="Type a command or alias (e.g. 'REC 6 4', 'WALL 5', 'STAIR', '4VIEW', 'HELP')..." autocomplete="off" spellcheck="false" />
-        <span id="commandbar-history-echo" class="commandbar-history-echo" style="display: none; font-size: 0.70rem; color: var(--color-warning, #fbbf24); font-family: var(--font-mono); white-space: nowrap;"></span>
+        <span class="commandbar-label" id="commandbar-prompt">Command:</span>
+        <input type="text" id="commandbar-input" class="commandbar-input" placeholder="Type a command — REC 6 4 · WALL · LINE 0,0 2.4,0 · @5<90 · HELP" autocomplete="off" spellcheck="false" />
+        <div id="commandbar-suggestions" class="commandbar-suggestions" hidden></div>
       </div>
-
-      <!-- Drafting Aids Toggles (Osnap, Ortho, Grid) -->
+      <div id="commandbar-options" class="commandbar-options" hidden></div>
       <div class="commandbar-aids-strip">
-        <button type="button" class="aid-toggle-btn ${isSnap ? 'active' : ''}" id="aid-toggle-snap" title="Grid Snap (F9)">
-          SNAP (${currentGrid}m)
-        </button>
-        <button type="button" class="aid-toggle-btn ${isOrtho ? 'active' : ''}" id="aid-toggle-ortho" title="Ortho Mode 90° (F8)">
-          ORTHO
-        </button>
-        <div class="aid-osnap-group" title="Object Snap (F3)">
-          <span class="osnap-label">OSNAP:</span>
-          <span class="osnap-chip active">END</span>
-          <span class="osnap-chip active">MID</span>
-          <span class="osnap-chip active">INT</span>
-          <span class="osnap-chip">CEN</span>
-          <span class="osnap-chip">PERP</span>
-        </div>
+        <button type="button" class="aid-toggle-btn ${isSnap ? 'active' : ''}" id="aid-toggle-snap" title="Grid Snap (F9)">SNAP (${currentGrid}m)</button>
+        <button type="button" class="aid-toggle-btn ${isOrtho ? 'active' : ''}" id="aid-toggle-ortho" title="Ortho Mode 90° (F8)">ORTHO</button>
+        <button type="button" class="aid-toggle-btn" id="commandbar-history-btn" title="Command history (ArrowUp to replay)">${icon('history', { size: 14 })}</button>
       </div>
-
-      <!-- Real-Time Cursor Coordinates & Scale -->
       <div class="commandbar-status-readout">
         <span class="coords-val" id="commandbar-coords">X: ${currentCoords.x.toFixed(2)} m &nbsp; Y: ${currentCoords.y.toFixed(2)} m</span>
       </div>
     </div>
+    <div id="commandbar-log" class="commandbar-log" role="status" aria-live="polite"></div>
   `;
 
-  container.innerHTML = html;
+  const input = container.querySelector('#commandbar-input');
+  const suggestions = container.querySelector('#commandbar-suggestions');
+  const optionsEl = container.querySelector('#commandbar-options');
+  const logEl = container.querySelector('#commandbar-log');
+  let highlighted = -1;
+  let matches = [];
 
-  const cliInput = container.querySelector('#commandbar-input');
-  if (cliInput) {
-    cliInput.addEventListener('keydown', (e) => {
+  function closeSuggestions() {
+    suggestions.hidden = true;
+    suggestions.innerHTML = '';
+    highlighted = -1;
+    matches = [];
+  }
+
+  function log(message, kind = 'info') {
+    if (!logEl) return;
+    logEl.textContent = message || '';
+    logEl.dataset.kind = kind;
+  }
+
+  function showSuggestions(query) {
+    if (!session) { closeSuggestions(); return; }
+    const q = String(query || '').trim();
+    matches = q ? session.autocomplete(q, { limit: 8 }) : [];
+    if (!matches.length) { closeSuggestions(); return; }
+    suggestions.innerHTML = matches.map((m, i) => `
+      <button type="button" class="commandbar-suggestion${i === highlighted ? ' highlighted' : ''}" data-cmd="${m.name}">
+        ${icon(m.toolId ? 'select' : 'command', { size: 14 })}
+        <span class="suggestion-name">${m.name}</span>
+        ${m.aliases.length ? `<span class="suggestion-alias">${m.aliases.join(', ')}</span>` : ''}
+        <span class="suggestion-desc">${m.interactive ? '↵ starts prompts · ' : ''}${m.description}</span>
+      </button>`).join('');
+    suggestions.hidden = false;
+    suggestions.querySelectorAll('.commandbar-suggestion').forEach(btn => {
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault(); // keep input focus
+        const name = btn.dataset.cmd;
+        input.value = `${name} `;
+        closeSuggestions();
+        updatePrompt(container, session);
+        input.focus();
+      });
+    });
+  }
+
+  function refreshOptions(sessionState) {
+    if (!optionsEl) return;
+    if (!sessionState || !sessionState.active) {
+      optionsEl.hidden = true;
+      optionsEl.innerHTML = '';
+      return;
+    }
+    const chips = sessionState.options.map(o =>
+      `<button type="button" class="commandbar-option-chip" data-token="${o.token}">[${o.label}=${o.value}]</button>`
+    ).join('');
+    optionsEl.innerHTML = `${chips}<button type="button" class="commandbar-option-chip cancel" data-cancel="1">[Cancel Esc]</button>`;
+    optionsEl.hidden = false;
+    optionsEl.querySelectorAll('[data-token]').forEach(chip => {
+      chip.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        input.value = `${chip.dataset.token}=`;
+        input.focus();
+      });
+    });
+    optionsEl.querySelector('[data-cancel]')?.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const res = session.cancel();
+      log(res.message, 'info');
+      refreshOptions(session.state());
+      updatePrompt(container, session);
+    });
+  }
+
+  function completeFromSuggestion() {
+    if (highlighted >= 0 && matches[highlighted]) {
+      input.value = `${matches[highlighted].name} `;
+      closeSuggestions();
+      return true;
+    }
+    if (matches.length === 1) {
+      input.value = `${matches[0].name} `;
+      closeSuggestions();
+      return true;
+    }
+    return false;
+  }
+
+  if (session) {
+    input.addEventListener('input', () => {
+      highlighted = -1;
+      showSuggestions(input.value);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowUp' && suggestions.hidden) {
+        e.preventDefault();
+        const step = session.historyStep('up');
+        if (step.ok) input.value = step.value;
+        else log(step.message, 'info');
+        return;
+      }
+      if (e.key === 'ArrowDown' && suggestions.hidden) {
+        e.preventDefault();
+        const step = session.historyStep('down');
+        if (step.ok) input.value = step.value;
+        return;
+      }
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !suggestions.hidden) {
+        e.preventDefault();
+        const delta = e.key === 'ArrowDown' ? 1 : -1;
+        highlighted = Math.max(0, Math.min(matches.length - 1, highlighted + delta));
+        suggestions.querySelectorAll('.commandbar-suggestion').forEach((el, i) => {
+          el.classList.toggle('highlighted', i === highlighted);
+        });
+        return;
+      }
+      if (e.key === 'Tab' && !suggestions.hidden) {
+        e.preventDefault();
+        completeFromSuggestion();
+        return;
+      }
+      if (e.key === 'Escape') {
+        if (!suggestions.hidden) { closeSuggestions(); return; }
+        e.preventDefault();
+        const res = session.cancel();
+        log(res.message, 'info');
+        input.value = '';
+        refreshOptions(session.state());
+        updatePrompt(container, session);
+        return;
+      }
       if (e.key === 'Enter') {
         e.preventDefault();
-        const raw = cliInput.value.trim();
-        cliInput.value = '';
+        if (!suggestions.hidden && highlighted >= 0) { completeFromSuggestion(); return; }
+        const raw = input.value.trim();
+        input.value = '';
+        closeSuggestions();
         if (!raw) return;
-
-        const parsed = parseStudioCommand(raw, { coords: currentCoords });
-        if (parsed) {
-          const historyEl = container.querySelector('#commandbar-history-echo');
-          if (historyEl) {
-            historyEl.textContent = `Command: ${raw} [${parsed.type.toUpperCase()}]`;
-            historyEl.style.display = 'inline-block';
-            setTimeout(() => { if (historyEl) historyEl.style.display = 'none'; }, 4000);
-          }
-
-          if (typeof options.onExecuteParsedCommand === 'function') {
-            options.onExecuteParsedCommand(parsed);
-          } else if (typeof options.onExecuteCommand === 'function') {
-            options.onExecuteCommand(parsed.toolId || parsed.verb || raw);
-          }
-        } else if (typeof options.onUnknownCommand === 'function') {
-          options.onUnknownCommand(raw);
+        // While an interactive prompt is active, Enter feeds the CURRENT
+        // step (point/length/option) — not a new command.
+        if (session.state().active) {
+          const res = session.submit(raw, ctxFrom(null));
+          handleSubmitResult(res);
+          if (typeof options.onAfterRun === 'function') options.onAfterRun({ handled: true, kind: 'interactive', state: session.state() });
+          input.focus();
+          return;
         }
+        submitLine(raw);
       }
     });
+  }
+
+  function submitLine(raw) {
+    if (!session) return;
+    const ctx = {
+      currentPoint: typeof options.getCurrentPoint === 'function' ? options.getCurrentPoint() : null,
+      snap: typeof options.snapPoint === 'function' ? options.snapPoint : null
+    };
+    let res = session.run(raw, ctx);
+    // Legacy parametric shortcuts (REC 6 4 · WALL 5 · STAIR 16 1.1 · HATCH brick ·
+    // INSERT key · 4VIEW …) stay available beneath the engine.
+    if (res.kind === 'unknown' && typeof options.onLegacyCommand === 'function') {
+      const legacy = options.onLegacyCommand(raw);
+      if (legacy && legacy.handled) {
+        res = { handled: true, kind: 'legacy', command: legacy.verb || raw, outcome: { ok: true } };
+      }
+    }
+    if (res.kind === 'unknown') {
+      log(res.message, 'error');
+    } else if (res.error) {
+      log(`${res.command}: ${res.error}`, 'error');
+    } else if (res.kind === 'interactive' && res.state && res.state.active) {
+      log(`${res.state.command} — ${res.state.prompt}`, 'prompt');
+    } else if (res.outcome && res.outcome.ok === false) {
+      log(res.outcome.error || 'Command failed.', 'error');
+    } else if (res.kind === 'interactive' && res.completed) {
+      log(`${res.command} completed.`, 'success');
+    } else if (res.kind === 'simple' && res.outcome && res.outcome.message) {
+      log(res.outcome.message, 'success');
+    } else {
+      log(`${res.command || raw} executed.`, 'success');
+    }
+    refreshOptions(session.state());
+    updatePrompt(container, session);
+    if (typeof options.onAfterRun === 'function') options.onAfterRun(res);
+  }
+
+  // Exported micro-API so plan.js can feed canvas clicks and log outcomes.
+  container.__commandbar = {
+    submitPoint(worldPoint) {
+      if (!session || !session.state().active) return false;
+      const res = session.submitPoint ? session.submitPoint(worldPoint, ctxFrom(worldPoint)) : session.submit('', ctxFrom(worldPoint));
+      handleSubmitResult(res);
+      return true;
+    },
+    submitText(text, worldPoint) {
+      if (!session || !session.state().active) return false;
+      const res = session.submit(text, ctxFrom(worldPoint));
+      handleSubmitResult(res);
+      return true;
+    },
+    log,
+    isActive: () => !!(session && session.state().active)
+  };
+
+  function ctxFrom(worldPoint) {
+    return {
+      currentPoint: worldPoint || (typeof options.getCurrentPoint === 'function' ? options.getCurrentPoint() : null),
+      snap: typeof options.snapPoint === 'function' ? options.snapPoint : null
+    };
+  }
+
+  function handleSubmitResult(res) {
+    if (!res.ok) {
+      log(res.error, 'error');
+    } else if (res.completed) {
+      log(`${res.completed} completed.`, 'success');
+    } else if (res.optionSet) {
+      log(`${res.optionSet.token} = ${res.optionSet.value}`, 'info');
+    } else if (res.state && res.state.active) {
+      log(`${res.state.command} — ${res.state.prompt}`, 'prompt');
+    }
+    refreshOptions(session.state());
+    updatePrompt(container, session);
   }
 
   container.querySelector('#aid-toggle-snap')?.addEventListener('click', () => {
     if (typeof options.onToggleSnap === 'function') options.onToggleSnap();
   });
-
   container.querySelector('#aid-toggle-ortho')?.addEventListener('click', () => {
     if (typeof options.onToggleOrtho === 'function') options.onToggleOrtho();
   });
+  container.querySelector('#commandbar-history-btn')?.addEventListener('click', () => {
+    const items = session ? session.historySearch('', 8) : [];
+    log(items.length ? `Recent: ${items.join(' · ')}` : 'No command history yet.', 'info');
+  });
+}
+
+/** Updates the prompt label + placeholder to reflect the active command. */
+function updatePrompt(container, session) {
+  const prompt = container?.querySelector('#commandbar-prompt');
+  if (!prompt || !session) return;
+  const s = session.state();
+  if (s.active) {
+    prompt.textContent = `${s.command} [${s.stepIndex + 1}/${s.stepCount}]`;
+    prompt.classList.add('active');
+  } else {
+    prompt.textContent = 'Command:';
+    prompt.classList.remove('active');
+  }
+}
+
+function updateCoords(container, coords) {
+  const el = container.querySelector('#commandbar-coords');
+  if (el) el.innerHTML = `X: ${coords.x.toFixed(2)} m &nbsp; Y: ${coords.y.toFixed(2)} m`;
 }
 
 
@@ -33415,6 +34969,20 @@ function generateArchitecturalAiResponse(prompt, ctx) {
 
 
 
+
+
+
+const svgIconClose = icon('delete', { size: 10 });
+const svgIconPlus = icon('command', { size: 12 });
+const TOOL_ICON_BY_TOOL = {
+  select: 'select', room: 'room', polyroom: 'polyroom', wall: 'wall', door: 'door',
+  window: 'window', column: 'column', grid: 'grid', stair: 'stair', ramp: 'ramp',
+  dimension: 'dimension', measure: 'measure', furniture: 'furniture',
+  hatch: 'hatch', north: 'north', text: 'info',
+  leader: 'dimension', section_cut: 'section', detail_callout: 'detail',
+  material_paint: 'hatch', watercolor_brush: 'hatch', pushpull: 'pushpull'
+};
+
 const PLAN_STATE_KEY = 'archiscale_plan_prefs'; // user preferences only
 
 function createPlanView(context) {
@@ -33438,6 +35006,219 @@ function createPlanView(context) {
   let polyRoomVertices = []; // [{x, y}, ...]
   let currentMouseWorld = { x: 0, y: 0 };
   let activeSidebarTab = 'entities'; // 'entities' | 'layers'
+
+  // ------------------------------------------------------------------
+  // CAD command engine (src/core/cad-commands.js) — one registry derived
+  // from the live tool catalog; the command bar, canvas clicks and the
+  // deterministic core all meet here.
+  // ------------------------------------------------------------------
+  function commitEntity(entity, label) {
+    const cmd = entityAddRemoveCommand(entities(), entity, label);
+    cmd.redo();
+    history.push(cmd);
+    state.plan.selectedIds = new Set([entity.id]);
+    render();
+    updateStudioCPanels();
+    return entity;
+  }
+
+  function executeCadCommand(run, args = {}) {
+    switch (run) {
+      case 'create_line': {
+        const [p1, p2] = args.points;
+        const line = createLineEntity({ p1, p2 });
+        commitEntity(line, 'create line');
+        return { ok: true, message: `Line ${line.length.toFixed(2)} m · ${Math.round(line.angleDegrees)}°` };
+      }
+      case 'create_wall_points': {
+        const [p1, p2] = args.points;
+        const thickness = Math.max(0.05, Number(args.options?.WIDTH) || 0.2);
+        const wall = createWall({ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, thickness });
+        commitEntity(wall, 'create wall');
+        return { ok: true, message: `Wall ${wallLength(wall).toFixed(2)} m · ${thickness.toFixed(2)} m thick` };
+      }
+      case 'create_room_points': {
+        const [p1, p2] = args.points;
+        const w = Math.abs(p2.x - p1.x);
+        const d = Math.abs(p2.y - p1.y);
+        if (w < 0.3 || d < 0.3) return { ok: false, error: 'Room corners too close — drag a larger rectangle (≥ 0.3 m each side).' };
+        const room = createRoom({
+          name: `Room ${w.toFixed(1)}x${d.toFixed(1)}m`,
+          x: Math.min(p1.x, p2.x),
+          y: Math.min(p1.y, p2.y),
+          width: w,
+          depth: d
+        });
+        commitEntity(room, 'create room');
+        return { ok: true, message: `Room ${w.toFixed(2)} × ${d.toFixed(2)} m · ${(w * d).toFixed(1)} m²` };
+      }
+      case 'measure_points': {
+        const [p1, p2] = args.points;
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const dist = Math.hypot(dx, dy);
+        const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
+        return { ok: true, message: `Distance ${dist.toFixed(3)} m · Angle ${ang.toFixed(1)}° · Δ(${dx.toFixed(2)}, ${dy.toFixed(2)})` };
+      }
+      case 'create_dimension': {
+        const [p1, p2] = args.points;
+        const dim = createDimension({ p1, p2 });
+        commitEntity(dim, 'create dimension');
+        return { ok: true, message: `Dimension placed · ${Math.hypot(p2.x - p1.x, p2.y - p1.y).toFixed(2)} m` };
+      }
+      case 'undo': undo(); return { ok: true, message: 'Undo.' };
+      case 'redo': redo(); return { ok: true, message: 'Redo.' };
+      case 'delete': deleteSelected(); return { ok: true, message: 'Selection deleted.' };
+      case 'zoom_extents': fitToContent(); return { ok: true, message: 'Zoom to fit.' };
+      case 'zoom': {
+        const a = (args.args && args.args[0] ? String(args.args[0]) : 'E').toUpperCase();
+        if (a === 'E' || a === 'EXTENTS') { fitToContent(); return { ok: true, message: 'Zoom extents.' }; }
+        if (a === 'IN') { zoomStep(1.25); return { ok: true, message: 'Zoom in.' }; }
+        if (a === 'OUT') { zoomStep(0.8); return { ok: true, message: 'Zoom out.' }; }
+        const num = parseFloat(a);
+        if (Number.isFinite(num)) { setZoomPercent(num); return { ok: true, message: `Zoom ${num}%.` }; }
+        return { ok: false, error: 'ZOOM expects E (extents), IN, OUT or a percentage — e.g. ZOOM 100.' };
+      }
+      case 'pan': setTool('pan'); return { ok: true, message: 'Pan tool active — drag to pan.' };
+      case 'view_top': handleStudioToolAction('view_top'); return { ok: true, message: 'Top (plan) view.' };
+      case 'view_front': handleStudioToolAction('view_south'); return { ok: true, message: 'Front (south) elevation.' };
+      case 'view_right': {
+        let eDoc = state.plan.documents.find(d => d.type === 'elevation');
+        if (!eDoc) {
+          createDocument('East Elevation', 'elevation');
+          eDoc = state.plan.documents.find(d => d.type === 'elevation');
+        }
+        if (eDoc) {
+          eDoc.elevationDirection = 'east';
+          eDoc.name = 'East Elevation';
+          switchDocument(eDoc.id);
+        }
+        return { ok: true, message: 'Right (east) elevation.' };
+      }
+      case 'view_perspective': handleStudioToolAction('view_perspective'); return { ok: true, message: '3D massing view.' };
+      case 'view_4split': handleStudioToolAction('view_4split'); return { ok: true, message: '4-viewport workspace.' };
+      case 'tool:select': setTool('select'); return { ok: true, message: 'Selection tool active.' };
+      case 'properties': renderPropertiesInspector(); updateStudioCPanels(); return { ok: true, message: 'Properties panel focused on the current selection.' };
+      case 'info': {
+        const sel = selectedEntities();
+        if (sel.length === 0) return { ok: false, error: 'INFO needs a selection — click an entity first (SELECT to activate the pick tool).' };
+        showInspectorInfo(sel);
+        return { ok: true, message: `Info for ${sel.length} selected entity(ies) shown in the inspector.` };
+      }
+      case 'suggest': return runSuggestions();
+      case 'ai_query': {
+        const question = (args.args || []).join(' ') || '';
+        startAiQuery(question);
+        return { ok: true, message: question ? 'AI query started from the selection.' : 'AI query mode — select entities, then type your question.' };
+      }
+      case 'ai_analyze': triggerAiCritique('plan_only', { question: 'Analyze this plan: major risks, geometry problems, missing information, circulation and annotation gaps. Cite deterministic evidence for each finding.' }); return { ok: true, message: 'Project-wide AI analysis started.' };
+      case 'panel:layers': activeSidebarTab = 'layers'; renderEntityList(); renderLayerList(); return { ok: true, message: 'Layers panel active.' };
+      case 'help': {
+        const names = [...buildCommandRegistry(STUDIO_TOOL_CATALOG).commands.values()].map(c => c.name);
+        return { ok: true, message: `Commands: ${names.join(' · ')}` };
+      }
+      default:
+        if (run.startsWith('tool:')) {
+          handleStudioToolAction(run.slice(5));
+          return { ok: true };
+        }
+        return { ok: false, error: `Unhandled command action "${run}".` };
+    }
+  }
+
+  function selectedEntities() {
+    return entities().filter(e => state.plan.selectedIds.has(e.id));
+  }
+
+  const cadSession = createCommandSession({
+    registry: buildCommandRegistry(STUDIO_TOOL_CATALOG),
+    execute: executeCadCommand,
+    storage: (typeof window !== 'undefined' && window.localStorage) ? window.localStorage : null
+  });
+
+  /** Legacy parametric command executor (REC w d · WALL len · STAIR r w · HATCH · INSERT). */
+  function onExecuteParsedCommand(parsed) {
+    if (!parsed) return;
+    if (parsed.type === 'create_room') {
+      const w = parsed.width || 4;
+      const d = parsed.depth || 3;
+      const origin = currentMouseWorld || { x: 2, y: 2 };
+      const r = createRoom({
+        name: parsed.name || `Room ${w}x${d}m`,
+        x: snapToGrid(origin.x, state.plan.grid),
+        y: snapToGrid(origin.y, state.plan.grid),
+        width: w,
+        depth: d
+      });
+      commitEntity(r, `create ${r.name}`);
+      showToast(`Created Room: ${r.name} (${(w * d).toFixed(1)} m²)`, 'success');
+      return;
+    }
+    if (parsed.type === 'create_wall_length') {
+      const len = parsed.length || 5;
+      const origin = currentMouseWorld || { x: 2, y: 2 };
+      const wall = createWall({
+        x1: snapToGrid(origin.x, state.plan.grid),
+        y1: snapToGrid(origin.y, state.plan.grid),
+        x2: snapToGrid(origin.x + len, state.plan.grid),
+        y2: snapToGrid(origin.y, state.plan.grid),
+        thickness: 0.2
+      });
+      commitEntity(wall, 'create wall');
+      showToast(`Created Wall: ${len}m`, 'success');
+      return;
+    }
+    if (parsed.type === 'create_stair') {
+      const risers = parsed.risers || 16;
+      const width = parsed.width || 1.1;
+      const origin = currentMouseWorld || { x: 2, y: 4 };
+      const stair = createStairEntity({
+        x: snapToGrid(origin.x, state.plan.grid),
+        y: snapToGrid(origin.y, state.plan.grid),
+        width: width,
+        riserCount: risers
+      });
+      commitEntity(stair, 'create stair');
+      showToast(`Created Stair: ${risers} risers, ${width}m width`, 'success');
+      return;
+    }
+    if (parsed.type === 'set_hatch') {
+      state.activeMaterial = parsed.pattern || 'brick';
+      setTool('hatch');
+      showToast(`Active Hatch: ${state.activeMaterial}. Click a room to apply.`);
+      renderContextualToolbar();
+      return;
+    }
+    if (parsed.type === 'insert_block') {
+      const blockId = parsed.blockKey || 'DOOR_SINGLE_900';
+      const origin = currentMouseWorld || { x: parsed.x || 2, y: parsed.y || 2 };
+      const blk = createBlockInstanceEntity({
+        blockId,
+        x: snapToGrid(origin.x, state.plan.grid),
+        y: snapToGrid(origin.y, state.plan.grid)
+      });
+      commitEntity(blk, `insert ${blk.name}`);
+      showToast(`Inserted Block: ${blk.name}`, 'success');
+      return;
+    }
+    if (parsed.type === 'switch_cpanel') {
+      state.activeCPanelTab = parsed.panelTab;
+      updateStudioCPanels();
+      showToast(`C-Panel: ${parsed.panelTab} active`);
+      return;
+    }
+    if (parsed.type === 'set_view') {
+      if (parsed.view === 'top') handleStudioToolAction('view_top');
+      else if (parsed.view === 'south') handleStudioToolAction('view_south');
+      else if (parsed.view === 'perspective') handleStudioToolAction('view_perspective');
+      else if (parsed.view === '4view') handleStudioToolAction('view_4split');
+      return;
+    }
+    if (parsed.type === 'set_tool') {
+      handleStudioToolAction(parsed.toolId || parsed.verb);
+      return;
+    }
+  }
 
   function initDocuments() {
     if (!state.plan) state.plan = {};
@@ -33646,10 +35427,11 @@ function createPlanView(context) {
       tab.className = `plan-doc-tab ${isActive ? 'active' : ''}`;
       tab.dataset.docId = doc.id;
 
-      const typeIcon = doc.type === '3d_massing' ? '🏢 ' : (doc.type === 'sheet' ? '📄 ' : (doc.type === 'elevation' ? '🏛️ ' : (doc.type === 'section' ? '✂️ ' : (doc.type === 'detail' ? '🔍 ' : '📐 '))));
+      const typeGlyph = docTypeIcon(doc.type, { size: 13 });
       const titleSpan = document.createElement('span');
       titleSpan.className = 'plan-doc-tab-title';
-      titleSpan.textContent = `${typeIcon}${doc.name}`;
+      titleSpan.innerHTML = `${typeGlyph}<span class="tab-title-text"></span>`;
+      titleSpan.querySelector('.tab-title-text').textContent = doc.name;
       titleSpan.title = 'Double click to rename tab';
 
       titleSpan.addEventListener('dblclick', (e) => {
@@ -33680,7 +35462,8 @@ function createPlanView(context) {
         const closeBtn = document.createElement('button');
         closeBtn.type = 'button';
         closeBtn.className = 'plan-doc-tab-close';
-        closeBtn.textContent = '✕';
+        closeBtn.innerHTML = svgIconClose;
+        closeBtn.setAttribute('aria-label', `Close ${doc.name}`);
         closeBtn.title = `Close ${doc.name}`;
         closeBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -34377,141 +36160,18 @@ function createPlanView(context) {
         grid: state.plan.grid || 0.5,
         snap: state.plan.snap !== false,
         ortho: state.plan.ortho !== false,
-        onExecuteCommand: (cmd) => {
-          handleStudioToolAction(cmd);
+        session: cadSession,
+        getCurrentPoint: () => currentMouseWorld,
+        snapPoint: (p) => ({ x: snapToGrid(p.x, state.plan.grid), y: snapToGrid(p.y, state.plan.grid) }),
+        onLegacyCommand: (raw) => {
+          const parsed = parseStudioCommand(raw, { coords: currentMouseWorld });
+          if (!parsed) return null;
+          if (parsed.type === 'unknown') return null;
+          onExecuteParsedCommand(parsed);
+          return { handled: true, verb: parsed.verb || parsed.type };
         },
-        onExecuteParsedCommand: (parsed) => {
-          if (!parsed) return;
-          if (parsed.type === 'create_room') {
-            const w = parsed.width || 4;
-            const d = parsed.depth || 3;
-            const origin = currentMouseWorld || { x: 2, y: 2 };
-            const r = createRoom({
-              name: parsed.name || `Room ${w}x${d}m`,
-              x: snapToGrid(origin.x, state.plan.grid),
-              y: snapToGrid(origin.y, state.plan.grid),
-              width: w,
-              depth: d
-            });
-            const cmd = entityAddRemoveCommand(entities(), r, `create ${r.name}`);
-            cmd.redo();
-            history.push(cmd);
-            state.plan.selectedIds = new Set([r.id]);
-            showToast(`Created Room: ${r.name} (${(w * d).toFixed(1)} m²)`, 'success');
-            render();
-            updateStudioCPanels();
-            return;
-          }
-          if (parsed.type === 'create_wall_length') {
-            const len = parsed.length || 5;
-            const origin = currentMouseWorld || { x: 2, y: 2 };
-            const wall = createWall({
-              x1: snapToGrid(origin.x, state.plan.grid),
-              y1: snapToGrid(origin.y, state.plan.grid),
-              x2: snapToGrid(origin.x + len, state.plan.grid),
-              y2: snapToGrid(origin.y, state.plan.grid),
-              thickness: 0.2
-            });
-            const cmd = entityAddRemoveCommand(entities(), wall, `create wall ${len}m`);
-            cmd.redo();
-            history.push(cmd);
-            state.plan.selectedIds = new Set([wall.id]);
-            showToast(`Created Wall: ${len}m`, 'success');
-            render();
-            updateStudioCPanels();
-            return;
-          }
-          if (parsed.type === 'create_wall') {
-            const wall = createWall({
-              x1: parsed.x1,
-              y1: parsed.y1,
-              x2: parsed.x2,
-              y2: parsed.y2,
-              thickness: 0.2
-            });
-            const cmd = entityAddRemoveCommand(entities(), wall, `create wall`);
-            cmd.redo();
-            history.push(cmd);
-            state.plan.selectedIds = new Set([wall.id]);
-            showToast(`Created Wall from (${parsed.x1},${parsed.y1}) to (${parsed.x2},${parsed.y2})`, 'success');
-            render();
-            updateStudioCPanels();
-            return;
-          }
-          if (parsed.type === 'create_stair') {
-            const risers = parsed.risers || 16;
-            const width = parsed.width || 1.1;
-            const origin = currentMouseWorld || { x: 2, y: 4 };
-            const stair = createStairEntity({
-              x: snapToGrid(origin.x, state.plan.grid),
-              y: snapToGrid(origin.y, state.plan.grid),
-              width: width,
-              riserCount: risers
-            });
-            const cmd = entityAddRemoveCommand(entities(), stair, `create stair`);
-            cmd.redo();
-            history.push(cmd);
-            state.plan.selectedIds = new Set([stair.id]);
-            showToast(`Created Stair: ${risers} risers, ${width}m width`, 'success');
-            render();
-            updateStudioCPanels();
-            return;
-          }
-          if (parsed.type === 'set_hatch') {
-            state.activeMaterial = parsed.pattern || 'brick';
-            setTool('hatch');
-            showToast(`Active Hatch: ${state.activeMaterial}. Click a room to apply.`);
-            renderContextualToolbar();
-            return;
-          }
-          if (parsed.type === 'insert_block') {
-            const blockId = parsed.blockKey || 'DOOR_SINGLE_900';
-            const origin = currentMouseWorld || { x: parsed.x || 2, y: parsed.y || 2 };
-            const blk = createBlockInstanceEntity({
-              blockId,
-              x: snapToGrid(origin.x, state.plan.grid),
-              y: snapToGrid(origin.y, state.plan.grid)
-            });
-            const cmd = entityAddRemoveCommand(entities(), blk, `insert ${blk.name}`);
-            cmd.redo();
-            history.push(cmd);
-            state.plan.selectedIds = new Set([blk.id]);
-            showToast(`Inserted Block: ${blk.name}`, 'success');
-            render();
-            updateStudioCPanels();
-            return;
-          }
-          if (parsed.type === 'switch_cpanel') {
-            state.activeCPanelTab = parsed.panelTab;
-            updateStudioCPanels();
-            showToast(`C-Panel: ${parsed.panelTab} active`);
-            return;
-          }
-          if (parsed.type === 'set_view') {
-            if (parsed.view === 'top') handleStudioToolAction('view_top');
-            else if (parsed.view === 'south') handleStudioToolAction('view_south');
-            else if (parsed.view === 'perspective') handleStudioToolAction('view_perspective');
-            else if (parsed.view === '4view') handleStudioToolAction('view_4split');
-            return;
-          }
-          if (parsed.type === 'zoom_extents') {
-            fitToContent();
-            return;
-          }
-          if (parsed.type === 'undo') { undo(); return; }
-          if (parsed.type === 'redo') { redo(); return; }
-          if (parsed.type === 'delete') { deleteSelected(); return; }
-          if (parsed.type === 'help') {
-            showToast('Commands: REC [w] [d], WALL [len], STAIR [r] [w], HATCH [pat], PLAN, PERSP, 4VIEW, DIST, HELP');
-            return;
-          }
-          if (parsed.type === 'set_tool') {
-            handleStudioToolAction(parsed.toolId || parsed.verb);
-            return;
-          }
-          if (parsed.type === 'unknown') {
-            showToast(`Unknown command: "${parsed.verb}". Type HELP for command list.`, 'warning');
-          }
+        onAfterRun: (res) => {
+          if (res && res.handled) AudioService.playTick();
         },
         onToggleSnap: () => {
           toggleSnap();
@@ -35237,7 +36897,7 @@ function createPlanView(context) {
 
     const ctxBar = dom.planContextualToolbar || document.getElementById('plan-contextual-toolbar');
     if (ctxBar) {
-      const multiStoryLabel = doc.massingOptions.multiStory ? '🏢 Stack All Stories' : '🏢 Single Story';
+      const multiStoryLabel = doc.massingOptions.multiStory ? 'Stack All Stories' : 'Single Story';
       ctxBar.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
           <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
@@ -35478,7 +37138,7 @@ function createPlanView(context) {
               <button type="button" class="result-action-btn ${dir === 'east' ? 'primary' : ''}" data-dir="east" style="font-size: 0.68rem; padding: 2px 6px;">East (Right)</button>
               <button type="button" class="result-action-btn ${dir === 'west' ? 'primary' : ''}" data-dir="west" style="font-size: 0.68rem; padding: 2px 6px;">West (Left)</button>
             </div>
-            <button type="button" id="btn-elev-multistory" class="result-action-btn ${doc.multiStory !== false ? 'active' : ''}" style="font-size: 0.68rem; padding: 2px 6px;">${doc.multiStory !== false ? '🏢 Stack All Stories' : '📄 Single Floor'}</button>
+            <button type="button" id="btn-elev-multistory" class="result-action-btn ${doc.multiStory !== false ? 'active' : ''}" style="font-size: 0.68rem; padding: 2px 6px;">${doc.multiStory !== false ? 'Stack All Stories' : 'Single Floor'}</button>
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
             <button type="button" id="btn-elev-export" class="result-action-btn primary" style="font-size: 0.68rem; padding: 2px 8px;">💾 Export Elevation SVG</button>
@@ -35755,7 +37415,7 @@ function createPlanView(context) {
         ${topEntitiesMarkup}
         <g class="quadrant-pill" data-quadrant="top" cursor="pointer">
           <rect x="12" y="12" width="130" height="24" rx="4" fill="rgba(15, 23, 42, 0.9)" stroke="#057a55" stroke-width="1.2" />
-          <text x="22" y="28" fill="#4ade80" font-size="11" font-weight="bold" font-family="var(--font-mono)">🦏 Top [Plan]</text>
+          <text x="22" y="28" fill="#4ade80" font-size="11" font-weight="bold" font-family="var(--font-mono)">TOP · PLAN</text>
         </g>
       </g>
 
@@ -35766,7 +37426,7 @@ function createPlanView(context) {
         </g>
         <g class="quadrant-pill" data-quadrant="perspective" cursor="pointer">
           <rect x="${halfW + 12}" y="12" width="145" height="24" rx="4" fill="rgba(11, 17, 32, 0.9)" stroke="#057a55" stroke-width="1.2" />
-          <text x="${halfW + 22}" y="28" fill="#38bdf8" font-size="11" font-weight="bold" font-family="var(--font-mono)">👁️ Perspective</text>
+          <text x="${halfW + 22}" y="28" fill="#38bdf8" font-size="11" font-weight="bold" font-family="var(--font-mono)">PERSPECTIVE</text>
         </g>
       </g>
 
@@ -35777,7 +37437,7 @@ function createPlanView(context) {
         </svg>
         <g class="quadrant-pill" data-quadrant="front" cursor="pointer">
           <rect x="12" y="12" width="145" height="24" rx="4" fill="rgba(13, 21, 39, 0.9)" stroke="#057a55" stroke-width="1.2" />
-          <text x="22" y="28" fill="#fbbf24" font-size="11" font-weight="bold" font-family="var(--font-mono)">🏛️ Front [South]</text>
+          <text x="22" y="28" fill="#fbbf24" font-size="11" font-weight="bold" font-family="var(--font-mono)">FRONT · SOUTH</text>
         </g>
       </g>
 
@@ -35788,7 +37448,7 @@ function createPlanView(context) {
         </svg>
         <g class="quadrant-pill" data-quadrant="right" cursor="pointer">
           <rect x="12" y="12" width="145" height="24" rx="4" fill="rgba(15, 23, 42, 0.9)" stroke="#057a55" stroke-width="1.2" />
-          <text x="22" y="28" fill="#a78bfa" font-size="11" font-weight="bold" font-family="var(--font-mono)">📐 Right [East]</text>
+          <text x="22" y="28" fill="#a78bfa" font-size="11" font-weight="bold" font-family="var(--font-mono)">RIGHT · EAST</text>
         </g>
       </g>
 
@@ -36484,6 +38144,14 @@ function createPlanView(context) {
           <text x="${p.x.toFixed(1)}" y="${(p.y + 3.5).toFixed(1)}" text-anchor="middle" font-size="8.5" font-family="var(--font-mono)" fill="var(--cyan-glow, #38bdf8)" font-weight="700">${escapeHtml(tagText)}</text>
         </g>`;
       }
+      if (e.kind === 'line') {
+        const sP1 = worldToSvg(transform, e.x1, e.y1);
+        const sP2 = worldToSvg(transform, e.x2, e.y2);
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <line x1="${sP1.x.toFixed(1)}" y1="${sP1.y.toFixed(1)}" x2="${sP2.x.toFixed(1)}" y2="${sP2.y.toFixed(1)}"
+            stroke="${stroke}" stroke-width="${selected ? 2.4 : 1.3}" stroke-linecap="round"/>
+        </g>`;
+      }
       if (e.kind === 'leader') {
         const p1 = e.p1 || { x: e.x || 0, y: e.y || 0 };
         const knee = e.knee || { x: p1.x + 0.5, y: p1.y + 0.5 };
@@ -36871,6 +38539,7 @@ function createPlanView(context) {
       else if (e.kind === 'door_tag') desc = `Badge [${escapeHtml(e.tag || '')}]`;
       else if (e.kind === 'window_tag') desc = `Badge <${escapeHtml(e.tag || '')}>`;
       else if (e.kind === 'leader') desc = `Leader · "${escapeHtml(e.text || '')}"`;
+      else if (e.kind === 'line') desc = `Line · ${(typeof e.length === 'number' ? e.length : 0).toFixed(2)} m · ${Math.round(e.angleDegrees || 0)}°`;
       else if (e.kind === 'north_arrow') desc = `North · ${Math.round(e.rotation || 0)}°`;
       else if (e.kind === 'column') desc = `Column · ${e.profile || 'rect'} · ${num(e.width)}×${num(e.depth)} m`;
       else if (e.kind === 'grid_line') desc = `Grid · Axis [${escapeHtml(e.name || '')}]`;
@@ -36922,11 +38591,11 @@ function createPlanView(context) {
             <span style="font-size: 0.65rem; color: var(--text-muted, #888); flex-shrink: 0;">(${count})</span>
           </div>
           <div style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0;">
-            <button type="button" class="layer-toggle-vis" data-layer-id="${escapeHtml(l.id)}" title="${isVis ? 'Hide layer (currently visible)' : 'Show layer (currently hidden)'}" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; font-size: 0.8rem; opacity: ${isVis ? '1.0' : '0.4'};">
-              ${isVis ? '👁️' : '🚫'}
+            <button type="button" class="layer-toggle-vis" data-layer-id="${escapeHtml(l.id)}" title="${isVis ? 'Hide layer (currently visible)' : 'Show layer (currently hidden)'}" aria-label="${isVis ? 'Hide layer' : 'Show layer'} ${escapeHtml(l.name)}" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; opacity: ${isVis ? '1.0' : '0.4'}; display: inline-flex;">
+              ${icon(isVis ? 'visible' : 'hidden', { size: 14 })}
             </button>
-            <button type="button" class="layer-toggle-lock" data-layer-id="${escapeHtml(l.id)}" title="${isLck ? 'Unlock layer (currently locked)' : 'Lock layer (currently editable)'}" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; font-size: 0.8rem; opacity: ${isLck ? '1.0' : '0.45'};">
-              ${isLck ? '🔒' : '🔓'}
+            <button type="button" class="layer-toggle-lock" data-layer-id="${escapeHtml(l.id)}" title="${isLck ? 'Unlock layer (currently locked)' : 'Lock layer (currently editable)'}" aria-label="${isLck ? 'Unlock layer' : 'Lock layer'} ${escapeHtml(l.name)}" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; opacity: ${isLck ? '1.0' : '0.45'}; display: inline-flex;">
+              ${icon(isLck ? 'lock' : 'unlock', { size: 14 })}
             </button>
             ${l.custom ? `
               <button type="button" class="layer-delete-btn" data-layer-id="${escapeHtml(l.id)}" title="Delete custom layer" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; font-size: 0.75rem; color: var(--accent-action, #f43f5e);">
@@ -38612,6 +40281,15 @@ function createPlanView(context) {
 
   function onPointerDown(event) {
     if (event.button !== 0) return;
+    // Active interactive command (LINE/WALL/RECTANGLE/…): the canvas click
+    // IS the point input — one interaction model, one geometry engine.
+    const cmdbar = document.getElementById('studio-commandbar-container')?.__commandbar;
+    if (cmdbar && cmdbar.isActive()) {
+      const world = svgPoint(event);
+      cmdbar.submitPoint(world);
+      event.preventDefault();
+      return;
+    }
     const doc = getActiveDocument();
     if (doc && doc.type === '3d_massing') {
       dragState = {
@@ -39349,6 +41027,9 @@ function createPlanView(context) {
   }
 
   function triggerAiCritique(targetType, payload = {}) {
+    // Selection evidence rides to the AI studio so the answer concerns the
+    // exact selected entities (consumed by the facts-pack builder in app.js).
+    state.aiSelectionContext = payload.selectionPackets || null;
     switchMode('ai');
     setTimeout(() => {
       if (dom.aiJobSelect) {
@@ -39379,6 +41060,145 @@ function createPlanView(context) {
       views.callController('ai', 'refreshImageGroup');
       showToast(`AI Studio loaded with contextual ${targetType} scope`);
     }, 50);
+  }
+
+  // ------------------------------------------------------------------
+  // AI Query / Suggestions / Info — selection-aware copilot hooks
+  // ------------------------------------------------------------------
+
+  /**
+   * AI Query command: routes the user to AI Studio with the exact selection
+   * serialized (geometry, relationships, deterministic checks). The AI
+   * answers about THAT entity with real numbers, not guesses.
+   */
+  function startAiQuery(question = '') {
+    const sel = selectedEntities();
+    const packets = serializeSelection(entities(), state.plan.selectedIds);
+    const hasQuestion = typeof question === 'string' && question.trim().length > 0;
+    const kindSummary = packets.length
+      ? packets.map(p => p.name || p.kind).slice(0, 3).join(', ')
+      : 'no selection (document context only)';
+    const defaultQuestion = hasQuestion ? question : (packets.length
+      ? `Review the selected ${kindSummary}: verify dimensions against geometry, check proportions and clearances, and state any concerns with evidence.`
+      : 'Analyze this document: geometry problems, missing annotations, and improvement opportunities.');
+    triggerAiCritique(packets.length === 1 ? packets[0].kind : 'plan_only', {
+      selectionPackets: packets,
+      question: defaultQuestion
+    });
+    // triggerAiCritique writes canned text; override with our evidence-aware question.
+    setTimeout(() => {
+      const targetInput = dom.aiQuestionInput || dom.aiUserPrompt;
+      if (targetInput) targetInput.value = defaultQuestion;
+      if (packets.length === 1 && dom.aiContextScopeSelect) {
+        // Narrow the deterministic facts pack to the selection.
+        dom.aiContextScopeSelect.value = 'plan_only';
+      }
+    }, 60);
+  }
+
+  /**
+   * SUGGEST command: deterministic, ranked, evidence-backed suggestions for
+   * the selection (or the whole document when nothing is selected).
+   */
+  function runSuggestions() {
+    const sel = selectedEntities();
+    const findings = sel.length > 0
+      ? sel.flatMap(e => suggestForEntity(e, entities()))
+      : suggestForDocument(entities());
+    const scopeLabel = sel.length > 0 ? `${sel.length} selected` : 'the whole document';
+    if (findings.length === 0) {
+      showToast(`No deterministic issues found in ${scopeLabel}.`, 'success');
+      return { ok: true, message: `No deterministic issues found in ${scopeLabel}.` };
+    }
+    const order = { critical: 0, high: 1, medium: 2, low: 3, informational: 4 };
+    findings.sort((a, b) => (order[a.severity] ?? 4) - (order[b.severity] ?? 4));
+    const summary = findings.slice(0, 3)
+      .map(f => `[${f.severity.toUpperCase()}] ${f.problem} — ${f.evidence}`)
+      .join('  |  ');
+    showToast(`Suggestions for ${scopeLabel}: ${summary}`, 'info', 6000);
+    showSuggestionsPanel(findings, scopeLabel);
+    return { ok: true, message: `${findings.length} suggestion(s) for ${scopeLabel} shown in the inspector.` };
+  }
+
+  /**
+   * Renders the suggestions / info readout into the properties inspector so
+   * deterministic evidence and AI actions share one selection-anchored panel.
+   */
+  function showSuggestionsPanel(findings, scopeLabel) {
+    const host = dom.planPropContent;
+    if (!host) return;
+    const sevClass = s => ({ critical: 'sug-critical', high: 'sug-high', medium: 'sug-med', low: 'sug-low', informational: 'sug-info' }[s] || 'sug-info');
+    host.innerHTML = `
+      <div class="suggestions-panel">
+        <div class="plan-prop-title">SUGGESTIONS — ${escapeHtml(scopeLabel)}</div>
+        ${findings.map(f => `
+          <div class="suggestion-row ${sevClass(f.severity)}">
+            <div class="suggestion-sev">${escapeHtml(f.severity.toUpperCase())}</div>
+            <div class="suggestion-body">
+              <div class="suggestion-problem">${escapeHtml(f.problem)}</div>
+              <div class="suggestion-evidence">${escapeHtml(f.evidence)}</div>
+              <div class="suggestion-rec">${escapeHtml(f.recommendation)}${f.toolId ? ` <em>(tool: ${escapeHtml(f.toolId)})</em>` : ''}</div>
+            </div>
+          </div>`).join('')}
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-sug-ai" class="plan-prop-btn"><span>Ask AI about these</span></button>
+        </div>
+      </div>`;
+    host.querySelector('#btn-sug-ai')?.addEventListener('click', () => {
+      const questions = findings.filter(f => f.severity !== 'informational').slice(0, 5)
+        .map(f => `${f.problem}: ${f.evidence}`).join('; ');
+      startAiQuery(`How should I resolve these findings? ${questions}`);
+    });
+  }
+
+  /**
+   * INFO command: rich entity readout in the inspector — measurements,
+   * relationships and deterministic checks, per entity kind.
+   */
+  function showInspectorInfo(selection) {
+    const host = dom.planPropContent;
+    if (!host) return;
+    const packets = serializeSelection(entities(), state.plan.selectedIds);
+    const rows = [];
+    for (const p of packets) {
+      rows.push(`<div class="info-entity"><div class="plan-prop-title">[${escapeHtml(p.kind.toUpperCase())}] ${escapeHtml(p.name)}</div>`);
+      const fact = (k, v, unit = '') => {
+        if (v === null || v === undefined) return;
+        rows.push(`<div class="plan-prop-row"><span class="plan-prop-label">${escapeHtml(k)}</span><span class="plan-prop-value">${escapeHtml(String(v))}${unit}</span></div>`);
+      };
+      fact('Length', typeof p.length === 'number' ? p.length.toFixed(3) : null, ' m');
+      fact('Angle', typeof p.angleDegrees === 'number' ? p.angleDegrees.toFixed(1) : null, '°');
+      fact('Thickness', typeof p.thickness === 'number' ? p.thickness.toFixed(3) : null, ' m');
+      fact('Width', typeof p.width === 'number' ? p.width.toFixed(3) : null, ' m');
+      fact('Depth', typeof p.depth === 'number' ? p.depth.toFixed(3) : null, ' m');
+      fact('Area', typeof p.area === 'number' ? p.area.toFixed(2) : null, ' m²');
+      fact('Perimeter', typeof p.perimeter === 'number' ? p.perimeter.toFixed(2) : null, ' m');
+      fact('Aspect ratio', typeof p.aspectRatio === 'number' ? p.aspectRatio.toFixed(2) : null, ':1');
+      fact('Measured', typeof p.measuredLength === 'number' ? p.measuredLength.toFixed(3) : null, ' m');
+      fact('Layer', p.layerId);
+      if (p.openings) fact('Openings', p.openings.length);
+      if (p.dimensions && p.dimensions.length) fact('Dimensions', p.dimensions.map(d => d.value.toFixed(2)).join(', '), ' m');
+      if (p.furniture) fact('Furniture inside', p.furniture.length);
+      if (p.doors) fact('Doors', p.doors.length);
+      if (p.hostRoom) fact('Host room', p.hostRoom);
+      if (typeof p.matchesGeometry === 'boolean') {
+        fact('Verified vs geometry', p.matchesGeometry ? 'MATCH' : 'NO MATCH');
+        if (!p.matchesGeometry && p.matchingEntities?.length === 0) {
+          rows.push('<div class="info-check info-check-fail">This dimension does not correspond to any wall/line/room edge — re-measure with DIST.</div>');
+        } else if (p.matchesGeometry) {
+          rows.push('<div class="info-check info-check-pass">Dimension verified against actual geometry.</div>');
+        }
+      }
+      rows.push('</div>');
+    }
+    rows.push(`
+      <div class="plan-prop-actions">
+        <button type="button" id="btn-info-ai" class="plan-prop-btn"><span>Ask AI about this</span></button>
+        <button type="button" id="btn-info-suggest" class="plan-prop-btn"><span>Suggestions</span></button>
+      </div>`);
+    host.innerHTML = rows.join('');
+    host.querySelector('#btn-info-ai')?.addEventListener('click', () => startAiQuery(''));
+    host.querySelector('#btn-info-suggest')?.addEventListener('click', () => runSuggestions());
   }
 
   function dropFurniture(snapped) {
@@ -39768,6 +41588,21 @@ function createPlanView(context) {
 
       const newDocBtn = dom.btnPlanNewDoc || document.getElementById('btn-plan-new-doc');
       const newTabMenu = document.getElementById('plan-new-tab-menu');
+      // Hydrate the new-tab menu icons from the SVG registry (no emoji in UI).
+      newTabMenu?.querySelectorAll('[data-doc-icon]').forEach(span => {
+        span.innerHTML = docTypeIcon(span.dataset.docIcon, { size: 14 });
+      });
+
+      // View orientation compass: routes through the command executor so the
+      // compass, the TOP/FRONT/RIGHT/PERSPECTIVE commands and the ribbon all
+      // share one view-switching path.
+      const compass = document.getElementById('plan-nav-compass');
+      compass?.querySelectorAll('.navc-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          executeCadCommand(btn.dataset.view);
+        });
+      });
       if (newDocBtn) {
         newDocBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -39799,6 +41634,13 @@ function createPlanView(context) {
       // Tool palette buttons
       const palette = dom.planToolPalette || document.getElementById('plan-tool-palette');
       if (palette) {
+        // Hydrate static emoji buttons with the SVG icon registry.
+        palette.querySelectorAll('.tool-palette-btn[data-tool]').forEach(btn => {
+          const span = btn.querySelector('.tool-icon');
+          if (span && span.children.length === 0) {
+            span.innerHTML = icon(TOOL_ICON_BY_TOOL[btn.dataset.tool] || 'generic', { size: 16 });
+          }
+        });
         palette.addEventListener('click', (e) => {
           const btn = e.target.closest('.tool-palette-btn');
           if (btn && btn.dataset.tool) {
@@ -41653,6 +43495,7 @@ function createSurveyView(context) {
 
 
 
+
 function initializeApp() {
   /** Escapes user-controllable strings before innerHTML rendering (app-wide). */
   function escapeHtml(str) {
@@ -42923,7 +44766,7 @@ function initializeApp() {
             ${items.map(item => `
               <button type="button" class="sidebar-item ${state.currentMode === item.id ? 'active' : ''}" data-mode="${item.id}"
                 title="${item.desc}" aria-label="${item.label} — ${item.desc}">
-                <span class="sidebar-item-icon" aria-hidden="true">${item.icon}</span>
+                <span class="sidebar-item-icon" aria-hidden="true">${navIcon(item.id, { size: 18 })}</span>
                 <span class="sidebar-item-text">
                   <span class="sidebar-item-label">${item.label}</span>
                   <span class="sidebar-item-desc">${item.desc}</span>
@@ -43014,7 +44857,7 @@ function initializeApp() {
               </button>
               ${items.map(item => `
                 <button type="button" class="menubar-dropdown-item ${state.currentMode === item.id ? 'active' : ''}" data-mode="${item.id}" role="menuitem" title="${item.desc}">
-                  <span class="menubar-item-icon" aria-hidden="true">${item.icon}</span>
+                  <span class="menubar-item-icon" aria-hidden="true">${navIcon(item.id, { size: 15 })}</span>
                   <span class="menubar-item-text">
                     <span class="menubar-item-title-row">
                       <span class="menubar-item-label">${item.label}</span>
@@ -43041,7 +44884,7 @@ function initializeApp() {
             <div class="menubar-menu-header">${section} Tools</div>
             ${items.map(item => `
               <button type="button" class="menubar-dropdown-item ${state.currentMode === item.id ? 'active' : ''}" data-mode="${item.id}" role="menuitem" title="${item.desc}">
-                <span class="menubar-item-icon" aria-hidden="true">${item.icon}</span>
+                <span class="menubar-item-icon" aria-hidden="true">${navIcon(item.id, { size: 15 })}</span>
                 <span class="menubar-item-text">
                   <span class="menubar-item-title-row">
                     <span class="menubar-item-label">${item.label}</span>
@@ -44859,7 +46702,7 @@ function initializeApp() {
         aria-selected="${isSelected ? 'true' : 'false'}"
       >
         <div class="command-item-left">
-          <span class="command-icon">${cmd.icon || '⚡'}</span>
+          <span class="command-icon">${commandIcon(cmd.id, { size: 15 })}</span>
           <div class="command-text-group">
             <div class="command-title">
               <span>${cmd.title}</span>
@@ -47809,7 +49652,8 @@ function initializeApp() {
       buildFactsPack: (args = {}) => buildScopedFactsPack({
         project: projectStore.getProject(),
         planEntities: state.plan.entities,
-        request: { scopeHint: args.request?.scopeHint || args.options?.scopeHint || '' }
+        request: { scopeHint: args.request?.scopeHint || args.options?.scopeHint || '' },
+        selectionPackets: args.request?.selectionPackets || state.aiSelectionContext || null
       })
     });
     aiServices = { http, transports, providerManager, modelCatalog, router };
@@ -47819,6 +49663,9 @@ function initializeApp() {
     aiServices = null;
   }
   state.ai = aiServices;
+  // Selection evidence packets set by the Plan workspace AI Query tool;
+  // consumed by the facts-pack builder so AI answers the exact selection.
+  state.aiSelectionContext = null;
 
   const viewContext = Object.freeze({
     state,

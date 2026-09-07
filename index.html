@@ -7,8 +7,8 @@
   <title>Architecture Helping Hand — Scaling & Furniture Studio</title>
   
   <!-- CSS Stylesheets -->
-  <link rel="stylesheet" href="css/themes.css?v=2.2.0">
-  <link rel="stylesheet" href="css/main.css?v=2.2.0">
+  <link rel="stylesheet" href="css/themes.css?v=2.3.0">
+  <link rel="stylesheet" href="css/main.css?v=2.3.0">
   
   <!-- Fail-safe immediate overrides for mode views & form controls -->
   <style>
@@ -4035,22 +4035,22 @@
               <button type="button" id="btn-plan-new-doc" class="plan-doc-new-btn" title="Create new drawing tab / sheet (+)">+ New Tab ▾</button>
               <div id="plan-new-tab-menu" class="plan-tab-dropdown-menu" style="display: none; position: absolute; top: 100%; right: 0; z-index: 100; background: var(--bg-surface-2, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); min-width: 175px; padding: 4px; margin-top: 4px;">
                 <button type="button" class="plan-dropdown-item" data-tab-type="2d_plan" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: none; background: transparent; color: var(--text-normal, #f8fafc); font-size: 0.74rem; cursor: pointer; text-align: left; border-radius: 4px;">
-                  <span>📐</span> 2D Floor Plan
+                  <span data-doc-icon="2d_plan"></span> 2D Floor Plan
                 </button>
                 <button type="button" class="plan-dropdown-item" data-tab-type="3d_massing" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: none; background: transparent; color: var(--text-normal, #f8fafc); font-size: 0.74rem; cursor: pointer; text-align: left; border-radius: 4px;">
-                  <span>🏢</span> 3D Massing Preview
+                  <span data-doc-icon="3d_massing"></span> 3D Massing Preview
                 </button>
                 <button type="button" class="plan-dropdown-item" data-tab-type="elevation" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: none; background: transparent; color: var(--text-normal, #f8fafc); font-size: 0.74rem; cursor: pointer; text-align: left; border-radius: 4px;">
-                  <span>🏛️</span> Building Elevation
+                  <span data-doc-icon="elevation"></span> Building Elevation
                 </button>
                 <button type="button" class="plan-dropdown-item" data-tab-type="section" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: none; background: transparent; color: var(--text-normal, #f8fafc); font-size: 0.74rem; cursor: pointer; text-align: left; border-radius: 4px;">
-                  <span>✂️</span> Building Section
+                  <span data-doc-icon="section"></span> Building Section
                 </button>
                 <button type="button" class="plan-dropdown-item" data-tab-type="detail" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: none; background: transparent; color: var(--text-normal, #f8fafc); font-size: 0.74rem; cursor: pointer; text-align: left; border-radius: 4px;">
-                  <span>🔍</span> Construction Detail
+                  <span data-doc-icon="detail"></span> Construction Detail
                 </button>
                 <button type="button" class="plan-dropdown-item" data-tab-type="sheet" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: none; background: transparent; color: var(--text-normal, #f8fafc); font-size: 0.74rem; cursor: pointer; text-align: left; border-radius: 4px;">
-                  <span>📄</span> Presentation Sheet
+                  <span data-doc-icon="sheet"></span> Presentation Sheet
                 </button>
               </div>
             </div>
@@ -4089,6 +4089,20 @@
             </div>
 
             <svg id="plan-svg" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" role="application" aria-label="Architectural plan canvas — scroll zooms, space+drag pans, arrow keys pan, plus/minus zoom"></svg>
+
+            <!-- View orientation compass (original widget; click a cardinal to switch view) -->
+            <div id="plan-nav-compass" class="plan-nav-compass" role="navigation" aria-label="View orientation — click a cardinal to switch view">
+              <button type="button" class="navc-btn navc-n" data-view="view_top" title="Top (plan) view">N</button>
+              <button type="button" class="navc-btn navc-s" data-view="view_front" title="Bottom / South view">S</button>
+              <button type="button" class="navc-btn navc-w" data-view="view_front" title="Front / West elevation">W</button>
+              <button type="button" class="navc-btn navc-e" data-view="view_right" title="Right / East elevation">E</button>
+              <button type="button" class="navc-btn navc-c" data-view="view_perspective" title="Perspective 3D view" aria-label="Perspective 3D view">P</button>
+              <div class="navc-axes" aria-hidden="true">
+                <span class="navc-axis navc-x">X</span>
+                <span class="navc-axis navc-y">Y</span>
+                <span class="navc-axis navc-z">Z</span>
+              </div>
+            </div>
           </div>
 
           <!-- Bottom CAD Drafting Status Bar -->
@@ -4925,6 +4939,6 @@
   </footer>
 
   <!-- Application Script (Standalone, works via file:// and http://) -->
-  <script src="js/app.js?v=2.2.0"></script>
+  <script src="js/app.js?v=2.3.0"></script>
 </body>
 </html>
