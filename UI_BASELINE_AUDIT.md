@@ -70,3 +70,27 @@ canvas's guessed height (C2) are the two remaining full-viewport defects. Both
 have straightforward, contained fixes (remove the cap for the plan workstation
 shell; make the canvas column a bounded flex region) — documented for the fix
 phase, not applied.
+
+
+---
+
+# Phase 5 After-State (viewport transformation — measured 2026-09-08)
+
+Changes applied: `.tool-surface` max-width cap removed for `body.mode-active-plan`
+(full width, fixed viewport height, flex column); canvas wrap switched from
+`calc(100vh − 340px)` guess to flex-fill; ribbon capped at 108–132px; 720p chrome
+trims (tab bar, gaps, command log, result header). Cache v2.3.6.
+
+| Viewport | Surface width | Canvas width | Canvas height | Fits vertically | Overflow-x |
+|---|---|---|---|---|---|
+| 1280×720 | 83% | 50% | 346 px | ✅ command bar bottom 712 ≤ 720 | none |
+| 1366×768 | 82% | 50% | 360 px | ✅ | none |
+| 1440×900 | 83% | 53% | 492 px | ✅ | none |
+| 1920×1080 | 87% (was 77%) | 65% | 678 px | ✅ | none |
+| 2560×1440 | **90% (was 58%)** | 74% | 1038 px | ✅ | none |
+
+Canvas is now the majority surface at ≥1920; the tool rail scrolls internally
+with the last tool reachable at every size; command bar, status bar, compass
+verified in-viewport at all five sizes. Remaining: rail stays at 79–92 px
+fixed; at 2560 the center column could theoretically grow further but the
+drawing area already dominates.

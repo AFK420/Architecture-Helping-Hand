@@ -9898,6 +9898,74 @@ select option {
 /* --- Tab icon alignment --- */
 .plan-doc-tab-title .ahh-icon { margin-right: 4px; opacity: 0.85; }
 
+
+/* ==========================================================================
+   Section 24: Plan Canvas full-viewport workstation (Phase 5)
+   Scoped to body.mode-active-plan — other tools keep the centered layout.
+   ========================================================================== */
+@media (min-width: 1024px) {
+  body.mode-active-plan .tool-surface {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+    padding: 0.25rem var(--space-sm) 0.35rem !important;
+    height: calc(100vh - var(--topbar-height, 56px) - 34px) !important;
+    max-height: calc(100vh - var(--topbar-height, 56px) - 34px) !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+  }
+
+  body.mode-active-plan #studio-ribbon-container {
+    flex: 0 0 auto !important;
+    max-height: 132px !important;
+    overflow: hidden !important;
+  }
+
+  body.mode-active-plan .tool-layout-plan-3col {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+  }
+
+  /* Canvas column: flex-fill — the canvas receives ALL remaining height
+     (replaces the calc(100vh - 340px) guess). */
+  body.mode-active-plan .plan-canvas-panel {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  body.mode-active-plan #plan-result-panel .result-header,
+  body.mode-active-plan .plan-doc-tab-bar,
+  body.mode-active-plan #plan-contextual-toolbar {
+    flex: 0 0 auto !important;
+  }
+
+  body.mode-active-plan #plan-svg-wrap {
+    flex: 1 1 0 !important;
+    height: auto !important;
+    min-height: 220px !important;
+    margin: 0 !important;
+  }
+
+  body.mode-active-plan #plan-status-bar,
+  body.mode-active-plan #studio-commandbar-container {
+    flex: 0 0 auto !important;
+  }
+
+  /* Right inspector: bounded column with internal scroll (unchanged width). */
+  body.mode-active-plan .plan-properties-panel {
+    overflow: hidden !important;
+  }
+
+  /* Visual hierarchy: soften card chrome so the canvas dominates */
+  body.mode-active-plan .plan-canvas-panel {
+    border-color: var(--border-color, #334155) !important;
+    box-shadow: none !important;
+  }
+}
+
 /* ==========================================================================
    Section 23: Planned (unimplemented) tool honesty styling
    ========================================================================== */
@@ -9908,3 +9976,26 @@ select option {
 .flyout-sub-btn .sub-kbd { filter: saturate(0.4); }
 .planned-tool .tool-flyout-indicator { opacity: 0.4; }
 .palette-tool-btn.planned:hover, .ribbon-tool-btn.planned:hover { opacity: 0.6; cursor: help; }
+
+/* Short viewports: tighten the command bar so it fits fully */
+@media (min-width: 1024px) and (max-height: 760px) {
+  body.mode-active-plan #studio-ribbon-container { max-height: 108px !important; }
+  body.mode-active-plan .plan-canvas-panel .plan-doc-tab-bar { padding-top: 1px !important; padding-bottom: 1px !important; }
+  body.mode-active-plan #mode-view-plan .tool-layout-plan-3col { gap: 0.35rem !important; }
+  .commandbar-log {
+    min-height: 13px;
+    font-size: 0.62rem;
+    padding-bottom: 2px;
+  }
+  .studio-bottom-commandbar { padding: 2px 8px !important; }
+  #commandbar-input { height: 30px !important; }
+
+  /* Trim vertical chrome so the full command/status area fits at 720p */
+  body.mode-active-plan .plan-canvas-panel .result-header {
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+  }
+  body.mode-active-plan #plan-contextual-toolbar { min-height: 0 !important; }
+  body.mode-active-plan #plan-status-bar { padding-top: 2px !important; padding-bottom: 2px !important; }
+  body.mode-active-plan .plan-svg-wrap { min-height: 180px !important; }
+}

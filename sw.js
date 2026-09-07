@@ -3,14 +3,14 @@
  * Enables 100% offline operation, instant caching, and standalone desktop installation.
  */
 
-const CACHE_NAME = 'archiscale-v2.3.4';
+const CACHE_NAME = 'archiscale-v2.3.6';
 
 const PRECACHE_ASSETS = [
   './',
   './index.html',
-  './css/main.css?v=2.3.4',
-  './css/themes.css?v=2.3.4',
-  './js/app.js?v=2.3.4',
+  './css/main.css?v=2.3.6',
+  './css/themes.css?v=2.3.6',
+  './js/app.js?v=2.3.6',
   './js/app.js',
   './manifest.json',
   './assets/icon.svg',
