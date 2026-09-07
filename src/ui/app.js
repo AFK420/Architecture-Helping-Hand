@@ -1705,6 +1705,7 @@ export function initializeApp() {
   }
 
   function switchMode(targetMode) {
+    const previousMode = state.currentMode;
     if (targetMode === 'home' || !NAV_CATALOG.some(i => i.id === targetMode) && targetMode !== 'furniture') {
       // unknown ids fall back to home so a stale link never dead-ends
       if (!NAV_CATALOG.some(i => i.id === targetMode)) targetMode = 'home';
@@ -1810,6 +1811,10 @@ export function initializeApp() {
     else if (targetMode === 'survey') {
       views.callController('survey', 'renderMeasurements');
     }
+
+    // Documented view lifecycle contract: hooks are optional and skipped
+    // silently by the registry when a view does not define them.
+    views.notifyModeChange(previousMode, targetMode);
   }
 
   // ---------------------------------------------------------------------------

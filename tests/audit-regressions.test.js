@@ -203,6 +203,16 @@ console.log('\n--- A9. bindShortcut rejects duplicates across categories ---');
   assertEqual(sm.getKeyForAction('tool_wall'), 'w', 'resetAllShortcuts restores defaults after A9 probing');
 }
 
+// --- A11b. view-registry mode hooks are wired into switchMode ---
+console.log('\n--- A11b. view lifecycle hooks wired ---');
+{
+  const appSrc = fs.readFileSync(fileURLToPath(new URL('../src/ui/app.js', import.meta.url)), 'utf-8');
+  assert(/views\.notifyModeChange\(previousMode, targetMode\)/.test(appSrc),
+    'switchMode notifies the registry so onModeEnter/onModeLeave fire');
+  const regSrc = fs.readFileSync(fileURLToPath(new URL('../src/ui/view-registry.js', import.meta.url)), 'utf-8');
+  assert(regSrc.includes('function notifyModeChange'), 'registry exposes notifyModeChange');
+}
+
 console.log(`\n========================================`);
 console.log(`Audit Regression Test Summary: ${passed} passed, ${failed} failed.`);
 console.log(`========================================`);
