@@ -24,6 +24,7 @@
 
 import { parseInput } from './parser.js';
 import { UNITS } from './units.js';
+import { isExpressionLike, evaluateExpressionSafe } from './dimension-expression.js';
 
 // ---------------------------------------------------------------------------
 // Command definitions
@@ -206,10 +207,26 @@ export function parsePointToken(token, lastPoint = null) {
   return { error: `"${t}" is not a coordinate — try 10,20 · @5,0 · @5<90 · 2400mm.` };
 }
 
-/** Parses a unit-bearing length via the shared parser ("2400mm", "2.4m", "8'"). */
+/** Parses a unit-bearing length: expressions ("2m+400mm") via the math
+ *  engine, single values via the shared parser ("2400mm", "2.4m", "8'"). */
 export function parseLengthToken(token) {
-  const res = parseInput(token, { allowNegative: true });
-  if (!res.isValid) return { error: `"${token}" is not a valid length — try 2400mm, 2.4m or 8'.` };
+  const t = String(token ?? '').trim();
+  // Expression path: any input with an operator runs through the
+  // deterministic math engine (same units, same parser family).
+  if (/[+\-*/%^]/.test(t.slice(1)) && isExpressionLike(t)) {
+    const res = evaluateExpressionSafe(t, { defaultUnit: 'm', displayUnit: 'm' });
+    if (res.isValid && (res.dimension === 'length' || res.dimension === 'scalar')) {
+      return { value: res.value };
+    }
+    if (res.isValid && (res.dimension === 'area' || res.dimension === 'volume')) {
+      return { error: `"${t}" results in an ${res.dimension} — a point or length is required here (e.g. 2m+400mm).` };
+    }
+    // fall through to parseInput for non-expression strings
+  }
+  const res = parseInput(t, { allowNegative: true });
+  if (!res.isValid) {
+    return { error: `"${token}" is not a valid length — try 2400mm, 2.4m, 8', or an expression like 2m+400mm.` };
+  }
   // parseInput returns the value in the DETECTED unit ("2400mm" → 2400 mm);
   // the command engine's canonical unit is meters (canvas world space).
   let meters = res.value;

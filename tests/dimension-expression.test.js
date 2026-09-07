@@ -254,11 +254,12 @@ console.log('\n--- 7. Dimensional Semantics ---');
   assertCloseTo(res.value, 1.1, 0.0001, '(2.4m + 900mm) / 3 evaluates to 1.1 m');
 }
 
-assertThrows(
-  () => evaluateExpression('1200mm * 500mm'),
-  EXPRESSION_ERROR_CODES.INCOMPATIBLE_DIMENSIONS,
-  'Rejects multiplying two lengths (area producing)'
-);
+{
+  // Phase 3: length * length now produces AREA (dimensional analysis m * m = m2)
+  const areaRes = evaluateExpression('1200mm * 500mm', { defaultUnit: 'mm', displayUnit: 'm2' });
+  assertCloseTo(areaRes.value, 0.6, 0.0001, '1200mm * 500mm = 0.6 m2 (area)');
+  assert(areaRes.dimension === 'area', 'Result dimension is area');
+}
 
 assertThrows(
   () => evaluateExpression('10 / 500mm'),
