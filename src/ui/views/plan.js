@@ -28,7 +28,7 @@ import {
   WALL_ASSEMBLIES, wallOpenings,
   createRoomTag, createDoorTag, createWindowTag,
   createLeaderNote, createNorthArrow, autoTagDocument,
-  createDetailCallout, createBlockInstanceEntity
+  createDetailCallout, createBlockInstanceEntity, createLineEntity
 } from '../../core/entities.js';
 import {
   normalizeDocumentLayers, resolveEntityLayer, isEntityVisible, isEntityLocked,
@@ -74,13 +74,28 @@ import {
   TOOL_CATEGORIES,
   STUDIO_TOOL_CATALOG,
   searchStudioTools,
+  parseStudioCommand,
   PERSONA_RIBBON_CONFIGS
 } from '../../core/personas.js';
 import { renderStudioRibbon } from '../components/ribbon.js';
 import { renderStudioPalette } from '../components/palette.js';
 import { renderStudioCPanels } from '../components/cpanels.js';
-import { renderStudioCommandBar } from '../components/commandbar.js';
+import { renderStudioCommandBar, updatePrompt } from '../components/commandbar.js';
 import { initToolGuidance, updateInspectorGuide } from '../components/tooltip.js';
+import { buildCommandRegistry, createCommandSession } from '../../core/cad-commands.js';
+import { suggestForEntity, suggestForDocument } from '../../core/suggestions.js';
+import { serializeDrawingContext, serializeSelection, serializeToolCapabilities } from '../../core/ai-bridge.js';
+import { docTypeIcon, icon } from '../../core/icons.js';
+const svgIconClose = icon('delete', { size: 10 });
+const svgIconPlus = icon('command', { size: 12 });
+const TOOL_ICON_BY_TOOL = {
+  select: 'select', room: 'room', polyroom: 'polyroom', wall: 'wall', door: 'door',
+  window: 'window', column: 'column', grid: 'grid', stair: 'stair', ramp: 'ramp',
+  dimension: 'dimension', measure: 'measure', furniture: 'furniture',
+  hatch: 'hatch', north: 'north', text: 'info',
+  leader: 'dimension', section_cut: 'section', detail_callout: 'detail',
+  material_paint: 'hatch', watercolor_brush: 'hatch', pushpull: 'pushpull'
+};
 
 const PLAN_STATE_KEY = 'archiscale_plan_prefs'; // user preferences only
 
@@ -105,6 +120,219 @@ export function createPlanView(context) {
   let polyRoomVertices = []; // [{x, y}, ...]
   let currentMouseWorld = { x: 0, y: 0 };
   let activeSidebarTab = 'entities'; // 'entities' | 'layers'
+
+  // ------------------------------------------------------------------
+  // CAD command engine (src/core/cad-commands.js) — one registry derived
+  // from the live tool catalog; the command bar, canvas clicks and the
+  // deterministic core all meet here.
+  // ------------------------------------------------------------------
+  function commitEntity(entity, label) {
+    const cmd = entityAddRemoveCommand(entities(), entity, label);
+    cmd.redo();
+    history.push(cmd);
+    state.plan.selectedIds = new Set([entity.id]);
+    render();
+    updateStudioCPanels();
+    return entity;
+  }
+
+  function executeCadCommand(run, args = {}) {
+    switch (run) {
+      case 'create_line': {
+        const [p1, p2] = args.points;
+        const line = createLineEntity({ p1, p2 });
+        commitEntity(line, 'create line');
+        return { ok: true, message: `Line ${line.length.toFixed(2)} m · ${Math.round(line.angleDegrees)}°` };
+      }
+      case 'create_wall_points': {
+        const [p1, p2] = args.points;
+        const thickness = Math.max(0.05, Number(args.options?.WIDTH) || 0.2);
+        const wall = createWall({ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, thickness });
+        commitEntity(wall, 'create wall');
+        return { ok: true, message: `Wall ${wallLength(wall).toFixed(2)} m · ${thickness.toFixed(2)} m thick` };
+      }
+      case 'create_room_points': {
+        const [p1, p2] = args.points;
+        const w = Math.abs(p2.x - p1.x);
+        const d = Math.abs(p2.y - p1.y);
+        if (w < 0.3 || d < 0.3) return { ok: false, error: 'Room corners too close — drag a larger rectangle (≥ 0.3 m each side).' };
+        const room = createRoom({
+          name: `Room ${w.toFixed(1)}x${d.toFixed(1)}m`,
+          x: Math.min(p1.x, p2.x),
+          y: Math.min(p1.y, p2.y),
+          width: w,
+          depth: d
+        });
+        commitEntity(room, 'create room');
+        return { ok: true, message: `Room ${w.toFixed(2)} × ${d.toFixed(2)} m · ${(w * d).toFixed(1)} m²` };
+      }
+      case 'measure_points': {
+        const [p1, p2] = args.points;
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const dist = Math.hypot(dx, dy);
+        const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
+        return { ok: true, message: `Distance ${dist.toFixed(3)} m · Angle ${ang.toFixed(1)}° · Δ(${dx.toFixed(2)}, ${dy.toFixed(2)})` };
+      }
+      case 'create_dimension': {
+        const [p1, p2] = args.points;
+        const dim = createDimension({ p1, p2 });
+        commitEntity(dim, 'create dimension');
+        return { ok: true, message: `Dimension placed · ${Math.hypot(p2.x - p1.x, p2.y - p1.y).toFixed(2)} m` };
+      }
+      case 'undo': undo(); return { ok: true, message: 'Undo.' };
+      case 'redo': redo(); return { ok: true, message: 'Redo.' };
+      case 'delete': deleteSelected(); return { ok: true, message: 'Selection deleted.' };
+      case 'zoom_extents': fitToContent(); return { ok: true, message: 'Zoom to fit.' };
+      case 'zoom': {
+        const a = (args.args && args.args[0] ? String(args.args[0]) : 'E').toUpperCase();
+        if (a === 'E' || a === 'EXTENTS') { fitToContent(); return { ok: true, message: 'Zoom extents.' }; }
+        if (a === 'IN') { zoomStep(1.25); return { ok: true, message: 'Zoom in.' }; }
+        if (a === 'OUT') { zoomStep(0.8); return { ok: true, message: 'Zoom out.' }; }
+        const num = parseFloat(a);
+        if (Number.isFinite(num)) { setZoomPercent(num); return { ok: true, message: `Zoom ${num}%.` }; }
+        return { ok: false, error: 'ZOOM expects E (extents), IN, OUT or a percentage — e.g. ZOOM 100.' };
+      }
+      case 'pan': setTool('pan'); return { ok: true, message: 'Pan tool active — drag to pan.' };
+      case 'view_top': handleStudioToolAction('view_top'); return { ok: true, message: 'Top (plan) view.' };
+      case 'view_front': handleStudioToolAction('view_south'); return { ok: true, message: 'Front (south) elevation.' };
+      case 'view_right': {
+        let eDoc = state.plan.documents.find(d => d.type === 'elevation');
+        if (!eDoc) {
+          createDocument('East Elevation', 'elevation');
+          eDoc = state.plan.documents.find(d => d.type === 'elevation');
+        }
+        if (eDoc) {
+          eDoc.elevationDirection = 'east';
+          eDoc.name = 'East Elevation';
+          switchDocument(eDoc.id);
+        }
+        return { ok: true, message: 'Right (east) elevation.' };
+      }
+      case 'view_perspective': handleStudioToolAction('view_perspective'); return { ok: true, message: '3D massing view.' };
+      case 'view_4split': handleStudioToolAction('view_4split'); return { ok: true, message: '4-viewport workspace.' };
+      case 'tool:select': setTool('select'); return { ok: true, message: 'Selection tool active.' };
+      case 'properties': renderPropertiesInspector(); updateStudioCPanels(); return { ok: true, message: 'Properties panel focused on the current selection.' };
+      case 'info': {
+        const sel = selectedEntities();
+        if (sel.length === 0) return { ok: false, error: 'INFO needs a selection — click an entity first (SELECT to activate the pick tool).' };
+        showInspectorInfo(sel);
+        return { ok: true, message: `Info for ${sel.length} selected entity(ies) shown in the inspector.` };
+      }
+      case 'suggest': return runSuggestions();
+      case 'ai_query': {
+        const question = (args.args || []).join(' ') || '';
+        startAiQuery(question);
+        return { ok: true, message: question ? 'AI query started from the selection.' : 'AI query mode — select entities, then type your question.' };
+      }
+      case 'ai_analyze': triggerAiCritique('plan_only', { question: 'Analyze this plan: major risks, geometry problems, missing information, circulation and annotation gaps. Cite deterministic evidence for each finding.' }); return { ok: true, message: 'Project-wide AI analysis started.' };
+      case 'panel:layers': activeSidebarTab = 'layers'; renderEntityList(); renderLayerList(); return { ok: true, message: 'Layers panel active.' };
+      case 'help': {
+        const names = [...buildCommandRegistry(STUDIO_TOOL_CATALOG).commands.values()].map(c => c.name);
+        return { ok: true, message: `Commands: ${names.join(' · ')}` };
+      }
+      default:
+        if (run.startsWith('tool:')) {
+          handleStudioToolAction(run.slice(5));
+          return { ok: true };
+        }
+        return { ok: false, error: `Unhandled command action "${run}".` };
+    }
+  }
+
+  function selectedEntities() {
+    return entities().filter(e => state.plan.selectedIds.has(e.id));
+  }
+
+  const cadSession = createCommandSession({
+    registry: buildCommandRegistry(STUDIO_TOOL_CATALOG),
+    execute: executeCadCommand,
+    storage: (typeof window !== 'undefined' && window.localStorage) ? window.localStorage : null
+  });
+
+  /** Legacy parametric command executor (REC w d · WALL len · STAIR r w · HATCH · INSERT). */
+  function onExecuteParsedCommand(parsed) {
+    if (!parsed) return;
+    if (parsed.type === 'create_room') {
+      const w = parsed.width || 4;
+      const d = parsed.depth || 3;
+      const origin = currentMouseWorld || { x: 2, y: 2 };
+      const r = createRoom({
+        name: parsed.name || `Room ${w}x${d}m`,
+        x: snapToGrid(origin.x, state.plan.grid),
+        y: snapToGrid(origin.y, state.plan.grid),
+        width: w,
+        depth: d
+      });
+      commitEntity(r, `create ${r.name}`);
+      showToast(`Created Room: ${r.name} (${(w * d).toFixed(1)} m²)`, 'success');
+      return;
+    }
+    if (parsed.type === 'create_wall_length') {
+      const len = parsed.length || 5;
+      const origin = currentMouseWorld || { x: 2, y: 2 };
+      const wall = createWall({
+        x1: snapToGrid(origin.x, state.plan.grid),
+        y1: snapToGrid(origin.y, state.plan.grid),
+        x2: snapToGrid(origin.x + len, state.plan.grid),
+        y2: snapToGrid(origin.y, state.plan.grid),
+        thickness: 0.2
+      });
+      commitEntity(wall, 'create wall');
+      showToast(`Created Wall: ${len}m`, 'success');
+      return;
+    }
+    if (parsed.type === 'create_stair') {
+      const risers = parsed.risers || 16;
+      const width = parsed.width || 1.1;
+      const origin = currentMouseWorld || { x: 2, y: 4 };
+      const stair = createStairEntity({
+        x: snapToGrid(origin.x, state.plan.grid),
+        y: snapToGrid(origin.y, state.plan.grid),
+        width: width,
+        riserCount: risers
+      });
+      commitEntity(stair, 'create stair');
+      showToast(`Created Stair: ${risers} risers, ${width}m width`, 'success');
+      return;
+    }
+    if (parsed.type === 'set_hatch') {
+      state.activeMaterial = parsed.pattern || 'brick';
+      setTool('hatch');
+      showToast(`Active Hatch: ${state.activeMaterial}. Click a room to apply.`);
+      renderContextualToolbar();
+      return;
+    }
+    if (parsed.type === 'insert_block') {
+      const blockId = parsed.blockKey || 'DOOR_SINGLE_900';
+      const origin = currentMouseWorld || { x: parsed.x || 2, y: parsed.y || 2 };
+      const blk = createBlockInstanceEntity({
+        blockId,
+        x: snapToGrid(origin.x, state.plan.grid),
+        y: snapToGrid(origin.y, state.plan.grid)
+      });
+      commitEntity(blk, `insert ${blk.name}`);
+      showToast(`Inserted Block: ${blk.name}`, 'success');
+      return;
+    }
+    if (parsed.type === 'switch_cpanel') {
+      state.activeCPanelTab = parsed.panelTab;
+      updateStudioCPanels();
+      showToast(`C-Panel: ${parsed.panelTab} active`);
+      return;
+    }
+    if (parsed.type === 'set_view') {
+      if (parsed.view === 'top') handleStudioToolAction('view_top');
+      else if (parsed.view === 'south') handleStudioToolAction('view_south');
+      else if (parsed.view === 'perspective') handleStudioToolAction('view_perspective');
+      else if (parsed.view === '4view') handleStudioToolAction('view_4split');
+      return;
+    }
+    if (parsed.type === 'set_tool') {
+      handleStudioToolAction(parsed.toolId || parsed.verb);
+      return;
+    }
+  }
 
   function initDocuments() {
     if (!state.plan) state.plan = {};
@@ -313,10 +541,11 @@ export function createPlanView(context) {
       tab.className = `plan-doc-tab ${isActive ? 'active' : ''}`;
       tab.dataset.docId = doc.id;
 
-      const typeIcon = doc.type === '3d_massing' ? '🏢 ' : (doc.type === 'sheet' ? '📄 ' : (doc.type === 'elevation' ? '🏛️ ' : (doc.type === 'section' ? '✂️ ' : (doc.type === 'detail' ? '🔍 ' : '📐 '))));
+      const typeGlyph = docTypeIcon(doc.type, { size: 13 });
       const titleSpan = document.createElement('span');
       titleSpan.className = 'plan-doc-tab-title';
-      titleSpan.textContent = `${typeIcon}${doc.name}`;
+      titleSpan.innerHTML = `${typeGlyph}<span class="tab-title-text"></span>`;
+      titleSpan.querySelector('.tab-title-text').textContent = doc.name;
       titleSpan.title = 'Double click to rename tab';
 
       titleSpan.addEventListener('dblclick', (e) => {
@@ -347,7 +576,8 @@ export function createPlanView(context) {
         const closeBtn = document.createElement('button');
         closeBtn.type = 'button';
         closeBtn.className = 'plan-doc-tab-close';
-        closeBtn.textContent = '✕';
+        closeBtn.innerHTML = svgIconClose;
+        closeBtn.setAttribute('aria-label', `Close ${doc.name}`);
         closeBtn.title = `Close ${doc.name}`;
         closeBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -1044,141 +1274,18 @@ export function createPlanView(context) {
         grid: state.plan.grid || 0.5,
         snap: state.plan.snap !== false,
         ortho: state.plan.ortho !== false,
-        onExecuteCommand: (cmd) => {
-          handleStudioToolAction(cmd);
+        session: cadSession,
+        getCurrentPoint: () => currentMouseWorld,
+        snapPoint: (p) => ({ x: snapToGrid(p.x, state.plan.grid), y: snapToGrid(p.y, state.plan.grid) }),
+        onLegacyCommand: (raw) => {
+          const parsed = parseStudioCommand(raw, { coords: currentMouseWorld });
+          if (!parsed) return null;
+          if (parsed.type === 'unknown') return null;
+          onExecuteParsedCommand(parsed);
+          return { handled: true, verb: parsed.verb || parsed.type };
         },
-        onExecuteParsedCommand: (parsed) => {
-          if (!parsed) return;
-          if (parsed.type === 'create_room') {
-            const w = parsed.width || 4;
-            const d = parsed.depth || 3;
-            const origin = currentMouseWorld || { x: 2, y: 2 };
-            const r = createRoom({
-              name: parsed.name || `Room ${w}x${d}m`,
-              x: snapToGrid(origin.x, state.plan.grid),
-              y: snapToGrid(origin.y, state.plan.grid),
-              width: w,
-              depth: d
-            });
-            const cmd = entityAddRemoveCommand(entities(), r, `create ${r.name}`);
-            cmd.redo();
-            history.push(cmd);
-            state.plan.selectedIds = new Set([r.id]);
-            showToast(`Created Room: ${r.name} (${(w * d).toFixed(1)} m²)`, 'success');
-            render();
-            updateStudioCPanels();
-            return;
-          }
-          if (parsed.type === 'create_wall_length') {
-            const len = parsed.length || 5;
-            const origin = currentMouseWorld || { x: 2, y: 2 };
-            const wall = createWall({
-              x1: snapToGrid(origin.x, state.plan.grid),
-              y1: snapToGrid(origin.y, state.plan.grid),
-              x2: snapToGrid(origin.x + len, state.plan.grid),
-              y2: snapToGrid(origin.y, state.plan.grid),
-              thickness: 0.2
-            });
-            const cmd = entityAddRemoveCommand(entities(), wall, `create wall ${len}m`);
-            cmd.redo();
-            history.push(cmd);
-            state.plan.selectedIds = new Set([wall.id]);
-            showToast(`Created Wall: ${len}m`, 'success');
-            render();
-            updateStudioCPanels();
-            return;
-          }
-          if (parsed.type === 'create_wall') {
-            const wall = createWall({
-              x1: parsed.x1,
-              y1: parsed.y1,
-              x2: parsed.x2,
-              y2: parsed.y2,
-              thickness: 0.2
-            });
-            const cmd = entityAddRemoveCommand(entities(), wall, `create wall`);
-            cmd.redo();
-            history.push(cmd);
-            state.plan.selectedIds = new Set([wall.id]);
-            showToast(`Created Wall from (${parsed.x1},${parsed.y1}) to (${parsed.x2},${parsed.y2})`, 'success');
-            render();
-            updateStudioCPanels();
-            return;
-          }
-          if (parsed.type === 'create_stair') {
-            const risers = parsed.risers || 16;
-            const width = parsed.width || 1.1;
-            const origin = currentMouseWorld || { x: 2, y: 4 };
-            const stair = createStairEntity({
-              x: snapToGrid(origin.x, state.plan.grid),
-              y: snapToGrid(origin.y, state.plan.grid),
-              width: width,
-              riserCount: risers
-            });
-            const cmd = entityAddRemoveCommand(entities(), stair, `create stair`);
-            cmd.redo();
-            history.push(cmd);
-            state.plan.selectedIds = new Set([stair.id]);
-            showToast(`Created Stair: ${risers} risers, ${width}m width`, 'success');
-            render();
-            updateStudioCPanels();
-            return;
-          }
-          if (parsed.type === 'set_hatch') {
-            state.activeMaterial = parsed.pattern || 'brick';
-            setTool('hatch');
-            showToast(`Active Hatch: ${state.activeMaterial}. Click a room to apply.`);
-            renderContextualToolbar();
-            return;
-          }
-          if (parsed.type === 'insert_block') {
-            const blockId = parsed.blockKey || 'DOOR_SINGLE_900';
-            const origin = currentMouseWorld || { x: parsed.x || 2, y: parsed.y || 2 };
-            const blk = createBlockInstanceEntity({
-              blockId,
-              x: snapToGrid(origin.x, state.plan.grid),
-              y: snapToGrid(origin.y, state.plan.grid)
-            });
-            const cmd = entityAddRemoveCommand(entities(), blk, `insert ${blk.name}`);
-            cmd.redo();
-            history.push(cmd);
-            state.plan.selectedIds = new Set([blk.id]);
-            showToast(`Inserted Block: ${blk.name}`, 'success');
-            render();
-            updateStudioCPanels();
-            return;
-          }
-          if (parsed.type === 'switch_cpanel') {
-            state.activeCPanelTab = parsed.panelTab;
-            updateStudioCPanels();
-            showToast(`C-Panel: ${parsed.panelTab} active`);
-            return;
-          }
-          if (parsed.type === 'set_view') {
-            if (parsed.view === 'top') handleStudioToolAction('view_top');
-            else if (parsed.view === 'south') handleStudioToolAction('view_south');
-            else if (parsed.view === 'perspective') handleStudioToolAction('view_perspective');
-            else if (parsed.view === '4view') handleStudioToolAction('view_4split');
-            return;
-          }
-          if (parsed.type === 'zoom_extents') {
-            fitToContent();
-            return;
-          }
-          if (parsed.type === 'undo') { undo(); return; }
-          if (parsed.type === 'redo') { redo(); return; }
-          if (parsed.type === 'delete') { deleteSelected(); return; }
-          if (parsed.type === 'help') {
-            showToast('Commands: REC [w] [d], WALL [len], STAIR [r] [w], HATCH [pat], PLAN, PERSP, 4VIEW, DIST, HELP');
-            return;
-          }
-          if (parsed.type === 'set_tool') {
-            handleStudioToolAction(parsed.toolId || parsed.verb);
-            return;
-          }
-          if (parsed.type === 'unknown') {
-            showToast(`Unknown command: "${parsed.verb}". Type HELP for command list.`, 'warning');
-          }
+        onAfterRun: (res) => {
+          if (res && res.handled) AudioService.playTick();
         },
         onToggleSnap: () => {
           toggleSnap();
@@ -1904,7 +2011,7 @@ export function createPlanView(context) {
 
     const ctxBar = dom.planContextualToolbar || document.getElementById('plan-contextual-toolbar');
     if (ctxBar) {
-      const multiStoryLabel = doc.massingOptions.multiStory ? '🏢 Stack All Stories' : '🏢 Single Story';
+      const multiStoryLabel = doc.massingOptions.multiStory ? 'Stack All Stories' : 'Single Story';
       ctxBar.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
           <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
@@ -2145,7 +2252,7 @@ export function createPlanView(context) {
               <button type="button" class="result-action-btn ${dir === 'east' ? 'primary' : ''}" data-dir="east" style="font-size: 0.68rem; padding: 2px 6px;">East (Right)</button>
               <button type="button" class="result-action-btn ${dir === 'west' ? 'primary' : ''}" data-dir="west" style="font-size: 0.68rem; padding: 2px 6px;">West (Left)</button>
             </div>
-            <button type="button" id="btn-elev-multistory" class="result-action-btn ${doc.multiStory !== false ? 'active' : ''}" style="font-size: 0.68rem; padding: 2px 6px;">${doc.multiStory !== false ? '🏢 Stack All Stories' : '📄 Single Floor'}</button>
+            <button type="button" id="btn-elev-multistory" class="result-action-btn ${doc.multiStory !== false ? 'active' : ''}" style="font-size: 0.68rem; padding: 2px 6px;">${doc.multiStory !== false ? 'Stack All Stories' : 'Single Floor'}</button>
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
             <button type="button" id="btn-elev-export" class="result-action-btn primary" style="font-size: 0.68rem; padding: 2px 8px;">💾 Export Elevation SVG</button>
@@ -2422,7 +2529,7 @@ export function createPlanView(context) {
         ${topEntitiesMarkup}
         <g class="quadrant-pill" data-quadrant="top" cursor="pointer">
           <rect x="12" y="12" width="130" height="24" rx="4" fill="rgba(15, 23, 42, 0.9)" stroke="#057a55" stroke-width="1.2" />
-          <text x="22" y="28" fill="#4ade80" font-size="11" font-weight="bold" font-family="var(--font-mono)">🦏 Top [Plan]</text>
+          <text x="22" y="28" fill="#4ade80" font-size="11" font-weight="bold" font-family="var(--font-mono)">TOP · PLAN</text>
         </g>
       </g>
 
@@ -2433,7 +2540,7 @@ export function createPlanView(context) {
         </g>
         <g class="quadrant-pill" data-quadrant="perspective" cursor="pointer">
           <rect x="${halfW + 12}" y="12" width="145" height="24" rx="4" fill="rgba(11, 17, 32, 0.9)" stroke="#057a55" stroke-width="1.2" />
-          <text x="${halfW + 22}" y="28" fill="#38bdf8" font-size="11" font-weight="bold" font-family="var(--font-mono)">👁️ Perspective</text>
+          <text x="${halfW + 22}" y="28" fill="#38bdf8" font-size="11" font-weight="bold" font-family="var(--font-mono)">PERSPECTIVE</text>
         </g>
       </g>
 
@@ -2444,7 +2551,7 @@ export function createPlanView(context) {
         </svg>
         <g class="quadrant-pill" data-quadrant="front" cursor="pointer">
           <rect x="12" y="12" width="145" height="24" rx="4" fill="rgba(13, 21, 39, 0.9)" stroke="#057a55" stroke-width="1.2" />
-          <text x="22" y="28" fill="#fbbf24" font-size="11" font-weight="bold" font-family="var(--font-mono)">🏛️ Front [South]</text>
+          <text x="22" y="28" fill="#fbbf24" font-size="11" font-weight="bold" font-family="var(--font-mono)">FRONT · SOUTH</text>
         </g>
       </g>
 
@@ -2455,7 +2562,7 @@ export function createPlanView(context) {
         </svg>
         <g class="quadrant-pill" data-quadrant="right" cursor="pointer">
           <rect x="12" y="12" width="145" height="24" rx="4" fill="rgba(15, 23, 42, 0.9)" stroke="#057a55" stroke-width="1.2" />
-          <text x="22" y="28" fill="#a78bfa" font-size="11" font-weight="bold" font-family="var(--font-mono)">📐 Right [East]</text>
+          <text x="22" y="28" fill="#a78bfa" font-size="11" font-weight="bold" font-family="var(--font-mono)">RIGHT · EAST</text>
         </g>
       </g>
 
@@ -3151,6 +3258,14 @@ export function createPlanView(context) {
           <text x="${p.x.toFixed(1)}" y="${(p.y + 3.5).toFixed(1)}" text-anchor="middle" font-size="8.5" font-family="var(--font-mono)" fill="var(--cyan-glow, #38bdf8)" font-weight="700">${escapeHtml(tagText)}</text>
         </g>`;
       }
+      if (e.kind === 'line') {
+        const sP1 = worldToSvg(transform, e.x1, e.y1);
+        const sP2 = worldToSvg(transform, e.x2, e.y2);
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <line x1="${sP1.x.toFixed(1)}" y1="${sP1.y.toFixed(1)}" x2="${sP2.x.toFixed(1)}" y2="${sP2.y.toFixed(1)}"
+            stroke="${stroke}" stroke-width="${selected ? 2.4 : 1.3}" stroke-linecap="round"/>
+        </g>`;
+      }
       if (e.kind === 'leader') {
         const p1 = e.p1 || { x: e.x || 0, y: e.y || 0 };
         const knee = e.knee || { x: p1.x + 0.5, y: p1.y + 0.5 };
@@ -3538,6 +3653,7 @@ export function createPlanView(context) {
       else if (e.kind === 'door_tag') desc = `Badge [${escapeHtml(e.tag || '')}]`;
       else if (e.kind === 'window_tag') desc = `Badge <${escapeHtml(e.tag || '')}>`;
       else if (e.kind === 'leader') desc = `Leader · "${escapeHtml(e.text || '')}"`;
+      else if (e.kind === 'line') desc = `Line · ${(typeof e.length === 'number' ? e.length : 0).toFixed(2)} m · ${Math.round(e.angleDegrees || 0)}°`;
       else if (e.kind === 'north_arrow') desc = `North · ${Math.round(e.rotation || 0)}°`;
       else if (e.kind === 'column') desc = `Column · ${e.profile || 'rect'} · ${num(e.width)}×${num(e.depth)} m`;
       else if (e.kind === 'grid_line') desc = `Grid · Axis [${escapeHtml(e.name || '')}]`;
@@ -3589,11 +3705,11 @@ export function createPlanView(context) {
             <span style="font-size: 0.65rem; color: var(--text-muted, #888); flex-shrink: 0;">(${count})</span>
           </div>
           <div style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0;">
-            <button type="button" class="layer-toggle-vis" data-layer-id="${escapeHtml(l.id)}" title="${isVis ? 'Hide layer (currently visible)' : 'Show layer (currently hidden)'}" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; font-size: 0.8rem; opacity: ${isVis ? '1.0' : '0.4'};">
-              ${isVis ? '👁️' : '🚫'}
+            <button type="button" class="layer-toggle-vis" data-layer-id="${escapeHtml(l.id)}" title="${isVis ? 'Hide layer (currently visible)' : 'Show layer (currently hidden)'}" aria-label="${isVis ? 'Hide layer' : 'Show layer'} ${escapeHtml(l.name)}" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; opacity: ${isVis ? '1.0' : '0.4'}; display: inline-flex;">
+              ${icon(isVis ? 'visible' : 'hidden', { size: 14 })}
             </button>
-            <button type="button" class="layer-toggle-lock" data-layer-id="${escapeHtml(l.id)}" title="${isLck ? 'Unlock layer (currently locked)' : 'Lock layer (currently editable)'}" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; font-size: 0.8rem; opacity: ${isLck ? '1.0' : '0.45'};">
-              ${isLck ? '🔒' : '🔓'}
+            <button type="button" class="layer-toggle-lock" data-layer-id="${escapeHtml(l.id)}" title="${isLck ? 'Unlock layer (currently locked)' : 'Lock layer (currently editable)'}" aria-label="${isLck ? 'Unlock layer' : 'Lock layer'} ${escapeHtml(l.name)}" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; opacity: ${isLck ? '1.0' : '0.45'}; display: inline-flex;">
+              ${icon(isLck ? 'lock' : 'unlock', { size: 14 })}
             </button>
             ${l.custom ? `
               <button type="button" class="layer-delete-btn" data-layer-id="${escapeHtml(l.id)}" title="Delete custom layer" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; font-size: 0.75rem; color: var(--accent-action, #f43f5e);">
@@ -5279,6 +5395,15 @@ export function createPlanView(context) {
 
   function onPointerDown(event) {
     if (event.button !== 0) return;
+    // Active interactive command (LINE/WALL/RECTANGLE/…): the canvas click
+    // IS the point input — one interaction model, one geometry engine.
+    const cmdbar = document.getElementById('studio-commandbar-container')?.__commandbar;
+    if (cmdbar && cmdbar.isActive()) {
+      const world = svgPoint(event);
+      cmdbar.submitPoint(world);
+      event.preventDefault();
+      return;
+    }
     const doc = getActiveDocument();
     if (doc && doc.type === '3d_massing') {
       dragState = {
@@ -6016,6 +6141,9 @@ export function createPlanView(context) {
   }
 
   function triggerAiCritique(targetType, payload = {}) {
+    // Selection evidence rides to the AI studio so the answer concerns the
+    // exact selected entities (consumed by the facts-pack builder in app.js).
+    state.aiSelectionContext = payload.selectionPackets || null;
     switchMode('ai');
     setTimeout(() => {
       if (dom.aiJobSelect) {
@@ -6046,6 +6174,145 @@ export function createPlanView(context) {
       views.callController('ai', 'refreshImageGroup');
       showToast(`AI Studio loaded with contextual ${targetType} scope`);
     }, 50);
+  }
+
+  // ------------------------------------------------------------------
+  // AI Query / Suggestions / Info — selection-aware copilot hooks
+  // ------------------------------------------------------------------
+
+  /**
+   * AI Query command: routes the user to AI Studio with the exact selection
+   * serialized (geometry, relationships, deterministic checks). The AI
+   * answers about THAT entity with real numbers, not guesses.
+   */
+  function startAiQuery(question = '') {
+    const sel = selectedEntities();
+    const packets = serializeSelection(entities(), state.plan.selectedIds);
+    const hasQuestion = typeof question === 'string' && question.trim().length > 0;
+    const kindSummary = packets.length
+      ? packets.map(p => p.name || p.kind).slice(0, 3).join(', ')
+      : 'no selection (document context only)';
+    const defaultQuestion = hasQuestion ? question : (packets.length
+      ? `Review the selected ${kindSummary}: verify dimensions against geometry, check proportions and clearances, and state any concerns with evidence.`
+      : 'Analyze this document: geometry problems, missing annotations, and improvement opportunities.');
+    triggerAiCritique(packets.length === 1 ? packets[0].kind : 'plan_only', {
+      selectionPackets: packets,
+      question: defaultQuestion
+    });
+    // triggerAiCritique writes canned text; override with our evidence-aware question.
+    setTimeout(() => {
+      const targetInput = dom.aiQuestionInput || dom.aiUserPrompt;
+      if (targetInput) targetInput.value = defaultQuestion;
+      if (packets.length === 1 && dom.aiContextScopeSelect) {
+        // Narrow the deterministic facts pack to the selection.
+        dom.aiContextScopeSelect.value = 'plan_only';
+      }
+    }, 60);
+  }
+
+  /**
+   * SUGGEST command: deterministic, ranked, evidence-backed suggestions for
+   * the selection (or the whole document when nothing is selected).
+   */
+  function runSuggestions() {
+    const sel = selectedEntities();
+    const findings = sel.length > 0
+      ? sel.flatMap(e => suggestForEntity(e, entities()))
+      : suggestForDocument(entities());
+    const scopeLabel = sel.length > 0 ? `${sel.length} selected` : 'the whole document';
+    if (findings.length === 0) {
+      showToast(`No deterministic issues found in ${scopeLabel}.`, 'success');
+      return { ok: true, message: `No deterministic issues found in ${scopeLabel}.` };
+    }
+    const order = { critical: 0, high: 1, medium: 2, low: 3, informational: 4 };
+    findings.sort((a, b) => (order[a.severity] ?? 4) - (order[b.severity] ?? 4));
+    const summary = findings.slice(0, 3)
+      .map(f => `[${f.severity.toUpperCase()}] ${f.problem} — ${f.evidence}`)
+      .join('  |  ');
+    showToast(`Suggestions for ${scopeLabel}: ${summary}`, 'info', 6000);
+    showSuggestionsPanel(findings, scopeLabel);
+    return { ok: true, message: `${findings.length} suggestion(s) for ${scopeLabel} shown in the inspector.` };
+  }
+
+  /**
+   * Renders the suggestions / info readout into the properties inspector so
+   * deterministic evidence and AI actions share one selection-anchored panel.
+   */
+  function showSuggestionsPanel(findings, scopeLabel) {
+    const host = dom.planPropContent;
+    if (!host) return;
+    const sevClass = s => ({ critical: 'sug-critical', high: 'sug-high', medium: 'sug-med', low: 'sug-low', informational: 'sug-info' }[s] || 'sug-info');
+    host.innerHTML = `
+      <div class="suggestions-panel">
+        <div class="plan-prop-title">SUGGESTIONS — ${escapeHtml(scopeLabel)}</div>
+        ${findings.map(f => `
+          <div class="suggestion-row ${sevClass(f.severity)}">
+            <div class="suggestion-sev">${escapeHtml(f.severity.toUpperCase())}</div>
+            <div class="suggestion-body">
+              <div class="suggestion-problem">${escapeHtml(f.problem)}</div>
+              <div class="suggestion-evidence">${escapeHtml(f.evidence)}</div>
+              <div class="suggestion-rec">${escapeHtml(f.recommendation)}${f.toolId ? ` <em>(tool: ${escapeHtml(f.toolId)})</em>` : ''}</div>
+            </div>
+          </div>`).join('')}
+        <div class="plan-prop-actions">
+          <button type="button" id="btn-sug-ai" class="plan-prop-btn"><span>Ask AI about these</span></button>
+        </div>
+      </div>`;
+    host.querySelector('#btn-sug-ai')?.addEventListener('click', () => {
+      const questions = findings.filter(f => f.severity !== 'informational').slice(0, 5)
+        .map(f => `${f.problem}: ${f.evidence}`).join('; ');
+      startAiQuery(`How should I resolve these findings? ${questions}`);
+    });
+  }
+
+  /**
+   * INFO command: rich entity readout in the inspector — measurements,
+   * relationships and deterministic checks, per entity kind.
+   */
+  function showInspectorInfo(selection) {
+    const host = dom.planPropContent;
+    if (!host) return;
+    const packets = serializeSelection(entities(), state.plan.selectedIds);
+    const rows = [];
+    for (const p of packets) {
+      rows.push(`<div class="info-entity"><div class="plan-prop-title">[${escapeHtml(p.kind.toUpperCase())}] ${escapeHtml(p.name)}</div>`);
+      const fact = (k, v, unit = '') => {
+        if (v === null || v === undefined) return;
+        rows.push(`<div class="plan-prop-row"><span class="plan-prop-label">${escapeHtml(k)}</span><span class="plan-prop-value">${escapeHtml(String(v))}${unit}</span></div>`);
+      };
+      fact('Length', typeof p.length === 'number' ? p.length.toFixed(3) : null, ' m');
+      fact('Angle', typeof p.angleDegrees === 'number' ? p.angleDegrees.toFixed(1) : null, '°');
+      fact('Thickness', typeof p.thickness === 'number' ? p.thickness.toFixed(3) : null, ' m');
+      fact('Width', typeof p.width === 'number' ? p.width.toFixed(3) : null, ' m');
+      fact('Depth', typeof p.depth === 'number' ? p.depth.toFixed(3) : null, ' m');
+      fact('Area', typeof p.area === 'number' ? p.area.toFixed(2) : null, ' m²');
+      fact('Perimeter', typeof p.perimeter === 'number' ? p.perimeter.toFixed(2) : null, ' m');
+      fact('Aspect ratio', typeof p.aspectRatio === 'number' ? p.aspectRatio.toFixed(2) : null, ':1');
+      fact('Measured', typeof p.measuredLength === 'number' ? p.measuredLength.toFixed(3) : null, ' m');
+      fact('Layer', p.layerId);
+      if (p.openings) fact('Openings', p.openings.length);
+      if (p.dimensions && p.dimensions.length) fact('Dimensions', p.dimensions.map(d => d.value.toFixed(2)).join(', '), ' m');
+      if (p.furniture) fact('Furniture inside', p.furniture.length);
+      if (p.doors) fact('Doors', p.doors.length);
+      if (p.hostRoom) fact('Host room', p.hostRoom);
+      if (typeof p.matchesGeometry === 'boolean') {
+        fact('Verified vs geometry', p.matchesGeometry ? 'MATCH' : 'NO MATCH');
+        if (!p.matchesGeometry && p.matchingEntities?.length === 0) {
+          rows.push('<div class="info-check info-check-fail">This dimension does not correspond to any wall/line/room edge — re-measure with DIST.</div>');
+        } else if (p.matchesGeometry) {
+          rows.push('<div class="info-check info-check-pass">Dimension verified against actual geometry.</div>');
+        }
+      }
+      rows.push('</div>');
+    }
+    rows.push(`
+      <div class="plan-prop-actions">
+        <button type="button" id="btn-info-ai" class="plan-prop-btn"><span>Ask AI about this</span></button>
+        <button type="button" id="btn-info-suggest" class="plan-prop-btn"><span>Suggestions</span></button>
+      </div>`);
+    host.innerHTML = rows.join('');
+    host.querySelector('#btn-info-ai')?.addEventListener('click', () => startAiQuery(''));
+    host.querySelector('#btn-info-suggest')?.addEventListener('click', () => runSuggestions());
   }
 
   function dropFurniture(snapped) {
@@ -6435,6 +6702,21 @@ export function createPlanView(context) {
 
       const newDocBtn = dom.btnPlanNewDoc || document.getElementById('btn-plan-new-doc');
       const newTabMenu = document.getElementById('plan-new-tab-menu');
+      // Hydrate the new-tab menu icons from the SVG registry (no emoji in UI).
+      newTabMenu?.querySelectorAll('[data-doc-icon]').forEach(span => {
+        span.innerHTML = docTypeIcon(span.dataset.docIcon, { size: 14 });
+      });
+
+      // View orientation compass: routes through the command executor so the
+      // compass, the TOP/FRONT/RIGHT/PERSPECTIVE commands and the ribbon all
+      // share one view-switching path.
+      const compass = document.getElementById('plan-nav-compass');
+      compass?.querySelectorAll('.navc-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          executeCadCommand(btn.dataset.view);
+        });
+      });
       if (newDocBtn) {
         newDocBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -6466,6 +6748,13 @@ export function createPlanView(context) {
       // Tool palette buttons
       const palette = dom.planToolPalette || document.getElementById('plan-tool-palette');
       if (palette) {
+        // Hydrate static emoji buttons with the SVG icon registry.
+        palette.querySelectorAll('.tool-palette-btn[data-tool]').forEach(btn => {
+          const span = btn.querySelector('.tool-icon');
+          if (span && span.children.length === 0) {
+            span.innerHTML = icon(TOOL_ICON_BY_TOOL[btn.dataset.tool] || 'generic', { size: 16 });
+          }
+        });
         palette.addEventListener('click', (e) => {
           const btn = e.target.closest('.tool-palette-btn');
           if (btn && btn.dataset.tool) {

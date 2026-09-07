@@ -951,6 +951,56 @@ export function createLeaderNote({
 }
 
 /**
+ * Factory for a pure 2-point line-segment entity (a drafting line, distinct
+ * from a wall: no thickness, no assembly — pure geometry annotation).
+ */
+export function createLineEntity({
+  id,
+  name,
+  p1,
+  p2,
+  x1, y1, x2, y2,
+  layerId = 'A-ANNO-LINES',
+  floorId = 'floor-1',
+  metadata = {}
+} = {}) {
+  const actualP1 = p1 || { x: x1, y: y1 };
+  const actualP2 = p2 || { x: x2, y: y2 };
+
+  requireFiniteNumber(actualP1.x, 'line.p1.x');
+  requireFiniteNumber(actualP1.y, 'line.p1.y');
+  requireFiniteNumber(actualP2.x, 'line.p2.x');
+  requireFiniteNumber(actualP2.y, 'line.p2.y');
+
+  const dx = actualP2.x - actualP1.x;
+  const dy = actualP2.y - actualP1.y;
+  if (Math.hypot(dx, dy) < 1e-4) {
+    throw new Error('Line start and end points cannot be identical (length must be > 0)');
+  }
+
+  return {
+    kind: 'line',
+    id: id || generateEntityId('line'),
+    name: typeof name === 'string' && name ? name : 'Line',
+    p1: { x: actualP1.x, y: actualP1.y },
+    p2: { x: actualP2.x, y: actualP2.y },
+    x1: actualP1.x,
+    y1: actualP1.y,
+    x2: actualP2.x,
+    y2: actualP2.y,
+    x: Math.min(actualP1.x, actualP2.x),
+    y: Math.min(actualP1.y, actualP2.y),
+    width: Math.max(0.001, Math.abs(dx)),
+    depth: Math.max(0.001, Math.abs(dy)),
+    length: Math.hypot(dx, dy),
+    angleDegrees: (Math.atan2(dy, dx) * 180) / Math.PI,
+    layerId,
+    floorId,
+    metadata
+  };
+}
+
+/**
  * Factory for a CAD North Arrow symbol.
  */
 export function createNorthArrow({

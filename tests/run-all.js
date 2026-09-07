@@ -60,7 +60,10 @@ const testFiles = [
   'studio-phase7.test.js',
   'studio-phase8.test.js',
   'studio-personas.test.js',
-  'audit-regressions.test.js'
+  'audit-regressions.test.js',
+  'cad-commands.test.js',
+  'icon-system.test.js',
+  'ai-context.test.js'
 ];
 
 console.log('=================================================================');
