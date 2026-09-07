@@ -31,8 +31,12 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
+        // Fail installation if precaching breaks: a partially primed offline
+        // cache would advertise offline support while serving 404s. A failed
+        // install keeps the previous service worker (and its good cache).
         return cache.addAll(PRECACHE_ASSETS).catch(err => {
-          console.warn('[PWA ServiceWorker] Precache partial error (continuing):', err);
+          console.error('[PWA ServiceWorker] Precache failed — install aborted:', err);
+          throw err;
         });
       })
       .then(() => self.skipWaiting())

@@ -285,6 +285,39 @@ function formatFeetInches(totalInches, precision = 16) {
 
 
 /**
+ * Disambiguates commas before numeric parsing.
+ * - "1,234.5" / "1,234,567"  → thousands separators (strip)
+ * - "1,5" / "2,40"           → decimal comma (convert to '.') — a bare "1,5"
+ *   previously parsed as 15, a silent 10× error for decimal-comma locales.
+ * - "1.234,5"                → European mixed notation (strip dots, comma → '.')
+ * Ambiguous ",ddd" (exactly three digits) follows English thousands convention.
+ * @private
+ */
+function normalizeDecimalCommas(s) {
+  if (!s.includes(',')) return s;
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if (lastDot > lastComma) {
+    // "1,234.5" — comma(s) before the decimal point are grouping separators
+    return s.replace(/,/g, '');
+  }
+  if (lastDot !== -1) {
+    // "1.234,5" — European mixed: dot groups, comma decimal
+    return s.replace(/\./g, '').replace(/,/g, '.');
+  }
+  if (/^-?\d{1,3}(,\d{3})+(\s*\D.*)?$/.test(s)) {
+    return s.replace(/,/g, ''); // unambiguous thousands grouping ("1,234" / "1,234 mm")
+  }
+  // Decimal comma — any grouped digit count other than exactly three
+  // ("1,5", "2,40 m", "3,1416"); exactly-three digits stay thousands
+  // (handled by the rule above).
+  if (/^-?\d+,\d+(\s*\D.*)?$/.test(s)) {
+    return s.replace(',', '.');
+  }
+  return s.replace(/,/g, ''); // leave anything else to the numeric regexes
+}
+
+/**
  * Normalized Parse Result Structure
  * @typedef {Object} ParseResult
  * @property {number} value - Numeric value in the recognized or default unit
@@ -317,7 +350,7 @@ function parseInput(input, options = {}) {
     return { value: 0, detectedUnit: null, isValid: false, error: 'Empty or invalid input type' };
   }
 
-  const trimmed = input.trim().replace(/,/g, '');
+  const trimmed = normalizeDecimalCommas(input.trim());
   if (trimmed === '') {
     return { value: 0, detectedUnit: null, isValid: false, error: 'Input is empty' };
   }
@@ -4575,7 +4608,9 @@ function calculateAtScale(canonicalMeters, scaleRatio, options = {}) {
   // Determine drawing unit: if imperial real unit, default drawing unit is inches ('in'), otherwise millimeters ('mm')
   const isImperial = (displayUnit === 'ft' || displayUnit === 'in' || displayUnit === 'ft_in' || displayUnit === 'yd');
   const targetDrawingUnit = drawingUnit || (isImperial ? 'in' : 'mm');
-  const drawUnitDef = UNITS[targetDrawingUnit] || UNITS.mm;
+  // 'ft_in' is a display format, not a UNITS key — its machine value is inches
+  // (previously it silently fell back to mm while reporting drawingUnit 'ft_in')
+  const drawUnitDef = UNITS[targetDrawingUnit] || UNITS.in;
 
   const drawingValue = drawingMeters / drawUnitDef.toMeters;
   const isNegative = canonicalMeters < 0;
@@ -8909,6 +8944,19 @@ function calculateMultiSegmentRamp(totalRiseMeters, slopePercent, options = {}) 
   const rampWidth = options.rampWidthMeters && options.rampWidthMeters > 0 ? options.rampWidthMeters : 1.2;
   const landingLength = options.landingLengthMeters && options.landingLengthMeters > 0 ? options.landingLengthMeters : 1.5;
 
+  // Guard the same input contract as the single-flight modes — without this,
+  // slopePercent = 0 propagated Infinity through every footprint value.
+  if (typeof totalRiseMeters !== 'number' || !isFinite(totalRiseMeters) || totalRiseMeters <= 0) {
+    const err = new Error('Total rise must be a finite number greater than zero.');
+    err.code = RAMP_ERROR_CODES.INVALID_RISE;
+    throw err;
+  }
+  if (typeof slopePercent !== 'number' || !isFinite(slopePercent) || slopePercent <= 0) {
+    const err = new Error('Slope must be a finite number greater than zero.');
+    err.code = RAMP_ERROR_CODES.INVALID_SLOPE;
+    throw err;
+  }
+
   const totalRunMeters = totalRiseMeters / (slopePercent / 100);
   const ratioValue = 100 / slopePercent;
 
@@ -9844,9 +9892,23 @@ function inspectStairCompliance(stairResult, codeId = 'jnbc', buildingType = 'pu
   }
 
   const geom = stairResult.geometry;
-  const riserMm = Math.round(geom.riserHeightMeters * 1000 * 10) / 10;
-  const treadMm = Math.round(geom.treadDepthMeters * 1000 * 10) / 10;
-  const blondelMm = Math.round(geom.blondelMeters * 1000 * 10) / 10;
+  // calculateStair() carries riser/tread/Blondel values on risers/treads/proportion,
+  // not on geometry; accept the flat legacy aliases for hand-built fixtures.
+  const riserMeters = stairResult.risers?.heightMeters ?? geom.riserHeightMeters;
+  const treadMeters = stairResult.treads?.depthMeters ?? geom.treadDepthMeters;
+  const blondelMeters = stairResult.proportion?.twoRPlusTMeters ?? geom.blondelMeters;
+  if (!Number.isFinite(riserMeters) || !Number.isFinite(treadMeters)) {
+    return {
+      code,
+      overallStatus: 'warn',
+      summaryText: 'Incomplete stair geometry — riser/tread values missing, compliance cannot be evaluated.',
+      summaryArabic: 'بيانات هندسية للقلبة غير مكتملة — لا يمكن إجراء الفحص.',
+      checks: []
+    };
+  }
+  const riserMm = Math.round(riserMeters * 1000 * 10) / 10;
+  const treadMm = Math.round(treadMeters * 1000 * 10) / 10;
+  const blondelMm = Number.isFinite(blondelMeters) ? Math.round(blondelMeters * 1000 * 10) / 10 : null;
   const riserCount = stairResult.risers?.count || 0;
 
   const minTreadAllowed = buildingType === 'residential' ? cfg.treadResidentialMinMm : cfg.treadMinMm;
@@ -9994,9 +10056,21 @@ function inspectRampCompliance(rampResult, codeId = 'jnbc') {
 
   const geom = rampResult.geometry;
   const slopePercent = Math.round(geom.slopePercent * 100) / 100;
-  const ratioVal = Math.round(geom.ratio * 10) / 10;
+  // buildRampGeometry() exposes the run/rise ratio as `ratioValue`; the flat
+  // `ratio` alias is accepted for hand-built legacy fixtures.
+  const ratioSource = Number.isFinite(geom.ratioValue) ? geom.ratioValue : geom.ratio;
+  const ratioVal = Number.isFinite(ratioSource) ? Math.round(ratioSource * 10) / 10 : null;
   const riseMeters = geom.riseMeters;
   const runMeters = geom.runMeters;
+  if (!Number.isFinite(slopePercent)) {
+    return {
+      code,
+      overallStatus: 'warn',
+      summaryText: 'Incomplete ramp geometry — slope values missing, compliance cannot be evaluated.',
+      summaryArabic: 'بيانات هندسية للمنحدر غير مكتملة — لا يمكن إجراء الفحص.',
+      checks: []
+    };
+  }
 
   const checks = [];
 
@@ -12489,7 +12563,8 @@ const ZONING_CATEGORIES = Object.freeze({
 const OCCUPANCY_FACTORS = Object.freeze({
   residential: { factorM2: 18.6, label: 'Residential (18.6 m²/person)' },
   assembly_unconcentrated: { factorM2: 1.4, label: 'Assembly Tables/Chairs (1.4 m²/person)' },
-  assembly_concentrated: { factorM2: 0.65, label: 'Assembly Standing (0.65 m²/person)' },
+  // IBC 1004.5 standing space: 5 net ft²/person ≈ 0.46 m²/person
+  assembly_concentrated: { factorM2: 0.46, label: 'Assembly Standing (0.46 m²/person)' },
   business: { factorM2: 9.3, label: 'Business / Office (9.3 m²/person)' },
   educational: { factorM2: 1.9, label: 'Classrooms (1.9 m²/person)' },
   kitchen_commercial: { factorM2: 18.6, label: 'Kitchen / Service (18.6 m²/person)' },
@@ -12631,7 +12706,10 @@ function calculateFloorTotals(docOrEntities) {
     ? docOrEntities
     : (docOrEntities && Array.isArray(docOrEntities.entities) ? docOrEntities.entities : []);
 
-  const netInternalArea = schedule.reduce((sum, r) => sum + r.areaM2, 0);
+  // Sum RAW room areas (schedule entries carry display-rounded values; summing
+  // those accumulates rounding error across large floors)
+  const rooms = entities.filter(e => e && e.kind === 'room');
+  const netInternalArea = rooms.reduce((sum, r) => sum + roomArea(r), 0);
 
   // Estimate wall footprint area if walls are present
   const walls = entities.filter(e => e && e.kind === 'wall' && typeof e.x1 === 'number');
@@ -12646,16 +12724,19 @@ function calculateFloorTotals(docOrEntities) {
 
   const totalOccupants = schedule.reduce((sum, r) => sum + r.occupantCount, 0);
 
-  // Circulation analysis
-  const circulationRooms = schedule.filter(r => r.zoningKey === 'circulation');
-  const circulationArea = circulationRooms.reduce((sum, r) => sum + r.areaM2, 0);
+  // Circulation analysis (raw areas, like netInternalArea)
+  const circulationRooms = rooms.filter(r => {
+    const key = r.zoning || guessZoningFromRoomName(r.name);
+    return key === 'circulation';
+  });
+  const circulationArea = circulationRooms.reduce((sum, r) => sum + roomArea(r), 0);
   const circulationRatio = netInternalArea > 0 ? (circulationArea / netInternalArea) * 100 : 0;
 
   // Breakdown by zoning department
   const zoningBreakdown = {};
   for (const key of Object.keys(ZONING_CATEGORIES)) {
-    const matching = schedule.filter(r => r.zoningKey === key);
-    const area = matching.reduce((sum, r) => sum + r.areaM2, 0);
+    const matching = rooms.filter(r => (r.zoning || guessZoningFromRoomName(r.name)) === key);
+    const area = matching.reduce((sum, r) => sum + roomArea(r), 0);
     const pct = netInternalArea > 0 ? (area / netInternalArea) * 100 : 0;
     zoningBreakdown[key] = {
       name: ZONING_CATEGORIES[key].name,
@@ -18929,7 +19010,9 @@ function normalizeKeyCombo(input) {
     const parts = [];
     if (input.ctrlKey || input.metaKey) parts.push('ctrl');
     if (input.altKey) parts.push('alt');
-    if (input.shiftKey && rawKey.length > 1) parts.push('shift');
+    // Shift+<letter> arrives as an uppercase key ('M'); without this guard the
+    // Shift modifier is dropped and Shift+M collapses onto bare 'm'.
+    if (input.shiftKey && (rawKey.length > 1 || /^[A-Z]$/.test(rawKey))) parts.push('shift');
 
     let keyName = rawKey.toLowerCase();
     if (keyName === 'escape' || keyName === 'esc') keyName = 'escape';
@@ -19082,8 +19165,10 @@ class ShortcutsManagerClass {
       return { success: false, error: 'Invalid key combination.' };
     }
 
-    // Check for conflict in the same category or overall
-    const conflict = this.shortcuts.find(x => x.id !== id && x.key === normalized && (x.category === target.category || ['escape', 'delete', 'ctrl+k'].includes(normalized)));
+    // Check for conflict against ANY existing binding. Cross-category
+    // duplicates previously slipped through, and since no handler stops
+    // propagation both actions would fire on a single keypress.
+    const conflict = this.shortcuts.find(x => x.id !== id && x.key === normalized);
     if (conflict) {
       return {
         success: false,
@@ -21581,14 +21666,23 @@ const StorageService = {
   },
 
   setItem(key, value) {
+    let persisted = true;
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem(key, value);
+        persisted = true;
       }
+      // No localStorage at all (Node/sandboxed): the memory fallback is the
+      // designed behavior, not a persistence failure — report success so
+      // durability-aware callers don't false-alarm.
     } catch (e) {
-      // Fallback to memory store
+      // Quota exceeded / private mode: fall back to memory and report failure
+      persisted = false;
     }
     memoryStore.set(key, String(value));
+    // Callers that need durability guarantees (e.g. the project store) use
+    // this return value; fire-and-forget callers may ignore it.
+    return persisted;
   },
 
   removeItem(key) {
@@ -21835,7 +21929,13 @@ function createProjectStore(options = {}) {
 
   function writeEnvelope(envelope) {
     try {
-      storage.setItem(PROJECT_STORE_KEY, JSON.stringify(envelope));
+      // StorageService signals a localStorage failure (quota/private mode) via
+      // its return value rather than throwing — a false return must surface
+      // to the caller just like a thrown error, otherwise saves are reported
+      // as successful while data only lives in the in-memory fallback.
+      if (storage.setItem(PROJECT_STORE_KEY, JSON.stringify(envelope)) === false) {
+        return false;
+      }
       return true;
     } catch (e) {
       // Quota failures and private-mode write errors surface to the caller
@@ -23500,8 +23600,8 @@ function createAiHttp(options = {}) {
  * Real Google Gemini API adapter over the injected AI HTTP boundary.
  *
  * Endpoint mechanics (official REST, v1beta):
- *  - Generate:  POST {endpoint}/models/{model}:generateContent?key=API_KEY
- *  - Models:    GET  {endpoint}/models?key=API_KEY (paginated ListModels)
+ *  - Generate:  POST {endpoint}/models/{model}:generateContent  (x-goog-api-key header)
+ *  - Models:    GET  {endpoint}/models  (x-goog-api-key header, paginated ListModels)
  *  - Vision:    inline_data { mime_type, data(base64) } part
  *  - Structured: generationConfig.responseMimeType = "application/json"
  *
@@ -23651,10 +23751,10 @@ function createGeminiTransport({ http }) {
     const model = modelId || 'gemini-2.0-flash';
     const started = Date.now();
     const res = await http.request({
-      url: `${endpoint}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      url: `${endpoint}/models/${encodeURIComponent(model)}:generateContent`,
       init: {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify(buildGenerateBody({ userPrompt: GEMINI_TEST_PROMPT, options: { maxOutputTokens: 16 } }))
       },
       timeoutMs: 20000
@@ -23677,10 +23777,9 @@ function createGeminiTransport({ http }) {
     // Bound the pagination loop defensively (provider bug protection).
     for (let page = 0; page < 10; page++) {
       const url = new URL(`${endpoint}/models`);
-      url.searchParams.set('key', apiKey);
       url.searchParams.set('pageSize', '200');
       if (pageToken) url.searchParams.set('pageToken', pageToken);
-      const res = await http.request({ url: url.toString(), timeoutMs: 20000 });
+      const res = await http.request({ url: url.toString(), init: { headers: { 'x-goog-api-key': apiKey } }, timeoutMs: 20000 });
       if (!res.ok) {
         return { ok: false, ...mapGeminiError(res), partial: out };
       }
@@ -23708,10 +23807,10 @@ function createGeminiTransport({ http }) {
     const { endpoint, apiKey, modelId, systemPrompt, userPrompt, options = {} } = req || {};
     if (!modelId) return { ok: false, errorCode: AI_ERROR_CODES.INVALID_MODEL, message: 'No model selected for this request.' };
     const res = await http.request({
-      url: `${endpoint}/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      url: `${endpoint}/models/${encodeURIComponent(modelId)}:generateContent`,
       init: {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify(buildGenerateBody({ systemPrompt, userPrompt, options }))
       }
     });
@@ -23743,10 +23842,10 @@ function createGeminiTransport({ http }) {
     const { endpoint, apiKey, modelId, prompt, options = {} } = req || {};
     if (!modelId) return { ok: false, errorCode: AI_ERROR_CODES.INVALID_MODEL, message: 'No image model selected.' };
     const res = await http.request({
-      url: `${endpoint}/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      url: `${endpoint}/models/${encodeURIComponent(modelId)}:generateContent`,
       init: {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt || 'Conceptual architectural massing study' }] }],
           generationConfig: {
@@ -30460,20 +30559,32 @@ function createRampsView(context) {
     if (dom.rampsMultisegmentWrap) {
       const selectedCodeId = dom.rampsCodeSelect?.value || 'jnbc';
       const code = getBuildingCode(selectedCodeId);
-      const maxRisePerFlight = (code?.ramp?.maxRisePerRunMm || 750) / 1000;
-      const minWidth = (code?.ramp?.minWidthMm || 1200) / 1000;
-      const minLanding = (code?.ramp?.landingLengthMinMm || 1500) / 1000;
+      // Field names match BUILDING_CODES ramp config (the previous names —
+      // maxRisePerRunMm/minWidthMm/landingLengthMinMm — never existed, so every
+      // jurisdiction silently fell back to the same generic defaults)
+      const maxRisePerFlight = code?.ramp?.maxRunRiseMeters || 0.75;
+      const minWidth = (code?.ramp?.minLandingWidthMm || 1200) / 1000;
+      const minLanding = (code?.ramp?.minLandingLengthMm || 1500) / 1000;
 
-      const multi = calculateMultiSegmentRamp(
-        result.geometry.riseMeters,
-        result.geometry.slopePercent,
-        {
-          maxRisePerRunMeters: maxRisePerFlight,
-          rampWidthMeters: minWidth,
-          landingLengthMeters: minLanding
+      const multi = (() => {
+        try {
+          return calculateMultiSegmentRamp(
+            result.geometry.riseMeters,
+            result.geometry.slopePercent,
+            {
+              maxRisePerRunMeters: maxRisePerFlight,
+              rampWidthMeters: minWidth,
+              landingLengthMeters: minLanding
+            }
+          );
+        } catch (err) {
+          return null; // validation failure degrades to the fallback message below
         }
-      );
+      })();
 
+      if (!multi) {
+        dom.rampsMultisegmentWrap.innerHTML = '<div class="multisegment-card"><div class="multisegment-title">📐 Multi-Flight layouts unavailable for this input.</div></div>';
+      } else {
       dom.rampsMultisegmentWrap.innerHTML = `
         <div class="multisegment-card">
           <div class="multisegment-header">
@@ -30526,6 +30637,7 @@ function createRampsView(context) {
           </div>
         </div>
       `;
+      }
     }
 
     // Available-run analysis for modes with an explicit available run
@@ -31593,17 +31705,19 @@ function createProjectsView(context) {
       return;
     }
     const activeId = currentProject()?.id;
-    dom.projectsLibraryList.innerHTML = res.projects.map(p => `
+    dom.projectsLibraryList.innerHTML = res.projects.map(p => {
+      const safeId = escapeHtml(p.id);
+      return `
       <div class="projects-library-row" role="listitem" style="display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; padding: 0.45rem 0.6rem; border: 1px solid var(--border-color-light); border-radius: 5px; background: ${p.id === activeId ? 'var(--bg-chip)' : 'transparent'};">
-        <button type="button" class="projects-open-btn" data-id="${p.id}" title="Open this project"
+        <button type="button" class="projects-open-btn" data-id="${safeId}" title="Open this project"
           style="text-align: left; background: none; border: none; cursor: pointer; color: var(--text-primary); font-family: var(--font-family-mono); font-size: 0.78rem;">
           <strong style="color: var(--accent-primary);">${escapeHtml(p.name)}</strong>
-          <span style="color: var(--text-muted);"> · ${p.id}</span>
+          <span style="color: var(--text-muted);"> · ${safeId}</span>
         </button>
-        <button type="button" class="projects-delete-lib-btn" data-id="${p.id}" title="Delete this library copy" aria-label="Delete ${escapeHtml(p.name)} from library"
+        <button type="button" class="projects-delete-lib-btn" data-id="${safeId}" title="Delete this library copy" aria-label="Delete ${escapeHtml(p.name)} from library"
           style="background: none; border: none; color: var(--text-muted); cursor: pointer;">✕</button>
       </div>
-    `).join('');
+    `; }).join('');
 
     dom.projectsLibraryList.querySelectorAll('.projects-open-btn').forEach(btn => {
       btn.addEventListener('click', () => openProject(btn.dataset.id));
@@ -32091,7 +32205,8 @@ function renderStudioPalette(container, options = {}) {
       }
       const matches = searchStudioTools(q, { persona: currentPersona });
       if (matches.length === 0) {
-        searchResults.innerHTML = `<div class="search-empty-hint">No tools found matching "${q}"</div>`;
+        const safeQ = q.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        searchResults.innerHTML = `<div class="search-empty-hint">No tools found matching "${safeQ}"</div>`;
         searchResults.style.display = 'block';
         return;
       }
@@ -33151,9 +33266,13 @@ function initAiDropdownDrawer(container, state, options = {}) {
     }
   }
 
-  // Keyboard shortcut Ctrl + Space
+  // Keyboard shortcut Ctrl + Space (skipped while typing — Ctrl+Space is an
+  // IME toggle / completion chord in many editors)
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
+      const t = e.target;
+      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+      if (typing) return;
       e.preventDefault();
       toggle();
     }
@@ -33328,6 +33447,9 @@ function createPlanView(context) {
     state.plan.activeDocId = target.id;
     state.plan.entities = target.entities || [];
     state.plan.selectedIds = new Set();
+    // Undo commands close over the previous document's entity objects; keeping
+    // them would let a later Ctrl+Z mutate the now-hidden document.
+    history.clear();
     if (target.viewport && typeof target.viewport.zoom === 'number') {
       transform = {
         zoom: target.viewport.zoom,
@@ -42560,8 +42682,10 @@ function initializeApp() {
     }
 
     if (contextStrip && context) {
+      // Values are escaped here so a future caller passing user-derived text
+      // cannot become an XSS sink; numeric/formatter output is unaffected.
       contextStrip.innerHTML = Object.entries(context)
-        .map(([k, v]) => `<span class="context-pill"><strong>${k}:</strong> ${v}</span>`)
+        .map(([k, v]) => `<span class="context-pill"><strong>${escapeHtml(String(k))}:</strong> ${escapeHtml(String(v))}</span>`)
         .join('');
     }
   }
@@ -43188,19 +43312,16 @@ function initializeApp() {
       dom.refScaleSelect.value = String(state.refScaleRatio || 50);
     }
 
-    // Area & Volume unit selects
+    // Area & Volume unit selects (the else-branch that filled volume units
+    // dereferenced the null element that selected that branch — dead code removed)
     if (dom.areavolInputUnit) {
       const opts = Object.entries(AREA_UNITS).map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
       dom.areavolInputUnit.innerHTML = opts;
-      dom.areavolOutputUnit.innerHTML = opts;
+      if (dom.areavolOutputUnit) {
+        dom.areavolOutputUnit.innerHTML = opts;
+        dom.areavolOutputUnit.value = 'm2';
+      }
       dom.areavolInputUnit.value = 'cm2';
-      dom.areavolOutputUnit.value = 'm2';
-    } else {
-      const opts = Object.entries(VOLUME_UNITS).map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
-      dom.areavolInputUnit.innerHTML = opts;
-      dom.areavolOutputUnit.innerHTML = opts;
-      dom.areavolInputUnit.value = 'cm3';
-      dom.areavolOutputUnit.value = 'm3';
     }
   }
 
@@ -47418,7 +47539,10 @@ function initializeApp() {
           views.callController('scratchpad', 'toggleDrawer', false);
           return;
         }
-        if (dom.historyDrawer?.classList.contains('open')) views.callController('history', 'toggleHistoryDrawer');
+        if (dom.historyDrawer?.classList.contains('open')) {
+          views.callController('history', 'toggleHistoryDrawer');
+          return; // one Esc press performs exactly one action
+        }
         if (dom.shortcutsModal?.classList.contains('open')) {
           listeningActionId = null;
           dom.shortcutsModal.classList.remove('open');
