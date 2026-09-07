@@ -1,5 +1,27 @@
 # Production Hardening Changelog
 
+## 2026-09-07 (pass 3) — Plan workstation, CAD command engine, icon system, contextual AI
+
+| File / module | Change | Verification |
+|---|---|---|
+| `src/core/cad-commands.js` (NEW) | Interactive CAD command engine: registry from live catalog, multi-step prompts, coordinate/length parsing via the shared parser, autocomplete, persistent history | `tests/cad-commands.test.js` (41) + live QA |
+| `src/core/icons.js` (NEW) | Original 90+-glyph SVG registry (tools/categories/personas/doc types/nav/commands); replaces all functional emoji icons | `tests/icon-system.test.js` (19) + DOM emoji scan |
+| `src/core/suggestions.js` (NEW) | Deterministic, evidence-backed suggestion engine (per-entity + document scope) | `tests/ai-context.test.js` |
+| `src/core/entities.js` | `createLineEntity` factory (pure 2-point line primitive — the `L`/LINE tool previously had no entity) | Unit + live |
+| `src/core/ai-bridge.js` | `serializeSelection()` per-entity evidence packets; tool-catalog exposure | `tests/ai-context.test.js` |
+| `src/ai/context/project-context.js` | `selectionPackets` parameter → SELECTED ENTITIES block in the facts pack with do-not-invent instruction | unit via ai-context |
+| `src/ui/components/commandbar.js` | Full rewrite: prompt state, upward autocomplete, options chips, result log, history arrows, canvas point bridge | live QA |
+| `src/ui/components/palette.js` / `ribbon.js` | SVG icons via registry (incl. persona pills); palette search/category jump fix | live + suites |
+| `src/ui/views/plan.js` | Command executor + session wiring; canvas click → prompt point; compass; tab/menu icon hydration; layer toggle aria-labels; INFO/SUGGEST/AI inspector panels | live QA |
+| `src/ui/app.js` | nav/menu/command-palette SVG icons; `aiSelectionContext` facts-pack bridge | ui-contracts suite |
+| `index.html` | Compass widget markup; new-tab emoji → hydration slots; cache-bust 2.3.0 | live |
+| `css/main.css` | Section 22: command bar UI, compass, suggestions/info panels, icon alignment; palette scroll fix (flex region + themed scrollbar); dropdown opens upward, width-capped | live geometry checks |
+| `sw.js` / `package.json` | Cache 2.3.0 (name + precache list); version sync | build-integrity |
+| `tests/run-all.js` | Registered cad-commands, icon-system, ai-context suites | 53/53 |
+
+Migration/deployment: SW cache bump forces one fresh fetch; no persisted-data changes (command history key is new and additive).
+
+## 2026-09-07 — Full-scale audit hardening pass
 ## 2026-09-07 — Full-scale audit hardening pass
 
 ### Correctness

@@ -146,6 +146,26 @@ However, the audit found **four confirmed P1 defects** — including a building-
 
 ---
 
+## Third Pass (September 7, 2026) — Plan workstation, command engine, icon system, contextual AI
+
+Product-direction pass per the workstation directive. Details: `COMMAND_ENGINE.md`, `ICON_SYSTEM.md`, `AI_CONTEXTUAL_COPILOT.md`.
+
+| Area | What was delivered | Verification |
+|---|---|---|
+| CAD command engine | New `src/core/cad-commands.js`: registry derived from the live tool catalog (24 built-ins + 50+ catalog aliases), interactive multi-step prompts (WALL/LINE/RECTANGLE/DIST/DIMLIN), coordinate input (`10,20`, `@5,0`, `@5<90`, `2400mm`, `8'`) through the shared parser, Width option, ranked autocomplete (prefix/alias/fuzzy + recents), up/down history with session persistence, did-you-mean errors | 41 unit tests; live: `WALL` → canvas click → `@2.4<0` → Enter created a snapped wall; autocomplete screenshot verified in-viewport |
+| Original icon system | `src/core/icons.js`: 90+ original 24×24 stroke glyphs; emoji removed from palette, ribbon, personas, document tabs, new-tab menu, sidebar, menu bar, Ctrl+K palette, static plan palette, layer toggles (now aria-labelled), quadrant pills; catalog `icon:` emoji fields are inert legacy data ignored by all renderers | 19 unit tests (incl. every catalog id resolves); DOM emoji scan clean |
+| Navigation compass | In-canvas orientation widget (N/S/W/E/P + X/Y/Z markers) routing through the same view executor as the commands; `view_right` now creates/activates a true East elevation | Live: compass E → "East Elevation" tab created + active; N → back to plan |
+| AI contextual selection | `serializeSelection()` builds per-entity evidence packets (geometry, relationships, dimension-vs-geometry verification); packets ride the facts pack to the provider; `AI`/`ASK` command + inspector Ask-AI buttons | 21 unit tests incl. MATCH/NO-MATCH verification |
+| Deterministic suggestions | `src/core/suggestions.js`: evidence-backed ranked findings (dimension gaps, Blondel band, 1:12 ramp, overlaps, density, orphan furniture); `SUGGEST` command + inspector panel; every recommended toolId validated against the real catalog | Unit tests + live `SUGGEST` on a drawn wall (MEDIUM: no dimension annotation; LOW: disconnected) |
+| INFO command/inspector | Rich per-kind readout (measurements/relationships/checks) in the properties panel | Live verified |
+| Plan workspace shell | Palette scrolls via flex-based internal scroll region (visible themed scrollbar, no clipping); tool rail + canvas + inspector + command/status bar structure confirmed at 1280×720 | Live geometry assertions |
+| Fixes found by live QA | Enter-during-prompt routed to `run()` instead of `submit()`; canvas point-pick fed empty text; suggestions opened downward off-screen + caused horizontal overflow (capped width, opens upward); compass bypassed the view executor; `view_right` created a South elevation; bundle-scope import alias broke the build (caught by build-integrity smoke test) | All fixed and re-verified live |
+| Version | 2.2.0 → 2.3.0 (index.html cache-bust, sw.js cache name + precache list, package.json) | Build + integrity tests green |
+
+**Third-pass verification:** `npm run build` (2,066.3 KB) + `--check` in sync; `npm test` → **53/53 suites, 4,710 assertions**; `npm run lint` → 94 files, 0 errors; live browser: WALL mixed-input flow, autocomplete screenshot, INFO/SUGGEST panels, compass view switching, zero page overflow with the dropdown open.
+
+---
+
 ## Second Hardening Pass (September 7, 2026) — deferred items resolved
 
 | # | Fix | Files | Verification |

@@ -1,6 +1,8 @@
 # Production Readiness
 
 **Assessment date:** September 7, 2026 (updated after second hardening pass)
+**Pass 3 update (Sept 7, 2026):** Plan workstation redesigned around the canvas — real CAD command engine (multi-step prompts, coordinates, autocomplete, history), original SVG icon system (emoji removed from all functional chrome), in-canvas navigation compass, selection-aware AI copilot (evidence packets + deterministic SUGGEST/INFO). Final: 53/53 suites, 4,710 assertions; lint clean; live browser QA passed. See `COMMAND_ENGINE.md`, `ICON_SYSTEM.md`, `AI_CONTEXTUAL_COPILOT.md`.
+
 **Overall verdict: Production-ready with known minor risks** — fit for its stated purpose (educational/design-assistance architectural tool). All identified P1/P2 defects from both audit passes are fixed and pinned by tests; what remains are minor, documented limitations below. The app itself correctly disclaims that it is not a code-certification engine.
 
 ## Checklist
@@ -36,7 +38,7 @@
 ## Verification evidence
 
 - Baseline: `npm test` → 49/49 suites, 4,583 assertions, all pass (before any change).
-- Final: `npm test` → **50/50 suites, 4,613 assertions, all pass**.
+- Final: `npm test` → **53/53 suites, 4,710 assertions, all pass** (pass 3: +command engine, +icons, +AI context).
 - `npm run build` → success; `node scripts/build.js --check` → bundle in sync with `src/`.
 - Live in-app browser against a local server: app boots cleanly; skip link and aria-labels present in DOM; illegal 250 mm riser now renders "VIOLATION · Non-Compliant" with correct values (previously "NaN mm / Full Compliance"); no `NaN` in stairs or ramps output; unit selects populated.
 - Full `git diff` reviewed line-by-line after all fixes (hostile-review pass); one self-caught defect (early `return` skipping render blocks) fixed before commit.
