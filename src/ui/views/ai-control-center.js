@@ -170,6 +170,22 @@ export function createAiControlCenterView(context) {
     });
     dom.aiProvidersList.querySelectorAll('.ai-provider-endpoint').forEach(input => {
       input.addEventListener('change', () => {
+        const svc = ai();
+        const nextHost = (() => { try { return new URL(input.value.trim())?.hostname; } catch { return null; } })();
+        const currentHost = (() => { try { return new URL(input.defaultValue || input.value.trim())?.hostname; } catch { return null; } })();
+        // Your stored API key is sent to whatever endpoint is configured —
+        // changing to a host you have not used before deserves a pause.
+        if (svc?.providerManager?.hasKey?.(input.dataset.provider) && nextHost && nextHost !== currentHost) {
+          const ok = window.confirm(
+            `Send this provider's stored API key to "${nextHost}"?\n\n` +
+            `Previous host: ${currentHost || '(none)'}\n` +
+            `Only continue if you trust this endpoint (official mirrors or your own proxy).`
+          );
+          if (!ok) {
+            input.value = input.defaultValue;
+            return;
+          }
+        }
         const res = svc.providerManager.setEndpoint(input.dataset.provider, input.value);
         if (!res.ok) {
           showError(res.error);
