@@ -80,6 +80,20 @@ export function createProject(options = {}) {
     decisions: [],
     exports: [],
     scratchpad: [],
+    brief: {
+      buildingType: '',
+      site: { location: '', notes: '', areaM2: null, orientation: '' },
+      floors: null,
+      areaTargets: { grossM2: null, netM2: null },
+      circulation: { strategy: '', targetPctOfNet: null },
+      accessibility: { target: '', notes: '' },
+      orientation: { primary: '', notes: '' },
+      specialConstraints: [],
+      userRules: [],
+      roomRequirements: [],
+      requirements: [],
+      adjacencies: []
+    },
     documents: Array.isArray(options.documents) ? options.documents : [
       {
         id: 'doc-1',
@@ -160,6 +174,7 @@ export function validateProject(doc) {
   }
 
   for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad', 'documents']) {
+    // 'brief' normalized separately below (object, not array)
     if (doc[key] !== undefined && !Array.isArray(doc[key])) {
       errors.push(`${key} must be an array when present`);
     }
@@ -203,6 +218,37 @@ export function normalizeProject(doc) {
   for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad', 'documents']) {
     if (!Array.isArray(normalized[key])) normalized[key] = [];
   }
+
+  // Project brief (schema v2 container): normalized so every field exists.
+  const defaultBrief = {
+    buildingType: '',
+    site: { location: '', notes: '', areaM2: null, orientation: '' },
+    floors: null,
+    areaTargets: { grossM2: null, netM2: null },
+    circulation: { strategy: '', targetPctOfNet: null },
+    accessibility: { target: '', notes: '' },
+    orientation: { primary: '', notes: '' },
+    specialConstraints: [],
+    userRules: [],
+    roomRequirements: [],
+    requirements: [],
+    adjacencies: []
+  };
+  const briefSrc = src.brief && typeof src.brief === 'object' && !Array.isArray(src.brief) ? src.brief : {};
+  normalized.brief = {
+    ...defaultBrief,
+    ...briefSrc,
+    site: { ...defaultBrief.site, ...(briefSrc.site && typeof briefSrc.site === 'object' ? briefSrc.site : {}) },
+    areaTargets: { ...defaultBrief.areaTargets, ...(briefSrc.areaTargets && typeof briefSrc.areaTargets === 'object' ? briefSrc.areaTargets : {}) },
+    circulation: { ...defaultBrief.circulation, ...(briefSrc.circulation && typeof briefSrc.circulation === 'object' ? briefSrc.circulation : {}) },
+    accessibility: { ...defaultBrief.accessibility, ...(briefSrc.accessibility && typeof briefSrc.accessibility === 'object' ? briefSrc.accessibility : {}) },
+    orientation: { ...defaultBrief.orientation, ...(briefSrc.orientation && typeof briefSrc.orientation === 'object' ? briefSrc.orientation : {}) },
+    specialConstraints: Array.isArray(briefSrc.specialConstraints) ? briefSrc.specialConstraints : [],
+    userRules: Array.isArray(briefSrc.userRules) ? briefSrc.userRules : [],
+    roomRequirements: Array.isArray(briefSrc.roomRequirements) ? briefSrc.roomRequirements : [],
+    requirements: Array.isArray(briefSrc.requirements) ? briefSrc.requirements : [],
+    adjacencies: Array.isArray(briefSrc.adjacencies) ? briefSrc.adjacencies : []
+  };
   if (normalized.documents.length === 0) {
     let defaultEntities = [];
     if (Array.isArray(src.entities)) {

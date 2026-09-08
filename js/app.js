@@ -10693,6 +10693,20 @@ function createProject(options = {}) {
     decisions: [],
     exports: [],
     scratchpad: [],
+    brief: {
+      buildingType: '',
+      site: { location: '', notes: '', areaM2: null, orientation: '' },
+      floors: null,
+      areaTargets: { grossM2: null, netM2: null },
+      circulation: { strategy: '', targetPctOfNet: null },
+      accessibility: { target: '', notes: '' },
+      orientation: { primary: '', notes: '' },
+      specialConstraints: [],
+      userRules: [],
+      roomRequirements: [],
+      requirements: [],
+      adjacencies: []
+    },
     documents: Array.isArray(options.documents) ? options.documents : [
       {
         id: 'doc-1',
@@ -10773,6 +10787,7 @@ function validateProject(doc) {
   }
 
   for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad', 'documents']) {
+    // 'brief' normalized separately below (object, not array)
     if (doc[key] !== undefined && !Array.isArray(doc[key])) {
       errors.push(`${key} must be an array when present`);
     }
@@ -10816,6 +10831,37 @@ function normalizeProject(doc) {
   for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad', 'documents']) {
     if (!Array.isArray(normalized[key])) normalized[key] = [];
   }
+
+  // Project brief (schema v2 container): normalized so every field exists.
+  const defaultBrief = {
+    buildingType: '',
+    site: { location: '', notes: '', areaM2: null, orientation: '' },
+    floors: null,
+    areaTargets: { grossM2: null, netM2: null },
+    circulation: { strategy: '', targetPctOfNet: null },
+    accessibility: { target: '', notes: '' },
+    orientation: { primary: '', notes: '' },
+    specialConstraints: [],
+    userRules: [],
+    roomRequirements: [],
+    requirements: [],
+    adjacencies: []
+  };
+  const briefSrc = src.brief && typeof src.brief === 'object' && !Array.isArray(src.brief) ? src.brief : {};
+  normalized.brief = {
+    ...defaultBrief,
+    ...briefSrc,
+    site: { ...defaultBrief.site, ...(briefSrc.site && typeof briefSrc.site === 'object' ? briefSrc.site : {}) },
+    areaTargets: { ...defaultBrief.areaTargets, ...(briefSrc.areaTargets && typeof briefSrc.areaTargets === 'object' ? briefSrc.areaTargets : {}) },
+    circulation: { ...defaultBrief.circulation, ...(briefSrc.circulation && typeof briefSrc.circulation === 'object' ? briefSrc.circulation : {}) },
+    accessibility: { ...defaultBrief.accessibility, ...(briefSrc.accessibility && typeof briefSrc.accessibility === 'object' ? briefSrc.accessibility : {}) },
+    orientation: { ...defaultBrief.orientation, ...(briefSrc.orientation && typeof briefSrc.orientation === 'object' ? briefSrc.orientation : {}) },
+    specialConstraints: Array.isArray(briefSrc.specialConstraints) ? briefSrc.specialConstraints : [],
+    userRules: Array.isArray(briefSrc.userRules) ? briefSrc.userRules : [],
+    roomRequirements: Array.isArray(briefSrc.roomRequirements) ? briefSrc.roomRequirements : [],
+    requirements: Array.isArray(briefSrc.requirements) ? briefSrc.requirements : [],
+    adjacencies: Array.isArray(briefSrc.adjacencies) ? briefSrc.adjacencies : []
+  };
   if (normalized.documents.length === 0) {
     let defaultEntities = [];
     if (Array.isArray(src.entities)) {
@@ -18701,6 +18747,7 @@ const SIMPLE = [
   { name: 'ISSUES', aliases: ['AUDIT'], description: 'Deterministic project audit — geometry, rooms, doors, dimensions, documentation', category: 'ai', run: 'issues' },
   { name: 'AI', aliases: ['ASK', 'AIQUERY'], description: 'Ask the AI about the current selection: AI <question…>', category: 'ai', run: 'ai_query' },
   { name: 'ANALYZE', aliases: ['AICRITIQUE'], description: 'Project-wide AI review with deterministic evidence', category: 'ai', run: 'ai_analyze' },
+  { name: 'BRIEF', aliases: ['REQ', 'REQUIREMENTS'], description: 'Open the Brief & Requirements studio (evaluate requirements vs model)', category: 'system', run: 'brief' },
   { name: 'LAYER', aliases: ['LA'], description: 'Open the layers panel', category: 'organize', run: 'panel:layers' },
   { name: 'HELP', aliases: ['?'], description: 'List commands: HELP [search…]', category: 'system', run: 'help' }
 ];
@@ -20596,6 +20643,380 @@ function runAllChecks(entities, context = {}) {
 /** Rule registry metadata for UI/debug display. */
 function listRules() {
   return RULES.map(r => ({ id: r.id, name: r.name, severity: r.severity, scope: r.scope, description: r.description }));
+}
+
+
+  // =========================================================================
+  // MODULE: Requirements
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — Project Brief, Requirements & Design Intent
+ *
+ * The brief captures WHAT the building must do; the model captures what it
+ * IS; the requirements engine compares the two deterministically.
+ *
+ *   - BRIEF: building type, site, area targets, room requirements, floors,
+ *     circulation, accessibility, orientation, special constraints, user rules
+ *   - REQUIREMENTS: typed records { id, name, type, target, unit, scope,
+ *     status, evidence } evaluated against actual geometry — PASS / FAIL /
+ *     NEEDS INPUT / NOT APPLICABLE, never invented
+ *   - ADJACENCY: required / preferred / avoid relationships between spaces
+ *   - DESIGN INTENT: decisions with rationale, alternatives considered and
+ *     the rejected ones (feeds the existing project.decisions container)
+ *
+ * All pure and deterministic: evaluation reads entities, never mutates them.
+ */
+
+
+
+// ---------------------------------------------------------------------------
+// Project brief
+// ---------------------------------------------------------------------------
+
+/** Creates an empty project brief with sensible defaults. */
+function createProjectBrief(overrides = {}) {
+  return {
+    buildingType: '',
+    site: { location: '', notes: '', areaM2: null, orientation: '' },
+    floors: null,
+    areaTargets: { grossM2: null, netM2: null },
+    circulation: { strategy: '', targetPctOfNet: null },
+    accessibility: { target: '', notes: '' },
+    orientation: { primary: '', notes: '' },
+    specialConstraints: [],
+    userRules: [],
+    ...structuredCloneCompat(overrides)
+  };
+}
+
+// structuredClone is unavailable in some embedded runtimes; a local deep copy
+// keeps this module dependency-free.
+function structuredCloneCompat(value) {
+  return JSON.parse(JSON.stringify(value ?? {}));
+}
+
+/** Validates a brief field set; returns {ok, errors[]} without throwing. */
+function validateBrief(brief) {
+  const errors = [];
+  if (!brief || typeof brief !== 'object') {
+    return { ok: false, errors: ['Brief must be an object'] };
+  }
+  if (brief.buildingType !== undefined && typeof brief.buildingType !== 'string') {
+    errors.push('buildingType must be a string');
+  }
+  if (brief.floors !== undefined && brief.floors !== null &&
+      (!Number.isInteger(brief.floors) || brief.floors < 1 || brief.floors > 200)) {
+    errors.push('floors must be an integer between 1 and 200');
+  }
+  if (brief.areaTargets) {
+    for (const key of ['grossM2', 'netM2']) {
+      const v = brief.areaTargets[key];
+      if (v !== undefined && v !== null && (typeof v !== 'number' || v <= 0)) {
+        errors.push(`areaTargets.${key} must be a positive number`);
+      }
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+// ---------------------------------------------------------------------------
+// Room requirements
+// ---------------------------------------------------------------------------
+
+/**
+ * Creates a room requirement: "N rooms of kind X, each ≥ target area".
+ * Example: createRoomRequirement('Bedroom', { count: 3, minAreaM2: 14 })
+ */
+function createRoomRequirement(name, { count = 1, minAreaM2 = null, minDimensions = null, notes = '' } = {}) {
+  if (typeof name !== 'string' || !name.trim()) {
+    throw new Error('Room requirement needs a room name (e.g. "Bedroom")');
+  }
+  if (minAreaM2 !== null && !(minAreaM2 > 0)) {
+    throw new Error('minAreaM2 must be a positive number when provided');
+  }
+  if (minDimensions !== null &&
+      (typeof minDimensions !== 'object' || !(minDimensions.width > 0) || !(minDimensions.depth > 0))) {
+    throw new Error('minDimensions must be { width > 0, depth > 0 } when provided');
+  }
+  return {
+    id: `req-room-${String(name).toLowerCase().replace(/\s+/g, '-')}-${Date.now().toString(36)}`,
+    kind: 'room',
+    name: name.trim(),
+    count,
+    minAreaM2,
+    minDimensions,
+    notes
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Generic requirements (target / min / max against a scope metric)
+// ---------------------------------------------------------------------------
+
+const REQUIREMENT_TYPES = Object.freeze({
+  MIN: 'min',     // scope metric must be >= target
+  MAX: 'max',     // scope metric must be <= target
+  EQUAL: 'equal', // scope metric must == target (within tolerance)
+  PRESENCE: 'presence' // scope must exist
+});
+
+const REQUIREMENT_SCOPES = Object.freeze([
+  'gross_area', 'net_area', 'room_count', 'room_area', 'corridor_width',
+  'floor_count', 'door_clearance', 'stair_rise', 'stair_tread', 'custom'
+]);
+
+function createRequirement({ name, type, scope, target, unit = '', tolerance = 1e-9 } = {}) {
+  if (typeof name !== 'string' || !name.trim()) {
+    throw new Error('Requirement needs a name');
+  }
+  if (!REQUIREMENT_TYPES[type]) {
+    throw new Error(`Unknown requirement type "${type}" — allowed: ${Object.values(REQUIREMENT_TYPES).join(', ')}`);
+  }
+  if (!REQUIREMENT_SCOPES.includes(scope) && !scope.startsWith('custom.')) {
+    throw new Error(`Unknown requirement scope "${scope}" — allowed: ${REQUIREMENT_SCOPES.join(', ')}, or "custom.*"`);
+  }
+  return {
+    id: `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    kind: 'metric',
+    name: name.trim(),
+    type,
+    scope,
+    target,
+    unit,
+    tolerance
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Evaluation — deterministic comparison against the actual model
+// ---------------------------------------------------------------------------
+
+/** Area of a room entity (m²), width×depth based. */
+function roomAreaOf(room) {
+  return (room.width || 0) * (room.depth || 0);
+}
+
+/** Sum of all room areas = net internal area. */
+function netInternalArea(entities) {
+  return entities.filter(e => e.kind === 'room')
+    .reduce((sum, r) => sum + roomAreaOf(r), 0);
+}
+
+/** Extracts the metric for a requirement scope. Returns {value, detail} or null. */
+function scopeMetric(scope, entities, brief) {
+  const rooms = entities.filter(e => e.kind === 'room');
+  switch (scope) {
+    case 'gross_area': return { value: netInternalArea(entities), detail: `${rooms.length} rooms` };
+    case 'net_area': return { value: netInternalArea(entities), detail: `${rooms.length} rooms` };
+    case 'room_count': return { value: rooms.length, detail: rooms.map(r => r.name).join(', ') };
+    case 'floor_count': return { value: brief?.floors ?? null, detail: 'from brief' };
+    default:
+      if (scope.startsWith('custom.')) return { value: null, detail: scope };
+      return null;
+  }
+}
+
+/**
+ * Evaluates a room requirement against the model: matches rooms by name
+ * (case-insensitive substring) and checks count / min area / min dimensions.
+ */
+function evaluateRoomRequirement(req, entities) {
+  const matched = entities.filter(e => e.kind === 'room' &&
+    String(e.name || '').toLowerCase().includes(req.name.toLowerCase()));
+  const found = matched.length;
+  const evidence = {
+    required: { name: req.name, count: req.count, minAreaM2: req.minAreaM2, minDimensions: req.minDimensions },
+    matched: matched.map(r => ({ id: r.id, name: r.name, areaM2: +roomAreaOf(r).toFixed(2), width: r.width, depth: r.depth }))
+  };
+
+  if (found === 0) {
+    return { status: 'NEEDS_INPUT', message: `No room matching "${req.name}" exists yet.`, evidence };
+  }
+
+  const problems = [];
+  if (found < req.count) {
+    problems.push(`only ${found} of ${req.count} required "${req.name}" rooms present`);
+  }
+  for (const r of matched) {
+    const area = roomAreaOf(r);
+    if (req.minAreaM2 && area < req.minAreaM2 - 1e-9) {
+      problems.push(`"${r.name}" is ${area.toFixed(1)} m², below the ${req.minAreaM2} m² minimum`);
+    }
+    if (req.minDimensions) {
+      const wOk = r.width >= req.minDimensions.width - 1e-9;
+      const dOk = r.depth >= req.minDimensions.depth - 1e-9;
+      if (!wOk || !dOk) {
+        problems.push(`"${r.name}" is ${r.width}×${r.depth} m, below the ${req.minDimensions.width}×${req.minDimensions.depth} m minimum`);
+      }
+    }
+  }
+
+  if (problems.length > 0) {
+    return { status: 'FAIL', message: `Room requirement not met: ${problems.join('; ')}.`, evidence };
+  }
+  return { status: 'PASS', message: `Room requirement met: ${found} × "${req.name}" present and within limits.`, evidence };
+}
+
+/**
+ * Evaluates a generic metric requirement. Returns
+ *   { status: 'PASS'|'FAIL'|'NOT_APPLICABLE'|'NEEDS_INPUT', evidence }
+ */
+function evaluateRequirement(req, entities, brief) {
+  const metric = scopeMetric(req.scope, entities, brief);
+  if (metric === null || metric.value === null || metric.value === undefined) {
+    return { status: 'NOT_APPLICABLE', evidence: { scope: req.scope, reason: 'metric unavailable for this model' } };
+  }
+  const evidence = { scope: req.scope, actual: +Number(metric.value).toFixed(3), target: req.target, unit: req.unit, detail: metric.detail };
+
+  switch (req.type) {
+    case 'MIN': {
+      if (!Number.isFinite(req.target)) return { status: 'NEEDS_INPUT', evidence: { ...evidence, reason: 'target not set' } };
+      return { status: metric.value >= req.target - (req.tolerance ?? 1e-9) ? 'PASS' : 'FAIL', evidence };
+    }
+    case 'MAX': {
+      if (!Number.isFinite(req.target)) return { status: 'NEEDS_INPUT', evidence: { ...evidence, reason: 'target not set' } };
+      return { status: metric.value <= req.target + (req.tolerance ?? 1e-9) ? 'PASS' : 'FAIL', evidence };
+    }
+    case 'EQUAL': {
+      if (!Number.isFinite(req.target)) return { status: 'NEEDS_INPUT', evidence: { ...evidence, reason: 'target not set' } };
+      return { status: Math.abs(metric.value - req.target) <= (req.tolerance ?? 1e-9) ? 'PASS' : 'FAIL', evidence };
+    }
+    case 'PRESENCE':
+      return { status: metric.value > 0 ? 'PASS' : 'FAIL', evidence };
+    default:
+      return { status: 'UNVERIFIED', evidence: { ...evidence, reason: `unknown type ${req.type}` } };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Adjacency
+// ---------------------------------------------------------------------------
+
+const ADJACENCY_LEVELS = Object.freeze({ REQUIRED: 'required', PREFERRED: 'preferred', AVOID: 'avoid' });
+
+/**
+ * Creates an adjacency expectation between two room names.
+ * Example: createAdjacency('Kitchen', 'Dining', ADJACENCY_LEVELS.PREFERRED, 'HIGH')
+ */
+function createAdjacency(roomA, roomB, level = ADJACENCY_LEVELS.PREFERRED, strength = 'MEDIUM', notes = '') {
+  if (!roomA?.trim() || !roomB?.trim()) throw new Error('Adjacency needs two room names');
+  const levelMatch = Object.values(ADJACENCY_LEVELS).find(l => l.toLowerCase() === String(level).toLowerCase());
+  if (!levelMatch) {
+    throw new Error(`Adjacency level must be one of: ${Object.values(ADJACENCY_LEVELS).join(', ')}`);
+  }
+  level = levelMatch;
+  if (!['LOW', 'MEDIUM', 'HIGH'].includes(strength)) {
+    throw new Error('Strength must be LOW, MEDIUM or HIGH');
+  }
+  return {
+    id: `adj-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
+    roomA: roomA.trim(), roomB: roomB.trim(), level, strength, notes
+  };
+}
+
+/** Rooms whose names contain the given name (case-insensitive). */
+function findRoomsByName(entities, name) {
+  const n = name.toLowerCase();
+  return entities.filter(e => e.kind === 'room' && String(e.name || '').toLowerCase().includes(n));
+}
+
+/** Rooms touch (share a boundary edge within tolerance) or come within `gap`. */
+function roomsAdjacentOrNear(a, b, gap = 0.5) {
+  const gapX = Math.max(a.x, b.x) - Math.min(a.x + a.width, b.x + b.width);
+  const gapY = Math.max(a.y, b.y) - Math.min(a.y + a.depth, b.y + b.depth);
+  return gapX <= gap && gapY <= gap;
+}
+
+/**
+ * Evaluates one adjacency expectation. FAIL only for REQUIRED adjacency
+ * that is missing; AVOID fails when the rooms DO touch; PREFERRED missing
+ * is a WARNING-grade note (returned in status for the panel to style).
+ */
+function evaluateAdjacency(adj, entities) {
+  const a = findRoomsByName(entities, adj.roomA);
+  const b = findRoomsByName(entities, adj.roomB);
+  const evidence = {
+    roomA: adj.roomA, roomB: adj.roomB, level: adj.level, strength: adj.strength,
+    matchedA: a.map(r => r.name), matchedB: b.map(r => r.name)
+  };
+  if (a.length === 0 || b.length === 0) {
+    return { status: 'NEEDS_INPUT', message: `Room "${a.length === 0 ? adj.roomA : adj.roomB}" not present yet.`, evidence };
+  }
+  let touching = false;
+  for (const ra of a) {
+    for (const rb of b) {
+      if (ra.id === rb.id) continue;
+      if (roomsAdjacentOrNear(ra, rb, 0.1)) { touching = true; break; }
+    }
+    if (touching) break;
+  }
+  if (adj.level === ADJACENCY_LEVELS.AVOID) {
+    return touching
+      ? { status: 'FAIL', message: `"${adj.roomA}" and "${adj.roomB}" should NOT be adjacent but they touch.`, evidence: { ...evidence, touching } }
+      : { status: 'PASS', message: `"${adj.roomA}" and "${adj.roomB}" are separated as required.`, evidence: { ...evidence, touching } };
+  }
+  return touching
+    ? { status: 'PASS', message: `"${adj.roomA}" and "${adj.roomB}" are adjacent (${adj.level}).`, evidence: { ...evidence, touching } }
+    : { status: adj.level === ADJACENCY_LEVELS.REQUIRED ? 'FAIL' : 'WARNING',
+        message: `"${adj.roomA}" and "${adj.roomB}" are not adjacent (required).`, evidence: { ...evidence, touching } };
+}
+
+// ---------------------------------------------------------------------------
+// Evaluation of a whole brief
+// ---------------------------------------------------------------------------
+
+/**
+ * Evaluates brief + requirements + adjacency against the model.
+ * @returns {{ results: Array, counts: {PASS,FAIL,WARNING,NEEDS_INPUT,NOT_APPLICABLE,UNVERIFIED}, ranAt }}
+ */
+function evaluateBriefCompliance(brief, entities) {
+  const results = [];
+  const reqs = Array.isArray(brief?.roomRequirements) ? brief.roomRequirements : [];
+  for (const req of reqs) {
+    const r = evaluateRoomRequirement(req, entities);
+    results.push({ kind: 'room', name: req.name, ...r });
+  }
+  const metrics = Array.isArray(brief?.requirements) ? brief.requirements : [];
+  for (const req of metrics) {
+    const r = evaluateRequirement(req, entities, brief);
+    results.push({ kind: 'metric', name: req.name, ...r });
+  }
+  const adjs = Array.isArray(brief?.adjacencies) ? brief.adjacencies : [];
+  for (const adj of adjs) {
+    const r = evaluateAdjacency(adj, entities);
+    results.push({ kind: 'adjacency', name: `${adj.roomA} ↔ ${adj.roomB}`, ...r });
+  }
+  const counts = { PASS: 0, FAIL: 0, WARNING: 0, NEEDS_INPUT: 0, NOT_APPLICABLE: 0, UNVERIFIED: 0 };
+  for (const r of results) counts[r.status] = (counts[r.status] || 0) + 1;
+  return { results, counts, ranAt: new Date().toISOString() };
+}
+
+// ---------------------------------------------------------------------------
+// Design intent
+// ---------------------------------------------------------------------------
+
+/**
+ * Creates a design-intent record: a decision WITH its reasoning trail —
+ * alternatives considered and the rejected ones. Feeds project.decisions.
+ */
+function createDesignIntent({ name, rationale, alternatives = [], rejected = [], createdBy = 'user' } = {}) {
+  if (typeof name !== 'string' || !name.trim()) {
+    throw new Error('Design intent needs a name');
+  }
+  if (typeof rationale !== 'string' || !rationale.trim()) {
+    throw new Error('Design intent needs a rationale (the "why")');
+  }
+  return {
+    id: `intent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
+    kind: 'intent',
+    name: name.trim(),
+    rationale: rationale.trim(),
+    alternatives: alternatives.map(a => ({ option: a.option || String(a), whyNotChosen: a.whyNotChosen || '' })),
+    rejected: rejected.map(r => ({ option: r.option || String(r), whyRejected: r.whyRejected || '' })),
+    createdBy,
+    createdAt: new Date().toISOString()
+  };
 }
 
 
@@ -38156,6 +38577,10 @@ function createPlanView(context) {
         startAiQuery(question);
         return { ok: true, message: question ? 'AI query started from the selection.' : 'AI query mode — select entities, then type your question.' };
       }
+      case 'brief': {
+        switchMode('requirements');
+        return { ok: true, message: 'Brief & Requirements studio opened.' };
+      }
       case 'ai_analyze': triggerAiCritique('plan_only', { question: 'Analyze this plan: major risks, geometry problems, missing information, circulation and annotation gaps. Cite deterministic evidence for each finding.' }); return { ok: true, message: 'Project-wide AI analysis started.' };
       case 'panel:layers': activeSidebarTab = 'layers'; renderEntityList(); renderLayerList(); return { ok: true, message: 'Layers panel active.' };
       case 'help': {
@@ -46875,6 +47300,145 @@ function createSurveyView(context) {
 
 
   // =========================================================================
+  // MODULE: ViewRequirements
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Requirements Studio View
+ * Phase 10: project brief, requirements, adjacency and design intent —
+ * evaluated deterministically against the actual model.
+ */
+
+
+
+function createRequirementsView(context) {
+  const { state, dom, showToast, projectStore, views } = context;
+
+  function brief() {
+    const p = projectStore.getProject();
+    if (!p.brief) p.brief = createProjectBrief();
+    return p.brief;
+  }
+
+  function save() {
+    projectStore.saveProject();
+  }
+
+  function renderAll() {
+    renderBriefEditor();
+    renderResults();
+  }
+
+  function renderBriefEditor() {
+    const host = dom.reqBriefEditor;
+    if (!host) return;
+    const b = brief();
+    host.innerHTML = `
+      <div class="brief-editor">
+        <div class="plan-prop-row"><span class="plan-prop-label">Building type</span>
+          <input id="brief-building-type" class="text-input" value="${escapeAttr(b.buildingType)}" style="width: 140px;" /></div>
+        <div class="plan-prop-row"><span class="plan-prop-label">Floors</span>
+          <input id="brief-floors" class="text-input" type="number" min="1" value="${b.floors ?? ''}" style="width: 60px;" /></div>
+        <div class="plan-prop-row"><span class="plan-prop-label">Net area target (m²)</span>
+          <input id="brief-net-area" class="text-input" type="number" value="${b.areaTargets.netM2 ?? ''}" style="width: 80px;" /></div>
+        <div class="plan-prop-row"><span class="plan-prop-label">Accessibility target</span>
+          <input id="brief-access" class="text-input" value="${escapeAttr(b.accessibility.target)}" style="width: 140px;" placeholder="e.g. ADA 2010" /></div>
+        <button type="button" id="brief-save-btn" class="plan-prop-btn"><span>Save Brief</span></button>
+      </div>`;
+    host.querySelector('#brief-save-btn')?.addEventListener('click', () => {
+      const b2 = brief();
+      b2.buildingType = host.querySelector('#brief-building-type').value.trim();
+      const floors = parseInt(host.querySelector('#brief-floors').value, 10);
+      b2.floors = Number.isFinite(floors) ? floors : null;
+      const net = parseFloat(host.querySelector('#brief-net-area').value);
+      b2.areaTargets.netM2 = Number.isFinite(net) ? net : null;
+      b2.accessibility.target = host.querySelector('#brief-access').value.trim();
+      save();
+      showToast('Project brief saved', 'success');
+      renderResults();
+    });
+  }
+
+  function renderResults() {
+    const host = dom.reqResults;
+    if (!host) return;
+    const b = brief();
+    const entities = state.plan.entities || [];
+    const report = evaluateBriefCompliance(b, entities);
+
+    const statusBadge = (s) => {
+      const cls = { PASS: 'info-check-pass', FAIL: 'info-check-fail' }[s] ||
+        (s === 'WARNING' ? 'sug-med' : 'info-check');
+      return `<span class="${cls}" style="padding:1px 6px; border-radius:4px; font-family:var(--font-mono); font-size:0.66rem;">${escapeHtml(s)}</span>`;
+    };
+    const rows = report.results.map(r => `
+      <div class="plan-prop-row" style="align-items:flex-start; flex-direction:column; gap:2px;">
+        <div style="display:flex; gap:6px; align-items:center;">
+          ${statusBadge(r.status)}
+          <strong style="font-size:0.74rem;">${escapeHtml(r.name)}</strong>
+          <span style="font-size:0.64rem; color:var(--text-muted);">(${escapeHtml(r.kind)})</span>
+        </div>
+        <div style="font-size:0.66rem; color:var(--text-secondary);">${escapeHtml(r.message || '')}</div>
+      </div>`).join('');
+
+    const counts = report.counts;
+    host.innerHTML = `
+      <div class="requirements-panel">
+        <div class="plan-prop-title">REQUIREMENTS vs MODEL</div>
+        <div class="issues-summary">
+          ${counts.PASS} PASS · ${counts.FAIL} FAIL · ${counts.WARNING} WARNING ·
+          ${counts.NEEDS_INPUT} NEEDS INPUT · ${counts.NOT_APPLICABLE} N/A
+        </div>
+        ${rows || '<div class="issues-empty">No requirements defined yet. Add room requirements to evaluate against the model.</div>'}
+        <div class="plan-prop-title" style="margin-top:0.5rem;">ROOM REQUIREMENTS</div>
+        <div class="plan-prop-row"><span class="plan-prop-label">Name</span>
+          <input id="req-room-name" class="text-input" placeholder="Bedroom" style="width:100px;" /></div>
+        <div class="plan-prop-row"><span class="plan-prop-label">Count</span>
+          <input id="req-room-count" class="text-input" type="number" min="1" value="1" style="width:50px;" /></div>
+        <div class="plan-prop-row"><span class="plan-prop-label">Min area (m²)</span>
+          <input id="req-room-area" class="text-input" type="number" placeholder="14" style="width:60px;" /></div>
+        <button type="button" id="req-room-add" class="plan-prop-btn"><span>Add Room Requirement</span></button>
+        <button type="button" id="req-adj-add" class="plan-prop-btn"><span>Add Adjacency (Kitchen↔Dining)</span></button>
+      </div>`;
+
+    host.querySelector('#req-room-add')?.addEventListener('click', () => {
+      const name = host.querySelector('#req-room-name').value.trim();
+      if (!name) { showToast('Room requirement needs a name (e.g. "Bedroom")', 'warning'); return; }
+      const count = parseInt(host.querySelector('#req-room-count').value, 10) || 1;
+      const area = parseFloat(host.querySelector('#req-room-area').value);
+      try {
+        brief().roomRequirements.push(
+          createRoomRequirement(name, { count, minAreaM2: Number.isFinite(area) ? area : null }));
+        save();
+        showToast(`Requirement added: ${count} × "${name}"`, 'success');
+        renderResults();
+      } catch (e) { showToast(e.message, 'warning'); }
+    });
+
+    host.querySelector('#req-adj-add')?.addEventListener('click', () => {
+      try {
+        brief().adjacencies.push(
+          createAdjacency('Kitchen', 'Dining', ADJACENCY_LEVELS.REQUIRED, 'HIGH'));
+        save();
+        showToast('Adjacency added: Kitchen ↔ Dining (required)', 'success');
+        renderResults();
+      } catch (e) { showToast(e.message, 'warning'); }
+    });
+  }
+
+  function escapeAttr(s) { return String(s ?? '').replace(/"/g, '&quot;'); }
+  function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+  return {
+    id: 'requirements',
+    mount() { renderAll(); },
+    onModeEnter() { renderAll(); },
+    getController() { return { renderAll, renderResults }; }
+  };
+}
+
+
+  // =========================================================================
   // MODULE: App
   // =========================================================================
 
@@ -46896,6 +47460,7 @@ function createSurveyView(context) {
 // NOTE: cad-clipboard / batch-cad / cad-targets core engines are imported by
 // their view modules (src/ui/views/*) — app.js only needs the storage keys
 // and the small helpers still referenced by listeners/state below.
+
 
 
 
@@ -47227,11 +47792,14 @@ function initializeApp() {
     // Mode 23: Survey Notebook (user preferences only; data lives in the project)
     survey: {
       defaultSource: 'Measured'
-    }
+    },
+
   };
 
   // DOM Elements Cache (Strictly normalized with index.html)
   const dom = {
+    reqBriefEditor: document.getElementById('req-brief-editor'),
+    reqResults: document.getElementById('req-results'),
     // Header & Global Modals
     themeSelect: document.getElementById('theme-select'),
     soundToggleBtn: document.getElementById('sound-toggle-btn'),
@@ -48157,6 +48725,7 @@ function initializeApp() {
     { id: 'furniture', section: 'Space', label: 'Furniture & Clearances', desc: '215 scaled standards with footprints', icon: '🛋️', shortcut: '5', keywords: ['furniture', 'clearance', 'ada', 'sofa', 'bed', 'desk', 'door'] },
     { id: 'reference', section: 'Space', label: 'Reference Chart', desc: 'Printable scale ruler, benchmarks, tables', icon: '📚', shortcut: '6', keywords: ['reference', 'ruler', 'benchmark', 'print', 'neufert'] },
     { id: 'projects', section: 'Project', label: 'Projects', desc: 'Library, save, duplicates, snapshots', icon: '🗂', keywords: ['project', 'library', 'snapshot', 'save', 'open', 'duplicate'] },
+    { id: 'requirements', section: 'Project', label: 'Brief & Requirements', desc: 'Project brief, room requirements, adjacency, design intent', keywords: ['brief', 'requirements', 'adjacency', 'rooms', 'program', 'intent'] },
     { id: 'plan', section: 'Project', label: 'Plan Canvas', desc: '2D plan editor: rooms, walls, furniture', icon: '▭', keywords: ['plan', 'canvas', 'room', 'wall', 'draw', 'layout'] },
     { id: 'survey', section: 'Project', label: 'Survey Notebook', desc: 'Field measurements, provenance, calibration', icon: '📏', keywords: ['survey', 'measurement', 'calibration', 'provenance', 'site'] },
     { id: 'imports', section: 'Project', label: 'Importer', desc: 'CSV/TSV, DXF, SVG ingestion with review', icon: '📥', keywords: ['import', 'csv', 'tsv', 'dxf', 'svg', 'ingest'] },
@@ -53158,6 +53727,7 @@ function initializeApp() {
   views.register(createAiControlCenterView(viewContext));
   views.register(createImportsView(viewContext));
   views.register(createSurveyView(viewContext));
+  views.register(createRequirementsView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();

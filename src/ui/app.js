@@ -117,6 +117,7 @@ import { createAiStudioView } from './views/ai-studio.js';
 import { createAiControlCenterView } from './views/ai-control-center.js';
 import { createImportsView } from './views/imports.js';
 import { createSurveyView } from './views/survey.js';
+import { createRequirementsView } from './views/requirements.js';
 import { buildScopedFactsPack } from '../ai/context/project-context.js';
 import { createAiHttp } from '../services/ai/http.js';
 import { createTransports } from '../services/ai/transports/index.js';
@@ -419,11 +420,14 @@ export function initializeApp() {
     // Mode 23: Survey Notebook (user preferences only; data lives in the project)
     survey: {
       defaultSource: 'Measured'
-    }
+    },
+
   };
 
   // DOM Elements Cache (Strictly normalized with index.html)
   const dom = {
+    reqBriefEditor: document.getElementById('req-brief-editor'),
+    reqResults: document.getElementById('req-results'),
     // Header & Global Modals
     themeSelect: document.getElementById('theme-select'),
     soundToggleBtn: document.getElementById('sound-toggle-btn'),
@@ -1349,6 +1353,7 @@ export function initializeApp() {
     { id: 'furniture', section: 'Space', label: 'Furniture & Clearances', desc: '215 scaled standards with footprints', icon: '🛋️', shortcut: '5', keywords: ['furniture', 'clearance', 'ada', 'sofa', 'bed', 'desk', 'door'] },
     { id: 'reference', section: 'Space', label: 'Reference Chart', desc: 'Printable scale ruler, benchmarks, tables', icon: '📚', shortcut: '6', keywords: ['reference', 'ruler', 'benchmark', 'print', 'neufert'] },
     { id: 'projects', section: 'Project', label: 'Projects', desc: 'Library, save, duplicates, snapshots', icon: '🗂', keywords: ['project', 'library', 'snapshot', 'save', 'open', 'duplicate'] },
+    { id: 'requirements', section: 'Project', label: 'Brief & Requirements', desc: 'Project brief, room requirements, adjacency, design intent', keywords: ['brief', 'requirements', 'adjacency', 'rooms', 'program', 'intent'] },
     { id: 'plan', section: 'Project', label: 'Plan Canvas', desc: '2D plan editor: rooms, walls, furniture', icon: '▭', keywords: ['plan', 'canvas', 'room', 'wall', 'draw', 'layout'] },
     { id: 'survey', section: 'Project', label: 'Survey Notebook', desc: 'Field measurements, provenance, calibration', icon: '📏', keywords: ['survey', 'measurement', 'calibration', 'provenance', 'site'] },
     { id: 'imports', section: 'Project', label: 'Importer', desc: 'CSV/TSV, DXF, SVG ingestion with review', icon: '📥', keywords: ['import', 'csv', 'tsv', 'dxf', 'svg', 'ingest'] },
@@ -6350,6 +6355,7 @@ export function initializeApp() {
   views.register(createAiControlCenterView(viewContext));
   views.register(createImportsView(viewContext));
   views.register(createSurveyView(viewContext));
+  views.register(createRequirementsView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();

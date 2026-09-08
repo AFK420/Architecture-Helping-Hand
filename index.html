@@ -4451,6 +4451,34 @@
     <!-- ======================================================== -->
     <!-- MODE 20: AI STUDIO (task-focused assistant)              -->
     <!-- ======================================================== -->
+    <!-- ======================================================== -->
+    <!-- MODE: BRIEF & REQUIREMENTS (project intent)              -->
+    <!-- ======================================================== -->
+    <section id="mode-view-requirements" class="tool-mode-view" aria-labelledby="heading-requirements" hidden>
+      <div class="tool-layout" style="grid-template-columns: minmax(0, 420px) minmax(0, 1fr);">
+        <div class="archi-card main-calc-card">
+          <div class="card-header">
+            <div>
+              <span class="card-tag">PROJECT</span>
+              <h2 id="heading-requirements" class="card-title">Brief &amp; Requirements</h2>
+            </div>
+          </div>
+          <p class="tool-description">Capture what the building must do: building type, floors, area targets, room requirements, adjacency, and design intent. Requirements are evaluated deterministically against the actual model — never invented.</p>
+          <div id="req-brief-editor"></div>
+        </div>
+        <div class="archi-card main-calc-card">
+          <div class="card-header">
+            <div>
+              <span class="card-tag">EVALUATION</span>
+              <h2 class="card-title">Requirements vs Model</h2>
+            </div>
+          </div>
+          <div id="req-results" style="padding: 0.5rem;"></div>
+        </div>
+      </div>
+    </section>
+
+
     <section id="mode-view-ai" class="tool-mode-view" aria-labelledby="heading-ai" hidden>
       <div class="tool-layout">
         <!-- Left Column: Job Actions & Prompt -->

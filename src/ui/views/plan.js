@@ -278,6 +278,10 @@ export function createPlanView(context) {
         startAiQuery(question);
         return { ok: true, message: question ? 'AI query started from the selection.' : 'AI query mode — select entities, then type your question.' };
       }
+      case 'brief': {
+        switchMode('requirements');
+        return { ok: true, message: 'Brief & Requirements studio opened.' };
+      }
       case 'ai_analyze': triggerAiCritique('plan_only', { question: 'Analyze this plan: major risks, geometry problems, missing information, circulation and annotation gaps. Cite deterministic evidence for each finding.' }); return { ok: true, message: 'Project-wide AI analysis started.' };
       case 'panel:layers': activeSidebarTab = 'layers'; renderEntityList(); renderLayerList(); return { ok: true, message: 'Layers panel active.' };
       case 'help': {

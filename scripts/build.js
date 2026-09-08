@@ -73,6 +73,7 @@ export const BUNDLE_MODULES = [
   { name: 'Constraints', file: path.join(srcDir, 'core', 'constraints.js') },
   { name: 'Parametric', file: path.join(srcDir, 'core', 'parametric.js') },
   { name: 'IssueEngine', file: path.join(srcDir, 'core', 'issue-engine.js') },
+  { name: 'Requirements', file: path.join(srcDir, 'core', 'requirements.js') },
   { name: 'AiBridge', file: path.join(srcDir, 'core', 'ai-bridge.js') },
   { name: 'PlanCanvas', file: path.join(srcDir, 'core', 'plan-canvas.js') },
   { name: 'Sheet', file: path.join(srcDir, 'core', 'sheet.js') },
@@ -141,6 +142,7 @@ export const BUNDLE_MODULES = [
   { name: 'ViewAiControlCenter', file: path.join(srcDir, 'ui', 'views', 'ai-control-center.js') },
   { name: 'ViewImports', file: path.join(srcDir, 'ui', 'views', 'imports.js') },
   { name: 'ViewSurvey', file: path.join(srcDir, 'ui', 'views', 'survey.js') },
+  { name: 'ViewRequirements', file: path.join(srcDir, 'ui', 'views', 'requirements.js') },
   { name: 'App', file: path.join(srcDir, 'ui', 'app.js') }
 ];
 

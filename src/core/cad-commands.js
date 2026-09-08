@@ -153,6 +153,7 @@ const SIMPLE = [
   { name: 'ISSUES', aliases: ['AUDIT'], description: 'Deterministic project audit — geometry, rooms, doors, dimensions, documentation', category: 'ai', run: 'issues' },
   { name: 'AI', aliases: ['ASK', 'AIQUERY'], description: 'Ask the AI about the current selection: AI <question…>', category: 'ai', run: 'ai_query' },
   { name: 'ANALYZE', aliases: ['AICRITIQUE'], description: 'Project-wide AI review with deterministic evidence', category: 'ai', run: 'ai_analyze' },
+  { name: 'BRIEF', aliases: ['REQ', 'REQUIREMENTS'], description: 'Open the Brief & Requirements studio (evaluate requirements vs model)', category: 'system', run: 'brief' },
   { name: 'LAYER', aliases: ['LA'], description: 'Open the layers panel', category: 'organize', run: 'panel:layers' },
   { name: 'HELP', aliases: ['?'], description: 'List commands: HELP [search…]', category: 'system', run: 'help' }
 ];
