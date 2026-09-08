@@ -65,10 +65,13 @@ export const BUNDLE_MODULES = [
   { name: 'Details', file: path.join(srcDir, 'core', 'details.js') },
   { name: 'Personas', file: path.join(srcDir, 'core', 'personas.js') },
   { name: 'ProjectSchema', file: path.join(srcDir, 'core', 'project-schema.js') },
+
   { name: 'GeometryEngine', file: path.join(srcDir, 'core', 'geometry-engine.js') },
   { name: 'Icons', file: path.join(srcDir, 'core', 'icons.js') },
   { name: 'CadCommands', file: path.join(srcDir, 'core', 'cad-commands.js') },
   { name: 'Suggestions', file: path.join(srcDir, 'core', 'suggestions.js') },
+  { name: 'Constraints', file: path.join(srcDir, 'core', 'constraints.js') },
+  { name: 'Parametric', file: path.join(srcDir, 'core', 'parametric.js') },
   { name: 'AiBridge', file: path.join(srcDir, 'core', 'ai-bridge.js') },
   { name: 'PlanCanvas', file: path.join(srcDir, 'core', 'plan-canvas.js') },
   { name: 'Sheet', file: path.join(srcDir, 'core', 'sheet.js') },

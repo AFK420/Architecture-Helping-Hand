@@ -68,7 +68,8 @@ const testFiles = [
   'project-model.test.js',
   'math-engine.test.js',
   'geometry-engine.test.js',
-  'geometry3d.test.js'
+  'geometry3d.test.js',
+  'constraints.test.js'
 ];
 
 console.log('=================================================================');
