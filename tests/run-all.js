@@ -67,7 +67,8 @@ const testFiles = [
   'ghost-tools.test.js',
   'project-model.test.js',
   'math-engine.test.js',
-  'geometry-engine.test.js'
+  'geometry-engine.test.js',
+  'geometry3d.test.js'
 ];
 
 console.log('=================================================================');

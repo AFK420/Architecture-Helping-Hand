@@ -56,6 +56,8 @@ export const BUNDLE_MODULES = [
   { name: 'GridColumns', file: path.join(srcDir, 'core', 'grid-columns.js') },
   { name: 'EntityIdentity', file: path.join(srcDir, 'core', 'entity-identity.js') },
   { name: 'GeometryTolerance', file: path.join(srcDir, 'core', 'geometry-tolerance.js') },
+  { name: 'Geometry3D', file: path.join(srcDir, 'core', 'geometry3d.js') },
+  { name: 'Camera3D', file: path.join(srcDir, 'core', 'camera3d.js') },
   { name: 'Entities', file: path.join(srcDir, 'core', 'entities.js') },
   { name: 'ZoningSchedule', file: path.join(srcDir, 'core', 'zoning-schedule.js') },
   { name: 'Massing3D', file: path.join(srcDir, 'core', 'massing-3d.js') },

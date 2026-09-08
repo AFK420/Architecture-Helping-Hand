@@ -11826,6 +11826,443 @@ function isZero(value, epsilon = EPSILON_MEDIUM) {
 
 
   // =========================================================================
+  // MODULE: Geometry3D
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — 3D Geometry Engine (leaf module)
+ *
+ * Foundational 3D math: vectors, Mat4 transforms, bounding boxes, rays,
+ * planes, minimal quaternion, camera model (world↔camera↔screen), ray
+ * casting, and mesh plane-clipping. Pure, deterministic, dependency-free.
+ *
+ * Coordinate system (matches massing-3d.js): world is Z-up; screen Y grows
+ * downward; the renderer camera is azimuth/elevation orthographic with a
+ * zoom scale (px per meter) and panX/panY screen offset.
+ */
+
+// ---------------------------------------------------------------------------
+// Vector3 / Point3
+// ---------------------------------------------------------------------------
+
+const Vec3 = {
+  add: (a, b) => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }),
+  sub: (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z }),
+  scale: (a, s) => ({ x: a.x * s, y: a.y * s, z: a.z * s }),
+  dot: (a, b) => a.x * b.x + a.y * b.y + a.z * b.z,
+  cross: (a, b) => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x }),
+  length: (a) => Math.hypot(a.x, a.y, a.z),
+  distance: (a, b) => Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z),
+  normalize(a) {
+    const len = Vec3.length(a);
+    if (len < 1e-12) return { x: 0, y: 0, z: 0 };
+    return { x: a.x / len, y: a.y / len, z: a.z / len };
+  },
+  lerp: (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t })
+};
+
+// ---------------------------------------------------------------------------
+// Mat4 (column-major 4x4, WebGL convention)
+// ---------------------------------------------------------------------------
+
+const Mat4 = {
+  identity() {
+    return new Float64Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  },
+  multiply(a, b) {
+    // a * b (column-major: out[col*4 + row])
+    const out = new Float64Array(16);
+    for (let col = 0; col < 4; col++) {
+      for (let row = 0; row < 4; row++) {
+        let s = 0;
+        for (let k = 0; k < 4; k++) s += a[k * 4 + row] * b[col * 4 + k];
+        out[col * 4 + row] = s;
+      }
+    }
+    return out;
+  },
+  translation(tx, ty, tz) {
+    return new Float64Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tx, ty, tz, 1]);
+  },
+  scaling(sx, sy, sz) {
+    return new Float64Array([sx, 0, 0, 0, 0, sy, 0, 0, 0, 0, sz, 0, 0, 0, 0, 1]);
+  },
+  rotationZ(radians) {
+    const c = Math.cos(radians), s = Math.sin(radians);
+    return new Float64Array([c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  },
+  rotationX(radians) {
+    const c = Math.cos(radians), s = Math.sin(radians);
+    return new Float64Array([1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]);
+  },
+  rotationY(radians) {
+    const c = Math.cos(radians), s = Math.sin(radians);
+    return new Float64Array([c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1]);
+  },
+  /**
+   * Mirror across an arbitrary plane through `point` with unit normal `normal`.
+   * Composed as translate·R·scale(-1)·R⁻¹·translate⁻¹ where R rotates the
+   * plane normal onto +X.
+   */
+  mirrorPlane(point, normal) {
+    const n = Vec3.normalize(normal);
+    const angleX = Math.atan2(n.y, n.z);          // rotate n onto the XZ plane
+    const afterX = { x: 0, y: 0, z: 1 };           // placeholder — compute directly
+    void afterX;
+    // Direct reflection matrix for unit normal n through plane through origin:
+    // I - 2·n·nᵀ
+    const m = Mat4.identity();
+    const xx = 1 - 2 * n.x * n.x, yy = 1 - 2 * n.y * n.y, zz = 1 - 2 * n.z * n.z;
+    const xy = -2 * n.x * n.y, xz = -2 * n.x * n.z, yz = -2 * n.y * n.z;
+    m[0] = xx; m[1] = xy; m[2] = xz;
+    m[4] = xy; m[5] = yy; m[6] = yz;
+    m[8] = xz; m[9] = yz; m[10] = zz;
+    return Mat4.multiply(Mat4.translation(point.x, point.y, point.z),
+      Mat4.multiply(m, Mat4.translation(-point.x, -point.y, -point.z)));
+  },
+  transformPoint(m, p) {
+    return {
+      x: m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12],
+      y: m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13],
+      z: m[2] * p.x + m[6] * p.y + m[10] * p.z + m[14]
+    };
+  },
+  transformVector(m, v) {
+    return {
+      x: m[0] * v.x + m[4] * v.y + m[8] * v.z,
+      y: m[1] * v.x + m[5] * v.y + m[9] * v.z,
+      z: m[2] * v.x + m[6] * v.y + m[10] * v.z
+    };
+  }
+};
+
+// ---------------------------------------------------------------------------
+// BoundingBox3D
+// ---------------------------------------------------------------------------
+
+function createBoundingBox3D() {
+  return { minX: Infinity, minY: Infinity, minZ: Infinity, maxX: -Infinity, maxY: -Infinity, maxZ: -Infinity, isEmpty: true };
+}
+
+function bbox3AddPoint(box, p) {
+  if (!box) return box;
+  box.isEmpty = false;
+  box.minX = Math.min(box.minX, p.x); box.minY = Math.min(box.minY, p.y); box.minZ = Math.min(box.minZ, p.z);
+  box.maxX = Math.max(box.maxX, p.x); box.maxY = Math.max(box.maxY, p.y); box.maxZ = Math.max(box.maxZ, p.z);
+  return box;
+}
+
+function bbox3Center(box) {
+  if (!box || box.isEmpty) return null;
+  return { x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2, z: (box.minZ + box.maxZ) / 2 };
+}
+
+function bbox3Intersects(a, b) {
+  return a && b && !a.isEmpty && !b.isEmpty &&
+    a.minX <= b.maxX && a.maxX >= b.minX &&
+    a.minY <= b.maxY && a.maxY >= b.minY &&
+    a.minZ <= b.maxZ && a.maxZ >= b.minZ;
+}
+
+// ---------------------------------------------------------------------------
+// Ray
+// ---------------------------------------------------------------------------
+
+function createRay(origin, direction) {
+  const dir = Vec3.normalize(direction);
+  if (dir.x === 0 && dir.y === 0 && dir.z === 0) {
+    throw new Error('createRay: direction must be a non-zero vector');
+  }
+  return { origin: { ...origin }, direction: dir };
+}
+
+/** Ray vs AABB (slab method). Returns {tMin, tMax} or null. */
+function rayIntersectsBox(ray, box) {
+  let tMin = -Infinity, tMax = Infinity;
+  const axes = [['minX', 'maxX', 'x'], ['minY', 'maxY', 'y'], ['minZ', 'maxZ', 'z']];
+  for (const [minKey, maxKey, axis] of axes) {
+    const d = ray.direction[axis];
+    if (Math.abs(d) < 1e-12) {
+      if (ray.origin[axis] < box[minKey] || ray.origin[axis] > box[maxKey]) return null;
+      continue;
+    }
+    let t1 = (box[minKey] - ray.origin[axis]) / d;
+    let t2 = (box[maxKey] - ray.origin[axis]) / d;
+    if (t1 > t2) [t1, t2] = [t2, t1];
+    tMin = Math.max(tMin, t1);
+    tMax = Math.min(tMax, t2);
+    if (tMin > tMax) return null;
+  }
+  if (tMax < 0) return null; // box behind the ray
+  return { tMin: Math.max(tMin, 0), tMax };
+}
+
+/** Ray vs triangle (Möller–Trumbore). Returns {t, u, v} or null. */
+function rayIntersectsTriangle(ray, v0, v1, v2) {
+  const e1 = Vec3.sub(v1, v0);
+  const e2 = Vec3.sub(v2, v0);
+  const p = Vec3.cross(ray.direction, e2);
+  const det = Vec3.dot(e1, p);
+  if (Math.abs(det) < 1e-12) return null; // parallel
+  const invDet = 1 / det;
+  const t = Vec3.sub(ray.origin, v0);
+  const u = Vec3.dot(t, p) * invDet;
+  if (u < -1e-9 || u > 1 + 1e-9) return null;
+  const q = Vec3.cross(t, e1);
+  const v = Vec3.dot(ray.direction, q) * invDet;
+  if (v < -1e-9 || u + v > 1 + 1e-9) return null;
+  const tHit = Vec3.dot(e2, q) * invDet;
+  if (tHit < 1e-9) return null;
+  return { t: tHit, u, v };
+}
+
+/**
+ * Ray vs triangle-fan face (convex polygon defined by vertex list).
+ * Returns {t, point} or null.
+ */
+function rayIntersectsFace(ray, vertices) {
+  if (!Array.isArray(vertices) || vertices.length < 3) return null;
+  for (let i = 1; i < vertices.length - 1; i++) {
+    const hit = rayIntersectsTriangle(ray, vertices[0], vertices[i], vertices[i + 1]);
+    if (hit) {
+      return { t: hit.t, point: Vec3.add(ray.origin, Vec3.scale(ray.direction, hit.t)) };
+    }
+  }
+  return null;
+}
+
+/** Nearest face hit across a mesh (faces = array of vertex arrays). */
+function rayCastMesh(ray, faces) {
+  let best = null;
+  for (let i = 0; i < faces.length; i++) {
+    const hit = rayIntersectsFace(ray, faces[i]);
+    if (hit && (!best || hit.t < best.t)) {
+      best = { ...hit, faceIndex: i };
+    }
+  }
+  return best;
+}
+
+// ---------------------------------------------------------------------------
+// Plane + clipping (sectioning foundation)
+// ---------------------------------------------------------------------------
+
+/** Plane through `point` with `normal`. signedDistance > 0 = normal side. */
+function createPlane(point, normal) {
+  const n = Vec3.normalize(normal);
+  return { normal: n, constant: -Vec3.dot(n, point) };
+}
+
+function planeDistanceToPoint(plane, p) {
+  return Vec3.dot(plane.normal, p) + plane.constant;
+}
+
+/** Intersects a ray with a plane. Returns {t, point} or null (parallel/behind with t<0). */
+function rayIntersectsPlane(ray, plane) {
+  const denom = Vec3.dot(plane.normal, ray.direction);
+  if (Math.abs(denom) < 1e-12) return null;
+  const t = -(Vec3.dot(plane.normal, ray.origin) + plane.constant) / denom;
+  if (t < 0) return null;
+  return { t, point: Vec3.add(ray.origin, Vec3.scale(ray.direction, t)) };
+}
+
+/**
+ * Clips a convex polygon (vertex ring) against a plane, keeping the side the
+ * normal points toward. Returns { vertices, clipped: boolean }.
+ */
+function clipPolygonAgainstPlane(vertices, plane) {
+  const out = [];
+  let clipped = false;
+  const n = vertices.length;
+  for (let i = 0; i < n; i++) {
+    const cur = vertices[i];
+    const next = vertices[(i + 1) % n];
+    const dCur = planeDistanceToPoint(plane, cur);
+    const dNext = planeDistanceToPoint(plane, next);
+    const curIn = dCur >= -1e-9;
+    const nextIn = dNext >= -1e-9;
+    if (curIn) out.push(cur);
+    if (curIn !== nextIn) {
+      // edge crosses the plane — insert intersection
+      const t = dCur / (dCur - dNext);
+      out.push(Vec3.lerp(cur, next, t));
+      clipped = true;
+    } else if (!curIn) {
+      clipped = true;
+    }
+  }
+  return { vertices: out, clipped };
+}
+
+// ---------------------------------------------------------------------------
+// Quaternion (minimal — justified for orbit composition without gimbal drift)
+// ---------------------------------------------------------------------------
+
+const Quat = {
+  fromAxisAngle(axis, radians) {
+    const n = Vec3.normalize(axis);
+    const half = radians / 2;
+    const s = Math.sin(half);
+    return { x: n.x * s, y: n.y * s, z: n.z * s, w: Math.cos(half) };
+  },
+  toMat4(q) {
+    const { x, y, z, w } = q;
+    const xx = x * x, yy = y * y, zz = z * z;
+    const xy = x * y, xz = x * z, yz = y * z;
+    const wx = w * x, wy = w * y, wz = w * z;
+    return new Float64Array([
+      1 - 2 * (yy + zz), 2 * (xy + wz), 2 * (xz - wy), 0,
+      2 * (xy - wz), 1 - 2 * (xx + zz), 2 * (yz + wx), 0,
+      2 * (xz + wy), 2 * (yz - wx), 1 - 2 * (xx + yy), 0,
+      0, 0, 0, 1
+    ]);
+  }
+};
+
+
+  // =========================================================================
+  // MODULE: Camera3D
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — Camera Model (3D)
+ *
+ * One camera model shared by the 3D massing view, the 4-view split, and any
+ * future 3D editing. Built on the same azimuth/elevation/zoom/pan convention
+ * as massing-3d.projectPoint3D so existing renders are unaffected; this
+ * module ADDS the missing direction: screen → world ray (picking) and the
+ * named architectural view presets (Top/Bottom/Front/Back/Left/Right/
+ * Perspective/Isometric) that the compass and view commands map to.
+ */
+
+
+
+/**
+ * Named view presets. azimuth/elevation in degrees (massing-3d convention),
+ * orthographic projection for all architectural views.
+ */
+const VIEW_PRESETS = Object.freeze({
+  top:         { azimuth: 0,   elevation: 89.9, label: 'Top',      axes: { right: '+X', up: '+Y' } },
+  bottom:      { azimuth: 0,   elevation: -89.9, label: 'Bottom',  axes: { right: '+X', up: '-Y' } },
+  front:       { azimuth: 0,   elevation: 0,    label: 'Front',    axes: { right: '+X', up: '+Z' } },
+  back:        { azimuth: 180, elevation: 0,    label: 'Back',     axes: { right: '-X', up: '+Z' } },
+  left:        { azimuth: -90, elevation: 0,    label: 'Left',     axes: { right: '-Y', up: '+Z' } },
+  right:       { azimuth: 90,  elevation: 0,    label: 'Right',    axes: { right: '+Y', up: '+Z' } },
+  perspective: { azimuth: 45,  elevation: 35.264, label: 'Perspective', axes: { right: '+X', up: '+Z' } },
+  isometric_ne:{ azimuth: 45,  elevation: 35.264, label: 'Isometric NE' },
+  isometric_nw:{ azimuth: 135, elevation: 35.264, label: 'Isometric NW' },
+  isometric_se:{ azimuth: -45, elevation: 35.264, label: 'Isometric SE' },
+  isometric_sw:{ azimuth: -135, elevation: 35.264, label: 'Isometric SW' }
+});
+
+/** Creates a normalized camera state. */
+function createCamera3D({ preset = 'perspective', azimuth = 45, elevation = 35.264, zoom = 40, panX = 0, panY = 0, target = { x: 0, y: 0, z: 0 }, orthographic = true } = {}) {
+  const p = VIEW_PRESETS[preset];
+  return {
+    preset: p ? preset : null,
+    azimuth: p ? p.azimuth : azimuth,
+    elevation: p ? p.elevation : elevation,
+    zoom, panX, panY, target: { ...target },
+    projection: orthographic ? 'orthographic' : 'perspective',
+    orthographic
+  };
+}
+
+/** View direction unit vector (the direction the depth buffer increases along).
+ *  massing-3d depth = z·sinEl + (x·sinAz + y·cosAz)·cosEl, so the gradient is
+ *  (sinAz·cosEl, cosAz·cosEl, sinEl). */
+function cameraViewDirection(camera) {
+  const az = (camera.azimuth * Math.PI) / 180;
+  const el = (camera.elevation * Math.PI) / 180;
+  return Vec3.normalize({
+    x: Math.sin(az) * Math.cos(el),
+    y: Math.cos(az) * Math.cos(el),
+    z: Math.sin(el)
+  });
+}
+
+/** Camera right and up basis vectors. */
+function cameraBasis(camera) {
+  const forward = cameraViewDirection(camera);
+  const worldUp = { x: 0, y: 0, z: 1 };
+  // forward ≈ ±worldUp for top/bottom — use a stable fallback
+  const upRef = Math.abs(Vec3.dot(forward, worldUp)) > 0.999
+    ? { x: 0, y: 1, z: 0 }
+    : worldUp;
+  const right = Vec3.normalize(Vec3.cross(forward, upRef));
+  const up = Vec3.cross(right, forward);
+  return { forward, right, up };
+}
+
+/** World → screen (2D). Byte-compatible with massing-3d.projectPoint3D. */
+function worldToScreen3D(p, camera) {
+  const az = ((camera.azimuth ?? 45) * Math.PI) / 180;
+  const el = ((camera.elevation ?? 35.264) * Math.PI) / 180;
+  const zoom = camera.zoom || 40;
+  const cosAz = Math.cos(az), sinAz = Math.sin(az);
+  const x1 = p.x * cosAz - p.y * sinAz;
+  const y1 = p.x * sinAz + p.y * cosAz;
+  const z1 = p.z || 0;
+  const cosEl = Math.cos(el), sinEl = Math.sin(el);
+  const screenX = camera.panX + x1 * zoom;
+  const screenY = camera.panY - (z1 * cosEl - y1 * sinEl) * zoom;
+  const depth = z1 * sinEl + y1 * cosEl;
+  return { x: screenX, y: screenY, depth };
+}
+
+/** Screen point → world ray (picking). camera.panX/panY are screen px.
+ *  Exact inverse of worldToScreen3D. All world points projecting to this
+ *  screen point form a line: solve for the point on that line at z=0 (or
+ *  y1=0 when the view is horizontal). */
+function screenToWorldRay(screenX, screenY, camera) {
+  const az = ((camera.azimuth ?? 45) * Math.PI) / 180;
+  const el = ((camera.elevation ?? 35.264) * Math.PI) / 180;
+  const zoom = camera.zoom || 40;
+  const vx = (screenX - camera.panX) / zoom;
+  const vy = (screenY - camera.panY) / zoom;
+  const cosAz = Math.cos(az), sinAz = Math.sin(az);
+  const cosEl = Math.cos(el), sinEl = Math.sin(el);
+  let x1 = vx, y1, z1;
+  if (Math.abs(sinEl) > 1e-6) {
+    y1 = vy / sinEl;
+    z1 = 0;
+  } else {
+    // horizontal view (plan): y1 = 0, solve z from vy = −z·cosEl
+    y1 = 0;
+    z1 = -vy / cosEl;
+  }
+  const origin = {
+    x: x1 * cosAz + y1 * sinAz + (camera.target?.x || 0),
+    y: -x1 * sinAz + y1 * cosAz + (camera.target?.y || 0),
+    z: z1 + (camera.target?.z || 0)
+  };
+  const direction = cameraViewDirection(camera);
+  return { origin, direction };
+}
+
+/** Orbit: change azimuth/elevation (clamped to avoid pole flip). */
+function orbitCamera(camera, deltaAzimuthDeg, deltaElevationDeg) {
+  let azimuth = camera.azimuth + deltaAzimuthDeg;
+  let elevation = camera.elevation + deltaElevationDeg;
+  elevation = Math.max(-89.9, Math.min(89.9, elevation));
+  if (azimuth > 180) azimuth -= 360;
+  if (azimuth < -180) azimuth += 360;
+  return { ...camera, azimuth, elevation };
+}
+
+/** Pan: shift the screen offset (world-anchored via target). */
+function panCamera(camera, deltaScreenX, deltaScreenY) {
+  return { ...camera, panX: camera.panX + deltaScreenX, panY: camera.panY + deltaScreenY };
+}
+
+/** Zoom: scale px/meter clamped to sane architectural bounds. */
+function zoomCamera(camera, factor) {
+  const zoom = Math.max(2, Math.min(400, (camera.zoom || 40) * factor));
+  return { ...camera, zoom };
+}
+
+
+  // =========================================================================
   // MODULE: Entities
   // =========================================================================
 
