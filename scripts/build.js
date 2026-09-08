@@ -72,6 +72,7 @@ export const BUNDLE_MODULES = [
   { name: 'Suggestions', file: path.join(srcDir, 'core', 'suggestions.js') },
   { name: 'Constraints', file: path.join(srcDir, 'core', 'constraints.js') },
   { name: 'Parametric', file: path.join(srcDir, 'core', 'parametric.js') },
+  { name: 'IssueEngine', file: path.join(srcDir, 'core', 'issue-engine.js') },
   { name: 'AiBridge', file: path.join(srcDir, 'core', 'ai-bridge.js') },
   { name: 'PlanCanvas', file: path.join(srcDir, 'core', 'plan-canvas.js') },
   { name: 'Sheet', file: path.join(srcDir, 'core', 'sheet.js') },

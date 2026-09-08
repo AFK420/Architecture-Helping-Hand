@@ -30,7 +30,7 @@ export function suggestForEntity(entity, entities = []) {
   switch (entity.kind) {
     case 'wall': {
       const len = wallLength(entity);
-      const touching = entities.filter(d => d.kind === 'dimension' && dimensionOnWall(d, entity));
+      const touching = entities.filter(d => d.kind === 'dimension' && suggestDimensionOnWall(d, entity));
       if (touching.length === 0) {
         push('medium', 'Wall has no dimension annotation',
           `Wall "${entity.name}" is ${len.toFixed(2)} m long; no dimension entity references its endpoints.`,
@@ -88,7 +88,7 @@ export function suggestForEntity(entity, entities = []) {
           `Named bedroom is ${area.toFixed(1)} m²; many codes/standards expect ≥ 7.5 m² for a habitable bedroom.`,
           'Enlarge the room or rename it to match its actual function.', 'room');
       }
-      const dims = entities.filter(d => d.kind === 'dimension' && dimensionNearRoom(d, entity));
+      const dims = entities.filter(d => d.kind === 'dimension' && suggestDimensionNearRoom(d, entity));
       if (dims.length === 0) {
         push('low', 'Room is undimensioned',
           `No dimension entities sit on the boundaries of "${entity.name}".`,
@@ -190,7 +190,7 @@ export function suggestForDocument(entities = []) {
       'Resolve the overlap before area schedules are trusted.', 'select');
   }
 
-  const undimensioned = walls.filter(w => !entities.some(d => d.kind === 'dimension' && dimensionOnWall(d, w)));
+  const undimensioned = walls.filter(w => !entities.some(d => d.kind === 'dimension' && suggestDimensionOnWall(d, w)));
   if (walls.length > 2 && undimensioned.length > walls.length / 2) {
     push('medium', 'Most walls are undimensioned',
       `${undimensioned.length} of ${walls.length} walls carry no dimension on their endpoints.`,
@@ -237,7 +237,7 @@ function suggestDimensionValue(d) {
   return Math.hypot(p2.x - p1.x, p2.y - p1.y);
 }
 
-function dimensionOnWall(d, wall) {
+function suggestDimensionOnWall(d, wall) {
   const p1 = d.p1 || { x: d.x1, y: d.y1 };
   const p2 = d.p2 || { x: d.x2, y: d.y2 };
   const near = (p, q) => Math.hypot(p.x - q.x, p.y - q.y) < 0.05;
@@ -245,7 +245,7 @@ function dimensionOnWall(d, wall) {
          (near(p1, { x: wall.x2, y: wall.y2 }) && near(p2, { x: wall.x1, y: wall.y1 }));
 }
 
-function dimensionNearRoom(d, room) {
+function suggestDimensionNearRoom(d, room) {
   const p1 = d.p1 || { x: d.x1, y: d.y1 };
   const p2 = d.p2 || { x: d.x2, y: d.y2 };
   const nearEdge = p => Math.abs(p.x - room.x) < 0.05 || Math.abs(p.x - (room.x + room.width)) < 0.05 ||

@@ -150,6 +150,7 @@ const SIMPLE = [
   { name: 'PROPERTIES', aliases: ['PROPS', 'CH'], description: 'Inspect the current selection in the properties panel', category: 'inquiry', run: 'properties' },
   { name: 'INFO', aliases: ['INSPECT'], description: 'Show detailed information about the current selection', category: 'inquiry', run: 'info' },
   { name: 'SUGGEST', aliases: ['SUGGESTIONS'], description: 'Ranked, evidence-backed suggestions for the current selection or document', category: 'ai', run: 'suggest' },
+  { name: 'ISSUES', aliases: ['AUDIT'], description: 'Deterministic project audit — geometry, rooms, doors, dimensions, documentation', category: 'ai', run: 'issues' },
   { name: 'AI', aliases: ['ASK', 'AIQUERY'], description: 'Ask the AI about the current selection: AI <question…>', category: 'ai', run: 'ai_query' },
   { name: 'ANALYZE', aliases: ['AICRITIQUE'], description: 'Project-wide AI review with deterministic evidence', category: 'ai', run: 'ai_analyze' },
   { name: 'LAYER', aliases: ['LA'], description: 'Open the layers panel', category: 'organize', run: 'panel:layers' },
