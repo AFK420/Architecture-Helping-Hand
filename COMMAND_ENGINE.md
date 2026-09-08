@@ -63,3 +63,52 @@ Typing opens a ranked dropdown **above** the prompt (in-viewport by construction
 ## Test coverage
 
 `tests/cad-commands.test.js` (41 assertions): registry/aliases, coordinate math (absolute/relative/polar/feet/mm), step-by-step + option + guided entry, one-shot inline points, did-you-mean, history replay/search/persistence/clear, autocomplete ranking.
+
+
+---
+
+# Phase 6 Addendum — Command Model & Lifecycle
+
+## Command definition contract
+
+Every command (built-in, catalog alias) now defines: `id` (stable machine id
+`cmd.*`), `name`, `aliases`, `description`, `category`, `interactive`,
+`selection` ('none'|'optional'|'required'), `undo`, `options[]`
+(length/option/boolean kinds with fallbacks), `steps[]` (input types:
+point/length/option/boolean — number/angle/string/selection grammar-ready),
+`result` (executor verb), `help` (usage with an `Example:` line), and
+`aiDescription` (consumed by AI tool recommendation — one registry, three
+consumers: palette, command line, AI).
+
+## Lifecycle
+
+`IDLE → START → PROMPT → INPUT → PREVIEW → CONFIRM → EXECUTE → COMMIT →
+COMPLETE`, with explicit `CANCELLED` at any point (Esc messages, `[Cancel
+Esc]` chip). Session state reports `{ lifecycle, command, stepIndex,
+stepCount, prompt, options, collected }`.
+
+## Option kinds
+
+- **length** — validated, clamped to [min, max] (`WIDTH=0.3`), type errors explain the expected form
+- **option** — enumerated (`ALIGN=Left` validated against `Center|Left|Right`, wrong values list the allowed set); **bare option name cycles** values
+- **boolean** — `REVERSE=true/false` or bare `REVERSE` toggles
+- Executor receives the full resolved options map: WALL applies Width,
+  Align (Left = picked edge, Right = opposite face, Center = centerline
+  default), Reverse (swaps direction)
+
+## WALL interactive example (verified live)
+
+```
+Command: WALL
+[Width=0.2] [Align=Center] [Reverse=false] [Cancel Esc]
+Wall start point:            ← click canvas
+Width=0.2 → Align=Left →     ← chips update inline
+@3.5m+200mm<0                ← math-engine expression endpoint
+WALL completed.
+```
+
+## Preview
+
+Interactive step `preview` hints (`line`, `wall`, `rect`) feed the canvas
+drag preview; the marquee overlay and live measurement labels cover box
+selection and drafting feedback.

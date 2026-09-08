@@ -173,11 +173,28 @@ export function createPlanView(context) {
         return { ok: true, message: `Line ${facts.length.value.toFixed(2)} m · ${Math.round(facts.angleDegrees.value)}°` };
       }
       case 'create_wall_points': {
-        const [p1, p2] = args.points;
+        let [p1, p2] = args.points;
         const thickness = Math.max(0.05, Number(args.options?.WIDTH) || 0.2);
+        // Alignment: the picked line is the wall's reference edge (Left),
+        // centerline (Center), or opposite face (Right). Perpendicular offset
+        // from the picked direction by ±thickness/2.
+        const align = String(args.options?.ALIGN || 'Center').toLowerCase();
+        if (align !== 'center') {
+          const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+          if (len > 1e-9) {
+            const nx = -(p2.y - p1.y) / len;
+            const ny = (p2.x - p1.x) / len;
+            const off = (align === 'left' ? -1 : 1) * thickness / 2;
+            p1 = { x: p1.x + nx * off, y: p1.y + ny * off };
+            p2 = { x: p2.x + nx * off, y: p2.y + ny * off };
+          }
+        }
+        if (args.options?.REVERSE === true || args.options?.REVERSE === 'true') {
+          [p1, p2] = [p2, p1];
+        }
         const wall = createWall({ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, thickness });
         commitEntity(wall, 'create wall');
-        return { ok: true, message: `Wall ${wallLength(wall).toFixed(2)} m · ${thickness.toFixed(2)} m thick` };
+        return { ok: true, message: `Wall ${wallLength(wall).toFixed(2)} m · ${thickness.toFixed(2)} m thick · ${align} aligned` };
       }
       case 'create_room_points': {
         const [p1, p2] = args.points;

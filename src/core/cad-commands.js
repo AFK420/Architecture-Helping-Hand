@@ -27,7 +27,19 @@ import { UNITS } from './units.js';
 import { isExpressionLike, evaluateExpressionSafe } from './dimension-expression.js';
 
 // ---------------------------------------------------------------------------
+// Command lifecycle: IDLE → START → PROMPT → INPUT → PREVIEW → CONFIRM →
+// EXECUTE → COMMIT → COMPLETE (or CANCELLED at any point). The session maps
+// draft progress onto these states in state().
+// ---------------------------------------------------------------------------
+export const COMMAND_LIFECYCLE = Object.freeze([
+  'IDLE', 'START', 'PROMPT', 'INPUT', 'PREVIEW', 'CONFIRM', 'EXECUTE', 'COMMIT', 'COMPLETE', 'CANCELLED'
+]);
+
+// ---------------------------------------------------------------------------
 // Command definitions
+// Each def: name, aliases[], description, category, interactive?, steps[],
+// options[], result, selection ('none'|'optional'|'required'), undo,
+// shortcut, help (usage text), aiDescription (for AI tool recommendation).
 // ---------------------------------------------------------------------------
 
 /**
@@ -39,9 +51,14 @@ import { isExpressionLike, evaluateExpressionSafe } from './dimension-expression
  */
 const INTERACTIVE = [
   {
+    id: 'cmd.line',
     name: 'LINE', aliases: ['L', 'LINESEG'],
     description: 'Draw a straight line between two points',
     category: 'draw',
+    selection: 'none',
+    undo: true,
+    help: "LINE → First point → Second point. Example: LINE 0,0 2m+400mm",
+    aiDescription: 'Creates one straight 2D line segment between two picked or typed points.',
     steps: [
       { kind: 'point', prompt: 'First point' },
       { kind: 'point', prompt: 'Second point', relative: true, preview: 'line' }
@@ -49,22 +66,34 @@ const INTERACTIVE = [
     result: 'create_line'
   },
   {
+    id: 'cmd.wall',
     name: 'WALL', aliases: ['W'],
-    description: 'Draw an architectural wall (option: Width=<m>)',
+    description: 'Draw an architectural wall with thickness and alignment options',
     category: 'draw',
+    selection: 'none',
+    undo: true,
     options: [
-      { token: 'WIDTH', label: 'Width', kind: 'length', min: 0.05, max: 2, fallback: 0.2 }
+      { token: 'WIDTH', label: 'Width', kind: 'length', min: 0.05, max: 2, fallback: 0.2 },
+      { token: 'ALIGN', label: 'Align', kind: 'option', values: ['Center', 'Left', 'Right'], fallback: 'Center' },
+      { token: 'REVERSE', label: 'Reverse', kind: 'boolean', fallback: false }
     ],
     steps: [
       { kind: 'point', prompt: 'Wall start point' },
       { kind: 'point', prompt: 'Wall end point', relative: true, preview: 'wall' }
     ],
-    result: 'create_wall_points'
+    result: 'create_wall_points',
+    help: "WALL → Start point → End point. Options: Width=0.2, Align=Center|Left|Right, Reverse=true. Example: WALL 0,0 @4m<0",
+    aiDescription: 'Creates an architectural wall segment between two points with configurable thickness and alignment.'
   },
   {
     name: 'RECTANGLE', aliases: ['REC', 'RECT'],
+    id: 'cmd.rectangle',
     description: 'Draw a rectangular room from two corners',
     category: 'draw',
+    selection: 'none',
+    undo: true,
+    help: 'RECTANGLE → First corner → Opposite corner. Example: REC 0,0 4,3',
+    aiDescription: 'Creates a rectangular room entity from two opposite corner points.',
     steps: [
       { kind: 'point', prompt: 'First corner' },
       { kind: 'point', prompt: 'Opposite corner', relative: true, preview: 'rect' }
@@ -72,9 +101,14 @@ const INTERACTIVE = [
     result: 'create_room_points'
   },
   {
+    id: 'cmd.dist',
     name: 'DIST', aliases: ['DI', 'MEASURE'],
     description: 'Measure the distance and angle between two points',
     category: 'inquiry',
+    selection: 'none',
+    undo: false,
+    help: 'DIST → First point → Second point. Result is reported, not drawn.',
+    aiDescription: 'Reports the deterministic distance, angle and delta between two points.',
     steps: [
       { kind: 'point', prompt: 'First point' },
       { kind: 'point', prompt: 'Second point', relative: true }
@@ -82,9 +116,14 @@ const INTERACTIVE = [
     result: 'measure_points'
   },
   {
+    id: 'cmd.dimlin',
     name: 'DIMLIN', aliases: ['DIM', 'DAL', 'DCO'],
     description: 'Place a linear dimension between two points',
     category: 'annotate',
+    selection: 'none',
+    undo: true,
+    help: 'DIMLIN → Dimension start → Dimension end. Example: DIMLIN 0,0 4.2,0',
+    aiDescription: 'Places a linear dimension entity measuring the span between two points.',
     steps: [
       { kind: 'point', prompt: 'Dimension start' },
       { kind: 'point', prompt: 'Dimension end', relative: true }
@@ -135,7 +174,15 @@ export function buildCommandRegistry(toolCatalog = []) {
   for (const def of INTERACTIVE) {
     register({ ...def, interactive: true, aliases: [...(def.aliases || [])] });
   }
-  for (const def of SIMPLE) register({ ...def, interactive: false, aliases: [...(def.aliases || [])] });
+  for (const def of SIMPLE) register({
+    ...def,
+    id: def.id || 'cmd.' + def.name.toLowerCase(),
+    interactive: false,
+    aliases: [...(def.aliases || [])],
+    selection: def.selection || 'none',
+    undo: def.undo !== undefined ? def.undo : (def.category === 'edit'),
+    aiDescription: def.aiDescription || def.description
+  });
 
   for (const tool of toolCatalog) {
     if (!tool || !tool.commandAlias) continue;
@@ -144,12 +191,16 @@ export function buildCommandRegistry(toolCatalog = []) {
     register({
       name: alias,
       aliases: [],
+      id: 'cmd.tool.' + tool.id,
       description: tool.description || `Activate ${tool.name} tool`,
       category: 'tool',
       run: `tool:${tool.id}`,
       toolId: tool.id,
       toolName: tool.name,
-      shortcut: tool.shortcut || null
+      shortcut: tool.shortcut || null,
+      selection: 'none',
+      undo: false,
+      aiDescription: `Activates the ${tool.name} tool on the canvas.`
     });
   }
 
@@ -297,11 +348,12 @@ export function createCommandSession({ registry, execute, storage = null, histor
   }
 
   function state() {
-    if (!draft) return { active: false };
+    if (!draft) return { active: false, lifecycle: 'IDLE' };
     const def = draft.def;
     const step = def.steps[draft.stepIndex];
     return {
       active: true,
+      lifecycle: 'PROMPT',
       command: def.name,
       stepIndex: draft.stepIndex,
       stepCount: def.steps.length,
@@ -329,12 +381,34 @@ export function createCommandSession({ registry, execute, storage = null, histor
     const trimmed = String(text || '').trim();
     if (!trimmed) return { ok: false, error: `${def.steps[draft.stepIndex].prompt}:` };
 
-    // Option token? "WIDTH=0.3" / "W 0.3"
-    const optMatch = trimmed.match(/^([A-Za-z]+)\s*=?\s*(.+)$/);
+    // Option token? "WIDTH=0.3" / "ALIGN=Left" / bare option name cycles values
+    const optMatch = trimmed.match(/^([A-Za-z]+)\s*=?\s*(.*)$/);
     if (optMatch && def.options) {
       const opt = def.options.find(o => o.token === optMatch[1].toUpperCase());
       if (opt) {
-        const val = parseLengthToken(optMatch[2]);
+        let arg = optMatch[2].trim();
+        // bare option name cycles/toggles its values (AutoCAD-style)
+        if (!arg) {
+          if (opt.kind === 'boolean') {
+            draft.options[opt.token] = !draft.options[opt.token];
+            return { ok: true, optionSet: { token: opt.token, value: draft.options[opt.token] }, state: state() };
+          }
+          if (opt.kind === 'option') {
+            const i = opt.values.indexOf(draft.options[opt.token]);
+            draft.options[opt.token] = opt.values[(i + 1) % opt.values.length];
+            return { ok: true, optionSet: { token: opt.token, value: draft.options[opt.token] }, state: state() };
+          }
+          return { ok: false, error: `${opt.label} needs a value — e.g. ${opt.token}=${opt.fallback}` };
+        }
+        if (opt.kind === 'option') {
+          const match = opt.values.find(v => v.toLowerCase() === arg.toLowerCase());
+          if (!match) {
+            return { ok: false, error: `${opt.label} must be one of: ${opt.values.join(', ')} (received "${arg}")` };
+          }
+          draft.options[opt.token] = match;
+          return { ok: true, optionSet: { token: opt.token, value: match }, state: state() };
+        }
+        const val = parseLengthToken(arg);
         if (val.error) return { ok: false, error: `${opt.label}: ${val.error}` };
         const clamped = Math.max(opt.min, Math.min(opt.max, val.value));
         draft.options[opt.token] = clamped;
@@ -560,11 +634,16 @@ export function suggestCommands(query, { registry, recents = [], limit = 8 } = {
 function describeCommand(def) {
   return {
     name: def.name,
+    id: def.id || null,
     aliases: def.aliases || [],
     description: def.description || '',
     category: def.category,
     interactive: !!def.interactive,
     shortcut: def.shortcut || null,
-    toolId: def.toolId || null
+    toolId: def.toolId || null,
+    selection: def.selection || 'none',
+    undo: def.undo !== undefined ? def.undo : !def.interactive,
+    help: def.help || def.description || '',
+    aiDescription: def.aiDescription || def.description || ''
   };
 }

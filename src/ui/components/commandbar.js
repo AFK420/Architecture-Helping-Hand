@@ -98,15 +98,24 @@ export function renderStudioCommandBar(container, options = {}) {
       optionsEl.innerHTML = '';
       return;
     }
-    const chips = sessionState.options.map(o =>
-      `<button type="button" class="commandbar-option-chip" data-token="${o.token}">[${o.label}=${o.value}]</button>`
-    ).join('');
+    const chips = sessionState.options.map(o => {
+      // option-kind and boolean chips cycle/toggle on click; text options prefill
+      const clickable = o.kind === 'option' || o.kind === 'boolean';
+      return `<button type="button" class="commandbar-option-chip" data-token="${o.token}" data-clickable="${clickable}">[${o.label}=${o.value}]</button>`;
+    }).join('');
     optionsEl.innerHTML = `${chips}<button type="button" class="commandbar-option-chip cancel" data-cancel="1">[Cancel Esc]</button>`;
     optionsEl.hidden = false;
     optionsEl.querySelectorAll('[data-token]').forEach(chip => {
       chip.addEventListener('mousedown', (e) => {
         e.preventDefault();
-        input.value = `${chip.dataset.token}=`;
+        if (chip.dataset.clickable === 'true') {
+          const res = session.submit(`${chip.dataset.token}=${chip.dataset.token === 'REVERSE' ? 'true' : ''}`, ctxFrom(null));
+          handleSubmitResult(res);
+          refreshOptions(session.state());
+          updatePrompt(container, session);
+        } else {
+          input.value = `${chip.dataset.token}=`;
+        }
         input.focus();
       });
     });

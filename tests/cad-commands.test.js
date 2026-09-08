@@ -151,3 +151,68 @@ console.log(`\n========================================`);
 console.log(`CAD Command Engine Test Summary: ${passed} passed, ${failed} failed.`);
 console.log(`========================================`);
 if (failed > 0) process.exit(1);
+
+// --- 10. Phase 6: command model + lifecycle + option kinds ---
+console.log('\n--- 10. Phase 6: command model & lifecycle ---');
+{
+  const reg = buildCommandRegistry([]);
+  const wall = reg.commands.get('WALL');
+  assert(wall.id === 'cmd.wall', 'commands expose stable ids');
+  assert(wall.undo === true, 'WALL declares undo support');
+  assert(wall.selection === 'none', 'WALL declares no selection requirement');
+  assert(typeof wall.help === 'string' && wall.help.includes('Example:'), 'help text includes an example');
+  assert(typeof wall.aiDescription === 'string' && wall.aiDescription.length > 10, 'aiDescription present for AI tool recommendation');
+  const undoDef = reg.commands.get('UNDO');
+  assert(undoDef.undo === true, 'UNDO declares undo (category edit default)');
+  assert(reg.commands.get('FIT').category === 'view', 'view category present');
+}
+
+console.log('\n--- 11. Lifecycle states ---');
+{
+  const session = createCommandSession({ registry: buildCommandRegistry([]), execute: () => ({ ok: true }) });
+  assertEqual(session.state().lifecycle, 'IDLE', 'IDLE before any command');
+  session.run('WALL');
+  assertEqual(session.state().lifecycle, 'PROMPT', 'PROMPT while collecting points');
+  session.cancel();
+  assertEqual(session.state().lifecycle, 'IDLE', 'IDLE after cancellation');
+}
+
+console.log('\n--- 12. Option kinds: cycle, toggle, validate ---');
+{
+  const executed = [];
+  const session = createCommandSession({ registry: buildCommandRegistry([]), execute: (run, args) => { executed.push(args); return { ok: true }; } });
+  session.run('WALL');
+  const cyc = session.submit('ALIGN');
+  assert(cyc.ok && cyc.optionSet.value === 'Left', 'bare option name cycles (Center → Left)');
+  const cyc2 = session.submit('ALIGN');
+  assertEqual(cyc2.optionSet.value, 'Right', 'second cycle → Right');
+  const cyc3 = session.submit('ALIGN');
+  assertEqual(cyc3.optionSet.value, 'Center', 'third cycle wraps to Center');
+  const tog = session.submit('REVERSE');
+  assert(tog.ok && tog.optionSet.value === true, 'boolean option toggles');
+  const inv = session.submit('ALIGN=diagonal');
+  assert(!inv.ok && /must be one of/.test(inv.error), 'invalid option value explained with allowed values');
+  const empty = session.submit('WIDTH=');
+  assert(!empty.ok, 'missing value rejected');
+  session.submit('0,0'); session.submit('2,0');
+  const wallArgs = executed[0];
+  assertEqual(wallArgs.options.ALIGN, 'Center', 'validated option reaches executor');
+  assertEqual(wallArgs.options.REVERSE, true, 'toggled boolean reaches executor');
+  assertEqual(wallArgs.options.WIDTH, 0.2, 'fallback width reaches executor');
+}
+
+console.log('\n--- 13. Error contract (WHAT/WHY/EXPECTED/EXAMPLE) ---');
+{
+  const session = createCommandSession({ registry: buildCommandRegistry([]), execute: () => ({ ok: true }) });
+  const bad = session.run('WAL');
+  assert(bad.message.includes('Unknown command "WAL"') && bad.message.includes('WALL'), 'unknown command: WHAT + did-you-mean');
+  session.run('WALL');
+  const badPt = session.submit('nonsense');
+  assert(!badPt.ok && badPt.error.includes('@5,0'), 'bad point: includes example format');
+}
+
+console.log(`
+========================================`);
+console.log(`CAD Command Engine Test Summary: ${passed} passed, ${failed} failed.`);
+console.log(`========================================`);
+if (failed > 0) process.exit(1);
