@@ -376,7 +376,13 @@ export function createJobRouter(options = {}) {
           maxOutputTokens: assignment.maxOutputTokens ?? undefined,
           reasoningEffort: assignment.reasoningEffort ?? undefined,
           imageBase64: request.image?.imageBase64,
-          mimeType: request.image?.mimeType
+          mimeType: request.image?.mimeType,
+          // Deterministic tool set (read/propose tier only) — the registry is
+          // injected by the app; without it no tools are sent. Structured
+          // (critic) modes use json_object, which conflicts with tool mode.
+          tools: (modeProfile && !modeProfile.expectsStructured && typeof options.getToolDefinitions === 'function')
+            ? options.getToolDefinitions()
+            : undefined
         }
       });
     } catch (err) {

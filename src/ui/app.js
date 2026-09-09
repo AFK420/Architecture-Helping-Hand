@@ -124,6 +124,8 @@ import { createTransports } from '../services/ai/transports/index.js';
 import { createProviderManager } from '../services/ai/provider-manager.js';
 import { createModelCatalog } from '../services/ai/model-catalog.js';
 import { createJobRouter } from '../services/ai/job-router.js';
+import { createToolRegistry } from '../ai/tools/registry.js';
+import { createArchitectureTools } from '../ai/tools/architecture-tools.js';
 import { StorageService } from '../services/storage.js';
 import { createProjectStore } from '../services/store.js';
 import { AudioService } from '../services/audio.js';
@@ -6283,6 +6285,13 @@ export function initializeApp() {
     const transports = createTransports({ http });
     const providerManager = createProviderManager({ storage: StorageService });
     const modelCatalog = createModelCatalog({ storage: StorageService });
+    // Deterministic tool registry — read/propose tier only. The model may
+    // call these; APPLY_* is impossible by construction (never registered),
+    // and proposals return to the UI for preview/accept, never auto-applied.
+    const aiTools = createToolRegistry(createArchitectureTools(
+      () => projectStore.getProject(),
+      () => state.plan.entities
+    ));
     const router = createJobRouter({
       providerManager,
       modelCatalog,
@@ -6293,9 +6302,10 @@ export function initializeApp() {
         planEntities: state.plan.entities,
         request: { scopeHint: args.request?.scopeHint || args.options?.scopeHint || '' },
         selectionPackets: args.request?.selectionPackets || state.aiSelectionContext || null
-      })
+      }),
+      getToolDefinitions: () => aiTools.list()
     });
-    aiServices = { http, transports, providerManager, modelCatalog, router };
+    aiServices = { http, transports, providerManager, modelCatalog, router, tools: aiTools };
   } catch (e) {
     // AI unavailable — the application remains fully functional (by design).
     console.warn('AI services unavailable:', e?.message || e);

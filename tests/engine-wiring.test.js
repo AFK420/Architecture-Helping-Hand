@@ -207,6 +207,59 @@ console.log('\n--- 8. 3D backend wiring (camera3d + geometry3d as the real engin
   assert(planSrc.includes('Math.max(-89.9, Math.min(89.9'), 'orbit allows full ±89.9° elevation (bottom views reachable)');
 }
 
+console.log('\n--- 9. AI tools wired to live transports + previewable proposals ---');
+{
+  const openai = await import('../src/services/ai/transports/openai-compat.js');
+  const gemini = await import('../src/services/ai/transports/gemini.js');
+  const { createToolRegistry } = await import('../src/ai/tools/registry.js');
+  const { createArchitectureTools, AI_PERMISSIONS } = await import('../src/ai/tools/architecture-tools.js');
+  const { parseAiActions, executeAiAction } = await import('../src/core/ai-bridge.js');
+
+  // Wire format: tools reach the request body in provider-native shape
+  const sampleTools = [
+    { name: 'getMeasurements', description: 'Get project measurements', inputSchema: { kind: { type: 'string', required: true } } },
+    { name: 'proposeFurnitureMove', description: 'Propose moving furniture', inputSchema: { furnitureId: { type: 'string', required: true }, dx: { type: 'number', required: true }, dy: { type: 'number', required: true } } }
+  ];
+  const body = openai.buildChatBody({ userPrompt: 'u', options: { modelId: 'x', tools: sampleTools } });
+  assert(Array.isArray(body.tools) && body.tools.length === 2, 'OpenAI body carries tool definitions');
+  assert(body.tools[0].type === 'function' && body.tools[0].function.name === 'getMeasurements', 'OpenAI function-calling format');
+  assert(body.tools[0].function.parameters.required.includes('kind'), 'flat schema converted to OpenAPI JSON Schema');
+  assert(body.tool_choice === 'auto', 'tool_choice auto');
+  const noToolBody = openai.buildChatBody({ userPrompt: 'u', options: { modelId: 'x' } });
+  assert(!('tools' in noToolBody), 'no tools field when none provided');
+
+  const gbody = gemini.buildGenerateBody({ userPrompt: 'u', options: { tools: sampleTools } });
+  assert(Array.isArray(gbody.tools) && gbody.tools[0].functionDeclarations.length === 2, 'Gemini body carries functionDeclarations');
+  assert(gbody.tools[0].functionDeclarations[0].parameters.type === 'object', 'Gemini parameters in OpenAPI object form');
+
+  // Registry safety: only READ/PROPOSE tiers are ever registered — an APPLY
+  // tool cannot exist, so the model can never mutate geometry directly.
+  const registry = createToolRegistry(createArchitectureTools(() => ({}), () => []));
+  const perms = new Set(registry.list().map(t => t.permission));
+  assert(![...perms].some(p => String(p).startsWith('APPLY')), 'no APPLY-tier tools in the live registry');
+  assert(registry.list().some(t => t.name === 'proposeFurnitureMove'), 'proposal tools registered');
+
+  // Proposal → preview → explicit user apply (ai-bridge pipeline)
+  const modelText = 'Here is my suggestion.\n```json\n[{ "type": "add_room", "name": "Study", "x": 0, "y": 0, "width": 3, "depth": 3 }]\n```';
+  const actions = parseAiActions(modelText);
+  assert(actions.length === 1 && actions[0].type === 'add_room', 'structured proposal parsed from model text');
+  const plan = { documents: [{ id: 'd1', type: '2d_plan', entities: [] }], activeDocId: 'd1' };
+  const res = executeAiAction(actions[0], plan);
+  assert(res.success === true && plan.documents[0].entities.length === 1, 'user-approved proposal applies deterministically');
+
+  // UI wiring pins
+  const fs = await import('node:fs');
+  const appSrc = fs.readFileSync('src/ui/app.js', 'utf8');
+  assert(appSrc.includes('createToolRegistry(createArchitectureTools'), 'app instantiates the live tool registry');
+  assert(appSrc.includes('getToolDefinitions: () => aiTools.list()'), 'registry definitions injected into the router');
+  const routerSrc = fs.readFileSync('src/services/ai/job-router.js', 'utf8');
+  assert(routerSrc.includes('getToolDefinitions'), 'router forwards tool definitions to transports');
+  const studioSrc = fs.readFileSync('src/ui/views/ai-studio.js', 'utf8');
+  assert(studioSrc.includes('renderProposals'), 'AI Studio renders proposal cards');
+  assert(studioSrc.includes("data-proposal-act"), 'proposal cards expose explicit Accept/Reject buttons');
+  assert(studioSrc.includes('executeAiAction'), 'accept applies through the deterministic action pipeline');
+}
+
 console.log(`\n========================================`);
 console.log(`Engine Wiring (Phase A: parametric): ${passed} passed, ${failed} failed.`);
 console.log(`========================================`);

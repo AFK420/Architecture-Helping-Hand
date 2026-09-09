@@ -28698,7 +28698,31 @@ function buildGenerateBody({ systemPrompt, userPrompt, options = {} }) {
   if (options.expectsStructured) {
     body.generationConfig.responseMimeType = 'application/json';
   }
+  if (Array.isArray(options.tools) && options.tools.length > 0) {
+    // Gemini function-calling format: { name, description, parameters }
+    body.tools = [{
+      functionDeclarations: options.tools.map(t => ({
+        name: t.name,
+        description: t.description || '',
+        parameters: normalizeSchemaForGemini(t.inputSchema || {})
+      }))
+    }];
+  }
   return body;
+}
+
+/** Converts our flat { key: {type, required} } schemas into Gemini's
+ *  OpenAPI-style { type: 'object', properties, required }. */
+function normalizeSchemaForGemini(schema) {
+  const properties = {};
+  const required = [];
+  for (const [key, def] of Object.entries(schema || {})) {
+    properties[key] = { type: (def && def.type) || 'string' };
+    if (def && def.required) required.push(key);
+  }
+  const out = { type: 'object', properties };
+  if (required.length > 0) out.required = required;
+  return out;
 }
 
 /** Extracts the candidate text (concatenating text parts) or null. */
@@ -28972,7 +28996,35 @@ function buildChatBody({ systemPrompt, userPrompt, options = {} }) {
     // OpenAI-compatible reasoning param (provider-accepted where supported)
     body.reasoning_effort = options.reasoningEffort;
   }
+  if (Array.isArray(options.tools) && options.tools.length > 0) {
+    // OpenAI function-calling format. Tools stay read/propose-tier only —
+    // the registry never registers APPLY_* tools, so the model can never
+    // mutate geometry directly.
+    body.tools = options.tools.map(t => ({
+      type: 'function',
+      function: {
+        name: t.name,
+        description: t.description || '',
+        parameters: normalizeSchemaForOpenAi(t.inputSchema || {})
+      }
+    }));
+    body.tool_choice = 'auto';
+  }
   return body;
+}
+
+/** Converts our flat { key: {type, required} } schemas into OpenAPI-style
+ *  JSON Schema ({ type: 'object', properties, required }). */
+function normalizeSchemaForOpenAi(schema) {
+  const properties = {};
+  const required = [];
+  for (const [key, def] of Object.entries(schema || {})) {
+    properties[key] = { type: (def && def.type) || 'string' };
+    if (def && def.required) required.push(key);
+  }
+  const out = { type: 'object', properties };
+  if (required.length > 0) out.required = required;
+  return out;
 }
 
 /** Extracts the first choice message content (string or typed array). */
@@ -30215,7 +30267,13 @@ function createJobRouter(options = {}) {
           maxOutputTokens: assignment.maxOutputTokens ?? undefined,
           reasoningEffort: assignment.reasoningEffort ?? undefined,
           imageBase64: request.image?.imageBase64,
-          mimeType: request.image?.mimeType
+          mimeType: request.image?.mimeType,
+          // Deterministic tool set (read/propose tier only) — the registry is
+          // injected by the app; without it no tools are sent. Structured
+          // (critic) modes use json_object, which conflicts with tool mode.
+          tools: (modeProfile && !modeProfile.expectsStructured && typeof options.getToolDefinitions === 'function')
+            ? options.getToolDefinitions()
+            : undefined
         }
       });
     } catch (err) {
@@ -46304,6 +46362,7 @@ function createPlanView(context) {
 
 
 
+
 function createAiStudioView(context) {
   const { state, dom, showToast, setUnifiedResultState, AudioService, switchMode, escapeHtml } = context;
 
@@ -46436,9 +46495,70 @@ function createAiStudioView(context) {
       dom.aiResponseBody.innerHTML = renderStructured(lastResult.structured);
     } else {
       dom.aiResponseBody.innerHTML = `<div class="ai-prose">${escape(lastResult.text || '')}</div>`;
+      renderProposals(lastResult.text || '');
     }
 
     renderConsistency();
+  }
+
+  // ------------------------------------------------------------------
+  // Previewable proposals (write-permission contract, rule 46): the model
+  // can PROPOSE canvas changes via structured JSON in its answer; the user
+  // previews and explicitly accepts. Nothing is ever auto-applied.
+  // ------------------------------------------------------------------
+  function renderProposals(text) {
+    const actions = parseAiActions(text);
+    if (!actions.length) return;
+    const cards = actions.map((act, i) => `
+      <div class="ai-proposal-card" data-proposal-idx="${i}" style="border: 1px solid var(--border-subtle); border-left: 3px solid var(--accent-primary, #4989D9); border-radius: 6px; padding: 0.55rem 0.7rem; margin: 0.5rem 0; background: var(--bg-surface-elevated, #28292e);">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+          <div style="font-size: 0.74rem;"><strong>Proposed:</strong> ${escapeHtml(describeAction(act))}</div>
+          <div style="display: flex; gap: 6px; flex-shrink: 0;">
+            <button type="button" class="btn btn-xs btn-outline" data-proposal-act="reject" data-proposal-idx="${i}">✕ Reject</button>
+            <button type="button" class="btn btn-xs btn-primary" data-proposal-act="accept" data-proposal-idx="${i}">✓ Preview &amp; Apply</button>
+          </div>
+        </div>
+      </div>`).join('');
+    const wrap = document.createElement('div');
+    wrap.className = 'ai-proposals-wrap';
+    wrap.innerHTML = `<div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 0.7rem;">Model proposals (${actions.length}) — apply is your call</div>${cards}`;
+    dom.aiResponseBody.appendChild(wrap);
+
+    wrap.querySelectorAll('[data-proposal-act]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.proposalIdx, 10);
+        const act = actions[idx];
+        if (!act) return;
+        const card = wrap.querySelector(`[data-proposal-idx="${idx}"]`);
+        if (btn.dataset.proposalAct === 'reject') {
+          if (card) card.style.opacity = '0.45';
+          btn.textContent = 'Rejected';
+          btn.disabled = true;
+          showToast('Proposal rejected — nothing changed');
+          return;
+        }
+        // Accept: apply deterministically through the action pipeline, then
+        // re-render the plan. The user clicked; this is explicit approval.
+        const res = executeAiAction(act, state);
+        if (res && res.success === false) {
+          showToast(`Proposal failed: ${res.error || 'unknown'}`, 'warning');
+          return;
+        }
+        if (card) card.style.opacity = '0.45';
+        btn.textContent = 'Applied ✓';
+        btn.disabled = true;
+        showToast(`Applied proposal to the Plan Canvas${res && res.count ? ` (${res.count} item${res.count > 1 ? 's' : ''})` : ''}`, 'success');
+        AudioService.playSuccess();
+        if (state.currentMode !== 'plan') switchMode('plan');
+      });
+    });
+  }
+
+  function describeAction(act) {
+    const t = String(act.type || act.action || '').replace(/_/g, ' ');
+    const name = act.name ? `"${act.name}"` : '';
+    const dims = act.width ? ` ${act.width}×${act.depth ?? '?'}m` : '';
+    return `${t}${name ? ' ' + name : ''}${dims}`;
   }
 
   function trustBadge(trust) {
@@ -48141,6 +48261,8 @@ function createRequirementsView(context) {
 // NOTE: cad-clipboard / batch-cad / cad-targets core engines are imported by
 // their view modules (src/ui/views/*) — app.js only needs the storage keys
 // and the small helpers still referenced by listeners/state below.
+
+
 
 
 
@@ -54336,6 +54458,13 @@ function initializeApp() {
     const transports = createTransports({ http });
     const providerManager = createProviderManager({ storage: StorageService });
     const modelCatalog = createModelCatalog({ storage: StorageService });
+    // Deterministic tool registry — read/propose tier only. The model may
+    // call these; APPLY_* is impossible by construction (never registered),
+    // and proposals return to the UI for preview/accept, never auto-applied.
+    const aiTools = createToolRegistry(createArchitectureTools(
+      () => projectStore.getProject(),
+      () => state.plan.entities
+    ));
     const router = createJobRouter({
       providerManager,
       modelCatalog,
@@ -54346,9 +54475,10 @@ function initializeApp() {
         planEntities: state.plan.entities,
         request: { scopeHint: args.request?.scopeHint || args.options?.scopeHint || '' },
         selectionPackets: args.request?.selectionPackets || state.aiSelectionContext || null
-      })
+      }),
+      getToolDefinitions: () => aiTools.list()
     });
-    aiServices = { http, transports, providerManager, modelCatalog, router };
+    aiServices = { http, transports, providerManager, modelCatalog, router, tools: aiTools };
   } catch (e) {
     // AI unavailable — the application remains fully functional (by design).
     console.warn('AI services unavailable:', e?.message || e);

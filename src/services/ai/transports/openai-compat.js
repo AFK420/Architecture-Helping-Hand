@@ -77,7 +77,35 @@ export function buildChatBody({ systemPrompt, userPrompt, options = {} }) {
     // OpenAI-compatible reasoning param (provider-accepted where supported)
     body.reasoning_effort = options.reasoningEffort;
   }
+  if (Array.isArray(options.tools) && options.tools.length > 0) {
+    // OpenAI function-calling format. Tools stay read/propose-tier only —
+    // the registry never registers APPLY_* tools, so the model can never
+    // mutate geometry directly.
+    body.tools = options.tools.map(t => ({
+      type: 'function',
+      function: {
+        name: t.name,
+        description: t.description || '',
+        parameters: normalizeSchemaForOpenAi(t.inputSchema || {})
+      }
+    }));
+    body.tool_choice = 'auto';
+  }
   return body;
+}
+
+/** Converts our flat { key: {type, required} } schemas into OpenAPI-style
+ *  JSON Schema ({ type: 'object', properties, required }). */
+function normalizeSchemaForOpenAi(schema) {
+  const properties = {};
+  const required = [];
+  for (const [key, def] of Object.entries(schema || {})) {
+    properties[key] = { type: (def && def.type) || 'string' };
+    if (def && def.required) required.push(key);
+  }
+  const out = { type: 'object', properties };
+  if (required.length > 0) out.required = required;
+  return out;
 }
 
 /** Extracts the first choice message content (string or typed array). */

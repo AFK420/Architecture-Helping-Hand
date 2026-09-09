@@ -79,7 +79,31 @@ export function buildGenerateBody({ systemPrompt, userPrompt, options = {} }) {
   if (options.expectsStructured) {
     body.generationConfig.responseMimeType = 'application/json';
   }
+  if (Array.isArray(options.tools) && options.tools.length > 0) {
+    // Gemini function-calling format: { name, description, parameters }
+    body.tools = [{
+      functionDeclarations: options.tools.map(t => ({
+        name: t.name,
+        description: t.description || '',
+        parameters: normalizeSchemaForGemini(t.inputSchema || {})
+      }))
+    }];
+  }
   return body;
+}
+
+/** Converts our flat { key: {type, required} } schemas into Gemini's
+ *  OpenAPI-style { type: 'object', properties, required }. */
+function normalizeSchemaForGemini(schema) {
+  const properties = {};
+  const required = [];
+  for (const [key, def] of Object.entries(schema || {})) {
+    properties[key] = { type: (def && def.type) || 'string' };
+    if (def && def.required) required.push(key);
+  }
+  const out = { type: 'object', properties };
+  if (required.length > 0) out.required = required;
+  return out;
 }
 
 /** Extracts the candidate text (concatenating text parts) or null. */
