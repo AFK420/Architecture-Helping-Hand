@@ -140,9 +140,11 @@ export function createRequirement({ name, type, scope, target, unit = '', tolera
 // Evaluation — deterministic comparison against the actual model
 // ---------------------------------------------------------------------------
 
-/** Area of a room entity (m²), width×depth based. */
+/** Area of a room entity (m²). Honors polygonal boundaries via the
+ *  canonical factory (entities.roomArea); width×depth is the fallback. */
 function roomAreaOf(room) {
-  return (room.width || 0) * (room.depth || 0);
+  const a = roomArea(room);
+  return Number.isFinite(a) && a > 0 ? a : (room.width || 0) * (room.depth || 0);
 }
 
 /** Sum of all room areas = net internal area. */
@@ -159,6 +161,25 @@ export function scopeMetric(scope, entities, brief) {
     case 'net_area': return { value: netInternalArea(entities), detail: `${rooms.length} rooms` };
     case 'room_count': return { value: rooms.length, detail: rooms.map(r => r.name).join(', ') };
     case 'floor_count': return { value: brief?.floors ?? null, detail: 'from brief' };
+    case 'room_area': {
+      // Smallest room area: the binding constraint when requiring a minimum
+      // usable area per room; largest when requiring no oversized rooms is a
+      // MAX check the caller composes. Detail exposes per-room areas.
+      const areas = rooms.map(r => roomAreaOf(r));
+      if (areas.length === 0) return { value: null, detail: 'no rooms in model' };
+      return {
+        value: Math.min(...areas),
+        detail: rooms.map(r => `${r.name}: ${roomAreaOf(r).toFixed(1)}m²`).join(', ')
+      };
+    }
+    case 'corridor_width': {
+      const corridors = rooms.filter(r => /corridor|hall/i.test(String(r.name || '')));
+      if (corridors.length === 0) return { value: null, detail: 'no corridor rooms' };
+      return {
+        value: Math.min(...corridors.map(r => Math.min(r.width || 0, r.depth || 0))),
+        detail: `${corridors.length} corridor room(s)`
+      };
+    }
     default:
       if (scope.startsWith('custom.')) return { value: null, detail: scope };
       return null;

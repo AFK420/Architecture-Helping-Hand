@@ -176,10 +176,12 @@ try {
   assertClose(projOrigin.x, 400, 'Projected origin panX is 400');
   assertClose(projOrigin.y, 300, 'Projected origin panY is 300');
 
-  // Presets exist
-  assert(Boolean(CAMERA_PRESETS.iso_ne), 'ISO NE camera preset exists');
-  assert(Boolean(CAMERA_PRESETS.iso_nw), 'ISO NW camera preset exists');
-  assert(Boolean(CAMERA_PRESETS.axonometric), 'Axonometric camera preset exists');
+  // Presets exist (canonical keys only — the iso_*/axonometric aliases were
+  // duplicates that rendered twice in the 3D toolbar)
+  assert(Boolean(CAMERA_PRESETS.isometric_ne), 'Isometric NE camera preset exists');
+  assert(Boolean(CAMERA_PRESETS.isometric_nw), 'Isometric NW camera preset exists');
+  assert(Boolean(CAMERA_PRESETS.axonometric_top), 'Axonometric camera preset exists');
+  assert(!('iso_ne' in CAMERA_PRESETS), 'Duplicate preset aliases removed');
 
   // Model builder with walls, door openings, window openings, and room slab
   const testEntities = [

@@ -156,7 +156,51 @@ console.log('\n--- 8. Determinism + registry integrity ---');
   assert(meta.length === RULES.length, 'listRules exposes the full registry');
 }
 
+console.log('\n--- 9. Factory-entity honesty (no false positives) ---');
+// Regression: door/window rules were pinned against fixtures with hand-added
+// x/y. Real factory openings are hosted (wallId + position along the wall)
+// and carry NO x/y — a properly hosted door + window on a bedroom must not
+// be flagged missing. Duplicate detection must also cover walls.
+{
+  const {
+    createRoom, createWall, createDoor, createWindow
+  } = await import('../src/core/entities.js');
+
+  const wallBottom = createWall({ id: 'fw1', name: 'FW1', x1: 0, y1: 0, x2: 4, y2: 0 });
+  createWall({ id: 'fw2', name: 'FW2', x1: 0, y1: 3, x2: 4, y2: 3 });
+  createWall({ id: 'fw3', name: 'FW3', x1: 0, y1: 0, x2: 0, y2: 3 });
+  const wallRight = createWall({ id: 'fw4', name: 'FW4', x1: 4, y1: 0, x2: 4, y2: 3 });
+  const room = createRoom({ id: 'fr1', name: 'Master Bedroom', x: 0, y: 0, width: 4, depth: 3 });
+  const door = createDoor({ id: 'fd1', name: 'Entry', wallId: 'fw1', position: 1.5, width: 0.9 });
+  const win = createWindow({ id: 'fwn1', name: 'W1', wallId: wallRight.id, position: 1.0, width: 1.2 });
+
+  const ents = [wallBottom, createWall({ id: 'fw2', name: 'FW2', x1: 0, y1: 3, x2: 4, y2: 3 }),
+    createWall({ id: 'fw3', name: 'FW3', x1: 0, y1: 0, x2: 0, y2: 3 }), wallRight, room, door, win];
+
+  const report = runAllChecks(ents, {});
+  const falsePositives = report.issues.filter(i =>
+    i.entityIds.includes('fr1') && ['room.missing_door', 'room.missing_window'].includes(i.rule));
+  assert(falsePositives.length === 0,
+    `hosted factory door + window on bedroom: no missing_door/missing_window flags (${falsePositives.map(i => i.rule).join(',')})`);
+  assert(!report.issues.some(i => i.entityIds.includes('fd1') && i.rule === 'door.host'),
+    'factory door with valid wallId: not flagged as orphan');
+  assert(!report.issues.some(i => i.entityIds.includes('fwn1') && i.rule === 'window.host'),
+    'factory window with valid wallId: not flagged as orphan');
+
+  // Wall duplicates now detected (walls have x1/y1/x2/y2, not x/y)
+  const dupWall = createWall({ id: 'fw1-dup', name: 'Dup', x1: 0, y1: 0, x2: 4, y2: 0 });
+  const dupReport = runAllChecks([...ents, dupWall], {});
+  assert(dupReport.issues.some(i => i.rule === 'geo.duplicate' && i.entityIds.includes('fw1-dup')),
+    'duplicate wall detected');
+
+  // A genuinely door-less factory room must still be flagged (no false negatives)
+  const room2 = createRoom({ id: 'fr2', name: 'Study', x: 10, y: 0, width: 3, depth: 3 });
+  const r2rep = runAllChecks([room2], {});
+  assert(r2rep.issues.some(i => i.entityIds.includes('fr2') && i.rule === 'room.missing_door'),
+    'door-less factory room still flagged');
+}
+
 console.log(`\n========================================`);
-console.log(`Issue Engine Summary: ${passed} passed, ${failed} failed.`);
+console.log(`Issue Engine Summary: ${passed}, ${failed} failed.`);
 console.log(`========================================`);
 if (failed > 0) process.exit(1);

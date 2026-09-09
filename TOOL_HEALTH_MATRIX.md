@@ -3,6 +3,12 @@
 Evidence: B = operated live in-browser this audit · T = test suite · S = static code.
 Statuses use the contract vocabulary. 65 catalog tools + static-palette extras.
 
+> **Audit pass 4 (2026-09-09, "honesty pass")**: D1/D2 below are FIXED and
+> pinned by `tests/audit-regressions.test.js`; the measure-release toast
+> remainder (`m.formatted`) was fixed in the same pass. Nine further live
+> defects found by the 2026-09 audit were fixed and pinned by
+> `tests/honesty-pass.test.js` — see PRODUCTION_HARDENING_CHANGELOG.md.
+
 ## Drawing & editing tools
 
 | Tool | id | Visible | Click | Drag | Command | Entity created | Undo | Persist | Crash-free | Status |

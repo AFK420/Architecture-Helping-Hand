@@ -101,7 +101,7 @@ export function serializeSelection(entities = [], selectedIds = null) {
         packet.angleDegrees = round((Math.atan2(e.y2 - e.y1, e.x2 - e.x1) * 180) / Math.PI);
         packet.p1 = { x: round(e.x1), y: round(e.y1) };
         packet.p2 = { x: round(e.x2), y: round(e.y2) };
-        packet.openings = (typeof wallOpenings === 'function' ? wallOpenings(entities, e) : []).map(o => ({
+        packet.openings = (typeof wallOpenings === 'function' ? wallOpenings(e, entities) : []).map(o => ({
           id: o.id, kind: o.kind, name: o.name, width: o.width
         }));
         packet.dimensions = entities
@@ -132,7 +132,7 @@ export function serializeSelection(entities = [], selectedIds = null) {
           d.y >= e.y - 0.3 && d.y <= e.y + e.depth + 0.3
         ).map(d => ({ id: d.id, name: d.name, width: round(d.width) }));
         packet.dimensions = entities.filter(d => d.kind === 'dimension' &&
-          Math.abs(dimensionValue(d) - e.width) < 0.02 || Math.abs(dimensionValue(d) - e.depth) < 0.02
+          (Math.abs(dimensionValue(d) - e.width) < 0.02 || Math.abs(dimensionValue(d) - e.depth) < 0.02)
         ).map(d => ({ id: d.id, value: round(dimensionValue(d)) }));
         break;
       }

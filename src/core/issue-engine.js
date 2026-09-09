@@ -97,16 +97,24 @@ rule(
   (entities) => {
     const issues = [];
     const boxes = new Map();
+    const posKeyOf = (e) => {
+      if (Number.isFinite(e.x1) && Number.isFinite(e.y1) && Number.isFinite(e.x2) && Number.isFinite(e.y2)) {
+        return `${e.x1}|${e.y1}|${e.x2}|${e.y2}`;
+      }
+      if (Number.isFinite(e.x) && Number.isFinite(e.y)) return `${e.x}|${e.y}|${e.width ?? ''}|${e.depth ?? ''}`;
+      return null; // hosted openings & other shapes: exact-position check n/a
+    };
     for (const e of entities) {
-      if (typeof e.x !== 'number' || typeof e.y !== 'number') continue;
-      const key = `${e.kind}|${e.x}|${e.y}|${e.width ?? ''}|${e.depth ?? ''}`;
-      if (boxes.has(key)) {
-        issues.push(issue('medium', 'geo.duplicate', [boxes.get(key), e.id], bboxOf(e),
-          { position: { x: e.x, y: e.y }, kind: e.kind },
-          `Two ${e.kind} entities occupy the exact same position ("${entities.find(x => x.id === boxes.get(key))?.name || boxes.get(key)}" and "${e.name || e.id}").`,
+      const key = posKeyOf(e);
+      if (!key) continue;
+      const fullKey = `${e.kind}|${key}`;
+      if (boxes.has(fullKey)) {
+        issues.push(issue('medium', 'geo.duplicate', [boxes.get(fullKey), e.id], bboxOf(e),
+          { position: key, kind: e.kind },
+          `Two ${e.kind} entities occupy the exact same position ("${entities.find(x => x.id === boxes.get(fullKey))?.name || boxes.get(fullKey)}" and "${e.name || e.id}").`,
           'Delete one of the duplicates.'));
       } else {
-        boxes.set(key, e.id);
+        boxes.set(fullKey, e.id);
       }
     }
     return issues;
@@ -212,9 +220,7 @@ rule(
     const issues = [];
     const rooms = entities.filter(e => e.kind === 'room' && typeof e.width === 'number');
     for (const r of rooms) {
-      const hasDoor = entities.some(d => d.kind === 'door' &&
-        d.x >= r.x - 0.3 && d.x <= r.x + r.width + 0.3 &&
-        d.y >= r.y - 0.3 && d.y <= r.y + r.depth + 0.3);
+      const hasDoor = entities.some(d => d.kind === 'door' && openingInRoom(d, r, entities));
       if (!hasDoor) {
         issues.push(issue('medium', 'room.missing_door', [r.id], bboxOf(r),
           { room: r.name },
@@ -234,9 +240,7 @@ rule(
     const issues = [];
     for (const r of entities.filter(e => e.kind === 'room')) {
       if (!/bed|liv|living/i.test(String(r.name || ''))) continue;
-      const hasWin = entities.some(w => w.kind === 'window' &&
-        w.x >= r.x - 0.3 && w.x <= r.x + r.width + 0.3 &&
-        w.y >= r.y - 0.3 && w.y <= r.y + r.depth + 0.3);
+      const hasWin = entities.some(w => w.kind === 'window' && openingInRoom(w, r, entities));
       if (!hasWin) {
         issues.push(issue('low', 'room.missing_window', [r.id], bboxOf(r),
           { room: r.name },
@@ -278,8 +282,9 @@ rule(
   (entities) => {
     const issues = [];
     for (const d of entities.filter(e => e.kind === 'door')) {
+      const dp = openingWorldPoint(d, entities);
       const host = entities.find(w => w.kind === 'wall' &&
-        (w.id === d.wallId || pointNearSegment({ x: d.x, y: d.y }, w, 0.3)));
+        (w.id === d.wallId || (dp && pointNearSegment(dp, w, 0.3))));
       if (!host) {
         issues.push(issue('medium', 'door.host', [d.id], bboxOf(d),
           { door: d.name },
@@ -298,13 +303,15 @@ rule(
   (entities) => {
     const issues = [];
     for (const d of entities.filter(e => e.kind === 'door')) {
+      const dp = openingWorldPoint(d, entities);
+      if (!dp) continue; // unhosted doors are flagged by door.host instead
       const swingR = (d.width || 0.9);
-      const cx = (d.x ?? 0) + (d.swing === 'right' ? swingR : 0);
-      const cy = (d.y ?? 0) - swingR;
+      const cx = dp.x + (d.swing === 'right' ? swingR : 0);
+      const cy = dp.y - swingR;
       const blocker = entities.find(o => o !== d && o.kind === 'furniture' &&
         typeof o.x === 'number' &&
         o.x + o.width > cx - swingR && o.x < cx + swingR &&
-        o.y + o.depth > Math.min(d.y ?? 0, cy) && o.y < Math.max(d.y ?? 0, cy));
+        o.y + o.depth > Math.min(dp.y, cy) && o.y < Math.max(dp.y, cy));
       if (blocker) {
         issues.push(issue('medium', 'door.clearance', [d.id, blocker.id], bboxOf(d),
           { door: d.name, blockedBy: blocker.name, swingRadius: +swingR.toFixed(2) },
@@ -323,8 +330,9 @@ rule(
   (entities) => {
     const issues = [];
     for (const w of entities.filter(e => e.kind === 'window')) {
+      const wp = openingWorldPoint(w, entities);
       const host = entities.find(wall => wall.kind === 'wall' &&
-        (wall.id === w.wallId || pointNearSegment({ x: w.x, y: w.y }, wall, 0.3)));
+        (wall.id === w.wallId || (wp && pointNearSegment(wp, wall, 0.3))));
       if (!host) {
         issues.push(issue('medium', 'window.host', [w.id], bboxOf(w),
           { window: w.name },
@@ -525,14 +533,50 @@ function bboxOf(e) {
 }
 
 function pointNearSegment(p, wall, tol) {
-  const seg = (a, b, c, d) => {
-    const lenSq = (d.y - c.y) ** 2 + (d.x - c.x) ** 2;
-    if (lenSq < 1e-12) return Math.hypot(p.x - c, p.y - c) < tol;
-    let t = ((p.x - c) * (d.x - c) + (p.y - c) * (d.y - c)) / lenSq;
-    t = Math.max(0, Math.min(1, t));
-    return Math.hypot(p.x - (c + t * (d.x - c)), p.y - (c + t * (d.y - c))) < tol;
-  };
-  return seg(0, 0, wall.x1, wall.y1, wall.x2, wall.y2) || seg(0, 0, wall.x1, wall.y1, wall.x2, wall.y2);
+  const x1 = wall.x1 ?? wall.p1?.x, y1 = wall.y1 ?? wall.p1?.y;
+  const x2 = wall.x2 ?? wall.p2?.x, y2 = wall.y2 ?? wall.p2?.y;
+  if (!Number.isFinite(x1) || !Number.isFinite(y1) || !Number.isFinite(x2) || !Number.isFinite(y2)) return false;
+  const dx = x2 - x1, dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 1e-12) return Math.hypot(p.x - x1, p.y - y1) < tol;
+  let t = ((p.x - x1) * dx + (p.y - y1) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (x1 + t * dx), p.y - (y1 + t * dy)) < tol;
+}
+
+/** World position of a hosted opening (door/window). Factory openings carry
+ *  wallId + position along the wall — no x/y. Returns null when unresolvable. */
+function openingWorldPoint(opening, entities) {
+  if (typeof opening.x === 'number' && typeof opening.y === 'number') {
+    return { x: opening.x, y: opening.y };
+  }
+  const wall = entities.find(w => w.kind === 'wall' && w.id === (opening.wallId || opening.hostWallId));
+  if (!wall || !Number.isFinite(wall.x1) || !Number.isFinite(wall.y1)) return null;
+  const dx = wall.x2 - wall.x1;
+  const dy = wall.y2 - wall.y1;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-9) return { x: wall.x1, y: wall.y1 };
+  const t = Math.min(1, Math.max(0, ((opening.position ?? 0) + (opening.width ?? 0) / 2) / len));
+  return { x: wall.x1 + t * dx, y: wall.y1 + t * dy };
+}
+
+/** Rect of a room honoring polygonal boundaries; fallback to width×depth. */
+function roomRectOf(r) {
+  if (Array.isArray(r.boundary) && r.boundary.length >= 3) {
+    const xs = r.boundary.map(p => p.x), ys = r.boundary.map(p => p.y);
+    const x = Math.min(...xs), y = Math.min(...ys);
+    return { x, y, width: Math.max(...xs) - x, depth: Math.max(...ys) - y };
+  }
+  return { x: r.x ?? 0, y: r.y ?? 0, width: r.width ?? 0, depth: r.depth ?? 0 };
+}
+
+/** True when a hosted/positioned opening falls within a room's envelope. */
+function openingInRoom(opening, room, entities, pad = 0.3) {
+  const p = openingWorldPoint(opening, entities);
+  if (!p) return false;
+  const r = roomRectOf(room);
+  return p.x >= r.x - pad && p.x <= r.x + r.width + pad &&
+    p.y >= r.y - pad && p.y <= r.y + r.depth + pad;
 }
 
 function dimensionOnWall(d, wall) {

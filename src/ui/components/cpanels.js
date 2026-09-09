@@ -118,18 +118,19 @@ export function renderStudioCPanels(container, options = {}) {
             </div>
           </div>
           <div class="cpanel-code-checklist">
-            <div class="checklist-item pass">
-              <span class="check-icon">✅</span>
-              <span class="check-text">IBC Headroom Clearance (≥ 2.0m)</span>
-            </div>
-            <div class="checklist-item pass">
-              <span class="check-icon">✅</span>
-              <span class="check-text">Egress Corridor Width (≥ 1.10m)</span>
-            </div>
-            <div class="checklist-item pass">
-              <span class="check-icon">✅</span>
-              <span class="check-text">Stair Blondel 2R+T Compliance</span>
-            </div>
+            ${(options.codeChecks && options.codeChecks.length ? options.codeChecks : [
+              { label: 'IBC Headroom Clearance (≥ 2.0m)', status: 'unknown', detail: 'No stairs/ramps in this document' },
+              { label: 'Egress Corridor Width (≥ 1.10m)', status: 'unknown', detail: 'No corridor rooms named' },
+              { label: 'Stair Blondel 2R+T Compliance', status: 'unknown', detail: 'No stairs in this document' }
+            ]).map(check => {
+              const cls = check.status === 'pass' ? 'pass' : check.status === 'fail' ? 'fail' : 'unknown';
+              const icon = check.status === 'pass' ? '✅' : check.status === 'fail' ? '❌' : '—';
+              return `
+            <div class="checklist-item ${cls}" title="${check.detail || ''}">
+              <span class="check-icon">${icon}</span>
+              <span class="check-text">${check.label}${check.detail ? ` <small style="color: var(--text-muted);">· ${check.detail}</small>` : ''}</span>
+            </div>`;
+            }).join('')}
           </div>
         </div>
 

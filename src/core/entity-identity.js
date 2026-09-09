@@ -101,11 +101,12 @@ export function removeEntityRelationships(index, entityId) {
   if (!index || !entityId) return index;
   delete index.bySource[entityId];
   delete index.byTarget[entityId];
-  // purge dangling back-references
+  // purge dangling back-references in other entities' link lists
   for (const key of Object.keys(index.bySource)) {
+    if (key === entityId) continue;
     index.bySource[key] = index.bySource[key].filter(link => {
       const target = link.split(':')[1];
-      return index.bySource[target] !== undefined || !index.byTarget[entityId];
+      return target !== entityId;
     });
   }
   return index;

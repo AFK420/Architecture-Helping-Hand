@@ -405,6 +405,7 @@ export function initializeApp() {
         tool: 'select',
         grid: 0.5,
         snap: true,
+        ortho: false,
         selectedIds: new Set(),
         furnitureIndex: 0,
         furnitureRotated: false,
@@ -3184,20 +3185,18 @@ export function initializeApp() {
                 clearance: piece.clearance || 0,
                 category: piece.category
               });
-              if (projectStore && typeof projectStore.updateProject === 'function') {
-                projectStore.updateProject(draft => {
-                  if (!draft.plan) draft.plan = { rooms: [], walls: [], doors: [], windows: [], furniture: [], dimensions: [], stairs: [], ramps: [] };
-                  if (!Array.isArray(draft.plan.furniture)) draft.plan.furniture = [];
-                  draft.plan.furniture.push(entity);
-                  return draft;
-                });
-              }
-              if (state.plan && state.plan.document) {
-                if (!Array.isArray(state.plan.document.furniture)) state.plan.document.furniture = [];
-                state.plan.document.furniture.push(entity);
-                state.plan.selectedIds = new Set([entity.id]);
-              }
               switchMode('plan');
+              // Insert into the live plan canvas (identity + undo + render)
+              // rather than a persisted container nothing reads back.
+              const placed = views && typeof views.hasController === 'function'
+                && views.hasController('plan', 'addEntity')
+                ? views.callController('plan', 'addEntity', entity, `place ${piece.name}`)
+                : null;
+              if (!placed || placed.ok !== true) {
+                AudioService.playError && AudioService.playError();
+                showToast(`Could not place ${piece.name} on the Plan Canvas`);
+                return;
+              }
               if (views && typeof views.callController === 'function') {
                 views.callController('plan', 'render');
               }

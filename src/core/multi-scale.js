@@ -147,7 +147,7 @@ export function parseMultiScaleInput(inputStr, options = {}) {
     displayUnit: defaultUnit,
     rawInput: trimmed,
     isExpression: false,
-    errorMessage: parsed.errorMessage || 'Invalid measurement input'
+    errorMessage: parsed.error || 'Invalid measurement input'
   };
 }
 
@@ -269,7 +269,7 @@ export function compareAcrossScales(input, scaleRatios = DEFAULT_COMPARISON_SCAL
   if (!parsed.isValid) {
     return {
       isValid: false,
-      errorMessage: parsed.errorMessage || 'Invalid dimension input',
+      errorMessage: parsed.error || parsed.errorMessage || 'Invalid dimension input',
       input: {
         raw: parsed.rawInput || '',
         canonicalMeters: 0,

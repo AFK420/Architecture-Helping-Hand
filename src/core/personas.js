@@ -435,7 +435,7 @@ export const STUDIO_TOOL_CATALOG = [
     personas: ['rhino', 'sketchup', 'studio'],
     icon: '👁️',
     commandAlias: 'PERSP',
-    description: 'Switch to 3-point perspective architectural eye-level camera view'
+    description: 'Open the 3D massing view with a one-point perspective camera (drag to orbit, toggle Ortho in the toolbar)'
   },
   {
     id: 'view_4split',
@@ -444,7 +444,7 @@ export const STUDIO_TOOL_CATALOG = [
     personas: ['rhino'],
     icon: '⊞',
     commandAlias: '4VIEW',
-    description: 'Split center viewport into classic Rhino 4-quadrant layout (Top, Front, Right, Perspective)'
+    description: 'Split center viewport into classic Rhino 4-quadrant layout (Top, Front, Right, Axonometric)'
   },
 
   // 8. Curve Tools

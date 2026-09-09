@@ -1,5 +1,61 @@
 # Production Hardening Changelog
 
+## 2026-09-09 (pass 4) — Honesty pass: 15 live defects fixed, fake UI removed
+
+Full 200-item capability audit (four subsystem audits + fresh test run) found
+real engines in good shape but nine live bugs, four fake/ghost UI surfaces,
+and five latent engine defects. All fixed in one pass and pinned by the new
+`tests/honesty-pass.test.js` (51 assertions) + factory-entity section in
+`tests/issue-engine.test.js` (5 new). Full suite: 61 files, 5,016 assertions, 0 failures.
+
+### Data integrity (worst-first)
+
+| Defect | Fix | Verification |
+|---|---|---|
+| Ctrl+D duplicate passed an object where a numeric meter offset is required → coords became `"1[object Object]"` strings → NaN geometry that PERSISTED into saved projects (test masked it by calling the correct signature) | `plan.js:1128` numeric offset + `duplicateEntity` now guards non-finite offsets (numeric, `{x,y}` object, or 0) | honesty-pass §1 |
+| NL furniture placement wrote into `draft.plan.furniture` (never loaded back) and `state.plan.document` (nonexistent) | New `addEntity` controller on the plan view; placement now goes through the live canvas with identity + undo + render | honesty-pass §10 |
+| Scratchpad "save to project" called `updateProject(id, obj)` (signature: mutator fn) inside `try/catch{}` → silent no-op | Correct mutator call; failure now surfaces as a warning toast | source pin |
+| `wallOpenings(entities, e)` args swapped → every wall serialized its openings as `[]` to the AI | `(e, entities)` + guard | honesty-pass §2 |
+| `removeEntityRelationships` purge condition always true → dangling back-references survived entity deletion | purge by target id | honesty-pass §4 |
+| Dimension filter precedence: `kind==='dimension' && A < 0.02 \|\| B < 0.02` matched any entity near room depth | parenthesized OR | review |
+
+### QA honesty (issue engine)
+
+| Defect | Fix | Verification |
+|---|---|---|
+| `pointNearSegment` called with 6 args through a 4-param closure → NaN → always false (door/window host proximity never worked) | Real point-to-segment distance with clamped t | honesty-pass §2 |
+| `room.missing_door` / `room.missing_window` required `d.x/d.y` — factory doors/windows carry NO x/y (hosted: wallId + position). A perfectly hosted door+window bedroom was flagged missing both. Tests passed only because fixtures hand-added x/y | New `openingWorldPoint` resolves hosted openings through the host wall; rules use it. Factory-entity regression tests added (no false positives AND no false negatives) | issue-engine §9 |
+| `geo.duplicate` required `e.x/e.y` → walls were never duplicate-checked | position key generalized to segment entities | honesty-pass §3 |
+| `door.clearance` used `d.x ?? 0` (meaningless for hosted doors) | resolves through host wall | review |
+
+### Fake/ghost UI removed or made real
+
+| Surface | Was | Now |
+|---|---|---|
+| Ctrl+Space AI dropdown | keyword-matched canned HTML + 400 ms `setTimeout` pretending to be latency; "Apply" inserted the same hardcoded 3-bed layout regardless of prompt | Thin client of the real job router (`runAIJob`); honest **AI UNAVAILABLE** state listing what works without AI; answers labeled with provider/model; actions only from real model responses via `parseAiActions`, applied on user click |
+| Inspector "IBC CODE" checklist | 3 hard-coded ✅ pass badges | Computed from document entities: ramp slope ≤ 8.33%, egress corridor ≥ 1.10 m, stair Blondel/riser band — pass/fail/unknown with detail text |
+| ORTHO toggle (F8) | flipped state; nothing ever read it | `applyOrtho` constrains drafting drags and moves to H/V from the reference point; F8 shortcut wired; default OFF |
+| "PERSPECTIVE" 3D label | orthographic projection mislabeled as perspective | Real one-point perspective divide in `projectPoint3D` (`camera.perspective`), toggle chip in the 3D toolbar, PERSP command enables it; 4-split quadrant honestly relabeled AXONOMETRIC |
+| Push/Pull toast | claimed "Extruded (3.0m height)!" — only switched documents | Honest message: opens the massing view, points at the H control |
+
+### Other UI defects
+
+- Polyline contextual toolbar wrote to undefined `toolbar` (var is `bar`) → ReferenceError, Finish/Cancel buttons never rendered (plan.js:1556) — fixed.
+- Measure release toast read `m.formatted` (never returned; is `formattedM`) → "Measured: undefined" — fixed, includes angle.
+- Polyroom snap call used `{threshold, gridSize}` (real options: `snapDistance, gridMeters, osnaps`) → polygon rooms ignored both grid and object snaps — fixed.
+
+### Latent engine defects
+
+- `joinCollinearSegments` gap check was dead code — disjoint collinear segments were silently bridged into one segment; now interval-based, gaps > tolerance return null (honesty-pass §5).
+- `multi-scale` read `parsed.errorMessage`; parser returns `error` → real error text never surfaced (§8).
+- `camera3d.worldToScreen3D` ignored `camera.target` while `screenToWorldRay` honored it → picking inverse broken for any non-zero target; now exact inverse (§7, cross-magnitude 9e-17).
+- Massing 3D stairs read `st.riserCount` (never set by factories → always 10 risers) and ignored `st.rise`; now `risers` + real rise; steps stack from their own base, not z=0.
+- Multi-story gross volume used average story height (`GFA × currentZ/docs`) — wrong for mixed heights; now Σ(area × own height) (§6).
+- NURBS surface tessellation emitted `[x,y,z]` arrays where every consumer expects `{x,y,z}`; fixed. Duplicate `CAMERA_PRESETS` aliases (iso_ne… doubled toolbar chips) removed.
+- Requirements engine: `room_area` and `corridor_width` scopes were declared but returned null → NOT_APPLICABLE; both implemented. `roomAreaOf` now honors polygonal boundaries via the factory `roomArea` (audit found two engines disagreeing on the same room).
+- `ROOM_MIN_AREA` constraint rescaled width/depth but left the polygon boundary stale (`scaleY` computed then void-discarded) → mixed geometry; boundary now rescaled consistently.
+
+
 ## 2026-09-07 (pass 3) — Plan workstation, CAD command engine, icon system, contextual AI
 
 | File / module | Change | Verification |

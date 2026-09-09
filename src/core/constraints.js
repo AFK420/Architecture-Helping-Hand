@@ -216,9 +216,14 @@ export function solveConstraint(constraint, entities) {
       const dy = neededDepth - room.depth;
       room.y -= dy / 2;
       room.depth = neededDepth;
-      if (Array.isArray(room.boundary)) {
-        const scaleY = neededDepth / (room.depth || 1);
-        void scaleY; // boundary rooms: grow handled by width/depth path below
+      if (Array.isArray(room.boundary) && room.boundary.length >= 3) {
+        // rescale the polygon too, about its vertical center, so the boundary
+        // stays consistent with the width/depth fields (no mixed geometry)
+        const ys = room.boundary.map(p => p.y);
+        const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+        const oldSpan = Math.max(...ys) - Math.min(...ys);
+        const sy = oldSpan > 1e-9 ? neededDepth / oldSpan : 1;
+        room.boundary = room.boundary.map(p => ({ x: p.x, y: cy + (p.y - cy) * sy }));
       }
       satisfy(constraint, `Room depth grown to ${neededDepth.toFixed(2)} m → ${minArea >= 0 ? minArea.toFixed(1) : ''} m² minimum met.`);
       return constraint;

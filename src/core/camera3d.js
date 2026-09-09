@@ -68,15 +68,19 @@ export function cameraBasis(camera) {
   return { forward, right, up };
 }
 
-/** World → screen (2D). Byte-compatible with massing-3d.projectPoint3D. */
+/** World → screen (2D). Byte-compatible with massing-3d.projectPoint3D.
+ *  camera.target translates the world before projection, so the reverse
+ *  (screenToWorldRay) stays an exact inverse for any target. */
 export function worldToScreen3D(p, camera) {
   const az = ((camera.azimuth ?? 45) * Math.PI) / 180;
   const el = ((camera.elevation ?? 35.264) * Math.PI) / 180;
   const zoom = camera.zoom || 40;
   const cosAz = Math.cos(az), sinAz = Math.sin(az);
-  const x1 = p.x * cosAz - p.y * sinAz;
-  const y1 = p.x * sinAz + p.y * cosAz;
-  const z1 = p.z || 0;
+  const tx = p.x - (camera.target?.x || 0);
+  const ty = p.y - (camera.target?.y || 0);
+  const z1 = p.z - (camera.target?.z || 0);
+  const x1 = tx * cosAz - ty * sinAz;
+  const y1 = tx * sinAz + ty * cosAz;
   const cosEl = Math.cos(el), sinEl = Math.sin(el);
   const screenX = camera.panX + x1 * zoom;
   const screenY = camera.panY - (z1 * cosEl - y1 * sinEl) * zoom;

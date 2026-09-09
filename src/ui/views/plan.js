@@ -1125,7 +1125,7 @@ export function createPlanView(context) {
     }
     const original = entities().find(x => x.id === selectedId);
     if (!original) return;
-    const clone = duplicateEntity(original, { x: 0.5, y: 0.5 });
+    const clone = duplicateEntity(original, 0.5);
     const cmd = entityAddRemoveCommand(entities(), clone, `duplicate ${original.name || original.kind}`);
     cmd.redo();
     history.push(cmd);
@@ -1231,16 +1231,26 @@ export function createPlanView(context) {
       return;
     }
     if (toolId === 'view_perspective' || toolId === 'massing' || toolId === 'box' || toolId === 'extrude' || toolId === 'loft') {
-      const mDoc = state.plan.documents && state.plan.documents.find(d => d.type === '3d_massing');
-      if (mDoc) switchDocument(mDoc.id);
-      else createDocument('3D Massing Preview', '3d_massing');
+      let mDoc = state.plan.documents && state.plan.documents.find(d => d.type === '3d_massing');
+      if (!mDoc) {
+        createDocument('3D Massing Preview', '3d_massing');
+        mDoc = state.plan.documents.find(d => d.type === '3d_massing');
+      } else {
+        switchDocument(mDoc.id);
+      }
+      // The PERSPECTIVE entry point genuinely enables the perspective camera.
+      if (mDoc && mDoc.camera) {
+        mDoc.camera.perspective = true;
+        mDoc.camera.elevation = 25; // eye-level-ish vantage for perspective
+        showToast('Perspective camera enabled — drag to orbit');
+      }
       return;
     }
     if (toolId === 'view_4split' || toolId === '4view') {
       const splitDoc = state.plan.documents && state.plan.documents.find(d => d.type === 'view_4split' || d.type === '4view');
       if (splitDoc) switchDocument(splitDoc.id);
       else createDocument('4-Viewport Split', 'view_4split');
-      showToast('Switched to Rhino 4-Viewport Split (Top, Perspective, Front, Right)');
+      showToast('Switched to Rhino 4-Viewport Split (Top, Axonometric, Front, Right)');
       return;
     }
     if (toolId === 'pushpull') {
@@ -1367,12 +1377,40 @@ export function createPlanView(context) {
     const rooms = es.filter(e => e.kind === 'room');
     const totalArea = rooms.reduce((sum, r) => sum + (typeof r.width === 'number' && typeof r.depth === 'number' ? roomArea(r) : 0), 0);
 
+    // Deterministic code checklist — computed from this document's entities,
+    // never hard-coded pass badges. Ramps need ≤ 1:12 headroom-safe slopes;
+    // corridors are rooms named "corridor"; stairs are Blondel-checked.
+    const stairs = es.filter(e => e.kind === 'stair');
+    const ramps = es.filter(e => e.kind === 'ramp');
+    const corridors = rooms.filter(r => /corridor/i.test(String(r.name || '')));
+    const codeChecks = [
+      ramps.length > 0
+        ? (() => {
+            const steepest = Math.max(...ramps.map(r => r.slopePercent || 0));
+            return { label: 'Ramp Slope (≤ 8.33%)', status: steepest <= 8.33 ? 'pass' : 'fail', detail: `steepest ${steepest.toFixed(1)}%` };
+          })()
+        : { label: 'Ramp Slope (≤ 8.33%)', status: 'unknown', detail: 'no ramps' },
+      corridors.length > 0
+        ? (() => {
+            const narrowest = Math.min(...corridors.map(r => Math.min(r.width || 0, r.depth || 0)));
+            return { label: 'Egress Corridor Width (≥ 1.10m)', status: narrowest >= 1.10 ? 'pass' : 'fail', detail: `narrowest ${narrowest.toFixed(2)}m` };
+          })()
+        : { label: 'Egress Corridor Width (≥ 1.10m)', status: 'unknown', detail: 'no corridor rooms' },
+      stairs.length > 0
+        ? (() => {
+            const worst = stairs.find(s => s.blondel < 0.59 || s.blondel > 0.66 || (s.riserHeight || 0) > 0.1955);
+            return { label: 'Stair Blondel 2R+T Compliance', status: worst ? 'fail' : 'pass', detail: worst ? `${(worst.blondel * 1000).toFixed(0)}mm · R${((worst.riserHeight || 0) * 1000).toFixed(0)}` : `${stairs.length} stair(s) in band` };
+          })()
+        : { label: 'Stair Blondel 2R+T Compliance', status: 'unknown', detail: 'no stairs' }
+    ];
+
     renderStudioCPanels(cpanelsHost, {
       activePanelTab: state.activeCPanelTab || 'properties',
       activeToolId: state.plan.tool || 'select',
       selectedEntity: selected,
       entityCount: es.length,
       layerCount: normalizeDocumentLayers(doc).length,
+      codeChecks,
       onSelectPanelTab: (tabId) => {
         state.activeCPanelTab = tabId;
         updateStudioCPanels();
@@ -1517,7 +1555,7 @@ export function createPlanView(context) {
         coords: currentMouseWorld,
         grid: state.plan.grid || 0.5,
         snap: state.plan.snap !== false,
-        ortho: state.plan.ortho !== false,
+        ortho: state.plan.ortho === true,
         session: cadSession,
         getCurrentPoint: () => currentMouseWorld,
         snapPoint: (p) => ({ x: snapToGrid(p.x, state.plan.grid), y: snapToGrid(p.y, state.plan.grid) }),
@@ -1535,7 +1573,7 @@ export function createPlanView(context) {
           toggleSnap();
         },
         onToggleOrtho: () => {
-          state.plan.ortho = state.plan.ortho === false ? true : false;
+          state.plan.ortho = state.plan.ortho !== true;
           showToast(`Ortho Mode: ${state.plan.ortho ? 'ON' : 'OFF'}`);
           renderStudioComponents();
         }
@@ -1553,7 +1591,7 @@ export function createPlanView(context) {
 
     if (!sel || selCount === 0) {
       if (polyLineVertices.length > 0) {
-        toolbar.innerHTML = `
+        bar.innerHTML = `
           <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
             <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
               <span class="context-tag-badge" style="background: rgba(56, 189, 248, 0.18); color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);">POLYLINE</span>
@@ -1565,8 +1603,8 @@ export function createPlanView(context) {
               <button type="button" class="result-action-btn" id="ctx-cancel-polyline" style="font-size: 0.68rem; padding: 2px 8px;">✕ Cancel</button>
             </div>
           </div>`;
-        toolbar.querySelector('#ctx-finish-polyline')?.addEventListener('click', finishPolyline);
-        toolbar.querySelector('#ctx-cancel-polyline')?.addEventListener('click', cancelPolyline);
+        bar.querySelector('#ctx-finish-polyline')?.addEventListener('click', finishPolyline);
+        bar.querySelector('#ctx-cancel-polyline')?.addEventListener('click', cancelPolyline);
         return;
       }
       if (polyRoomVertices.length > 0) {
@@ -2280,6 +2318,7 @@ export function createPlanView(context) {
             ${presetsMarkup}
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" id="btn-3d-projection" class="result-action-btn ${doc.camera.perspective === true ? 'primary' : ''}" style="font-size: 0.68rem; padding: 2px 6px;" title="Toggle perspective / orthographic projection">${doc.camera.perspective === true ? 'Perspective' : 'Ortho'}</button>
             <button type="button" id="btn-3d-multistory" class="result-action-btn ${doc.massingOptions.multiStory ? 'primary' : ''}" style="font-size: 0.68rem; padding: 2px 6px;" title="Toggle multi-story building stacking">${multiStoryLabel}</button>
             <button type="button" id="btn-3d-wireframe" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">${doc.massingOptions.wireframe ? 'Shaded' : 'Wireframe'}</button>
             <button type="button" id="btn-3d-height" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">H: ${(doc.massingOptions.wallHeight || 3.0).toFixed(1)}m</button>
@@ -2299,6 +2338,15 @@ export function createPlanView(context) {
             AudioService.playTick();
           }
         });
+      });
+
+      ctxBar.querySelector('#btn-3d-projection')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        doc.camera.perspective = doc.camera.perspective !== true;
+        if (doc.camera.perspective && (doc.camera.elevation ?? 0) > 60) doc.camera.elevation = 25;
+        render();
+        AudioService.playTick();
+        showToast(doc.camera.perspective ? 'Perspective projection ON' : 'Orthographic projection');
       });
 
       ctxBar.querySelector('#btn-3d-multistory')?.addEventListener('click', (e) => {
@@ -2753,7 +2801,7 @@ export function createPlanView(context) {
       }
     }
 
-    // 2. Perspective View (3D Massing)
+    // 2. Axonometric View (3D Massing) — orthographic axon projection
     const camera = { azimuth: 45, elevation: 35.264, zoom: 18, panX: halfW + halfW / 2, panY: halfH / 2 + 15 };
     const massingFaces = buildMassing3DModel(planEntities, { wallHeight: 3.0 });
     const sortedFaces = projectAndSortFaces(massingFaces, camera);
@@ -2794,14 +2842,14 @@ export function createPlanView(context) {
         </g>
       </g>
 
-      <!-- Quadrant 2: Perspective View -->
+      <!-- Quadrant 2: Axonometric View -->
       <g class="quadrant-perspective">
         <g class="massing-faces">
           ${facesMarkup}
         </g>
         <g class="quadrant-pill" data-quadrant="perspective" cursor="pointer">
           <rect x="${halfW + 12}" y="12" width="145" height="24" rx="4" fill="rgba(11, 17, 32, 0.9)" stroke="#057a55" stroke-width="1.2" />
-          <text x="${halfW + 22}" y="28" fill="#38bdf8" font-size="11" font-weight="bold" font-family="var(--font-mono)">PERSPECTIVE</text>
+          <text x="${halfW + 22}" y="28" fill="#38bdf8" font-size="11" font-weight="bold" font-family="var(--font-mono)">AXONOMETRIC</text>
         </g>
       </g>
 
@@ -2842,7 +2890,7 @@ export function createPlanView(context) {
             <span class="context-tag-badge" style="background: rgba(5, 122, 85, 0.2); color: #10b981; border-color: #057a55;">RHINO 4-VIEWPORT SPLIT</span>
             <span style="font-size: 0.72rem; color: var(--text-muted);">Click header or button to maximize:</span>
             <button type="button" class="result-action-btn" id="btn-4v-top" style="font-size: 0.68rem; padding: 2px 6px;">🔲 Maximize Top</button>
-            <button type="button" class="result-action-btn" id="btn-4v-persp" style="font-size: 0.68rem; padding: 2px 6px;">🔲 Maximize Perspective</button>
+            <button type="button" class="result-action-btn" id="btn-4v-persp" style="font-size: 0.68rem; padding: 2px 6px;">🔲 Maximize Axonometric</button>
             <button type="button" class="result-action-btn" id="btn-4v-front" style="font-size: 0.68rem; padding: 2px 6px;">🔲 Maximize Front</button>
             <button type="button" class="result-action-btn" id="btn-4v-right" style="font-size: 0.68rem; padding: 2px 6px;">🔲 Maximize Right</button>
           </div>
@@ -5891,7 +5939,7 @@ export function createPlanView(context) {
           } else {
             createDocument('3D Massing Preview', '3d_massing');
           }
-          showToast(`Extruded "${room.name}" to 3D Massing (3.0m height)!`, 'success');
+          showToast(`Opened 3D Massing — "${room.name}" extrudes at the wall height (H button to change)`);
           AudioService.playTick();
           return;
         }
@@ -5931,7 +5979,12 @@ export function createPlanView(context) {
     } else if (tool === 'polyroom') {
       let targetPt = initialPt;
       if (snapOn) {
-        const snapRes = findSnapPoint(world, visible, { threshold: 0.35, snapGrid: true, gridSize: state.plan.grid });
+        const snapRes = findSnapPoint(world, visible, {
+          snapDistance: 0.25,
+          snapGrid: true,
+          gridMeters: state.plan.grid,
+          osnaps: state.plan.osnaps || {}
+        });
         if (snapRes.snapped) {
           targetPt = { x: snapRes.x, y: snapRes.y };
         }
@@ -6043,6 +6096,15 @@ export function createPlanView(context) {
 
     const snapped = { x: snapToGrid(world.x, state.plan.grid), y: snapToGrid(world.y, state.plan.grid) };
 
+    // Ortho mode: constrain drafting/move points to horizontal/vertical
+    // from the gesture's reference point (classic CAD F8 behavior).
+    const applyOrtho = (pt, ref) => {
+      if (state.plan.ortho !== true || !ref) return pt;
+      return Math.abs(pt.x - ref.x) >= Math.abs(pt.y - ref.y)
+        ? { x: pt.x, y: ref.y }
+        : { x: ref.x, y: pt.y };
+    };
+
     if (dragState.mode === 'resize' && dragState.entity) {
       const e = dragState.entity;
       const init = dragState.initial;
@@ -6132,6 +6194,14 @@ export function createPlanView(context) {
       } else {
         activeSnap = null;
       }
+      // Ortho constrains object snaps too: the drafted segment stays H/V.
+      const draftingTool = dragState.tool === 'wall' || dragState.tool === 'line' ||
+        dragState.tool === 'dimension' || dragState.tool === 'measure' ||
+        dragState.tool === 'grid' || dragState.tool === 'section_cut' || dragState.tool === 'detail_callout';
+      if (draftingTool) {
+        targetPt = applyOrtho(targetPt, dragState.start);
+        activeSnap = null; // ortho overrides free snaps on the constrained axis
+      }
       dragState.current = targetPt;
 
       if (dragState.tool === 'measure') {
@@ -6155,8 +6225,9 @@ export function createPlanView(context) {
       }
       scheduleSceneRender();
     } else if (dragState.mode === 'move' && dragState.entity) {
-      const dx = snapped.x - dragState.last.x;
-      const dy = snapped.y - dragState.last.y;
+      const orthoPt = applyOrtho(snapped, dragState.last);
+      const dx = orthoPt.x - dragState.last.x;
+      const dy = orthoPt.y - dragState.last.y;
       if (dx !== 0 || dy !== 0) {
         if (dragState.entity.kind === 'wall' || dragState.entity.kind === 'dimension') {
           dragState.entity.x1 += dx;
@@ -6199,7 +6270,7 @@ export function createPlanView(context) {
             );
           }
         }
-        dragState.last = snapped;
+        dragState.last = orthoPt;
         scheduleSceneRender();
       }
     }
@@ -6418,7 +6489,7 @@ export function createPlanView(context) {
         AudioService.playTick();
       } else if (dragState.tool === 'measure') {
         const m = computeMeasurement(start, end);
-        showToast(`Measured: ${m.formatted}`);
+        showToast(`Measured: ${m.formattedM} (${m.formattedAngle})`);
         AudioService.playTick();
       }
     } else if (dragState.mode === 'move' && dragState.entity) {
@@ -6563,11 +6634,18 @@ export function createPlanView(context) {
     try {
       const proj = projectStore?.getProject();
       if (proj) {
-        if (!Array.isArray(proj.scratchpad)) proj.scratchpad = [];
-        proj.scratchpad.unshift(cleanItem);
-        projectStore.updateProject(proj.id, { scratchpad: proj.scratchpad });
+        const res = projectStore.updateProject(draft => {
+          if (!Array.isArray(draft.scratchpad)) draft.scratchpad = [];
+          draft.scratchpad.unshift(cleanItem);
+          return draft;
+        });
+        if (res && res.ok === false) {
+          showToast('Scratchpad: project save failed — kept in this session only', 'warning');
+        }
       }
-    } catch (e) {}
+    } catch (e) {
+      showToast('Scratchpad: project save failed — kept in this session only', 'warning');
+    }
     showToast(`📋 Saved to Scratchpad: "${cleanItem.label}" (${cleanItem.formatted})`);
     AudioService.playTick();
     return cleanItem;
@@ -7041,6 +7119,13 @@ export function createPlanView(context) {
         render();
         return;
       }
+      if (event.key === 'F8') {
+        event.preventDefault();
+        state.plan.ortho = state.plan.ortho !== true;
+        showToast(`Ortho Mode: ${state.plan.ortho ? 'ON' : 'OFF'}`);
+        renderStudioComponents();
+        return;
+      }
       if (ShortcutsManager.matchesEvent('plan_zoom_fit', event)) {
         event.preventDefault();
         fitToContent();
@@ -7291,6 +7376,13 @@ export function createPlanView(context) {
         finishPolyRoom, cancelPolyRoom, renderTabs,
         renderLayerList, setupSidebarTabs, renderScheduleList,
         renderStudioComponents, updateStudioCPanels, handleStudioToolAction,
+        addEntity(entity, label) {
+          if (!entity || typeof entity !== 'object' || !entity.kind) {
+            return { ok: false, error: 'addEntity requires an entity with a kind.' };
+          }
+          commitEntity(entity, label || `add ${entity.kind}`);
+          return { ok: true, id: entity.id };
+        },
         setPersona: (p) => {
           state.activePersona = p;
           const config = PERSONA_RIBBON_CONFIGS[p];

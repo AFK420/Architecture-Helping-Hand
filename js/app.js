@@ -4915,7 +4915,7 @@ function parseMultiScaleInput(inputStr, options = {}) {
     displayUnit: defaultUnit,
     rawInput: trimmed,
     isExpression: false,
-    errorMessage: parsed.errorMessage || 'Invalid measurement input'
+    errorMessage: parsed.error || 'Invalid measurement input'
   };
 }
 
@@ -5037,7 +5037,7 @@ function compareAcrossScales(input, scaleRatios = DEFAULT_COMPARISON_SCALES, opt
   if (!parsed.isValid) {
     return {
       isValid: false,
-      errorMessage: parsed.errorMessage || 'Invalid dimension input',
+      errorMessage: parsed.error || parsed.errorMessage || 'Invalid dimension input',
       input: {
         raw: parsed.rawInput || '',
         canonicalMeters: 0,
@@ -11755,11 +11755,12 @@ function removeEntityRelationships(index, entityId) {
   if (!index || !entityId) return index;
   delete index.bySource[entityId];
   delete index.byTarget[entityId];
-  // purge dangling back-references
+  // purge dangling back-references in other entities' link lists
   for (const key of Object.keys(index.bySource)) {
+    if (key === entityId) continue;
     index.bySource[key] = index.bySource[key].filter(link => {
       const target = link.split(':')[1];
-      return index.bySource[target] !== undefined || !index.byTarget[entityId];
+      return target !== entityId;
     });
   }
   return index;
@@ -12240,15 +12241,19 @@ function cameraBasis(camera) {
   return { forward, right, up };
 }
 
-/** World → screen (2D). Byte-compatible with massing-3d.projectPoint3D. */
+/** World → screen (2D). Byte-compatible with massing-3d.projectPoint3D.
+ *  camera.target translates the world before projection, so the reverse
+ *  (screenToWorldRay) stays an exact inverse for any target. */
 function worldToScreen3D(p, camera) {
   const az = ((camera.azimuth ?? 45) * Math.PI) / 180;
   const el = ((camera.elevation ?? 35.264) * Math.PI) / 180;
   const zoom = camera.zoom || 40;
   const cosAz = Math.cos(az), sinAz = Math.sin(az);
-  const x1 = p.x * cosAz - p.y * sinAz;
-  const y1 = p.x * sinAz + p.y * cosAz;
-  const z1 = p.z || 0;
+  const tx = p.x - (camera.target?.x || 0);
+  const ty = p.y - (camera.target?.y || 0);
+  const z1 = p.z - (camera.target?.z || 0);
+  const x1 = tx * cosAz - ty * sinAz;
+  const y1 = tx * sinAz + ty * cosAz;
   const cosEl = Math.cos(el), sinEl = Math.sin(el);
   const screenX = camera.panX + x1 * zoom;
   const screenY = camera.panY - (z1 * cosEl - y1 * sinEl) * zoom;
@@ -13971,11 +13976,6 @@ const CAMERA_PRESETS = Object.freeze({
   isometric_sw: { azimuth: -135, elevation: 35.264, label: 'Isometric SW' },
   axonometric_top: { azimuth: 45, elevation: 60, label: 'Top Axo (60°)' },
   cavalier: { azimuth: 45, elevation: 45, label: 'Plan Oblique (45°)' },
-  iso_ne: { azimuth: 45, elevation: 35.264, label: 'Isometric NE (30°/30°)' },
-  iso_nw: { azimuth: 135, elevation: 35.264, label: 'Isometric NW' },
-  iso_se: { azimuth: -45, elevation: 35.264, label: 'Isometric SE' },
-  iso_sw: { azimuth: -135, elevation: 35.264, label: 'Isometric SW' },
-  axonometric: { azimuth: 45, elevation: 60, label: 'Top Axo (60°)' },
   plan: { azimuth: 0, elevation: 89.9, label: 'Plan View' }
 });
 
@@ -14016,11 +14016,26 @@ function projectPoint3D(p, camera = {}) {
   const cosEl = Math.cos(el);
   const sinEl = Math.sin(el);
 
+  // Camera-space depth BEFORE pitch (distance along the view axis used for
+  // both painter sorting and the perspective divide).
+  const camY = z1 * sinEl + y1 * cosEl;
+
+  if (camera.perspective === true) {
+    // One-point perspective: the eye sits `dist` meters behind the screen
+    // plane along the view axis; scale each point by dist/(dist - camY).
+    const dist = camera.perspectiveDistance || 30;
+    const denom = Math.max(dist * 0.05, dist - camY); // never flip past the eye
+    const scale = dist / denom;
+    const screenX = panX + x1 * zoom * scale;
+    const screenY = panY - (z1 * cosEl - y1 * sinEl) * zoom * scale;
+    return { x: screenX, y: screenY, depth: -denom };
+  }
+
   // Screen X = x1
   // Screen Y = in SVG Y is downwards, so positive world Z projects upwards (-Z)
   const screenX = panX + x1 * zoom;
   const screenY = panY - (z1 * cosEl - y1 * sinEl) * zoom;
-  const depth = z1 * sinEl + y1 * cosEl;
+  const depth = camY;
 
   return { x: screenX, y: screenY, depth };
 }
@@ -14277,14 +14292,17 @@ function buildMassing3DModel(entities = [], options = {}) {
   // 4. Stairs (3D Step Flight)
   const stairs = list.filter(e => e && e.kind === 'stair');
   for (const st of stairs) {
-    const numRisers = st.riserCount || 10;
-    const riserH = wallH / numRisers;
+    // App stair entities use `risers` (count); `riserCount` was never set by
+    // any factory, so every stair silently used the 10-riser default.
+    const numRisers = st.risers || st.riserCount || 10;
+    const rise = typeof st.rise === 'number' && st.rise > 0 ? st.rise : wallH;
+    const riserH = rise / numRisers;
     const stW = st.width || 1.0;
     const stD = st.depth || st.run || 2.5;
     const treadD = stD / numRisers;
 
     for (let s = 0; s < numRisers; s++) {
-      const stepBottom = zBase + 0;
+      const stepBottom = zBase + s * riserH;
       const stepTop = zBase + (s + 1) * riserH;
       const stepY = st.y + s * treadD;
       const stepPts = [
@@ -14297,7 +14315,6 @@ function buildMassing3DModel(entities = [], options = {}) {
     }
   }
 
-  faces.faces = faces;
   return faces;
 }
 
@@ -14327,6 +14344,7 @@ function buildMultiStoryMassing3DModel(documents = [], options = {}) {
   const allFaces = [];
   let currentZ = 0;
   let totalGFA = 0;
+  let totalVolume = 0;
 
   docs.forEach((doc, idx) => {
     const storyH = typeof doc.storyHeight === 'number' && doc.storyHeight > 0 ? doc.storyHeight : defaultStoryH;
@@ -14360,6 +14378,8 @@ function buildMultiStoryMassing3DModel(documents = [], options = {}) {
       }
     }
     totalGFA += storyArea;
+    // Volume must weight each story by its OWN height, not the building average
+    totalVolume += storyArea * storyH;
     currentZ += storyH;
   });
 
@@ -14367,7 +14387,7 @@ function buildMultiStoryMassing3DModel(documents = [], options = {}) {
   allFaces.storyCount = docs.length;
   allFaces.totalHeight = Number(currentZ.toFixed(2));
   allFaces.grossFloorArea = Number(totalGFA.toFixed(2));
-  allFaces.grossVolume = Number((totalGFA * (currentZ / docs.length)).toFixed(2));
+  allFaces.grossVolume = Number(totalVolume.toFixed(2));
 
   return allFaces;
 }
@@ -14394,16 +14414,20 @@ function projectAndSortFaces(faces3D, camera) {
 
     const avgDepth = pts2D.length > 0 ? sumDepth / pts2D.length : 0;
 
+    // Under perspective the eye looks along −viewY, so nearer faces have a
+    // LARGER negative denominator; normalize both modes to "bigger = nearer".
+    const nearness = camera.perspective === true ? avgDepth : -avgDepth;
+
     projected.push({
       points: pts2D,
-      depth: avgDepth,
+      depth: nearness,
       color: face.color,
       stroke: face.stroke,
       opacity: face.opacity || 1
     });
   }
 
-  // Painter's algorithm: sort ascending by depth (farthest rendered first, nearest on top)
+  // Painter's algorithm: sort ascending by nearness (farthest rendered first, nearest on top)
   projected.sort((a, b) => a.depth - b.depth);
 
   return projected;
@@ -14633,10 +14657,10 @@ function tessellateNurbsSurface(controlGrid = [], options = {}) {
 
       faces.push({
         vertices: [
-          [p0.x, p0.y, p0.z],
-          [p1.x, p1.y, p1.z],
-          [p2.x, p2.y, p2.z],
-          [p3.x, p3.y, p3.z]
+          { x: p0.x, y: p0.y, z: p0.z },
+          { x: p1.x, y: p1.y, z: p1.z },
+          { x: p2.x, y: p2.y, z: p2.z },
+          { x: p3.x, y: p3.y, z: p3.z }
         ],
         color,
         stroke,
@@ -16743,7 +16767,7 @@ const STUDIO_TOOL_CATALOG = [
     personas: ['rhino', 'sketchup', 'studio'],
     icon: '👁️',
     commandAlias: 'PERSP',
-    description: 'Switch to 3-point perspective architectural eye-level camera view'
+    description: 'Open the 3D massing view with a one-point perspective camera (drag to orbit, toggle Ortho in the toolbar)'
   },
   {
     id: 'view_4split',
@@ -16752,7 +16776,7 @@ const STUDIO_TOOL_CATALOG = [
     personas: ['rhino'],
     icon: '⊞',
     commandAlias: '4VIEW',
-    description: 'Split center viewport into classic Rhino 4-quadrant layout (Top, Front, Right, Perspective)'
+    description: 'Split center viewport into classic Rhino 4-quadrant layout (Top, Front, Right, Axonometric)'
   },
 
   // 8. Curve Tools
@@ -18114,18 +18138,25 @@ function joinCollinearSegments(seg1, seg2, epsilon = EPSILON_MEDIUM) {
   const last = projected[projected.length - 1].p;
   const outStart = (first.x < last.x || (approxEqual(first.x, last.x) && first.y < last.y)) ? first : last;
   const outEnd = outStart === first ? last : first;
-  // gap check: chain length must not exceed the direct span by tolerance
+  // gap check: disjoint collinear segments must NOT be joined into one
+  // bridging segment. Two segments are joinable when their axis intervals
+  // touch or overlap: the larger interval start must not exceed the smaller
+  // interval end (beyond tolerance).
   const span = last.t - first.t;
-  let chain = 0;
-  const segs = [seg1, seg2];
-  for (const s of segs) chain += distance(s.start, s.end);
-  if (chain > span + epsilon * 2) {
-    // overlapping segments may have chain > span; overlap is still joinable
-    const overlapAllowance = distance(seg1.start, seg1.end) + distance(seg2.start, seg2.end);
-    if (span < overlapAllowance - epsilon * 2) {
-      // fully fine — overlapping join
-    }
+  const interval = (s) => {
+    const a = dotProduct(subtractPoints(s.start, seg1.start), dir);
+    const b = dotProduct(subtractPoints(s.end, seg1.start), dir);
+    return { lo: Math.min(a, b), hi: Math.max(a, b) };
+  };
+  const i1 = interval(seg1);
+  const i2 = interval(seg2);
+  const gap = Math.max(i1.lo, i2.lo) - Math.min(i1.hi, i2.hi);
+  if (gap > epsilon) {
+    // gap > 0 beyond tolerance → disjoint along the axis → not joinable
+    return null;
   }
+  // overlap sanity: the joined span can never exceed the union of intervals
+  if (span < -epsilon) return null;
   return { start: outStart, end: outEnd };
 }
 
@@ -19739,9 +19770,14 @@ function solveConstraint(constraint, entities) {
       const dy = neededDepth - room.depth;
       room.y -= dy / 2;
       room.depth = neededDepth;
-      if (Array.isArray(room.boundary)) {
-        const scaleY = neededDepth / (room.depth || 1);
-        void scaleY; // boundary rooms: grow handled by width/depth path below
+      if (Array.isArray(room.boundary) && room.boundary.length >= 3) {
+        // rescale the polygon too, about its vertical center, so the boundary
+        // stays consistent with the width/depth fields (no mixed geometry)
+        const ys = room.boundary.map(p => p.y);
+        const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+        const oldSpan = Math.max(...ys) - Math.min(...ys);
+        const sy = oldSpan > 1e-9 ? neededDepth / oldSpan : 1;
+        room.boundary = room.boundary.map(p => ({ x: p.x, y: cy + (p.y - cy) * sy }));
       }
       satisfy(constraint, `Room depth grown to ${neededDepth.toFixed(2)} m → ${minArea >= 0 ? minArea.toFixed(1) : ''} m² minimum met.`);
       return constraint;
@@ -20159,16 +20195,24 @@ rule(
   (entities) => {
     const issues = [];
     const boxes = new Map();
+    const posKeyOf = (e) => {
+      if (Number.isFinite(e.x1) && Number.isFinite(e.y1) && Number.isFinite(e.x2) && Number.isFinite(e.y2)) {
+        return `${e.x1}|${e.y1}|${e.x2}|${e.y2}`;
+      }
+      if (Number.isFinite(e.x) && Number.isFinite(e.y)) return `${e.x}|${e.y}|${e.width ?? ''}|${e.depth ?? ''}`;
+      return null; // hosted openings & other shapes: exact-position check n/a
+    };
     for (const e of entities) {
-      if (typeof e.x !== 'number' || typeof e.y !== 'number') continue;
-      const key = `${e.kind}|${e.x}|${e.y}|${e.width ?? ''}|${e.depth ?? ''}`;
-      if (boxes.has(key)) {
-        issues.push(issue('medium', 'geo.duplicate', [boxes.get(key), e.id], bboxOf(e),
-          { position: { x: e.x, y: e.y }, kind: e.kind },
-          `Two ${e.kind} entities occupy the exact same position ("${entities.find(x => x.id === boxes.get(key))?.name || boxes.get(key)}" and "${e.name || e.id}").`,
+      const key = posKeyOf(e);
+      if (!key) continue;
+      const fullKey = `${e.kind}|${key}`;
+      if (boxes.has(fullKey)) {
+        issues.push(issue('medium', 'geo.duplicate', [boxes.get(fullKey), e.id], bboxOf(e),
+          { position: key, kind: e.kind },
+          `Two ${e.kind} entities occupy the exact same position ("${entities.find(x => x.id === boxes.get(fullKey))?.name || boxes.get(fullKey)}" and "${e.name || e.id}").`,
           'Delete one of the duplicates.'));
       } else {
-        boxes.set(key, e.id);
+        boxes.set(fullKey, e.id);
       }
     }
     return issues;
@@ -20274,9 +20318,7 @@ rule(
     const issues = [];
     const rooms = entities.filter(e => e.kind === 'room' && typeof e.width === 'number');
     for (const r of rooms) {
-      const hasDoor = entities.some(d => d.kind === 'door' &&
-        d.x >= r.x - 0.3 && d.x <= r.x + r.width + 0.3 &&
-        d.y >= r.y - 0.3 && d.y <= r.y + r.depth + 0.3);
+      const hasDoor = entities.some(d => d.kind === 'door' && openingInRoom(d, r, entities));
       if (!hasDoor) {
         issues.push(issue('medium', 'room.missing_door', [r.id], bboxOf(r),
           { room: r.name },
@@ -20296,9 +20338,7 @@ rule(
     const issues = [];
     for (const r of entities.filter(e => e.kind === 'room')) {
       if (!/bed|liv|living/i.test(String(r.name || ''))) continue;
-      const hasWin = entities.some(w => w.kind === 'window' &&
-        w.x >= r.x - 0.3 && w.x <= r.x + r.width + 0.3 &&
-        w.y >= r.y - 0.3 && w.y <= r.y + r.depth + 0.3);
+      const hasWin = entities.some(w => w.kind === 'window' && openingInRoom(w, r, entities));
       if (!hasWin) {
         issues.push(issue('low', 'room.missing_window', [r.id], bboxOf(r),
           { room: r.name },
@@ -20340,8 +20380,9 @@ rule(
   (entities) => {
     const issues = [];
     for (const d of entities.filter(e => e.kind === 'door')) {
+      const dp = openingWorldPoint(d, entities);
       const host = entities.find(w => w.kind === 'wall' &&
-        (w.id === d.wallId || pointNearSegment({ x: d.x, y: d.y }, w, 0.3)));
+        (w.id === d.wallId || (dp && pointNearSegment(dp, w, 0.3))));
       if (!host) {
         issues.push(issue('medium', 'door.host', [d.id], bboxOf(d),
           { door: d.name },
@@ -20360,13 +20401,15 @@ rule(
   (entities) => {
     const issues = [];
     for (const d of entities.filter(e => e.kind === 'door')) {
+      const dp = openingWorldPoint(d, entities);
+      if (!dp) continue; // unhosted doors are flagged by door.host instead
       const swingR = (d.width || 0.9);
-      const cx = (d.x ?? 0) + (d.swing === 'right' ? swingR : 0);
-      const cy = (d.y ?? 0) - swingR;
+      const cx = dp.x + (d.swing === 'right' ? swingR : 0);
+      const cy = dp.y - swingR;
       const blocker = entities.find(o => o !== d && o.kind === 'furniture' &&
         typeof o.x === 'number' &&
         o.x + o.width > cx - swingR && o.x < cx + swingR &&
-        o.y + o.depth > Math.min(d.y ?? 0, cy) && o.y < Math.max(d.y ?? 0, cy));
+        o.y + o.depth > Math.min(dp.y, cy) && o.y < Math.max(dp.y, cy));
       if (blocker) {
         issues.push(issue('medium', 'door.clearance', [d.id, blocker.id], bboxOf(d),
           { door: d.name, blockedBy: blocker.name, swingRadius: +swingR.toFixed(2) },
@@ -20385,8 +20428,9 @@ rule(
   (entities) => {
     const issues = [];
     for (const w of entities.filter(e => e.kind === 'window')) {
+      const wp = openingWorldPoint(w, entities);
       const host = entities.find(wall => wall.kind === 'wall' &&
-        (wall.id === w.wallId || pointNearSegment({ x: w.x, y: w.y }, wall, 0.3)));
+        (wall.id === w.wallId || (wp && pointNearSegment(wp, wall, 0.3))));
       if (!host) {
         issues.push(issue('medium', 'window.host', [w.id], bboxOf(w),
           { window: w.name },
@@ -20587,14 +20631,50 @@ function bboxOf(e) {
 }
 
 function pointNearSegment(p, wall, tol) {
-  const seg = (a, b, c, d) => {
-    const lenSq = (d.y - c.y) ** 2 + (d.x - c.x) ** 2;
-    if (lenSq < 1e-12) return Math.hypot(p.x - c, p.y - c) < tol;
-    let t = ((p.x - c) * (d.x - c) + (p.y - c) * (d.y - c)) / lenSq;
-    t = Math.max(0, Math.min(1, t));
-    return Math.hypot(p.x - (c + t * (d.x - c)), p.y - (c + t * (d.y - c))) < tol;
-  };
-  return seg(0, 0, wall.x1, wall.y1, wall.x2, wall.y2) || seg(0, 0, wall.x1, wall.y1, wall.x2, wall.y2);
+  const x1 = wall.x1 ?? wall.p1?.x, y1 = wall.y1 ?? wall.p1?.y;
+  const x2 = wall.x2 ?? wall.p2?.x, y2 = wall.y2 ?? wall.p2?.y;
+  if (!Number.isFinite(x1) || !Number.isFinite(y1) || !Number.isFinite(x2) || !Number.isFinite(y2)) return false;
+  const dx = x2 - x1, dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 1e-12) return Math.hypot(p.x - x1, p.y - y1) < tol;
+  let t = ((p.x - x1) * dx + (p.y - y1) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (x1 + t * dx), p.y - (y1 + t * dy)) < tol;
+}
+
+/** World position of a hosted opening (door/window). Factory openings carry
+ *  wallId + position along the wall — no x/y. Returns null when unresolvable. */
+function openingWorldPoint(opening, entities) {
+  if (typeof opening.x === 'number' && typeof opening.y === 'number') {
+    return { x: opening.x, y: opening.y };
+  }
+  const wall = entities.find(w => w.kind === 'wall' && w.id === (opening.wallId || opening.hostWallId));
+  if (!wall || !Number.isFinite(wall.x1) || !Number.isFinite(wall.y1)) return null;
+  const dx = wall.x2 - wall.x1;
+  const dy = wall.y2 - wall.y1;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-9) return { x: wall.x1, y: wall.y1 };
+  const t = Math.min(1, Math.max(0, ((opening.position ?? 0) + (opening.width ?? 0) / 2) / len));
+  return { x: wall.x1 + t * dx, y: wall.y1 + t * dy };
+}
+
+/** Rect of a room honoring polygonal boundaries; fallback to width×depth. */
+function roomRectOf(r) {
+  if (Array.isArray(r.boundary) && r.boundary.length >= 3) {
+    const xs = r.boundary.map(p => p.x), ys = r.boundary.map(p => p.y);
+    const x = Math.min(...xs), y = Math.min(...ys);
+    return { x, y, width: Math.max(...xs) - x, depth: Math.max(...ys) - y };
+  }
+  return { x: r.x ?? 0, y: r.y ?? 0, width: r.width ?? 0, depth: r.depth ?? 0 };
+}
+
+/** True when a hosted/positioned opening falls within a room's envelope. */
+function openingInRoom(opening, room, entities, pad = 0.3) {
+  const p = openingWorldPoint(opening, entities);
+  if (!p) return false;
+  const r = roomRectOf(room);
+  return p.x >= r.x - pad && p.x <= r.x + r.width + pad &&
+    p.y >= r.y - pad && p.y <= r.y + r.depth + pad;
 }
 
 function dimensionOnWall(d, wall) {
@@ -20792,9 +20872,11 @@ function createRequirement({ name, type, scope, target, unit = '', tolerance = 1
 // Evaluation — deterministic comparison against the actual model
 // ---------------------------------------------------------------------------
 
-/** Area of a room entity (m²), width×depth based. */
+/** Area of a room entity (m²). Honors polygonal boundaries via the
+ *  canonical factory (entities.roomArea); width×depth is the fallback. */
 function roomAreaOf(room) {
-  return (room.width || 0) * (room.depth || 0);
+  const a = roomArea(room);
+  return Number.isFinite(a) && a > 0 ? a : (room.width || 0) * (room.depth || 0);
 }
 
 /** Sum of all room areas = net internal area. */
@@ -20811,6 +20893,25 @@ function scopeMetric(scope, entities, brief) {
     case 'net_area': return { value: netInternalArea(entities), detail: `${rooms.length} rooms` };
     case 'room_count': return { value: rooms.length, detail: rooms.map(r => r.name).join(', ') };
     case 'floor_count': return { value: brief?.floors ?? null, detail: 'from brief' };
+    case 'room_area': {
+      // Smallest room area: the binding constraint when requiring a minimum
+      // usable area per room; largest when requiring no oversized rooms is a
+      // MAX check the caller composes. Detail exposes per-room areas.
+      const areas = rooms.map(r => roomAreaOf(r));
+      if (areas.length === 0) return { value: null, detail: 'no rooms in model' };
+      return {
+        value: Math.min(...areas),
+        detail: rooms.map(r => `${r.name}: ${roomAreaOf(r).toFixed(1)}m²`).join(', ')
+      };
+    }
+    case 'corridor_width': {
+      const corridors = rooms.filter(r => /corridor|hall/i.test(String(r.name || '')));
+      if (corridors.length === 0) return { value: null, detail: 'no corridor rooms' };
+      return {
+        value: Math.min(...corridors.map(r => Math.min(r.width || 0, r.depth || 0))),
+        detail: `${corridors.length} corridor room(s)`
+      };
+    }
     default:
       if (scope.startsWith('custom.')) return { value: null, detail: scope };
       return null;
@@ -21120,7 +21221,7 @@ function serializeSelection(entities = [], selectedIds = null) {
         packet.angleDegrees = round((Math.atan2(e.y2 - e.y1, e.x2 - e.x1) * 180) / Math.PI);
         packet.p1 = { x: round(e.x1), y: round(e.y1) };
         packet.p2 = { x: round(e.x2), y: round(e.y2) };
-        packet.openings = (typeof wallOpenings === 'function' ? wallOpenings(entities, e) : []).map(o => ({
+        packet.openings = (typeof wallOpenings === 'function' ? wallOpenings(e, entities) : []).map(o => ({
           id: o.id, kind: o.kind, name: o.name, width: o.width
         }));
         packet.dimensions = entities
@@ -21151,7 +21252,7 @@ function serializeSelection(entities = [], selectedIds = null) {
           d.y >= e.y - 0.3 && d.y <= e.y + e.depth + 0.3
         ).map(d => ({ id: d.id, name: d.name, width: round(d.width) }));
         packet.dimensions = entities.filter(d => d.kind === 'dimension' &&
-          Math.abs(dimensionValue(d) - e.width) < 0.02 || Math.abs(dimensionValue(d) - e.depth) < 0.02
+          (Math.abs(dimensionValue(d) - e.width) < 0.02 || Math.abs(dimensionValue(d) - e.depth) < 0.02)
         ).map(d => ({ id: d.id, value: round(dimensionValue(d)) }));
         break;
       }
@@ -21904,19 +22005,23 @@ function computeMeasurement(p1, p2) {
  */
 function duplicateEntity(entity, offset = 0.5) {
   if (!entity || typeof entity !== 'object') return null;
+  // Hostile offset contract: only finite numbers may shift geometry — a
+  // non-numeric offset would stringify coords into NaN-corrupting data.
+  const dx = Number.isFinite(offset) ? offset : (Number.isFinite(offset?.x) ? offset.x : 0);
+  const dy = Number.isFinite(offset) ? offset : (Number.isFinite(offset?.y) ? offset.y : 0);
   const clone = JSON.parse(JSON.stringify(entity));
   clone.id = generateEntityId(clone.kind || 'item');
   clone.name = clone.name ? `${clone.name} (Copy)` : 'Copy';
   clone.locked = false;
 
   if (clone.kind === 'wall' && typeof clone.x1 === 'number') {
-    clone.x1 += offset;
-    clone.x2 += offset;
-    clone.y1 += offset;
-    clone.y2 += offset;
+    clone.x1 += dx;
+    clone.x2 += dx;
+    clone.y1 += dy;
+    clone.y2 += dy;
   } else if (typeof clone.x === 'number') {
-    clone.x += offset;
-    clone.y += offset;
+    clone.x += dx;
+    clone.y += dy;
   }
   return clone;
 }
@@ -37673,18 +37778,19 @@ function renderStudioCPanels(container, options = {}) {
             </div>
           </div>
           <div class="cpanel-code-checklist">
-            <div class="checklist-item pass">
-              <span class="check-icon">✅</span>
-              <span class="check-text">IBC Headroom Clearance (≥ 2.0m)</span>
-            </div>
-            <div class="checklist-item pass">
-              <span class="check-icon">✅</span>
-              <span class="check-text">Egress Corridor Width (≥ 1.10m)</span>
-            </div>
-            <div class="checklist-item pass">
-              <span class="check-icon">✅</span>
-              <span class="check-text">Stair Blondel 2R+T Compliance</span>
-            </div>
+            ${(options.codeChecks && options.codeChecks.length ? options.codeChecks : [
+              { label: 'IBC Headroom Clearance (≥ 2.0m)', status: 'unknown', detail: 'No stairs/ramps in this document' },
+              { label: 'Egress Corridor Width (≥ 1.10m)', status: 'unknown', detail: 'No corridor rooms named' },
+              { label: 'Stair Blondel 2R+T Compliance', status: 'unknown', detail: 'No stairs in this document' }
+            ]).map(check => {
+              const cls = check.status === 'pass' ? 'pass' : check.status === 'fail' ? 'fail' : 'unknown';
+              const icon = check.status === 'pass' ? '✅' : check.status === 'fail' ? '❌' : '—';
+              return `
+            <div class="checklist-item ${cls}" title="${check.detail || ''}">
+              <span class="check-icon">${icon}</span>
+              <span class="check-text">${check.label}${check.detail ? ` <small style="color: var(--text-muted);">· ${check.detail}</small>` : ''}</span>
+            </div>`;
+            }).join('')}
           </div>
         </div>
 
@@ -38084,19 +38190,67 @@ function updateCoords(container, coords) {
 
 /**
  * Architecture Helping Hand - Omnipresent Top AI Dropdown Assistant Component
- * Provides a slide-down AI drawer accessible from anywhere in the app without leaving the canvas.
+ * Provides a slide-down AI drawer accessible from anywhere in the app without
+ * leaving the canvas.
+ *
+ * Honesty contract (AI_ARCHITECTURE): this drawer is a thin client of the
+ * real AI job router. It never fabricates answers. Without a configured
+ * provider/key it shows AI UNAVAILABLE and lists what still works. Model
+ * answers are rendered verbatim with a provider label; any canvas mutations
+ * happen only through the deterministic action pipeline applied by the user.
  */
 
 
+
+const CHAT_JOB_ID = 'generalAssistant';
 
 function initAiDropdownDrawer(container, state, options = {}) {
   if (!container) return;
 
   let isOpen = false;
   let chatHistory = [];
+  let busy = false;
+
+  function router() {
+    return state?.ai?.router || null;
+  }
+
+  /** Honest provider readiness: a job is usable only when the router says so. */
+  function chatJobStatus() {
+    const r = router();
+    if (!r || typeof r.listJobStatuses !== 'function') return null;
+    try {
+      return r.listJobStatuses().find(s => s.jobId === CHAT_JOB_ID) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function aiUnavailableCard(status) {
+    const reason = status
+      ? (status.status === 'NO KEY'
+          ? 'No API key is configured for the assigned provider.'
+          : `The assigned model is not ready (${status.status}).`)
+      : 'No AI provider is configured.';
+    return `
+      <div class="ai-welcome-card" data-ai-unavailable="true">
+        <span class="welcome-icon">🔒</span>
+        <h4>AI UNAVAILABLE</h4>
+        <p>${escapeAiHtml(reason)}</p>
+        <p style="font-size: 0.72rem; color: var(--text-muted);">Configure a provider in the AI Control Center. The app works fully without AI:</p>
+        <ul style="font-size: 0.72rem; color: var(--text-muted); text-align: left; margin: 0.3rem 0 0 1rem;">
+          <li>Drawing &amp; geometry tools</li>
+          <li>Measurements &amp; calculations</li>
+          <li>Issues (QA) &amp; requirements</li>
+          <li>Exports &amp; project management</li>
+        </ul>
+      </div>`;
+  }
 
   function renderDrawer() {
     const ctx = serializeDrawingContext(state);
+    const status = chatJobStatus();
+    const aiReady = status && status.status === 'READY';
 
     let html = `
       <div class="app-ai-drawer ${isOpen ? 'open' : ''}" id="app-ai-drawer" role="dialog" aria-label="Omnipresent AI Assistant">
@@ -38107,50 +38261,53 @@ function initAiDropdownDrawer(container, state, options = {}) {
             <div class="ai-header-left">
               <span class="ai-sparkle-icon">✨</span>
               <span class="ai-title">Architectural AI Co-Pilot</span>
-              <span class="ai-context-pill" title="Live context passed to AI">
+              <span class="ai-context-pill" title="Live context passed to the configured AI provider">
                 📍 ${ctx.documentName} · ${ctx.entityCount} entities · Mode: ${ctx.persona.toUpperCase()}
               </span>
             </div>
             <div class="ai-header-right">
+              <span class="ai-context-pill" title="Provider routing status for this drawer" style="${aiReady ? 'color: #4ade80;' : 'color: #f59e0b;'}">
+                ${aiReady ? `AI READY · ${escapeAiHtml(String(status.providerId || ''))}` : 'AI UNAVAILABLE'}
+              </span>
               <button type="button" class="btn-drawer-close" id="btn-ai-drawer-close" title="Close AI Assistant (Esc)">✕</button>
             </div>
           </div>
 
           <!-- Quick Context Prompt Chips -->
           <div class="ai-prompt-chips-row">
-            <button type="button" class="ai-chip-btn" data-prompt="Check IBC stair compliance and egress geometry for this floor plan.">
-              📐 Verify Code & Stairs
+            <button type="button" class="ai-chip-btn" data-prompt="Check IBC stair compliance and egress geometry for this floor plan." ${aiReady ? '' : 'disabled'}>
+              📐 Verify Code &amp; Stairs
             </button>
-            <button type="button" class="ai-chip-btn" data-prompt="Generate a 3-bedroom residential apartment layout with a central hallway.">
-              🏢 Generate 3-Bed Layout
+            <button type="button" class="ai-chip-btn" data-prompt="Review this plan's room proportions and circulation." ${aiReady ? '' : 'disabled'}>
+              🏢 Review Layout
             </button>
-            <button type="button" class="ai-chip-btn" data-prompt="Auto-dimension all exterior perimeter walls.">
-              📏 Dimension Walls
+            <button type="button" class="ai-chip-btn" data-prompt="What should I dimension next on this drawing?" ${aiReady ? '' : 'disabled'}>
+              📏 Dimension Advice
             </button>
-            <button type="button" class="ai-chip-btn" data-prompt="Suggest appropriate exterior wall and roof parapet construction details.">
-              🧱 Suggest Construction Details
+            <button type="button" class="ai-chip-btn" data-prompt="Suggest appropriate exterior wall and roof parapet construction details." ${aiReady ? '' : 'disabled'}>
+              🧱 Construction Details
             </button>
-            <button type="button" class="ai-chip-btn" data-prompt="Calculate net usable area vs gross footprint and spatial efficiency ratio.">
-              📊 Area Efficiency Ratio
+            <button type="button" class="ai-chip-btn" data-prompt="Calculate net usable area vs gross footprint and spatial efficiency ratio." ${aiReady ? '' : 'disabled'}>
+              📊 Area Efficiency
             </button>
           </div>
 
           <!-- Conversation & Results Stream -->
           <div class="ai-conversation-stream" id="ai-conversation-stream">
-            ${chatHistory.length === 0 ? `
+            ${chatHistory.length === 0 ? (aiReady ? `
               <div class="ai-welcome-card">
                 <span class="welcome-icon">🏛️</span>
                 <h4>How can I help with your design?</h4>
-                <p>Ask anything about floor plans, dimensions, code requirements, stairs, structural grids, or construction details. I can generate layouts and apply them directly to your viewport!</p>
+                <p>Ask anything about floor plans, dimensions, code requirements, stairs, structural grids, or construction details. Answers cite the live project facts.</p>
               </div>
-            ` : ''}
+            ` : aiUnavailableCard(status)) : ''}
             ${chatHistory.map(item => `
               <div class="ai-message-bubble ${item.role}">
-                <div class="message-sender">${item.role === 'user' ? 'You' : 'AI Architect'}</div>
+                <div class="message-sender">${item.role === 'user' ? 'You' : `AI · ${escapeAiHtml(item.sourceLabel || 'model')}`}</div>
                 <div class="message-body">${item.htmlContent}</div>
                 ${item.actions && item.actions.length > 0 ? `
                   <div class="ai-action-card">
-                    <span class="action-summary">✨ Generated ${item.actions.length} architectural items:</span>
+                    <span class="action-summary">✨ Model proposed ${item.actions.length} action(s):</span>
                     <button type="button" class="btn btn-sm btn-primary ai-apply-btn" data-action-idx="${item.id}">
                       ➕ Apply to Viewport
                     </button>
@@ -38162,8 +38319,10 @@ function initAiDropdownDrawer(container, state, options = {}) {
 
           <!-- Input Bar -->
           <div class="ai-drawer-input-strip">
-            <input type="text" id="ai-drawer-prompt-input" class="ai-drawer-input" placeholder="Ask AI anything about your drawing or design (e.g. 'Add a 5x4m master bedroom and ensuite')..." autocomplete="off" />
-            <button type="button" id="btn-ai-drawer-send" class="btn btn-primary ai-send-btn">Send</button>
+            <input type="text" id="ai-drawer-prompt-input" class="ai-drawer-input"
+              placeholder="${aiReady ? 'Ask AI about your drawing or design…' : 'AI unavailable — configure a provider in the AI Control Center'}"
+              autocomplete="off" ${aiReady ? '' : 'disabled'} />
+            <button type="button" id="btn-ai-drawer-send" class="btn btn-primary ai-send-btn" ${aiReady && !busy ? '' : 'disabled'}>${busy ? '…' : 'Send'}</button>
           </div>
         </div>
       </div>
@@ -38194,10 +38353,9 @@ function initAiDropdownDrawer(container, state, options = {}) {
 
     container.querySelectorAll('.ai-chip-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        if (input) {
-          input.value = btn.dataset.prompt;
-          handleSend();
-        }
+        if (btn.disabled || !input) return;
+        input.value = btn.dataset.prompt;
+        handleSend();
       });
     });
 
@@ -38222,40 +38380,89 @@ function initAiDropdownDrawer(container, state, options = {}) {
 
   async function handleSend() {
     const input = container.querySelector('#ai-drawer-prompt-input');
-    if (!input) return;
+    if (!input || busy) return;
     const prompt = input.value.trim();
     if (!prompt) return;
-    input.value = '';
 
-    const msgId = 'msg-' + Date.now();
-    chatHistory.push({
-      id: msgId,
-      role: 'user',
-      htmlContent: escapeAiHtml(prompt)
-    });
-    renderDrawer();
-
-    const stream = container.querySelector('#ai-conversation-stream');
-    if (stream) stream.scrollTop = stream.scrollHeight;
-
-    // Simulate / invoke architectural AI response
-    const ctx = serializeDrawingContext(state);
-    const enrichedPrompt = buildArchitecturalPrompt(prompt, ctx);
-
-    // Architectural heuristic solver
-    const responseData = generateArchitecturalAiResponse(prompt, ctx);
-
-    setTimeout(() => {
+    const r = router();
+    const status = chatJobStatus();
+    if (!r || !status || status.status !== 'READY') {
+      // Never fabricate: show the honest state instead.
+      chatHistory.push({
+        id: 'msg-' + Date.now(),
+        role: 'user',
+        htmlContent: escapeAiHtml(prompt)
+      });
       chatHistory.push({
         id: 'resp-' + Date.now(),
         role: 'assistant',
-        htmlContent: responseData.html,
-        actions: responseData.actions
+        sourceLabel: 'system',
+        htmlContent: `<p><strong>AI UNAVAILABLE</strong></p><p>${escapeAiHtml(status ? (status.status === 'NO KEY' ? 'No API key configured for the assigned provider.' : `Assigned model not ready (${status.status}).`) : 'No AI provider is configured.')}</p><p>Open the AI Control Center to configure a provider. All drawing, measurement, QA, and export tools work without AI.</p>`
       });
       renderDrawer();
-      const stream2 = container.querySelector('#ai-conversation-stream');
-      if (stream2) stream2.scrollTop = stream2.scrollHeight;
-    }, 400);
+      return;
+    }
+
+    input.value = '';
+    chatHistory.push({
+      id: 'msg-' + Date.now(),
+      role: 'user',
+      htmlContent: escapeAiHtml(prompt)
+    });
+    busy = true;
+    chatHistory.push({ id: 'pending', role: 'assistant', sourceLabel: 'waiting', htmlContent: '<p><em>Asking the model…</em></p>' });
+    renderDrawer();
+    const stream = container.querySelector('#ai-conversation-stream');
+    if (stream) stream.scrollTop = stream.scrollHeight;
+
+    // Real call through the job router — the same path the AI Studio uses.
+    // The router builds its own scoped facts pack; the enriched prompt is
+    // kept only for logging/debug parity with the legacy path.
+    const ctx = serializeDrawingContext(state);
+    const enrichedPrompt = buildArchitecturalPrompt(prompt, ctx);
+    if (enrichedPrompt && typeof options.onEnrichedPrompt === 'function') {
+      options.onEnrichedPrompt(enrichedPrompt);
+    }
+
+    let result;
+    try {
+      result = await r.runAIJob(CHAT_JOB_ID, {
+        userMessage: prompt,
+        scopeHint: prompt
+      });
+    } catch (e) {
+      result = { ok: false, message: e?.message || 'The AI request failed.' };
+    }
+
+    chatHistory = chatHistory.filter(h => h.id !== 'pending');
+    const sourceLabel = result.ok
+      ? `${result.providerId || status.providerId} · ${result.modelId || status.modelId}`
+      : 'system';
+
+    if (result.ok) {
+      // Deterministic action pipeline: parse structured proposals (if any)
+      // and offer them for user-approved apply. Never auto-mutate.
+      const actions = parseAiActions(result.text || '');
+      chatHistory.push({
+        id: 'resp-' + Date.now(),
+        role: 'assistant',
+        sourceLabel,
+        htmlContent: `<p>${escapeAiHtml(String(result.text || '')).replace(/\n/g, '<br>')}</p>`,
+        actions
+      });
+    } else {
+      chatHistory.push({
+        id: 'resp-' + Date.now(),
+        role: 'assistant',
+        sourceLabel,
+        htmlContent: `<p><strong>AI request failed:</strong> ${escapeAiHtml(result.message || 'Unknown error.')}</p><p>The app continues to work fully without AI.</p>`
+      });
+    }
+
+    busy = false;
+    renderDrawer();
+    const stream2 = container.querySelector('#ai-conversation-stream');
+    if (stream2) stream2.scrollTop = stream2.scrollHeight;
   }
 
   function toggle(show) {
@@ -38286,7 +38493,11 @@ function initAiDropdownDrawer(container, state, options = {}) {
     toggle,
     open: () => toggle(true),
     close: () => toggle(false),
-    isOpen: () => isOpen
+    isOpen: () => isOpen,
+    isProviderReady: () => {
+      const s = chatJobStatus();
+      return !!(s && s.status === 'READY');
+    }
   };
 }
 
@@ -38295,47 +38506,6 @@ function escapeAiHtml(str) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
-}
-
-/** Built-in architectural heuristic responder generating layout actions */
-function generateArchitecturalAiResponse(prompt, ctx) {
-  const p = prompt.toLowerCase();
-  const actions = [];
-  let html = '';
-
-  if (p.includes('3-bed') || p.includes('layout') || p.includes('apartment')) {
-    actions.push(
-      { type: 'add_room', name: 'Living & Dining', x1: 2, y1: 2, x2: 8, y2: 6 },
-      { type: 'add_room', name: 'Master Bedroom', x1: 8, y1: 2, x2: 12, y2: 6 },
-      { type: 'add_room', name: 'Bedroom 2', x1: 2, y1: 6, x2: 6, y2: 10 },
-      { type: 'add_room', name: 'Bedroom 3', x1: 6, y1: 6, x2: 10, y2: 10 },
-      { type: 'add_stair', name: 'Main Egress Stair', x: 10.5, y: 6, width: 1.10, run: 3.60, rise: 2.80, risers: 16 }
-    );
-    html = `<p><strong>Architectural Layout Generated:</strong> Created a high-efficiency 3-bedroom residential suite with open-plan living/dining area, private master wing, and IBC-compliant egress stair.</p>
-    <ul>
-      <li>Living &amp; Dining: 24.0 m²</li>
-      <li>Master Bedroom: 16.0 m²</li>
-      <li>Secondary Bedrooms: 16.0 m² each</li>
-      <li>Egress Stair: 16R @ 175mm riser, 280mm tread (IBC compliant)</li>
-    </ul>`;
-  } else if (p.includes('stair') || p.includes('code') || p.includes('ibc')) {
-    html = `<p><strong>IBC / Building Code Verification:</strong></p>
-    <ul>
-      <li>✅ <strong>Headroom:</strong> Verified min 2.00m (80") continuous clearance along the walkline.</li>
-      <li>✅ <strong>Blondel Formula:</strong> $2R + T \\approx 630\\text{mm}$ (optimal range $600 - 640\\text{mm}$).</li>
-      <li>✅ <strong>Egress Width:</strong> Standard residential flight width 1.10m meets IBC 1011.2 threshold (min 36" / 44" for occupant load &gt; 50).</li>
-    </ul>`;
-  } else if (p.includes('detail') || p.includes('parapet') || p.includes('footing')) {
-    actions.push(
-      { type: 'add_detail', name: 'Roof Parapet Detail', detailKey: 'parapet', detailNum: '1', sheetRef: 'A-501', x: 6, y: 2 },
-      { type: 'add_detail', name: 'Foundation Footing Detail', detailKey: 'footing', detailNum: '2', sheetRef: 'A-501', x: 2, y: 6 }
-    );
-    html = `<p><strong>Construction Details Recommended:</strong> Added standard 1:10 scale technical assemblies with waterproof membranes, continuous insulation, and keynote annotations.</p>`;
-  } else {
-    html = `<p>Analyzed current ${ctx.persona.toUpperCase()} viewport with ${ctx.entityCount} entities. How would you like to develop this design further?</p>`;
-  }
-
-  return { html, actions };
 }
 
 
@@ -39424,7 +39594,7 @@ function createPlanView(context) {
     }
     const original = entities().find(x => x.id === selectedId);
     if (!original) return;
-    const clone = duplicateEntity(original, { x: 0.5, y: 0.5 });
+    const clone = duplicateEntity(original, 0.5);
     const cmd = entityAddRemoveCommand(entities(), clone, `duplicate ${original.name || original.kind}`);
     cmd.redo();
     history.push(cmd);
@@ -39530,16 +39700,26 @@ function createPlanView(context) {
       return;
     }
     if (toolId === 'view_perspective' || toolId === 'massing' || toolId === 'box' || toolId === 'extrude' || toolId === 'loft') {
-      const mDoc = state.plan.documents && state.plan.documents.find(d => d.type === '3d_massing');
-      if (mDoc) switchDocument(mDoc.id);
-      else createDocument('3D Massing Preview', '3d_massing');
+      let mDoc = state.plan.documents && state.plan.documents.find(d => d.type === '3d_massing');
+      if (!mDoc) {
+        createDocument('3D Massing Preview', '3d_massing');
+        mDoc = state.plan.documents.find(d => d.type === '3d_massing');
+      } else {
+        switchDocument(mDoc.id);
+      }
+      // The PERSPECTIVE entry point genuinely enables the perspective camera.
+      if (mDoc && mDoc.camera) {
+        mDoc.camera.perspective = true;
+        mDoc.camera.elevation = 25; // eye-level-ish vantage for perspective
+        showToast('Perspective camera enabled — drag to orbit');
+      }
       return;
     }
     if (toolId === 'view_4split' || toolId === '4view') {
       const splitDoc = state.plan.documents && state.plan.documents.find(d => d.type === 'view_4split' || d.type === '4view');
       if (splitDoc) switchDocument(splitDoc.id);
       else createDocument('4-Viewport Split', 'view_4split');
-      showToast('Switched to Rhino 4-Viewport Split (Top, Perspective, Front, Right)');
+      showToast('Switched to Rhino 4-Viewport Split (Top, Axonometric, Front, Right)');
       return;
     }
     if (toolId === 'pushpull') {
@@ -39666,12 +39846,40 @@ function createPlanView(context) {
     const rooms = es.filter(e => e.kind === 'room');
     const totalArea = rooms.reduce((sum, r) => sum + (typeof r.width === 'number' && typeof r.depth === 'number' ? roomArea(r) : 0), 0);
 
+    // Deterministic code checklist — computed from this document's entities,
+    // never hard-coded pass badges. Ramps need ≤ 1:12 headroom-safe slopes;
+    // corridors are rooms named "corridor"; stairs are Blondel-checked.
+    const stairs = es.filter(e => e.kind === 'stair');
+    const ramps = es.filter(e => e.kind === 'ramp');
+    const corridors = rooms.filter(r => /corridor/i.test(String(r.name || '')));
+    const codeChecks = [
+      ramps.length > 0
+        ? (() => {
+            const steepest = Math.max(...ramps.map(r => r.slopePercent || 0));
+            return { label: 'Ramp Slope (≤ 8.33%)', status: steepest <= 8.33 ? 'pass' : 'fail', detail: `steepest ${steepest.toFixed(1)}%` };
+          })()
+        : { label: 'Ramp Slope (≤ 8.33%)', status: 'unknown', detail: 'no ramps' },
+      corridors.length > 0
+        ? (() => {
+            const narrowest = Math.min(...corridors.map(r => Math.min(r.width || 0, r.depth || 0)));
+            return { label: 'Egress Corridor Width (≥ 1.10m)', status: narrowest >= 1.10 ? 'pass' : 'fail', detail: `narrowest ${narrowest.toFixed(2)}m` };
+          })()
+        : { label: 'Egress Corridor Width (≥ 1.10m)', status: 'unknown', detail: 'no corridor rooms' },
+      stairs.length > 0
+        ? (() => {
+            const worst = stairs.find(s => s.blondel < 0.59 || s.blondel > 0.66 || (s.riserHeight || 0) > 0.1955);
+            return { label: 'Stair Blondel 2R+T Compliance', status: worst ? 'fail' : 'pass', detail: worst ? `${(worst.blondel * 1000).toFixed(0)}mm · R${((worst.riserHeight || 0) * 1000).toFixed(0)}` : `${stairs.length} stair(s) in band` };
+          })()
+        : { label: 'Stair Blondel 2R+T Compliance', status: 'unknown', detail: 'no stairs' }
+    ];
+
     renderStudioCPanels(cpanelsHost, {
       activePanelTab: state.activeCPanelTab || 'properties',
       activeToolId: state.plan.tool || 'select',
       selectedEntity: selected,
       entityCount: es.length,
       layerCount: normalizeDocumentLayers(doc).length,
+      codeChecks,
       onSelectPanelTab: (tabId) => {
         state.activeCPanelTab = tabId;
         updateStudioCPanels();
@@ -39816,7 +40024,7 @@ function createPlanView(context) {
         coords: currentMouseWorld,
         grid: state.plan.grid || 0.5,
         snap: state.plan.snap !== false,
-        ortho: state.plan.ortho !== false,
+        ortho: state.plan.ortho === true,
         session: cadSession,
         getCurrentPoint: () => currentMouseWorld,
         snapPoint: (p) => ({ x: snapToGrid(p.x, state.plan.grid), y: snapToGrid(p.y, state.plan.grid) }),
@@ -39834,7 +40042,7 @@ function createPlanView(context) {
           toggleSnap();
         },
         onToggleOrtho: () => {
-          state.plan.ortho = state.plan.ortho === false ? true : false;
+          state.plan.ortho = state.plan.ortho !== true;
           showToast(`Ortho Mode: ${state.plan.ortho ? 'ON' : 'OFF'}`);
           renderStudioComponents();
         }
@@ -39852,7 +40060,7 @@ function createPlanView(context) {
 
     if (!sel || selCount === 0) {
       if (polyLineVertices.length > 0) {
-        toolbar.innerHTML = `
+        bar.innerHTML = `
           <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
             <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
               <span class="context-tag-badge" style="background: rgba(56, 189, 248, 0.18); color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);">POLYLINE</span>
@@ -39864,8 +40072,8 @@ function createPlanView(context) {
               <button type="button" class="result-action-btn" id="ctx-cancel-polyline" style="font-size: 0.68rem; padding: 2px 8px;">✕ Cancel</button>
             </div>
           </div>`;
-        toolbar.querySelector('#ctx-finish-polyline')?.addEventListener('click', finishPolyline);
-        toolbar.querySelector('#ctx-cancel-polyline')?.addEventListener('click', cancelPolyline);
+        bar.querySelector('#ctx-finish-polyline')?.addEventListener('click', finishPolyline);
+        bar.querySelector('#ctx-cancel-polyline')?.addEventListener('click', cancelPolyline);
         return;
       }
       if (polyRoomVertices.length > 0) {
@@ -40579,6 +40787,7 @@ function createPlanView(context) {
             ${presetsMarkup}
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" id="btn-3d-projection" class="result-action-btn ${doc.camera.perspective === true ? 'primary' : ''}" style="font-size: 0.68rem; padding: 2px 6px;" title="Toggle perspective / orthographic projection">${doc.camera.perspective === true ? 'Perspective' : 'Ortho'}</button>
             <button type="button" id="btn-3d-multistory" class="result-action-btn ${doc.massingOptions.multiStory ? 'primary' : ''}" style="font-size: 0.68rem; padding: 2px 6px;" title="Toggle multi-story building stacking">${multiStoryLabel}</button>
             <button type="button" id="btn-3d-wireframe" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">${doc.massingOptions.wireframe ? 'Shaded' : 'Wireframe'}</button>
             <button type="button" id="btn-3d-height" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">H: ${(doc.massingOptions.wallHeight || 3.0).toFixed(1)}m</button>
@@ -40598,6 +40807,15 @@ function createPlanView(context) {
             AudioService.playTick();
           }
         });
+      });
+
+      ctxBar.querySelector('#btn-3d-projection')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        doc.camera.perspective = doc.camera.perspective !== true;
+        if (doc.camera.perspective && (doc.camera.elevation ?? 0) > 60) doc.camera.elevation = 25;
+        render();
+        AudioService.playTick();
+        showToast(doc.camera.perspective ? 'Perspective projection ON' : 'Orthographic projection');
       });
 
       ctxBar.querySelector('#btn-3d-multistory')?.addEventListener('click', (e) => {
@@ -41052,7 +41270,7 @@ function createPlanView(context) {
       }
     }
 
-    // 2. Perspective View (3D Massing)
+    // 2. Axonometric View (3D Massing) — orthographic axon projection
     const camera = { azimuth: 45, elevation: 35.264, zoom: 18, panX: halfW + halfW / 2, panY: halfH / 2 + 15 };
     const massingFaces = buildMassing3DModel(planEntities, { wallHeight: 3.0 });
     const sortedFaces = projectAndSortFaces(massingFaces, camera);
@@ -41093,14 +41311,14 @@ function createPlanView(context) {
         </g>
       </g>
 
-      <!-- Quadrant 2: Perspective View -->
+      <!-- Quadrant 2: Axonometric View -->
       <g class="quadrant-perspective">
         <g class="massing-faces">
           ${facesMarkup}
         </g>
         <g class="quadrant-pill" data-quadrant="perspective" cursor="pointer">
           <rect x="${halfW + 12}" y="12" width="145" height="24" rx="4" fill="rgba(11, 17, 32, 0.9)" stroke="#057a55" stroke-width="1.2" />
-          <text x="${halfW + 22}" y="28" fill="#38bdf8" font-size="11" font-weight="bold" font-family="var(--font-mono)">PERSPECTIVE</text>
+          <text x="${halfW + 22}" y="28" fill="#38bdf8" font-size="11" font-weight="bold" font-family="var(--font-mono)">AXONOMETRIC</text>
         </g>
       </g>
 
@@ -41141,7 +41359,7 @@ function createPlanView(context) {
             <span class="context-tag-badge" style="background: rgba(5, 122, 85, 0.2); color: #10b981; border-color: #057a55;">RHINO 4-VIEWPORT SPLIT</span>
             <span style="font-size: 0.72rem; color: var(--text-muted);">Click header or button to maximize:</span>
             <button type="button" class="result-action-btn" id="btn-4v-top" style="font-size: 0.68rem; padding: 2px 6px;">🔲 Maximize Top</button>
-            <button type="button" class="result-action-btn" id="btn-4v-persp" style="font-size: 0.68rem; padding: 2px 6px;">🔲 Maximize Perspective</button>
+            <button type="button" class="result-action-btn" id="btn-4v-persp" style="font-size: 0.68rem; padding: 2px 6px;">🔲 Maximize Axonometric</button>
             <button type="button" class="result-action-btn" id="btn-4v-front" style="font-size: 0.68rem; padding: 2px 6px;">🔲 Maximize Front</button>
             <button type="button" class="result-action-btn" id="btn-4v-right" style="font-size: 0.68rem; padding: 2px 6px;">🔲 Maximize Right</button>
           </div>
@@ -44190,7 +44408,7 @@ function createPlanView(context) {
           } else {
             createDocument('3D Massing Preview', '3d_massing');
           }
-          showToast(`Extruded "${room.name}" to 3D Massing (3.0m height)!`, 'success');
+          showToast(`Opened 3D Massing — "${room.name}" extrudes at the wall height (H button to change)`);
           AudioService.playTick();
           return;
         }
@@ -44230,7 +44448,12 @@ function createPlanView(context) {
     } else if (tool === 'polyroom') {
       let targetPt = initialPt;
       if (snapOn) {
-        const snapRes = findSnapPoint(world, visible, { threshold: 0.35, snapGrid: true, gridSize: state.plan.grid });
+        const snapRes = findSnapPoint(world, visible, {
+          snapDistance: 0.25,
+          snapGrid: true,
+          gridMeters: state.plan.grid,
+          osnaps: state.plan.osnaps || {}
+        });
         if (snapRes.snapped) {
           targetPt = { x: snapRes.x, y: snapRes.y };
         }
@@ -44342,6 +44565,15 @@ function createPlanView(context) {
 
     const snapped = { x: snapToGrid(world.x, state.plan.grid), y: snapToGrid(world.y, state.plan.grid) };
 
+    // Ortho mode: constrain drafting/move points to horizontal/vertical
+    // from the gesture's reference point (classic CAD F8 behavior).
+    const applyOrtho = (pt, ref) => {
+      if (state.plan.ortho !== true || !ref) return pt;
+      return Math.abs(pt.x - ref.x) >= Math.abs(pt.y - ref.y)
+        ? { x: pt.x, y: ref.y }
+        : { x: ref.x, y: pt.y };
+    };
+
     if (dragState.mode === 'resize' && dragState.entity) {
       const e = dragState.entity;
       const init = dragState.initial;
@@ -44431,6 +44663,14 @@ function createPlanView(context) {
       } else {
         activeSnap = null;
       }
+      // Ortho constrains object snaps too: the drafted segment stays H/V.
+      const draftingTool = dragState.tool === 'wall' || dragState.tool === 'line' ||
+        dragState.tool === 'dimension' || dragState.tool === 'measure' ||
+        dragState.tool === 'grid' || dragState.tool === 'section_cut' || dragState.tool === 'detail_callout';
+      if (draftingTool) {
+        targetPt = applyOrtho(targetPt, dragState.start);
+        activeSnap = null; // ortho overrides free snaps on the constrained axis
+      }
       dragState.current = targetPt;
 
       if (dragState.tool === 'measure') {
@@ -44454,8 +44694,9 @@ function createPlanView(context) {
       }
       scheduleSceneRender();
     } else if (dragState.mode === 'move' && dragState.entity) {
-      const dx = snapped.x - dragState.last.x;
-      const dy = snapped.y - dragState.last.y;
+      const orthoPt = applyOrtho(snapped, dragState.last);
+      const dx = orthoPt.x - dragState.last.x;
+      const dy = orthoPt.y - dragState.last.y;
       if (dx !== 0 || dy !== 0) {
         if (dragState.entity.kind === 'wall' || dragState.entity.kind === 'dimension') {
           dragState.entity.x1 += dx;
@@ -44498,7 +44739,7 @@ function createPlanView(context) {
             );
           }
         }
-        dragState.last = snapped;
+        dragState.last = orthoPt;
         scheduleSceneRender();
       }
     }
@@ -44717,7 +44958,7 @@ function createPlanView(context) {
         AudioService.playTick();
       } else if (dragState.tool === 'measure') {
         const m = computeMeasurement(start, end);
-        showToast(`Measured: ${m.formatted}`);
+        showToast(`Measured: ${m.formattedM} (${m.formattedAngle})`);
         AudioService.playTick();
       }
     } else if (dragState.mode === 'move' && dragState.entity) {
@@ -44862,11 +45103,18 @@ function createPlanView(context) {
     try {
       const proj = projectStore?.getProject();
       if (proj) {
-        if (!Array.isArray(proj.scratchpad)) proj.scratchpad = [];
-        proj.scratchpad.unshift(cleanItem);
-        projectStore.updateProject(proj.id, { scratchpad: proj.scratchpad });
+        const res = projectStore.updateProject(draft => {
+          if (!Array.isArray(draft.scratchpad)) draft.scratchpad = [];
+          draft.scratchpad.unshift(cleanItem);
+          return draft;
+        });
+        if (res && res.ok === false) {
+          showToast('Scratchpad: project save failed — kept in this session only', 'warning');
+        }
       }
-    } catch (e) {}
+    } catch (e) {
+      showToast('Scratchpad: project save failed — kept in this session only', 'warning');
+    }
     showToast(`📋 Saved to Scratchpad: "${cleanItem.label}" (${cleanItem.formatted})`);
     AudioService.playTick();
     return cleanItem;
@@ -45340,6 +45588,13 @@ function createPlanView(context) {
         render();
         return;
       }
+      if (event.key === 'F8') {
+        event.preventDefault();
+        state.plan.ortho = state.plan.ortho !== true;
+        showToast(`Ortho Mode: ${state.plan.ortho ? 'ON' : 'OFF'}`);
+        renderStudioComponents();
+        return;
+      }
       if (ShortcutsManager.matchesEvent('plan_zoom_fit', event)) {
         event.preventDefault();
         fitToContent();
@@ -45590,6 +45845,13 @@ function createPlanView(context) {
         finishPolyRoom, cancelPolyRoom, renderTabs,
         renderLayerList, setupSidebarTabs, renderScheduleList,
         renderStudioComponents, updateStudioCPanels, handleStudioToolAction,
+        addEntity(entity, label) {
+          if (!entity || typeof entity !== 'object' || !entity.kind) {
+            return { ok: false, error: 'addEntity requires an entity with a kind.' };
+          }
+          commitEntity(entity, label || `add ${entity.kind}`);
+          return { ok: true, id: entity.id };
+        },
         setPersona: (p) => {
           state.activePersona = p;
           const config = PERSONA_RIBBON_CONFIGS[p];
@@ -47777,6 +48039,7 @@ function initializeApp() {
         tool: 'select',
         grid: 0.5,
         snap: true,
+        ortho: false,
         selectedIds: new Set(),
         furnitureIndex: 0,
         furnitureRotated: false,
@@ -50556,20 +50819,18 @@ function initializeApp() {
                 clearance: piece.clearance || 0,
                 category: piece.category
               });
-              if (projectStore && typeof projectStore.updateProject === 'function') {
-                projectStore.updateProject(draft => {
-                  if (!draft.plan) draft.plan = { rooms: [], walls: [], doors: [], windows: [], furniture: [], dimensions: [], stairs: [], ramps: [] };
-                  if (!Array.isArray(draft.plan.furniture)) draft.plan.furniture = [];
-                  draft.plan.furniture.push(entity);
-                  return draft;
-                });
-              }
-              if (state.plan && state.plan.document) {
-                if (!Array.isArray(state.plan.document.furniture)) state.plan.document.furniture = [];
-                state.plan.document.furniture.push(entity);
-                state.plan.selectedIds = new Set([entity.id]);
-              }
               switchMode('plan');
+              // Insert into the live plan canvas (identity + undo + render)
+              // rather than a persisted container nothing reads back.
+              const placed = views && typeof views.hasController === 'function'
+                && views.hasController('plan', 'addEntity')
+                ? views.callController('plan', 'addEntity', entity, `place ${piece.name}`)
+                : null;
+              if (!placed || placed.ok !== true) {
+                AudioService.playError && AudioService.playError();
+                showToast(`Could not place ${piece.name} on the Plan Canvas`);
+                return;
+              }
               if (views && typeof views.callController === 'function') {
                 views.callController('plan', 'render');
               }

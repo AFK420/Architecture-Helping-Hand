@@ -8901,6 +8901,11 @@ select option {
   border-radius: 4px;
 }
 
+.checklist-item.fail .check-icon { color: #f43f5e; }
+.checklist-item.pass .check-icon { color: #4ade80; }
+.checklist-item.unknown .check-icon { color: var(--text-muted, #71717a); }
+.checklist-item .check-text small { font-size: 0.62rem; }
+
 .detail-link-card {
   display: flex;
   align-items: center;

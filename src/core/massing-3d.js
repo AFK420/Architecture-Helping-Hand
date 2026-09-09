@@ -16,11 +16,6 @@ export const CAMERA_PRESETS = Object.freeze({
   isometric_sw: { azimuth: -135, elevation: 35.264, label: 'Isometric SW' },
   axonometric_top: { azimuth: 45, elevation: 60, label: 'Top Axo (60°)' },
   cavalier: { azimuth: 45, elevation: 45, label: 'Plan Oblique (45°)' },
-  iso_ne: { azimuth: 45, elevation: 35.264, label: 'Isometric NE (30°/30°)' },
-  iso_nw: { azimuth: 135, elevation: 35.264, label: 'Isometric NW' },
-  iso_se: { azimuth: -45, elevation: 35.264, label: 'Isometric SE' },
-  iso_sw: { azimuth: -135, elevation: 35.264, label: 'Isometric SW' },
-  axonometric: { azimuth: 45, elevation: 60, label: 'Top Axo (60°)' },
   plan: { azimuth: 0, elevation: 89.9, label: 'Plan View' }
 });
 
@@ -61,11 +56,26 @@ export function projectPoint3D(p, camera = {}) {
   const cosEl = Math.cos(el);
   const sinEl = Math.sin(el);
 
+  // Camera-space depth BEFORE pitch (distance along the view axis used for
+  // both painter sorting and the perspective divide).
+  const camY = z1 * sinEl + y1 * cosEl;
+
+  if (camera.perspective === true) {
+    // One-point perspective: the eye sits `dist` meters behind the screen
+    // plane along the view axis; scale each point by dist/(dist - camY).
+    const dist = camera.perspectiveDistance || 30;
+    const denom = Math.max(dist * 0.05, dist - camY); // never flip past the eye
+    const scale = dist / denom;
+    const screenX = panX + x1 * zoom * scale;
+    const screenY = panY - (z1 * cosEl - y1 * sinEl) * zoom * scale;
+    return { x: screenX, y: screenY, depth: -denom };
+  }
+
   // Screen X = x1
   // Screen Y = in SVG Y is downwards, so positive world Z projects upwards (-Z)
   const screenX = panX + x1 * zoom;
   const screenY = panY - (z1 * cosEl - y1 * sinEl) * zoom;
-  const depth = z1 * sinEl + y1 * cosEl;
+  const depth = camY;
 
   return { x: screenX, y: screenY, depth };
 }
@@ -322,14 +332,17 @@ export function buildMassing3DModel(entities = [], options = {}) {
   // 4. Stairs (3D Step Flight)
   const stairs = list.filter(e => e && e.kind === 'stair');
   for (const st of stairs) {
-    const numRisers = st.riserCount || 10;
-    const riserH = wallH / numRisers;
+    // App stair entities use `risers` (count); `riserCount` was never set by
+    // any factory, so every stair silently used the 10-riser default.
+    const numRisers = st.risers || st.riserCount || 10;
+    const rise = typeof st.rise === 'number' && st.rise > 0 ? st.rise : wallH;
+    const riserH = rise / numRisers;
     const stW = st.width || 1.0;
     const stD = st.depth || st.run || 2.5;
     const treadD = stD / numRisers;
 
     for (let s = 0; s < numRisers; s++) {
-      const stepBottom = zBase + 0;
+      const stepBottom = zBase + s * riserH;
       const stepTop = zBase + (s + 1) * riserH;
       const stepY = st.y + s * treadD;
       const stepPts = [
@@ -342,7 +355,6 @@ export function buildMassing3DModel(entities = [], options = {}) {
     }
   }
 
-  faces.faces = faces;
   return faces;
 }
 
@@ -372,6 +384,7 @@ export function buildMultiStoryMassing3DModel(documents = [], options = {}) {
   const allFaces = [];
   let currentZ = 0;
   let totalGFA = 0;
+  let totalVolume = 0;
 
   docs.forEach((doc, idx) => {
     const storyH = typeof doc.storyHeight === 'number' && doc.storyHeight > 0 ? doc.storyHeight : defaultStoryH;
@@ -405,6 +418,8 @@ export function buildMultiStoryMassing3DModel(documents = [], options = {}) {
       }
     }
     totalGFA += storyArea;
+    // Volume must weight each story by its OWN height, not the building average
+    totalVolume += storyArea * storyH;
     currentZ += storyH;
   });
 
@@ -412,7 +427,7 @@ export function buildMultiStoryMassing3DModel(documents = [], options = {}) {
   allFaces.storyCount = docs.length;
   allFaces.totalHeight = Number(currentZ.toFixed(2));
   allFaces.grossFloorArea = Number(totalGFA.toFixed(2));
-  allFaces.grossVolume = Number((totalGFA * (currentZ / docs.length)).toFixed(2));
+  allFaces.grossVolume = Number(totalVolume.toFixed(2));
 
   return allFaces;
 }
@@ -439,16 +454,20 @@ export function projectAndSortFaces(faces3D, camera) {
 
     const avgDepth = pts2D.length > 0 ? sumDepth / pts2D.length : 0;
 
+    // Under perspective the eye looks along −viewY, so nearer faces have a
+    // LARGER negative denominator; normalize both modes to "bigger = nearer".
+    const nearness = camera.perspective === true ? avgDepth : -avgDepth;
+
     projected.push({
       points: pts2D,
-      depth: avgDepth,
+      depth: nearness,
       color: face.color,
       stroke: face.stroke,
       opacity: face.opacity || 1
     });
   }
 
-  // Painter's algorithm: sort ascending by depth (farthest rendered first, nearest on top)
+  // Painter's algorithm: sort ascending by nearness (farthest rendered first, nearest on top)
   projected.sort((a, b) => a.depth - b.depth);
 
   return projected;
@@ -678,10 +697,10 @@ export function tessellateNurbsSurface(controlGrid = [], options = {}) {
 
       faces.push({
         vertices: [
-          [p0.x, p0.y, p0.z],
-          [p1.x, p1.y, p1.z],
-          [p2.x, p2.y, p2.z],
-          [p3.x, p3.y, p3.z]
+          { x: p0.x, y: p0.y, z: p0.z },
+          { x: p1.x, y: p1.y, z: p1.z },
+          { x: p2.x, y: p2.y, z: p2.z },
+          { x: p3.x, y: p3.y, z: p3.z }
         ],
         color,
         stroke,

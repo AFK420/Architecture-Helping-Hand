@@ -471,19 +471,23 @@ export function computeMeasurement(p1, p2) {
  */
 export function duplicateEntity(entity, offset = 0.5) {
   if (!entity || typeof entity !== 'object') return null;
+  // Hostile offset contract: only finite numbers may shift geometry — a
+  // non-numeric offset would stringify coords into NaN-corrupting data.
+  const dx = Number.isFinite(offset) ? offset : (Number.isFinite(offset?.x) ? offset.x : 0);
+  const dy = Number.isFinite(offset) ? offset : (Number.isFinite(offset?.y) ? offset.y : 0);
   const clone = JSON.parse(JSON.stringify(entity));
   clone.id = generateEntityId(clone.kind || 'item');
   clone.name = clone.name ? `${clone.name} (Copy)` : 'Copy';
   clone.locked = false;
 
   if (clone.kind === 'wall' && typeof clone.x1 === 'number') {
-    clone.x1 += offset;
-    clone.x2 += offset;
-    clone.y1 += offset;
-    clone.y2 += offset;
+    clone.x1 += dx;
+    clone.x2 += dx;
+    clone.y1 += dy;
+    clone.y2 += dy;
   } else if (typeof clone.x === 'number') {
-    clone.x += offset;
-    clone.y += offset;
+    clone.x += dx;
+    clone.y += dy;
   }
   return clone;
 }

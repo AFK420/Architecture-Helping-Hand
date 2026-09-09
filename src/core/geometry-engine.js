@@ -343,18 +343,25 @@ export function joinCollinearSegments(seg1, seg2, epsilon = EPSILON_MEDIUM) {
   const last = projected[projected.length - 1].p;
   const outStart = (first.x < last.x || (approxEqual(first.x, last.x) && first.y < last.y)) ? first : last;
   const outEnd = outStart === first ? last : first;
-  // gap check: chain length must not exceed the direct span by tolerance
+  // gap check: disjoint collinear segments must NOT be joined into one
+  // bridging segment. Two segments are joinable when their axis intervals
+  // touch or overlap: the larger interval start must not exceed the smaller
+  // interval end (beyond tolerance).
   const span = last.t - first.t;
-  let chain = 0;
-  const segs = [seg1, seg2];
-  for (const s of segs) chain += distance(s.start, s.end);
-  if (chain > span + epsilon * 2) {
-    // overlapping segments may have chain > span; overlap is still joinable
-    const overlapAllowance = distance(seg1.start, seg1.end) + distance(seg2.start, seg2.end);
-    if (span < overlapAllowance - epsilon * 2) {
-      // fully fine — overlapping join
-    }
+  const interval = (s) => {
+    const a = dotProduct(subtractPoints(s.start, seg1.start), dir);
+    const b = dotProduct(subtractPoints(s.end, seg1.start), dir);
+    return { lo: Math.min(a, b), hi: Math.max(a, b) };
+  };
+  const i1 = interval(seg1);
+  const i2 = interval(seg2);
+  const gap = Math.max(i1.lo, i2.lo) - Math.min(i1.hi, i2.hi);
+  if (gap > epsilon) {
+    // gap > 0 beyond tolerance → disjoint along the axis → not joinable
+    return null;
   }
+  // overlap sanity: the joined span can never exceed the union of intervals
+  if (span < -epsilon) return null;
   return { start: outStart, end: outEnd };
 }
 
