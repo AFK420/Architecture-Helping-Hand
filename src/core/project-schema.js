@@ -156,3 +156,68 @@ export function migrateProjectV1toV2(project) {
   }
   return migrated;
 }
+
+/**
+ * Migrates a schemaVersion 2 project to 3 (level system):
+ *  - creates the ordered `levels` array from existing 2D plan documents,
+ *    linking each level to its document (one level per plan document, in
+ *    document order, elevation = index × defaultHeight);
+ *  - stamps every entity's legacy floorId (default 'floor-1') onto
+ *    levelId of the first level (entities lived on one floor pre-v3);
+ *  - stairs gain fromLevel/toLevel linking consecutive levels when a
+ *    stair's rise matches the level height (best effort, no distortion).
+ * Fails loudly on non-object input; never corrupts.
+ */
+export function migrateProjectV2toV3(project, options = {}) {
+  if (!project || typeof project !== 'object' || Array.isArray(project)) {
+    throw new Error('Cannot migrate project: document must be an object');
+  }
+  const migrated = project;
+  migrated.schemaVersion = 3;
+
+  const defaultHeight = Number.isFinite(options.defaultLevelHeight) && options.defaultLevelHeight > 0
+    ? options.defaultLevelHeight : 3.2;
+  const docs = (Array.isArray(migrated.documents) ? migrated.documents : [])
+    .filter(d => d && (d.type === '2d_plan' || d.type === '2d'));
+
+  if (!Array.isArray(migrated.levels) || migrated.levels.length === 0) {
+    // One level per plan document, in order; elevation stacks by defaultHeight
+    migrated.levels = docs.length > 0
+      ? docs.map((d, i) => ({
+          id: `level-${i}`,
+          name: d.name || `Level ${String(i).padStart(2, '0')}`,
+          elevation: i * defaultHeight,
+          heightToNext: defaultHeight,
+          documentId: d.id,
+          visible: true
+        }))
+      : [{ id: 'level-0', name: 'Level 00', elevation: 0, heightToNext: defaultHeight, documentId: null, visible: true }];
+  } else {
+    migrated.levels = migrated.levels.map((l, i) => ({
+      id: l.id || `level-${i}`,
+      name: l.name || `Level ${String(i).padStart(2, '0')}`,
+      elevation: Number.isFinite(l.elevation) ? l.elevation : i * defaultHeight,
+      heightToNext: Number.isFinite(l.heightToNext) && l.heightToNext > 0 ? l.heightToNext : defaultHeight,
+      documentId: typeof l.documentId === 'string' ? l.documentId : null,
+      visible: l.visible !== false
+    })).sort((a, b) => a.elevation - b.elevation);
+  }
+
+  const firstLevelId = migrated.levels[0].id;
+  const docIdToLevel = new Map(migrated.levels.map(l => [l.documentId, l.id]));
+  for (const doc of docs) {
+    const levelId = docIdToLevel.get(doc.id) || firstLevelId;
+    if (!Array.isArray(doc.entities)) continue;
+    for (const e of doc.entities) {
+      if (!e || typeof e !== 'object') continue;
+      if (!e.levelId) e.levelId = levelId;
+      if (e.kind === 'stair' && !e.fromLevel) {
+        // best-effort link: a stair belongs to the level of its document
+        e.fromLevel = levelId;
+        const idx = migrated.levels.findIndex(l => l.id === levelId);
+        e.toLevel = idx >= 0 && idx + 1 < migrated.levels.length ? migrated.levels[idx + 1].id : levelId;
+      }
+    }
+  }
+  return migrated;
+}

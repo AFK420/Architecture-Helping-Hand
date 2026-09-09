@@ -22,7 +22,7 @@
  * Bump when the envelope changes, and add a migration in
  * src/core/project-migrations.js (Stabilization 3).
  */
-export const PROJECT_SCHEMA_VERSION = 2;
+export const PROJECT_SCHEMA_VERSION = 3;
 
 /** Historical schema versions (kept for migration tooling/tests). */
 export const PROJECT_SCHEMA_VERSION_V1 = 1;
@@ -72,6 +72,14 @@ export function createProject(options = {}) {
       updatedAt: now
     },
     site: normalizeSite(options.site),
+    // Level system (schema v3): ordered floors with elevation datums.
+    // Each level links to its plan document; entities carry levelId.
+    levels: Array.isArray(options.levels) && options.levels.length > 0
+      ? options.levels
+      : [
+          { id: 'level-0', name: 'Level 00', elevation: 0, heightToNext: 3.2, documentId: 'doc-1', visible: true },
+          { id: 'level-1', name: 'Level 01', elevation: 3.2, heightToNext: 3.2, documentId: null, visible: true }
+        ],
     // Project data containers (reserved for upcoming phases)
     dimensions: [],
     chains: [],
@@ -214,6 +222,26 @@ export function normalizeProject(doc) {
   normalized.metadata = metadata;
 
   normalized.site = normalizeSite(src.site);
+
+  // Levels (schema v3): ordered by elevation; first level holds datum 0.
+  if (!Array.isArray(normalized.levels) || normalized.levels.length === 0) {
+    const firstDoc = Array.isArray(normalized.documents) && normalized.documents[0] ? normalized.documents[0] : null;
+    normalized.levels = [
+      { id: 'level-0', name: 'Level 00', elevation: 0, heightToNext: 3.2, documentId: firstDoc ? firstDoc.id : null, visible: true }
+    ];
+  } else {
+    normalized.levels = normalized.levels
+      .filter(l => l && typeof l === 'object')
+      .map((l, i) => ({
+        id: typeof l.id === 'string' && l.id ? l.id : `level-${i}`,
+        name: typeof l.name === 'string' && l.name ? l.name : `Level ${String(i).padStart(2, '0')}`,
+        elevation: Number.isFinite(l.elevation) ? l.elevation : i * 3.2,
+        heightToNext: Number.isFinite(l.heightToNext) && l.heightToNext > 0 ? l.heightToNext : 3.2,
+        documentId: typeof l.documentId === 'string' ? l.documentId : null,
+        visible: l.visible !== false
+      }))
+      .sort((a, b) => a.elevation - b.elevation);
+  }
 
   for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad', 'documents']) {
     if (!Array.isArray(normalized[key])) normalized[key] = [];

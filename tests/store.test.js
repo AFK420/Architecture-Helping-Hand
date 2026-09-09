@@ -76,11 +76,11 @@ const fixedClock = () => new Date(1700000000000 + (clockTick++) * 1000);
 console.log('\n--- 1. Migration chain ---');
 
 assertEqual(MIGRATIONS.length, PROJECT_SCHEMA_VERSION - 1, 'exactly one migration per version step below the target');
-assertEqual(CURRENT_STORE_VERSION, 2, 'Version 2 is current (project model foundation migration registered)');
+assertEqual(CURRENT_STORE_VERSION, 3, 'Version 3 is current (level system migration registered)');
 
 {
   const env = { version: 1, project: createProject({ id: 'proj-m1' }) };
-  // Note: createProject now produces v2; force a genuine v1 fixture.
+  // Note: createProject now produces v3; force a genuine v1 fixture.
   env.version = 1;
   env.project.schemaVersion = 1;
   env.project.documents = [{
@@ -88,11 +88,29 @@ assertEqual(CURRENT_STORE_VERSION, 2, 'Version 2 is current (project model found
     entities: [{ kind: 'line', x1: 0, y1: 0, x2: 2, y2: 0, length: 2, angleDegrees: 0 }]
   }];
   const out = migrateEnvelope(env);
-  assertEqual(out.version, 2, 'v1 envelope migrates to v2');
+  assertEqual(out.version, 3, 'v1 envelope migrates through the chain to v3');
   const migratedLine = out.project.documents[0].entities[0];
   assert(migratedLine._meta && migratedLine._meta.provenance === 'migrated', 'migrated entity carries _meta identity (provenance migrated)');
   assert(migratedLine.length === undefined, 'stored derived shadow (length) stripped by migration');
   assert(!out.project.documents[0].entities.some(e => e.length !== undefined || e.area !== undefined), 'no derived shadows survive migration');
+  // v3 additions: levels exist, the plan document is linked, entities stamped
+  assert(Array.isArray(out.project.levels) && out.project.levels.length >= 1, 'migration creates the levels array');
+  assert(out.project.levels.some(l => l.documentId === 'doc-1'), 'level links to its plan document');
+  assert(migratedLine.levelId === out.project.levels[0].id, 'entities stamped with their level id');
+}
+
+{
+  // v2 → v3 direct: existing levels preserved and ordered by elevation
+  const { createProject } = await import('../src/core/project.js');
+  const env2 = { version: 2, project: createProject({ id: 'proj-m2' }) };
+  env2.project.schemaVersion = 2;
+  env2.project.levels = [
+    { id: 'lvl-up', name: 'Level 01', elevation: 3.2, heightToNext: 3.2, documentId: 'doc-2', visible: true },
+    { id: 'lvl-gnd', name: 'Level 00', elevation: 0, heightToNext: 3.2, documentId: 'doc-1', visible: true }
+  ];
+  const out2 = migrateEnvelope(env2);
+  assertEqual(out2.version, 3, 'v2 envelope migrates to v3');
+  assert(out2.project.levels[0].id === 'lvl-gnd' && out2.project.levels[1].id === 'lvl-up', 'levels sorted by elevation');
 }
 
 {

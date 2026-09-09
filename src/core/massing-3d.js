@@ -390,23 +390,33 @@ export function buildMultiStoryMassing3DModel(documents = [], options = {}) {
   }
 
   const defaultStoryH = typeof options.storyHeight === 'number' && options.storyHeight > 0 ? options.storyHeight : 3.0;
+  // Level system (schema v3): when a levels array is provided, each document
+  // places at its LEVEL ELEVATION (a datum, not a stack) and takes its own
+  // heightToNext as the story height. Without levels: legacy cumulative stack.
+  const levels = Array.isArray(options.levels) ? options.levels : null;
+  const levelByDoc = levels ? new Map(levels.filter(l => l && l.documentId).map(l => [l.documentId, l])) : null;
+
   const allFaces = [];
   let currentZ = 0;
   let totalGFA = 0;
   let totalVolume = 0;
 
   docs.forEach((doc, idx) => {
-    const storyH = typeof doc.storyHeight === 'number' && doc.storyHeight > 0 ? doc.storyHeight : defaultStoryH;
+    const level = levelByDoc ? levelByDoc.get(doc.id) : null;
+    const storyH = level
+      ? (Number.isFinite(level.heightToNext) && level.heightToNext > 0 ? level.heightToNext : defaultStoryH)
+      : (typeof doc.storyHeight === 'number' && doc.storyHeight > 0 ? doc.storyHeight : defaultStoryH);
+    const baseZ = level && Number.isFinite(level.elevation) ? level.elevation : currentZ;
     const storyFaces = buildMassing3DModel(doc.entities || [], {
       ...options,
       wallHeight: storyH,
-      baseElevation: currentZ
+      baseElevation: baseZ
     });
 
     for (const f of storyFaces) {
       f.storyIndex = idx;
-      f.baseElevation = currentZ;
-      f.storyName = doc.name || `Level ${idx + 1}`;
+      f.baseElevation = baseZ;
+      f.storyName = (level && level.name) || doc.name || `Level ${idx + 1}`;
     }
 
     allFaces.push(...storyFaces);
@@ -429,7 +439,7 @@ export function buildMultiStoryMassing3DModel(documents = [], options = {}) {
     totalGFA += storyArea;
     // Volume must weight each story by its OWN height, not the building average
     totalVolume += storyArea * storyH;
-    currentZ += storyH;
+    if (baseZ + storyH > currentZ) currentZ = baseZ + storyH;
   });
 
   allFaces.faces = allFaces;

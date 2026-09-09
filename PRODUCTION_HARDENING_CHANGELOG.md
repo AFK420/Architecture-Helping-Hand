@@ -1,5 +1,41 @@
 # Production Hardening Changelog
 
+## 2026-09-10 (pass 5) — Engine wiring + roadmap items 1–4 (v2.4.0)
+
+Executed the post-audit roadmap in order. Every phase: tests + lint + bundle
+rebuild + version bump. 62 suites, 5,163 assertions, 0 failures.
+
+### Item 1 — dead engines wired (previously tested-only, zero call sites)
+
+| Engine | Wiring |
+|---|---|
+| Parametric | Full dependent-chain recompute (stair risers→run/pitch/Blondel/IBC, door width→jambs+swing via live CAD, window sill→head, room target-area→depth+polygon). All inspector inputs route through `applyParameter` — the inspector's private stair math (a diverging second engine) removed |
+| Constraints | New Constraints tab in the C-panels: add on selection (kind-filtered types), Diagnose (cloned record — status only), Satisfy (deterministic solve, snapshot + undoable), remove. Conflicts report resolutions, never distort geometry. Persist with the document |
+| 3D backend | Faces stamped with source entity id → click-to-select in the massing view (raycast via `screenToWorldRay` + Möller–Trumbore). Section cut: clip plane (toolbar toggle + height slider). Full standard-view preset set (bottom + 4 elevations). Orbit ±89.9° |
+| AI tools | Live registry instantiated (read/propose tier only — no APPLY_* tool exists, so the model can never mutate geometry directly). Definitions forwarded to transports: OpenAI function-calling + Gemini functionDeclarations. Previewable proposals in AI Studio: cards with Reject / Preview & Apply; apply goes through the deterministic pipeline on explicit user click |
+
+### Item 2 — autosave + crash recovery
+Every undoable mutation schedules a debounced 8s snapshot to a dedicated
+recovery key (never the project itself); flush on tab-hide/unload; next boot
+offers Recover/Discard explicitly (no silent auto-restore); manual Save clears it.
+
+### Item 3 — classic modify ops
+New `src/core/cad-modify.js` (pure ops on the canonical geometry-engine
+helpers): MIRROR, ROTATE (arbitrary angle), SCALE (factor; boundary rooms and
+plain rects handled exactly once), OFFSET (walls), ARRAY (linear),
+TRIM/EXTEND (the geometry engine's functions finally get commands — TRIM
+keeps the longer remainder, EXTEND moves the nearer endpoint). All registered
+with aliases (MI/RO/SC/OFF/AR/TR/EX); in-place ops wrap in snapshot undo
+commands; contextual toolbar gains the buttons.
+
+### Item 4 — levels/floors (schema v3)
+`levels` array on the project (id/name/elevation/heightToNext/documentId/
+visible); v2→v3 migration builds one level per plan document, stamps entity
+`levelId`, links stairs `fromLevel/toLevel`; normalizeProject sorts by
+elevation and repairs fields. 3D multi-story places stories at level DATUMS
+(not cumulative stacking). Levels manager UI in the schedule panel (add/
+edit/link/goto/remove). Entities stamp `levelId` on commit. v2.4.0.
+
 ## 2026-09-09 (pass 4) — Honesty pass: 15 live defects fixed, fake UI removed
 
 Full 200-item capability audit (four subsystem audits + fresh test run) found

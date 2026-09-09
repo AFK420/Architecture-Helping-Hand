@@ -28,7 +28,7 @@ import {
   cloneProject,
   touchProject
 } from '../core/project.js';
-import { migrateProjectV1toV2 } from '../core/project-schema.js';
+import { migrateProjectV1toV2, migrateProjectV2toV3 } from '../core/project-schema.js';
 /**
  * Migration chain: each entry upgrades a document from its index+1 to the
  * next version. Register future migrations here, e.g. MIGRATIONS[1] = v2->v3.
@@ -43,7 +43,15 @@ export const MIGRATIONS = Object.freeze([
    *    measurements are derived on demand via core/project-schema.deriveFacts
    *  - empty relationship index created (rebuilt on demand)
    */
-  (project) => migrateProjectV1toV2(project)
+  (project) => migrateProjectV1toV2(project),
+  /**
+   * v2 → v3 (level system):
+   *  - ordered `levels` array built from 2D plan documents (one level per
+   *    document, elevations stacking by default height)
+   *  - entities stamped with levelId; stairs gain fromLevel/toLevel
+   *  - each level links to its plan document
+   */
+  (project) => migrateProjectV2toV3(project)
 ]);
 
 /** Highest version this build understands. */

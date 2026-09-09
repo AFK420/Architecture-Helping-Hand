@@ -349,6 +349,82 @@ console.log('\n--- 11. CAD modify operations (mirror/rotate/scale/offset/array/t
   assert(planSrc.includes('restoreEntitySnapshots'), 'in-place ops undo via snapshot commands');
 }
 
+console.log('\n--- 12. Levels/floors (schema v3) ---');
+{
+  const { migrateProjectV2toV3 } = await import('../src/core/project-schema.js');
+  const { createProject, normalizeProject, PROJECT_SCHEMA_VERSION } = await import('../src/core/project.js');
+  const { MIGRATIONS, migrateEnvelope, CURRENT_STORE_VERSION } = await import('../src/services/store.js');
+
+  assert(PROJECT_SCHEMA_VERSION === 3 && CURRENT_STORE_VERSION === 3, 'schema v3 is current');
+  assert(MIGRATIONS.length === 2, 'two migrations registered (v1→v2, v2→v3)');
+
+  // Fresh projects carry the level system
+  const fresh = createProject({ id: 'lvl-p1' });
+  assert(Array.isArray(fresh.levels) && fresh.levels.length >= 1, 'new projects have a levels array');
+  assert(fresh.levels[0].elevation === 0 && Number.isFinite(fresh.levels[0].heightToNext), 'level 0 carries a datum + height');
+
+  // v2→v3: one level per plan document, entities stamped, stairs linked
+  const v2 = createProject({ id: 'lvl-p2' });
+  v2.schemaVersion = 2;
+  delete v2.levels;
+  v2.documents = [
+    { id: 'dA', name: 'Ground Floor', type: '2d_plan', entities: [{ kind: 'wall', id: 'wA', x1: 0, y1: 0, x2: 4, y2: 0 }, { kind: 'stair', id: 'sA', x: 0, y: 0, width: 1.1, run: 4, rise: 2.8, risers: 16, tread: 0.28 }] },
+    { id: 'dB', name: 'First Floor', type: '2d_plan', entities: [{ kind: 'room', id: 'rB', x: 0, y: 0, width: 4, depth: 3 }] }
+  ];
+  const v3 = migrateProjectV2toV3(v2);
+  assert(v3.schemaVersion === 3, 'migration bumps to v3');
+  assert(v3.levels.length === 2, 'one level per plan document');
+  assert(v3.levels[0].documentId === 'dA' && v3.levels[1].documentId === 'dB', 'levels linked to their documents');
+  assert(Math.abs(v3.levels[1].elevation - v3.levels[0].heightToNext) < 1e-9, 'second level stacks on the first datum');
+  const wallA = v3.documents[0].entities.find(e => e.id === 'wA');
+  assert(wallA.levelId === v3.levels[0].id, 'entities stamped with their level id');
+  const stairA = v3.documents[0].entities.find(e => e.id === 'sA');
+  assert(stairA.fromLevel === v3.levels[0].id && stairA.toLevel === v3.levels[1].id, 'stairs gain fromLevel/toLevel');
+
+  // normalizeProject sorts levels by elevation and repairs missing fields
+  const messy = normalizeProject({
+    id: 'lvl-p3',
+    levels: [
+      { name: 'Upper', elevation: 6.4, documentId: 'dC' },
+      { id: 'keepme', elevation: -1 } // invalid-ish: repaired defaults
+    ]
+  });
+  assert(messy.levels[0].elevation <= messy.levels[1].elevation, 'levels sorted by elevation');
+  assert(messy.levels.every(l => l.id && l.name && l.visible === true || l.visible === false), 'level fields repaired');
+
+  // Envelope chain: v1 fixture walks all the way to v3
+  const env = { version: 1, project: createProject({ id: 'lvl-p4' }) };
+  env.version = 1;
+  env.project.schemaVersion = 1;
+  env.project.documents = [{ id: 'dD', name: 'GF', type: '2d', entities: [] }];
+  delete env.project.levels;
+  const out = migrateEnvelope(env);
+  assert(out.version === 3 && out.project.levels.length >= 1, 'v1 envelope migrates through to v3 with levels');
+
+  // 3D massing stacks by level datum (not cumulative order)
+  const { buildMultiStoryMassing3DModel } = await import('../src/core/massing-3d.js');
+  const docs = [
+    { id: 'dA', type: '2d_plan', entities: [{ kind: 'room', id: 'rA', name: 'A', x: 0, y: 0, width: 10, depth: 10 }] },
+    { id: 'dB', type: '2d_plan', entities: [{ kind: 'room', id: 'rB', name: 'B', x: 0, y: 0, width: 10, depth: 10 }] }
+  ];
+  const levels = [
+    { id: 'l0', name: 'L0', elevation: 0, heightToNext: 3.2, documentId: 'dA', visible: true },
+    { id: 'l1', name: 'L1', elevation: 6, heightToNext: 3.2, documentId: 'dB', visible: true } // gap floor: datum 6m
+  ];
+  const stacked = buildMultiStoryMassing3DModel(docs, { levels });
+  const zBases = [...new Set(stacked.map(f => f.baseElevation).sort((a, b) => a - b))];
+  assert(zBases.includes(0) && zBases.includes(6), `stories place at level datums (bases: ${zBases.join(',')})`);
+  assert(stacked.every(f => f.storyName === 'L0' || f.storyName === 'L1'), 'faces carry level names');
+
+  // UI wiring pins
+  const fs = await import('node:fs');
+  const planSrc = fs.readFileSync('src/ui/views/plan.js', 'utf8');
+  assert(planSrc.includes('function renderLevelsList'), 'levels manager renders in the schedule panel');
+  assert(planSrc.includes('function setupLevelsPanel'), 'levels panel initialized on mount');
+  assert(planSrc.includes("entity.levelId = (linked || lvls[0] || {}).id", 'entities stamped with levelId on commit' ) || planSrc.includes('entity.levelId = (linked || lvls[0] || {}).id'), 'entities stamped with levelId on commit');
+  assert(planSrc.includes('levels: projectLevels'), 'massing receives project levels');
+}
+
 console.log(`\n========================================`);
 console.log(`Engine Wiring (Phase A: parametric): ${passed} passed, ${failed} failed.`);
 console.log(`========================================`);

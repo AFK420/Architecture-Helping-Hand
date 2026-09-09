@@ -229,6 +229,12 @@ export function createPlanView(context) {
     const firstEntity = entities().length === 0;
     // Schema v2 identity contract stamped as the entity enters the model.
     attachIdentity(entity);
+    // Schema v3: the entity knows its level (the level linked to the
+    // active document, else the first level).
+    const doc = getActiveDocument();
+    const lvls = projectLevels();
+    const linked = lvls.find(l => l.documentId === (doc && doc.id));
+    entity.levelId = (linked || lvls[0] || {}).id || 'level-0';
     const cmd = entityAddRemoveCommand(entities(), entity, label);
     cmd.redo();
     history.push(cmd);
@@ -2646,7 +2652,13 @@ export function createPlanView(context) {
     let faces3D = [];
     let multiStoryMetrics = null;
     if (doc.massingOptions.multiStory) {
-      multiStoryMetrics = buildMultiStoryMassing3DModel(state.plan.documents || [planDoc], doc.massingOptions);
+      // Level-aware stacking (schema v3): elevations are datums from the
+      // project's levels array when present.
+      const projectLevels = projectStore?.getProject()?.levels || null;
+      multiStoryMetrics = buildMultiStoryMassing3DModel(
+        state.plan.documents || [planDoc],
+        { ...doc.massingOptions, levels: projectLevels }
+      );
       faces3D = multiStoryMetrics.faces;
     } else {
       faces3D = buildMassing3DModel(planEntities, doc.massingOptions);
@@ -4631,6 +4643,125 @@ export function createPlanView(context) {
     });
   }
 
+  // ------------------------------------------------------------------
+  // Level system (schema v3): ordered floors with elevation datums.
+  // Entities carry levelId; documents link to levels; 3D stacks by datum.
+  // ------------------------------------------------------------------
+  function projectLevels() {
+    const proj = projectStore?.getProject();
+    if (!proj) return [];
+    if (!Array.isArray(proj.levels) || proj.levels.length === 0) {
+      proj.levels = [{ id: 'level-0', name: 'Level 00', elevation: 0, heightToNext: 3.2, documentId: (state.plan.documents[0] || {}).id || null, visible: true }];
+    }
+    return proj.levels;
+  }
+
+  function saveLevels(levels) {
+    const proj = projectStore?.getProject();
+    if (!proj) return false;
+    const res = projectStore.updateProject(draft => {
+      draft.levels = levels;
+      return draft;
+    });
+    return !!(res && res.ok);
+  }
+
+  function renderLevelsList() {
+    const host = document.getElementById('plan-levels-list');
+    if (!host) return;
+    const levels = [...projectLevels()].sort((a, b) => a.elevation - b.elevation);
+    const docs = state.plan.documents || [];
+
+    host.innerHTML = levels.map((lvl, i) => {
+      const linkedDoc = docs.find(d => d.id === lvl.documentId);
+      return `
+        <div style="display: flex; align-items: center; gap: 6px; padding: 0.3rem 0.4rem; background: var(--bg-surface-2, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 4px;" data-level-idx="${i}">
+          <span style="font-family: var(--font-mono); font-size: 0.68rem; color: var(--accent-primary, #38bdf8); min-width: 42px;">±${lvl.elevation.toFixed(2)}</span>
+          <span style="flex: 1; font-size: 0.72rem; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(lvl.name)}${linkedDoc ? ` <small style="color: var(--text-muted);">· ${escapeHtml(linkedDoc.name)}</small>` : ' <small style="color: var(--text-muted);">· no plan</small>'}</span>
+          <button type="button" class="btn btn-xs btn-outline" data-level-act="goto" data-level-id="${lvl.id}" title="Open the linked plan document">→</button>
+          <button type="button" class="btn btn-xs btn-outline" data-level-act="elev" data-level-id="${lvl.id}" title="Edit elevation / height / name">✎</button>
+          <button type="button" class="btn btn-xs btn-outline" data-level-act="link" data-level-id="${lvl.id}" title="Link a document to this level">🔗</button>
+          <button type="button" class="btn btn-xs btn-outline" data-level-act="remove" data-level-id="${lvl.id}" title="Remove level (documents kept)">✕</button>
+        </div>`;
+    }).join('') || '<div style="font-size: 0.7rem; color: var(--text-muted);">No levels defined.</div>';
+
+    host.querySelectorAll('[data-level-act]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const act = btn.dataset.levelAct;
+        const id = btn.dataset.levelId;
+        const levels = projectLevels();
+        const lvl = levels.find(l => l.id === id);
+        if (!lvl) return;
+
+        if (act === 'goto' && lvl.documentId) {
+          const doc = (state.plan.documents || []).find(d => d.id === lvl.documentId);
+          if (doc) { switchDocument(doc.id); showToast(`Opened ${lvl.name} plan`); }
+          else showToast('The linked document no longer exists', 'warning');
+          return;
+        }
+        if (act === 'elev') {
+          const v = prompt(`Level "${lvl.name}" — elevation (m), height to next (m), name\n(current: ${lvl.elevation}, ${lvl.heightToNext}, ${lvl.name})\nFormat: elevation, height, name`, `${lvl.elevation}, ${lvl.heightToNext}, ${lvl.name}`);
+          if (v == null) return;
+          const parts = v.split(',').map(s => s.trim());
+          const elev = parseFloat(parts[0]), htn = parseFloat(parts[1]);
+          if (Number.isFinite(elev)) lvl.elevation = elev;
+          if (Number.isFinite(htn) && htn > 0) lvl.heightToNext = htn;
+          if (parts[2]) lvl.name = parts[2];
+          saveLevels(levels);
+          renderLevelsList();
+          showToast(`Updated ${lvl.name}`);
+          return;
+        }
+        if (act === 'link') {
+          const names = (state.plan.documents || []).map((d, i) => `${i}: ${d.name}`).join('\n');
+          const v = prompt(`Link which document index to ${lvl.name}?\n${names}`, '0');
+          if (v == null) return;
+          const doc = (state.plan.documents || [])[parseInt(v, 10)];
+          if (!doc) { showToast('No such document', 'warning'); return; }
+          // one document per level: clear the old link
+          for (const l of levels) if (l.documentId === doc.id) l.documentId = null;
+          lvl.documentId = doc.id;
+          saveLevels(levels);
+          renderLevelsList();
+          showToast(`${lvl.name} ↔ ${doc.name}`);
+          return;
+        }
+        if (act === 'remove') {
+          if (levels.length <= 1) { showToast('At least one level must remain', 'warning'); return; }
+          const idx = levels.indexOf(lvl);
+          levels.splice(idx, 1);
+          saveLevels(levels);
+          renderLevelsList();
+          showToast(`Removed ${lvl.name} (documents kept)`);
+          return;
+        }
+      });
+    });
+  }
+
+  function setupLevelsPanel() {
+    const addBtn = document.getElementById('btn-add-level');
+    addBtn?.addEventListener('click', () => {
+      const levels = projectLevels();
+      const topElev = Math.max(0, ...levels.map(l => l.elevation));
+      const topH = Math.max(...levels.map(l => l.heightToNext || 3.2));
+      const count = levels.length;
+      levels.push({
+        id: `level-${Date.now().toString(36)}`,
+        name: `Level ${String(count).padStart(2, '0')}`,
+        elevation: topElev + topH,
+        heightToNext: topH,
+        documentId: null,
+        visible: true
+      });
+      saveLevels(levels);
+      renderLevelsList();
+      showToast('Level added — link a plan document with 🔗');
+      AudioService.playTick();
+    });
+    renderLevelsList();
+  }
+
   function setupSidebarTabs() {
     const tabEntities = dom.tabPlanEntities || document.getElementById('tab-plan-entities');
     const tabLayers = dom.tabPlanLayers || document.getElementById('tab-plan-layers');
@@ -4678,6 +4809,7 @@ export function createPlanView(context) {
         activeSidebarTab = 'schedule';
         updateTabUI();
         renderScheduleList();
+        renderLevelsList();
       });
     }
 
@@ -7684,6 +7816,7 @@ export function createPlanView(context) {
       initDocuments();
       renderTabs();
       setupSidebarTabs();
+      setupLevelsPanel();
       showRecoveryBannerIfAny();
 
       const newDocBtn = dom.btnPlanNewDoc || document.getElementById('btn-plan-new-doc');

@@ -10635,7 +10635,7 @@ function inspectSlopeCompliance(slopeResult, codeId = 'jnbc') {
  * Bump when the envelope changes, and add a migration in
  * src/core/project-migrations.js (Stabilization 3).
  */
-const PROJECT_SCHEMA_VERSION = 2;
+const PROJECT_SCHEMA_VERSION = 3;
 
 /** Historical schema versions (kept for migration tooling/tests). */
 const PROJECT_SCHEMA_VERSION_V1 = 1;
@@ -10685,6 +10685,14 @@ function createProject(options = {}) {
       updatedAt: now
     },
     site: normalizeSite(options.site),
+    // Level system (schema v3): ordered floors with elevation datums.
+    // Each level links to its plan document; entities carry levelId.
+    levels: Array.isArray(options.levels) && options.levels.length > 0
+      ? options.levels
+      : [
+          { id: 'level-0', name: 'Level 00', elevation: 0, heightToNext: 3.2, documentId: 'doc-1', visible: true },
+          { id: 'level-1', name: 'Level 01', elevation: 3.2, heightToNext: 3.2, documentId: null, visible: true }
+        ],
     // Project data containers (reserved for upcoming phases)
     dimensions: [],
     chains: [],
@@ -10827,6 +10835,26 @@ function normalizeProject(doc) {
   normalized.metadata = metadata;
 
   normalized.site = normalizeSite(src.site);
+
+  // Levels (schema v3): ordered by elevation; first level holds datum 0.
+  if (!Array.isArray(normalized.levels) || normalized.levels.length === 0) {
+    const firstDoc = Array.isArray(normalized.documents) && normalized.documents[0] ? normalized.documents[0] : null;
+    normalized.levels = [
+      { id: 'level-0', name: 'Level 00', elevation: 0, heightToNext: 3.2, documentId: firstDoc ? firstDoc.id : null, visible: true }
+    ];
+  } else {
+    normalized.levels = normalized.levels
+      .filter(l => l && typeof l === 'object')
+      .map((l, i) => ({
+        id: typeof l.id === 'string' && l.id ? l.id : `level-${i}`,
+        name: typeof l.name === 'string' && l.name ? l.name : `Level ${String(i).padStart(2, '0')}`,
+        elevation: Number.isFinite(l.elevation) ? l.elevation : i * 3.2,
+        heightToNext: Number.isFinite(l.heightToNext) && l.heightToNext > 0 ? l.heightToNext : 3.2,
+        documentId: typeof l.documentId === 'string' ? l.documentId : null,
+        visible: l.visible !== false
+      }))
+      .sort((a, b) => a.elevation - b.elevation);
+  }
 
   for (const key of ['dimensions', 'chains', 'notes', 'snapshots', 'decisions', 'exports', 'scratchpad', 'documents']) {
     if (!Array.isArray(normalized[key])) normalized[key] = [];
@@ -14350,23 +14378,33 @@ function buildMultiStoryMassing3DModel(documents = [], options = {}) {
   }
 
   const defaultStoryH = typeof options.storyHeight === 'number' && options.storyHeight > 0 ? options.storyHeight : 3.0;
+  // Level system (schema v3): when a levels array is provided, each document
+  // places at its LEVEL ELEVATION (a datum, not a stack) and takes its own
+  // heightToNext as the story height. Without levels: legacy cumulative stack.
+  const levels = Array.isArray(options.levels) ? options.levels : null;
+  const levelByDoc = levels ? new Map(levels.filter(l => l && l.documentId).map(l => [l.documentId, l])) : null;
+
   const allFaces = [];
   let currentZ = 0;
   let totalGFA = 0;
   let totalVolume = 0;
 
   docs.forEach((doc, idx) => {
-    const storyH = typeof doc.storyHeight === 'number' && doc.storyHeight > 0 ? doc.storyHeight : defaultStoryH;
+    const level = levelByDoc ? levelByDoc.get(doc.id) : null;
+    const storyH = level
+      ? (Number.isFinite(level.heightToNext) && level.heightToNext > 0 ? level.heightToNext : defaultStoryH)
+      : (typeof doc.storyHeight === 'number' && doc.storyHeight > 0 ? doc.storyHeight : defaultStoryH);
+    const baseZ = level && Number.isFinite(level.elevation) ? level.elevation : currentZ;
     const storyFaces = buildMassing3DModel(doc.entities || [], {
       ...options,
       wallHeight: storyH,
-      baseElevation: currentZ
+      baseElevation: baseZ
     });
 
     for (const f of storyFaces) {
       f.storyIndex = idx;
-      f.baseElevation = currentZ;
-      f.storyName = doc.name || `Level ${idx + 1}`;
+      f.baseElevation = baseZ;
+      f.storyName = (level && level.name) || doc.name || `Level ${idx + 1}`;
     }
 
     allFaces.push(...storyFaces);
@@ -14389,7 +14427,7 @@ function buildMultiStoryMassing3DModel(documents = [], options = {}) {
     totalGFA += storyArea;
     // Volume must weight each story by its OWN height, not the building average
     totalVolume += storyArea * storyH;
-    currentZ += storyH;
+    if (baseZ + storyH > currentZ) currentZ = baseZ + storyH;
   });
 
   allFaces.faces = allFaces;
@@ -17839,6 +17877,71 @@ function migrateProjectV1toV2(project) {
   }
   if (!migrated.relationships || typeof migrated.relationships !== 'object') {
     migrated.relationships = createRelationshipIndex();
+  }
+  return migrated;
+}
+
+/**
+ * Migrates a schemaVersion 2 project to 3 (level system):
+ *  - creates the ordered `levels` array from existing 2D plan documents,
+ *    linking each level to its document (one level per plan document, in
+ *    document order, elevation = index × defaultHeight);
+ *  - stamps every entity's legacy floorId (default 'floor-1') onto
+ *    levelId of the first level (entities lived on one floor pre-v3);
+ *  - stairs gain fromLevel/toLevel linking consecutive levels when a
+ *    stair's rise matches the level height (best effort, no distortion).
+ * Fails loudly on non-object input; never corrupts.
+ */
+function migrateProjectV2toV3(project, options = {}) {
+  if (!project || typeof project !== 'object' || Array.isArray(project)) {
+    throw new Error('Cannot migrate project: document must be an object');
+  }
+  const migrated = project;
+  migrated.schemaVersion = 3;
+
+  const defaultHeight = Number.isFinite(options.defaultLevelHeight) && options.defaultLevelHeight > 0
+    ? options.defaultLevelHeight : 3.2;
+  const docs = (Array.isArray(migrated.documents) ? migrated.documents : [])
+    .filter(d => d && (d.type === '2d_plan' || d.type === '2d'));
+
+  if (!Array.isArray(migrated.levels) || migrated.levels.length === 0) {
+    // One level per plan document, in order; elevation stacks by defaultHeight
+    migrated.levels = docs.length > 0
+      ? docs.map((d, i) => ({
+          id: `level-${i}`,
+          name: d.name || `Level ${String(i).padStart(2, '0')}`,
+          elevation: i * defaultHeight,
+          heightToNext: defaultHeight,
+          documentId: d.id,
+          visible: true
+        }))
+      : [{ id: 'level-0', name: 'Level 00', elevation: 0, heightToNext: defaultHeight, documentId: null, visible: true }];
+  } else {
+    migrated.levels = migrated.levels.map((l, i) => ({
+      id: l.id || `level-${i}`,
+      name: l.name || `Level ${String(i).padStart(2, '0')}`,
+      elevation: Number.isFinite(l.elevation) ? l.elevation : i * defaultHeight,
+      heightToNext: Number.isFinite(l.heightToNext) && l.heightToNext > 0 ? l.heightToNext : defaultHeight,
+      documentId: typeof l.documentId === 'string' ? l.documentId : null,
+      visible: l.visible !== false
+    })).sort((a, b) => a.elevation - b.elevation);
+  }
+
+  const firstLevelId = migrated.levels[0].id;
+  const docIdToLevel = new Map(migrated.levels.map(l => [l.documentId, l.id]));
+  for (const doc of docs) {
+    const levelId = docIdToLevel.get(doc.id) || firstLevelId;
+    if (!Array.isArray(doc.entities)) continue;
+    for (const e of doc.entities) {
+      if (!e || typeof e !== 'object') continue;
+      if (!e.levelId) e.levelId = levelId;
+      if (e.kind === 'stair' && !e.fromLevel) {
+        // best-effort link: a stair belongs to the level of its document
+        e.fromLevel = levelId;
+        const idx = migrated.levels.findIndex(l => l.id === levelId);
+        e.toLevel = idx >= 0 && idx + 1 < migrated.levels.length ? migrated.levels[idx + 1].id : levelId;
+      }
+    }
   }
   return migrated;
 }
@@ -27046,7 +27149,15 @@ const MIGRATIONS = Object.freeze([
    *    measurements are derived on demand via core/project-schema.deriveFacts
    *  - empty relationship index created (rebuilt on demand)
    */
-  (project) => migrateProjectV1toV2(project)
+  (project) => migrateProjectV1toV2(project),
+  /**
+   * v2 → v3 (level system):
+   *  - ordered `levels` array built from 2D plan documents (one level per
+   *    document, elevations stacking by default height)
+   *  - entities stamped with levelId; stairs gain fromLevel/toLevel
+   *  - each level links to its plan document
+   */
+  (project) => migrateProjectV2toV3(project)
 ]);
 
 /** Highest version this build understands. */
@@ -39211,6 +39322,12 @@ function createPlanView(context) {
     const firstEntity = entities().length === 0;
     // Schema v2 identity contract stamped as the entity enters the model.
     attachIdentity(entity);
+    // Schema v3: the entity knows its level (the level linked to the
+    // active document, else the first level).
+    const doc = getActiveDocument();
+    const lvls = projectLevels();
+    const linked = lvls.find(l => l.documentId === (doc && doc.id));
+    entity.levelId = (linked || lvls[0] || {}).id || 'level-0';
     const cmd = entityAddRemoveCommand(entities(), entity, label);
     cmd.redo();
     history.push(cmd);
@@ -41628,7 +41745,13 @@ function createPlanView(context) {
     let faces3D = [];
     let multiStoryMetrics = null;
     if (doc.massingOptions.multiStory) {
-      multiStoryMetrics = buildMultiStoryMassing3DModel(state.plan.documents || [planDoc], doc.massingOptions);
+      // Level-aware stacking (schema v3): elevations are datums from the
+      // project's levels array when present.
+      const projectLevels = projectStore?.getProject()?.levels || null;
+      multiStoryMetrics = buildMultiStoryMassing3DModel(
+        state.plan.documents || [planDoc],
+        { ...doc.massingOptions, levels: projectLevels }
+      );
       faces3D = multiStoryMetrics.faces;
     } else {
       faces3D = buildMassing3DModel(planEntities, doc.massingOptions);
@@ -43613,6 +43736,125 @@ function createPlanView(context) {
     });
   }
 
+  // ------------------------------------------------------------------
+  // Level system (schema v3): ordered floors with elevation datums.
+  // Entities carry levelId; documents link to levels; 3D stacks by datum.
+  // ------------------------------------------------------------------
+  function projectLevels() {
+    const proj = projectStore?.getProject();
+    if (!proj) return [];
+    if (!Array.isArray(proj.levels) || proj.levels.length === 0) {
+      proj.levels = [{ id: 'level-0', name: 'Level 00', elevation: 0, heightToNext: 3.2, documentId: (state.plan.documents[0] || {}).id || null, visible: true }];
+    }
+    return proj.levels;
+  }
+
+  function saveLevels(levels) {
+    const proj = projectStore?.getProject();
+    if (!proj) return false;
+    const res = projectStore.updateProject(draft => {
+      draft.levels = levels;
+      return draft;
+    });
+    return !!(res && res.ok);
+  }
+
+  function renderLevelsList() {
+    const host = document.getElementById('plan-levels-list');
+    if (!host) return;
+    const levels = [...projectLevels()].sort((a, b) => a.elevation - b.elevation);
+    const docs = state.plan.documents || [];
+
+    host.innerHTML = levels.map((lvl, i) => {
+      const linkedDoc = docs.find(d => d.id === lvl.documentId);
+      return `
+        <div style="display: flex; align-items: center; gap: 6px; padding: 0.3rem 0.4rem; background: var(--bg-surface-2, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 4px;" data-level-idx="${i}">
+          <span style="font-family: var(--font-mono); font-size: 0.68rem; color: var(--accent-primary, #38bdf8); min-width: 42px;">±${lvl.elevation.toFixed(2)}</span>
+          <span style="flex: 1; font-size: 0.72rem; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(lvl.name)}${linkedDoc ? ` <small style="color: var(--text-muted);">· ${escapeHtml(linkedDoc.name)}</small>` : ' <small style="color: var(--text-muted);">· no plan</small>'}</span>
+          <button type="button" class="btn btn-xs btn-outline" data-level-act="goto" data-level-id="${lvl.id}" title="Open the linked plan document">→</button>
+          <button type="button" class="btn btn-xs btn-outline" data-level-act="elev" data-level-id="${lvl.id}" title="Edit elevation / height / name">✎</button>
+          <button type="button" class="btn btn-xs btn-outline" data-level-act="link" data-level-id="${lvl.id}" title="Link a document to this level">🔗</button>
+          <button type="button" class="btn btn-xs btn-outline" data-level-act="remove" data-level-id="${lvl.id}" title="Remove level (documents kept)">✕</button>
+        </div>`;
+    }).join('') || '<div style="font-size: 0.7rem; color: var(--text-muted);">No levels defined.</div>';
+
+    host.querySelectorAll('[data-level-act]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const act = btn.dataset.levelAct;
+        const id = btn.dataset.levelId;
+        const levels = projectLevels();
+        const lvl = levels.find(l => l.id === id);
+        if (!lvl) return;
+
+        if (act === 'goto' && lvl.documentId) {
+          const doc = (state.plan.documents || []).find(d => d.id === lvl.documentId);
+          if (doc) { switchDocument(doc.id); showToast(`Opened ${lvl.name} plan`); }
+          else showToast('The linked document no longer exists', 'warning');
+          return;
+        }
+        if (act === 'elev') {
+          const v = prompt(`Level "${lvl.name}" — elevation (m), height to next (m), name\n(current: ${lvl.elevation}, ${lvl.heightToNext}, ${lvl.name})\nFormat: elevation, height, name`, `${lvl.elevation}, ${lvl.heightToNext}, ${lvl.name}`);
+          if (v == null) return;
+          const parts = v.split(',').map(s => s.trim());
+          const elev = parseFloat(parts[0]), htn = parseFloat(parts[1]);
+          if (Number.isFinite(elev)) lvl.elevation = elev;
+          if (Number.isFinite(htn) && htn > 0) lvl.heightToNext = htn;
+          if (parts[2]) lvl.name = parts[2];
+          saveLevels(levels);
+          renderLevelsList();
+          showToast(`Updated ${lvl.name}`);
+          return;
+        }
+        if (act === 'link') {
+          const names = (state.plan.documents || []).map((d, i) => `${i}: ${d.name}`).join('\n');
+          const v = prompt(`Link which document index to ${lvl.name}?\n${names}`, '0');
+          if (v == null) return;
+          const doc = (state.plan.documents || [])[parseInt(v, 10)];
+          if (!doc) { showToast('No such document', 'warning'); return; }
+          // one document per level: clear the old link
+          for (const l of levels) if (l.documentId === doc.id) l.documentId = null;
+          lvl.documentId = doc.id;
+          saveLevels(levels);
+          renderLevelsList();
+          showToast(`${lvl.name} ↔ ${doc.name}`);
+          return;
+        }
+        if (act === 'remove') {
+          if (levels.length <= 1) { showToast('At least one level must remain', 'warning'); return; }
+          const idx = levels.indexOf(lvl);
+          levels.splice(idx, 1);
+          saveLevels(levels);
+          renderLevelsList();
+          showToast(`Removed ${lvl.name} (documents kept)`);
+          return;
+        }
+      });
+    });
+  }
+
+  function setupLevelsPanel() {
+    const addBtn = document.getElementById('btn-add-level');
+    addBtn?.addEventListener('click', () => {
+      const levels = projectLevels();
+      const topElev = Math.max(0, ...levels.map(l => l.elevation));
+      const topH = Math.max(...levels.map(l => l.heightToNext || 3.2));
+      const count = levels.length;
+      levels.push({
+        id: `level-${Date.now().toString(36)}`,
+        name: `Level ${String(count).padStart(2, '0')}`,
+        elevation: topElev + topH,
+        heightToNext: topH,
+        documentId: null,
+        visible: true
+      });
+      saveLevels(levels);
+      renderLevelsList();
+      showToast('Level added — link a plan document with 🔗');
+      AudioService.playTick();
+    });
+    renderLevelsList();
+  }
+
   function setupSidebarTabs() {
     const tabEntities = dom.tabPlanEntities || document.getElementById('tab-plan-entities');
     const tabLayers = dom.tabPlanLayers || document.getElementById('tab-plan-layers');
@@ -43660,6 +43902,7 @@ function createPlanView(context) {
         activeSidebarTab = 'schedule';
         updateTabUI();
         renderScheduleList();
+        renderLevelsList();
       });
     }
 
@@ -46666,6 +46909,7 @@ function createPlanView(context) {
       initDocuments();
       renderTabs();
       setupSidebarTabs();
+      setupLevelsPanel();
       showRecoveryBannerIfAny();
 
       const newDocBtn = dom.btnPlanNewDoc || document.getElementById('btn-plan-new-doc');
