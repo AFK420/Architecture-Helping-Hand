@@ -40,7 +40,7 @@ import {
   columnHatchLines, columnSnapPoints, gridLineIntersection, COLUMN_PROFILES, BUBBLE_POSITIONS
 } from '../../core/grid-columns.js';
 import {
-  CAMERA_PRESETS, buildMassing3DModel, buildMultiStoryMassing3DModel, projectAndSortFaces, generateMassingSVG, projectPoint3D
+  CAMERA_PRESETS, buildMassing3DModel, buildMultiStoryMassing3DModel, projectAndSortFaces, generateMassingSVG, projectPoint3D, pickMassingFace, clipMassingFaces
 } from '../../core/massing-3d.js';
 import { applyParameter as applyParametricParameter, readParameters } from '../../core/parametric.js';
 import { createConstraint, solveConstraint, CONSTRAINT_TYPES } from '../../core/constraints.js';
@@ -2403,6 +2403,10 @@ export function createPlanView(context) {
     } else {
       faces3D = buildMassing3DModel(planEntities, doc.massingOptions);
     }
+    // Section clip: keep only geometry at/below the cut height when active
+    if (doc.massingOptions.clipOn === true && Number.isFinite(doc.massingOptions.clipZ)) {
+      faces3D = clipMassingFaces(faces3D, doc.massingOptions.clipZ);
+    }
     const sortedFaces = projectAndSortFaces(faces3D, doc.camera);
 
     const facesMarkup = sortedFaces.map(f => {
@@ -2410,7 +2414,8 @@ export function createPlanView(context) {
       const fill = doc.massingOptions.wireframe ? 'none' : f.color;
       const stroke = doc.massingOptions.wireframe ? 'var(--accent-primary, #38bdf8)' : f.stroke;
       const op = f.opacity < 1 ? ` opacity="${f.opacity}"` : '';
-      return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="${doc.massingOptions.wireframe ? 1 : 1.2}" stroke-linejoin="round"${op}/>`;
+      const sel = f.entityId && state.plan.selectedIds && state.plan.selectedIds.has(f.entityId);
+      return `<polygon points="${pts}" fill="${fill}" stroke="${sel ? '#fbbf24' : stroke}" stroke-width="${sel ? 2.5 : doc.massingOptions.wireframe ? 1 : 1.2}" stroke-linejoin="round"${op} data-face-entity="${f.entityId || ''}" style="cursor: pointer;"${f.entityId ? '' : ' pointer-events="none"'}/>`;
     }).join('\n');
 
     const presetsMarkup = Object.entries(CAMERA_PRESETS).map(([key, p]) => {
@@ -2449,6 +2454,8 @@ export function createPlanView(context) {
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
             <button type="button" id="btn-3d-projection" class="result-action-btn ${doc.camera.perspective === true ? 'primary' : ''}" style="font-size: 0.68rem; padding: 2px 6px;" title="Toggle perspective / orthographic projection">${doc.camera.perspective === true ? 'Perspective' : 'Ortho'}</button>
+            <button type="button" id="btn-3d-clip" class="result-action-btn ${doc.massingOptions.clipOn ? 'primary' : ''}" style="font-size: 0.68rem; padding: 2px 6px;" title="Horizontal section clip plane">✂ ${doc.massingOptions.clipOn ? `Cut ${doc.massingOptions.clipZ.toFixed(1)}m` : 'Section Cut'}</button>
+            <input type="range" id="rng-3d-clip" min="0.2" max="6" step="0.1" value="${doc.massingOptions.clipZ != null ? doc.massingOptions.clipZ : 1.2}" style="width: 80px; display: ${doc.massingOptions.clipOn ? 'inline-block' : 'none'};" title="Section cut height (m above ground)" />
             <button type="button" id="btn-3d-multistory" class="result-action-btn ${doc.massingOptions.multiStory ? 'primary' : ''}" style="font-size: 0.68rem; padding: 2px 6px;" title="Toggle multi-story building stacking">${multiStoryLabel}</button>
             <button type="button" id="btn-3d-wireframe" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">${doc.massingOptions.wireframe ? 'Shaded' : 'Wireframe'}</button>
             <button type="button" id="btn-3d-height" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">H: ${(doc.massingOptions.wallHeight || 3.0).toFixed(1)}m</button>
@@ -2478,6 +2485,23 @@ export function createPlanView(context) {
         AudioService.playTick();
         showToast(doc.camera.perspective ? 'Perspective projection ON' : 'Orthographic projection');
       });
+
+      ctxBar.querySelector('#btn-3d-clip')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        doc.massingOptions.clipOn = doc.massingOptions.clipOn !== true;
+        if (doc.massingOptions.clipOn && doc.massingOptions.clipZ == null) doc.massingOptions.clipZ = 1.2;
+        render();
+        AudioService.playTick();
+        showToast(doc.massingOptions.clipOn ? `Section cut at ${doc.massingOptions.clipZ.toFixed(1)} m — click faces to select` : 'Section cut off');
+      });
+
+      const clipRange = ctxBar.querySelector('#rng-3d-clip');
+      clipRange?.addEventListener('input', (e) => {
+        doc.massingOptions.clipZ = parseFloat(e.target.value);
+        doc.massingOptions.clipOn = true;
+        scheduleSceneRender();
+      });
+      clipRange?.addEventListener('change', () => { AudioService.playTick(); });
 
       ctxBar.querySelector('#btn-3d-multistory')?.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -5944,10 +5968,16 @@ export function createPlanView(context) {
     }
     const doc = getActiveDocument();
     if (doc && doc.type === '3d_massing') {
+      // Face click = 3D pick (raycast → plan entity); drag = orbit.
+      const faceEl = event.target && event.target.dataset && event.target.dataset.faceEntity
+        ? event.target
+        : (event.target.closest ? event.target.closest('[data-face-entity]') : null);
       dragState = {
         mode: 'orbit_3d',
         startClient: { x: event.clientX, y: event.clientY },
-        startCam: { ...(doc.camera || {}) }
+        startCam: { ...(doc.camera || {}) },
+        downFaceEntity: faceEl && faceEl.dataset.faceEntity ? faceEl.dataset.faceEntity : null,
+        moved: false
       };
       event.preventDefault();
       return;
@@ -6207,10 +6237,12 @@ export function createPlanView(context) {
     if (dragState.mode === 'orbit_3d') {
       const dx = event.clientX - dragState.startClient.x;
       const dy = event.clientY - dragState.startClient.y;
+      if (Math.hypot(dx, dy) > 4) dragState.moved = true; // real drag → not a pick click
       const doc = getActiveDocument();
       if (!doc.camera) doc.camera = {};
       doc.camera.azimuth = (dragState.startCam.azimuth || 45) + dx * 0.5;
-      doc.camera.elevation = Math.max(10, Math.min(85, (dragState.startCam.elevation || 35.264) - dy * 0.5));
+      // Full ±89.9° like camera3d.orbitCamera — bottom views are reachable
+      doc.camera.elevation = Math.max(-89.9, Math.min(89.9, (dragState.startCam.elevation || 35.264) - dy * 0.5));
       scheduleSceneRender();
       return;
     }
@@ -6478,7 +6510,23 @@ export function createPlanView(context) {
         }
       }
     } else if (dragState.mode === 'orbit_3d') {
+      // Click (not drag) on a massing face = 3D pick: raycast against the
+      // rendered faces and select the source plan entity.
+      const wasPick = !dragState.moved && dragState.downFaceEntity;
+      const faceId = dragState.downFaceEntity;
       dragState = null;
+      if (wasPick && faceId) {
+        const entity = entities().find(e => e.id === faceId);
+        if (entity) {
+          state.plan.selectedIds = new Set([entity.id]);
+          render();
+          renderPropertiesInspector();
+          updateStudioCPanels();
+          AudioService.playTick();
+          showToast(`Selected ${entity.name || entity.kind} (3D pick)`);
+          return;
+        }
+      }
       render();
       return;
     } else if (dragState.mode === 'marqueeOrPan') {

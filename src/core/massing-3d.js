@@ -16,7 +16,12 @@ export const CAMERA_PRESETS = Object.freeze({
   isometric_sw: { azimuth: -135, elevation: 35.264, label: 'Isometric SW' },
   axonometric_top: { azimuth: 45, elevation: 60, label: 'Top Axo (60°)' },
   cavalier: { azimuth: 45, elevation: 45, label: 'Plan Oblique (45°)' },
-  plan: { azimuth: 0, elevation: 89.9, label: 'Plan View' }
+  plan: { azimuth: 0, elevation: 89.9, label: 'Plan (Top)' },
+  bottom: { azimuth: 0, elevation: -89.9, label: 'Bottom (Underside)' },
+  front_south: { azimuth: 180, elevation: 0, label: 'Front (South)' },
+  back_north: { azimuth: 0, elevation: 0, label: 'Back (North)' },
+  left_west: { azimuth: -90, elevation: 0, label: 'Left (West)' },
+  right_east: { azimuth: 90, elevation: 0, label: 'Right (East)' }
 });
 
 // Normalized directional sun light vector [Lx, Ly, Lz]
@@ -127,8 +132,9 @@ function applyLightingToColor(hexColor, factor) {
 
 /**
  * Creates a 3D box / prism from a 2D base polygon extruded along Z.
+ * All produced faces carry the source entity id (3D picking → plan entity).
  */
-function extrudePolygon(basePoints, zBottom, zTop, baseColor = '#e2e8f0', strokeColor = '#334155', opacity = 1, type = 'wall') {
+function extrudePolygon(basePoints, zBottom, zTop, baseColor = '#e2e8f0', strokeColor = '#334155', opacity = 1, type = 'wall', sourceId = null) {
   const faces = [];
   const n = basePoints.length;
   if (n < 3) return faces;
@@ -179,6 +185,9 @@ function extrudePolygon(basePoints, zBottom, zTop, baseColor = '#e2e8f0', stroke
     });
   }
 
+  if (sourceId != null) {
+    for (const f of faces) f.entityId = sourceId;
+  }
   return faces;
 }
 
@@ -223,7 +232,7 @@ export function buildMassing3DModel(entities = [], options = {}) {
       ];
     }
     if (poly.length >= 3) {
-      const slabFaces = extrudePolygon(poly, zBase - slabThick, zBase, '#cbd5e1', '#94a3b8', 1, 'slab');
+      const slabFaces = extrudePolygon(poly, zBase - slabThick, zBase, '#cbd5e1', '#94a3b8', 1, 'slab', r.id);
       faces.push(...slabFaces);
     }
   }
@@ -252,7 +261,7 @@ export function buildMassing3DModel(entities = [], options = {}) {
         [w.x2 - nx, w.y2 - ny],
         [w.x1 - nx, w.y1 - ny]
       ];
-      faces.push(...extrudePolygon(basePts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall'));
+      faces.push(...extrudePolygon(basePts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall', w.id));
     } else {
       // Segmented wall around openings
       let currentPos = 0;
@@ -270,7 +279,7 @@ export function buildMassing3DModel(entities = [], options = {}) {
             [pEnd.x - nx, pEnd.y - ny],
             [pStart.x - nx, pStart.y - ny]
           ];
-          faces.push(...extrudePolygon(segPts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall'));
+          faces.push(...extrudePolygon(segPts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall', w.id));
         }
 
         // Opening segment
@@ -286,18 +295,18 @@ export function buildMassing3DModel(entities = [], options = {}) {
         if (op.kind === 'door') {
           // Lintel above door (from zBase + doorH to zBase + wallH)
           if (wallH > doorH) {
-            faces.push(...extrudePolygon(opPts, zBase + doorH, zBase + wallH, '#f1f5f9', '#475569', 1, 'lintel'));
+            faces.push(...extrudePolygon(opPts, zBase + doorH, zBase + wallH, '#f1f5f9', '#475569', 1, 'lintel', w.id));
           }
         } else if (op.kind === 'window') {
           // Parapet / sill below window (from zBase to zBase + winSill)
           if (winSill > 0) {
-            faces.push(...extrudePolygon(opPts, zBase, zBase + winSill, '#f1f5f9', '#475569', 1, 'sill'));
+            faces.push(...extrudePolygon(opPts, zBase, zBase + winSill, '#f1f5f9', '#475569', 1, 'sill', w.id));
           }
           // Tinted window glass pane in middle (from zBase + winSill to zBase + winTop)
-          faces.push(...extrudePolygon(opPts, zBase + winSill, zBase + winTop, '#38bdf8', '#0284c7', 0.55, 'glass'));
+          faces.push(...extrudePolygon(opPts, zBase + winSill, zBase + winTop, '#38bdf8', '#0284c7', 0.55, 'glass', w.id));
           // Lintel above window (from zBase + winTop to zBase + wallH)
           if (wallH > winTop) {
-            faces.push(...extrudePolygon(opPts, zBase + winTop, zBase + wallH, '#f1f5f9', '#475569', 1, 'lintel'));
+            faces.push(...extrudePolygon(opPts, zBase + winTop, zBase + wallH, '#f1f5f9', '#475569', 1, 'lintel', w.id));
           }
         }
 
@@ -314,7 +323,7 @@ export function buildMassing3DModel(entities = [], options = {}) {
           [pEnd.x - nx, pEnd.y - ny],
           [pStart.x - nx, pStart.y - ny]
         ];
-        faces.push(...extrudePolygon(segPts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall'));
+        faces.push(...extrudePolygon(segPts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall', w.id));
       }
     }
   }
@@ -325,7 +334,7 @@ export function buildMassing3DModel(entities = [], options = {}) {
     const contour = columnContour(c);
     if (contour.length >= 3) {
       const colColor = c.material === 'steel' ? '#64748b' : '#94a3b8';
-      faces.push(...extrudePolygon(contour, zBase, zBase + wallH, colColor, '#1e293b', 1, 'column'));
+      faces.push(...extrudePolygon(contour, zBase, zBase + wallH, colColor, '#1e293b', 1, 'column', c.id));
     }
   }
 
@@ -351,7 +360,7 @@ export function buildMassing3DModel(entities = [], options = {}) {
         [st.x + stW, stepY + treadD],
         [st.x, stepY + treadD]
       ];
-      faces.push(...extrudePolygon(stepPts, stepBottom, stepTop, '#fbcfe8', '#db2777', 1, 'stair'));
+      faces.push(...extrudePolygon(stepPts, stepBottom, stepTop, '#fbcfe8', '#db2777', 1, 'stair', st.id));
     }
   }
 
@@ -471,6 +480,50 @@ export function projectAndSortFaces(faces3D, camera) {
   projected.sort((a, b) => a.depth - b.depth);
 
   return projected;
+}
+
+// ---------------------------------------------------------------------------
+// 3D picking — the tested geometry3d raycaster against massing faces
+// ---------------------------------------------------------------------------
+
+import { screenToWorldRay } from './camera3d.js';
+import { rayIntersectsFace, clipPolygonAgainstPlane, createPlane } from './geometry3d.js';
+
+/**
+ * Picks the nearest massing face under a screen point.
+ * Returns { entityId, type, t, point } | null. `entityId` maps back to the
+ * 2D plan entity that produced the face (walls/rooms/columns/stairs).
+ */
+export function pickMassingFace(faces3D, screenX, screenY, camera) {
+  const ray = screenToWorldRay(screenX, screenY, camera);
+  let best = null;
+  for (const face of faces3D) {
+    const hit = rayIntersectsFace(ray, face.vertices);
+    if (hit && (!best || hit.t < best.t)) {
+      best = { t: hit.t, point: hit.point, entityId: face.entityId || null, type: face.type };
+    }
+  }
+  return best;
+}
+
+/**
+ * Applies a horizontal section clip plane to the massing faces: everything
+ * above zClip is removed (keep the normal-pointing side — the plane normal
+ * points −z so points BELOW survive). Returns a new face array.
+ */
+export function clipMassingFaces(faces3D, zClip) {
+  if (!Number.isFinite(zClip)) return faces3D;
+  // normal (0,0,-1) through (0,0,zClip): planeDistance = zClip − z ≥ 0 keeps z ≤ zClip
+  const plane = createPlane({ x: 0, y: 0, z: zClip }, { x: 0, y: 0, z: -1 });
+  const out = [];
+  for (const face of faces3D) {
+    const res = clipPolygonAgainstPlane(face.vertices, plane);
+    const verts = res && Array.isArray(res.vertices) ? res.vertices : res;
+    if (Array.isArray(verts) && verts.length >= 3) {
+      out.push({ ...face, vertices: verts });
+    }
+  }
+  return out;
 }
 
 /**

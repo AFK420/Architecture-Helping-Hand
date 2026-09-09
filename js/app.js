@@ -13976,7 +13976,12 @@ const CAMERA_PRESETS = Object.freeze({
   isometric_sw: { azimuth: -135, elevation: 35.264, label: 'Isometric SW' },
   axonometric_top: { azimuth: 45, elevation: 60, label: 'Top Axo (60°)' },
   cavalier: { azimuth: 45, elevation: 45, label: 'Plan Oblique (45°)' },
-  plan: { azimuth: 0, elevation: 89.9, label: 'Plan View' }
+  plan: { azimuth: 0, elevation: 89.9, label: 'Plan (Top)' },
+  bottom: { azimuth: 0, elevation: -89.9, label: 'Bottom (Underside)' },
+  front_south: { azimuth: 180, elevation: 0, label: 'Front (South)' },
+  back_north: { azimuth: 0, elevation: 0, label: 'Back (North)' },
+  left_west: { azimuth: -90, elevation: 0, label: 'Left (West)' },
+  right_east: { azimuth: 90, elevation: 0, label: 'Right (East)' }
 });
 
 // Normalized directional sun light vector [Lx, Ly, Lz]
@@ -14087,8 +14092,9 @@ function applyLightingToColor(hexColor, factor) {
 
 /**
  * Creates a 3D box / prism from a 2D base polygon extruded along Z.
+ * All produced faces carry the source entity id (3D picking → plan entity).
  */
-function extrudePolygon(basePoints, zBottom, zTop, baseColor = '#e2e8f0', strokeColor = '#334155', opacity = 1, type = 'wall') {
+function extrudePolygon(basePoints, zBottom, zTop, baseColor = '#e2e8f0', strokeColor = '#334155', opacity = 1, type = 'wall', sourceId = null) {
   const faces = [];
   const n = basePoints.length;
   if (n < 3) return faces;
@@ -14139,6 +14145,9 @@ function extrudePolygon(basePoints, zBottom, zTop, baseColor = '#e2e8f0', stroke
     });
   }
 
+  if (sourceId != null) {
+    for (const f of faces) f.entityId = sourceId;
+  }
   return faces;
 }
 
@@ -14183,7 +14192,7 @@ function buildMassing3DModel(entities = [], options = {}) {
       ];
     }
     if (poly.length >= 3) {
-      const slabFaces = extrudePolygon(poly, zBase - slabThick, zBase, '#cbd5e1', '#94a3b8', 1, 'slab');
+      const slabFaces = extrudePolygon(poly, zBase - slabThick, zBase, '#cbd5e1', '#94a3b8', 1, 'slab', r.id);
       faces.push(...slabFaces);
     }
   }
@@ -14212,7 +14221,7 @@ function buildMassing3DModel(entities = [], options = {}) {
         [w.x2 - nx, w.y2 - ny],
         [w.x1 - nx, w.y1 - ny]
       ];
-      faces.push(...extrudePolygon(basePts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall'));
+      faces.push(...extrudePolygon(basePts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall', w.id));
     } else {
       // Segmented wall around openings
       let currentPos = 0;
@@ -14230,7 +14239,7 @@ function buildMassing3DModel(entities = [], options = {}) {
             [pEnd.x - nx, pEnd.y - ny],
             [pStart.x - nx, pStart.y - ny]
           ];
-          faces.push(...extrudePolygon(segPts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall'));
+          faces.push(...extrudePolygon(segPts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall', w.id));
         }
 
         // Opening segment
@@ -14246,18 +14255,18 @@ function buildMassing3DModel(entities = [], options = {}) {
         if (op.kind === 'door') {
           // Lintel above door (from zBase + doorH to zBase + wallH)
           if (wallH > doorH) {
-            faces.push(...extrudePolygon(opPts, zBase + doorH, zBase + wallH, '#f1f5f9', '#475569', 1, 'lintel'));
+            faces.push(...extrudePolygon(opPts, zBase + doorH, zBase + wallH, '#f1f5f9', '#475569', 1, 'lintel', w.id));
           }
         } else if (op.kind === 'window') {
           // Parapet / sill below window (from zBase to zBase + winSill)
           if (winSill > 0) {
-            faces.push(...extrudePolygon(opPts, zBase, zBase + winSill, '#f1f5f9', '#475569', 1, 'sill'));
+            faces.push(...extrudePolygon(opPts, zBase, zBase + winSill, '#f1f5f9', '#475569', 1, 'sill', w.id));
           }
           // Tinted window glass pane in middle (from zBase + winSill to zBase + winTop)
-          faces.push(...extrudePolygon(opPts, zBase + winSill, zBase + winTop, '#38bdf8', '#0284c7', 0.55, 'glass'));
+          faces.push(...extrudePolygon(opPts, zBase + winSill, zBase + winTop, '#38bdf8', '#0284c7', 0.55, 'glass', w.id));
           // Lintel above window (from zBase + winTop to zBase + wallH)
           if (wallH > winTop) {
-            faces.push(...extrudePolygon(opPts, zBase + winTop, zBase + wallH, '#f1f5f9', '#475569', 1, 'lintel'));
+            faces.push(...extrudePolygon(opPts, zBase + winTop, zBase + wallH, '#f1f5f9', '#475569', 1, 'lintel', w.id));
           }
         }
 
@@ -14274,7 +14283,7 @@ function buildMassing3DModel(entities = [], options = {}) {
           [pEnd.x - nx, pEnd.y - ny],
           [pStart.x - nx, pStart.y - ny]
         ];
-        faces.push(...extrudePolygon(segPts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall'));
+        faces.push(...extrudePolygon(segPts, zBase, zBase + wallH, '#f1f5f9', '#475569', 1, 'wall', w.id));
       }
     }
   }
@@ -14285,7 +14294,7 @@ function buildMassing3DModel(entities = [], options = {}) {
     const contour = columnContour(c);
     if (contour.length >= 3) {
       const colColor = c.material === 'steel' ? '#64748b' : '#94a3b8';
-      faces.push(...extrudePolygon(contour, zBase, zBase + wallH, colColor, '#1e293b', 1, 'column'));
+      faces.push(...extrudePolygon(contour, zBase, zBase + wallH, colColor, '#1e293b', 1, 'column', c.id));
     }
   }
 
@@ -14311,7 +14320,7 @@ function buildMassing3DModel(entities = [], options = {}) {
         [st.x + stW, stepY + treadD],
         [st.x, stepY + treadD]
       ];
-      faces.push(...extrudePolygon(stepPts, stepBottom, stepTop, '#fbcfe8', '#db2777', 1, 'stair'));
+      faces.push(...extrudePolygon(stepPts, stepBottom, stepTop, '#fbcfe8', '#db2777', 1, 'stair', st.id));
     }
   }
 
@@ -14431,6 +14440,50 @@ function projectAndSortFaces(faces3D, camera) {
   projected.sort((a, b) => a.depth - b.depth);
 
   return projected;
+}
+
+// ---------------------------------------------------------------------------
+// 3D picking — the tested geometry3d raycaster against massing faces
+// ---------------------------------------------------------------------------
+
+
+
+
+/**
+ * Picks the nearest massing face under a screen point.
+ * Returns { entityId, type, t, point } | null. `entityId` maps back to the
+ * 2D plan entity that produced the face (walls/rooms/columns/stairs).
+ */
+function pickMassingFace(faces3D, screenX, screenY, camera) {
+  const ray = screenToWorldRay(screenX, screenY, camera);
+  let best = null;
+  for (const face of faces3D) {
+    const hit = rayIntersectsFace(ray, face.vertices);
+    if (hit && (!best || hit.t < best.t)) {
+      best = { t: hit.t, point: hit.point, entityId: face.entityId || null, type: face.type };
+    }
+  }
+  return best;
+}
+
+/**
+ * Applies a horizontal section clip plane to the massing faces: everything
+ * above zClip is removed (keep the normal-pointing side — the plane normal
+ * points −z so points BELOW survive). Returns a new face array.
+ */
+function clipMassingFaces(faces3D, zClip) {
+  if (!Number.isFinite(zClip)) return faces3D;
+  // normal (0,0,-1) through (0,0,zClip): planeDistance = zClip − z ≥ 0 keeps z ≤ zClip
+  const plane = createPlane({ x: 0, y: 0, z: zClip }, { x: 0, y: 0, z: -1 });
+  const out = [];
+  for (const face of faces3D) {
+    const res = clipPolygonAgainstPlane(face.vertices, plane);
+    const verts = res && Array.isArray(res.vertices) ? res.vertices : res;
+    if (Array.isArray(verts) && verts.length >= 3) {
+      out.push({ ...face, vertices: verts });
+    }
+  }
+  return out;
 }
 
 /**
@@ -41042,6 +41095,10 @@ function createPlanView(context) {
     } else {
       faces3D = buildMassing3DModel(planEntities, doc.massingOptions);
     }
+    // Section clip: keep only geometry at/below the cut height when active
+    if (doc.massingOptions.clipOn === true && Number.isFinite(doc.massingOptions.clipZ)) {
+      faces3D = clipMassingFaces(faces3D, doc.massingOptions.clipZ);
+    }
     const sortedFaces = projectAndSortFaces(faces3D, doc.camera);
 
     const facesMarkup = sortedFaces.map(f => {
@@ -41049,7 +41106,8 @@ function createPlanView(context) {
       const fill = doc.massingOptions.wireframe ? 'none' : f.color;
       const stroke = doc.massingOptions.wireframe ? 'var(--accent-primary, #38bdf8)' : f.stroke;
       const op = f.opacity < 1 ? ` opacity="${f.opacity}"` : '';
-      return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="${doc.massingOptions.wireframe ? 1 : 1.2}" stroke-linejoin="round"${op}/>`;
+      const sel = f.entityId && state.plan.selectedIds && state.plan.selectedIds.has(f.entityId);
+      return `<polygon points="${pts}" fill="${fill}" stroke="${sel ? '#fbbf24' : stroke}" stroke-width="${sel ? 2.5 : doc.massingOptions.wireframe ? 1 : 1.2}" stroke-linejoin="round"${op} data-face-entity="${f.entityId || ''}" style="cursor: pointer;"${f.entityId ? '' : ' pointer-events="none"'}/>`;
     }).join('\n');
 
     const presetsMarkup = Object.entries(CAMERA_PRESETS).map(([key, p]) => {
@@ -41088,6 +41146,8 @@ function createPlanView(context) {
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
             <button type="button" id="btn-3d-projection" class="result-action-btn ${doc.camera.perspective === true ? 'primary' : ''}" style="font-size: 0.68rem; padding: 2px 6px;" title="Toggle perspective / orthographic projection">${doc.camera.perspective === true ? 'Perspective' : 'Ortho'}</button>
+            <button type="button" id="btn-3d-clip" class="result-action-btn ${doc.massingOptions.clipOn ? 'primary' : ''}" style="font-size: 0.68rem; padding: 2px 6px;" title="Horizontal section clip plane">✂ ${doc.massingOptions.clipOn ? `Cut ${doc.massingOptions.clipZ.toFixed(1)}m` : 'Section Cut'}</button>
+            <input type="range" id="rng-3d-clip" min="0.2" max="6" step="0.1" value="${doc.massingOptions.clipZ != null ? doc.massingOptions.clipZ : 1.2}" style="width: 80px; display: ${doc.massingOptions.clipOn ? 'inline-block' : 'none'};" title="Section cut height (m above ground)" />
             <button type="button" id="btn-3d-multistory" class="result-action-btn ${doc.massingOptions.multiStory ? 'primary' : ''}" style="font-size: 0.68rem; padding: 2px 6px;" title="Toggle multi-story building stacking">${multiStoryLabel}</button>
             <button type="button" id="btn-3d-wireframe" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">${doc.massingOptions.wireframe ? 'Shaded' : 'Wireframe'}</button>
             <button type="button" id="btn-3d-height" class="result-action-btn" style="font-size: 0.68rem; padding: 2px 6px;">H: ${(doc.massingOptions.wallHeight || 3.0).toFixed(1)}m</button>
@@ -41117,6 +41177,23 @@ function createPlanView(context) {
         AudioService.playTick();
         showToast(doc.camera.perspective ? 'Perspective projection ON' : 'Orthographic projection');
       });
+
+      ctxBar.querySelector('#btn-3d-clip')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        doc.massingOptions.clipOn = doc.massingOptions.clipOn !== true;
+        if (doc.massingOptions.clipOn && doc.massingOptions.clipZ == null) doc.massingOptions.clipZ = 1.2;
+        render();
+        AudioService.playTick();
+        showToast(doc.massingOptions.clipOn ? `Section cut at ${doc.massingOptions.clipZ.toFixed(1)} m — click faces to select` : 'Section cut off');
+      });
+
+      const clipRange = ctxBar.querySelector('#rng-3d-clip');
+      clipRange?.addEventListener('input', (e) => {
+        doc.massingOptions.clipZ = parseFloat(e.target.value);
+        doc.massingOptions.clipOn = true;
+        scheduleSceneRender();
+      });
+      clipRange?.addEventListener('change', () => { AudioService.playTick(); });
 
       ctxBar.querySelector('#btn-3d-multistory')?.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -44583,10 +44660,16 @@ function createPlanView(context) {
     }
     const doc = getActiveDocument();
     if (doc && doc.type === '3d_massing') {
+      // Face click = 3D pick (raycast → plan entity); drag = orbit.
+      const faceEl = event.target && event.target.dataset && event.target.dataset.faceEntity
+        ? event.target
+        : (event.target.closest ? event.target.closest('[data-face-entity]') : null);
       dragState = {
         mode: 'orbit_3d',
         startClient: { x: event.clientX, y: event.clientY },
-        startCam: { ...(doc.camera || {}) }
+        startCam: { ...(doc.camera || {}) },
+        downFaceEntity: faceEl && faceEl.dataset.faceEntity ? faceEl.dataset.faceEntity : null,
+        moved: false
       };
       event.preventDefault();
       return;
@@ -44846,10 +44929,12 @@ function createPlanView(context) {
     if (dragState.mode === 'orbit_3d') {
       const dx = event.clientX - dragState.startClient.x;
       const dy = event.clientY - dragState.startClient.y;
+      if (Math.hypot(dx, dy) > 4) dragState.moved = true; // real drag → not a pick click
       const doc = getActiveDocument();
       if (!doc.camera) doc.camera = {};
       doc.camera.azimuth = (dragState.startCam.azimuth || 45) + dx * 0.5;
-      doc.camera.elevation = Math.max(10, Math.min(85, (dragState.startCam.elevation || 35.264) - dy * 0.5));
+      // Full ±89.9° like camera3d.orbitCamera — bottom views are reachable
+      doc.camera.elevation = Math.max(-89.9, Math.min(89.9, (dragState.startCam.elevation || 35.264) - dy * 0.5));
       scheduleSceneRender();
       return;
     }
@@ -45117,7 +45202,23 @@ function createPlanView(context) {
         }
       }
     } else if (dragState.mode === 'orbit_3d') {
+      // Click (not drag) on a massing face = 3D pick: raycast against the
+      // rendered faces and select the source plan entity.
+      const wasPick = !dragState.moved && dragState.downFaceEntity;
+      const faceId = dragState.downFaceEntity;
       dragState = null;
+      if (wasPick && faceId) {
+        const entity = entities().find(e => e.id === faceId);
+        if (entity) {
+          state.plan.selectedIds = new Set([entity.id]);
+          render();
+          renderPropertiesInspector();
+          updateStudioCPanels();
+          AudioService.playTick();
+          showToast(`Selected ${entity.name || entity.kind} (3D pick)`);
+          return;
+        }
+      }
       render();
       return;
     } else if (dragState.mode === 'marqueeOrPan') {

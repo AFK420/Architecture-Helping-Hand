@@ -163,6 +163,50 @@ console.log('\n--- 7. Constraint UI wiring (C-panels Constraints tab) ---');
   assert(planSrc.includes('docConstraints(d).push(c)'), 'constraints stored on the document');
 }
 
+console.log('\n--- 8. 3D backend wiring (camera3d + geometry3d as the real engine) ---');
+{
+  const m = await import('../src/core/massing-3d.js');
+  const { createWall, createRoom } = await import('../src/core/entities.js');
+
+  // Standard views exposed: bottom + the 4 elevations + plan
+  for (const key of ['bottom', 'front_south', 'back_north', 'left_west', 'right_east', 'plan']) {
+    assert(Boolean(m.CAMERA_PRESETS[key]), `camera preset "${key}" exposed in the 3D toolbar`);
+  }
+  assert(!('iso_ne' in m.CAMERA_PRESETS) && !('axonometric' in m.CAMERA_PRESETS), 'no duplicate preset aliases');
+
+  // Faces carry their source entity id for picking
+  const wall = createWall({ id: 'pw1', name: 'PW', x1: 0, y1: 0, x2: 4, y2: 0 });
+  const room = createRoom({ id: 'pr1', name: 'PR', x: 0, y: 0, width: 4, depth: 3 });
+  const faces = m.buildMassing3DModel([wall, room], { wallHeight: 3 });
+  assert(faces.length > 0 && faces.every(f => f.entityId), 'every massing face stamped with its source entity id');
+  const faceIds = new Set(faces.map(f => f.entityId));
+  assert(faceIds.has('pw1') && faceIds.has('pr1'), 'wall and room faces both stamped');
+
+  // Raycast picking: click through a face → the plan entity id
+  const cam = { azimuth: 45, elevation: 30, zoom: 40, panX: 400, panY: 300 };
+  const probe = { x: 2, y: 1.5, z: 1.5 }; // a point inside the massing volume
+  const { worldToScreen3D } = await import('../src/core/camera3d.js');
+  const sp = worldToScreen3D(probe, cam);
+  const pick = m.pickMassingFace(faces, sp.x, sp.y, cam);
+  assert(pick !== null, 'raycast picks a face under the projected point');
+  assert(pick.entityId === 'pw1' || pick.entityId === 'pr1', `picked face maps to a plan entity (${pick && pick.entityId})`);
+
+  // Section clip: nothing above the cut survives
+  const clipped = m.clipMassingFaces(faces, 1.5);
+  assert(clipped.length > 0, 'clip keeps below-cut faces');
+  const maxZ = Math.max(...clipped.flatMap(f => f.vertices.map(v => v.z)));
+  assert(maxZ <= 1.5 + 1e-9, `no vertex above the cut plane (max z = ${maxZ.toFixed(2)})`);
+
+  // UI wiring pins
+  const fs = await import('node:fs');
+  const planSrc = fs.readFileSync('src/ui/views/plan.js', 'utf8');
+  assert(planSrc.includes('pickMassingFace, clipMassingFaces'), 'plan view imports the pick/clip functions');
+  assert(planSrc.includes('data-face-entity'), 'faces carry pickable data attributes');
+  assert(planSrc.includes('downFaceEntity'), '3D click-pick wired into pointerdown/up');
+  assert(planSrc.includes('rng-3d-clip'), 'section-cut slider in the 3D toolbar');
+  assert(planSrc.includes('Math.max(-89.9, Math.min(89.9'), 'orbit allows full ±89.9° elevation (bottom views reachable)');
+}
+
 console.log(`\n========================================`);
 console.log(`Engine Wiring (Phase A: parametric): ${passed} passed, ${failed} failed.`);
 console.log(`========================================`);
