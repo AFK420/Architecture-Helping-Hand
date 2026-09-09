@@ -35,6 +35,10 @@ export function renderStudioCPanels(container, options = {}) {
           <span class="cpanel-tab-icon">🔍</span>
           <span class="cpanel-tab-text">Details</span>
         </button>
+        <button type="button" class="cpanel-tab-btn ${activeTab === 'constraints' ? 'active' : ''}" data-panel-tab="constraints" title="Deterministic Constraints — diagnose & satisfy">
+          <span class="cpanel-tab-icon">🔗</span>
+          <span class="cpanel-tab-text">Constr</span>
+        </button>
       </div>
 
       <!-- C-Panel Content Body -->
@@ -171,6 +175,53 @@ export function renderStudioCPanels(container, options = {}) {
             </div>
           </div>
         </div>
+
+        <!-- 5. Constraints (deterministic) -->
+        <div class="cpanel-pane ${activeTab === 'constraints' ? 'active' : ''}" id="cpanel-pane-constraints">
+          <div class="cpanel-section-title">
+            <span>CONSTRAINTS</span>
+            <span class="cpanel-id-badge" id="cpanel-constraint-count">${(options.constraints && options.constraints.length) || 0}</span>
+          </div>
+          <div id="cpanel-constraint-list" class="cpanel-constraint-list">
+            ${(options.constraints && options.constraints.length > 0) ? options.constraints.map(c => `
+              <div class="constraint-card status-${c.status || 'untested'}" data-constraint-id="${c.id}">
+                <div class="constraint-head">
+                  <span class="constraint-name">${c.label || c.type}</span>
+                  <span class="constraint-status status-${c.status || 'untested'}">${(c.status || 'untested').toUpperCase()}</span>
+                </div>
+                ${c.message ? `<div class="constraint-msg">${c.message}</div>` : ''}
+                <div class="constraint-targets">${(c.targetIds || []).join(' · ')}</div>
+                ${c.resolutions && c.resolutions.length ? `
+                  <div class="constraint-resolutions">
+                    ${c.resolutions.map(r => `<div>→ ${r}</div>`).join('')}
+                  </div>` : ''}
+                <div class="constraint-actions">
+                  <button type="button" class="btn btn-xs btn-outline" data-constraint-act="test" data-constraint-id="${c.id}">Diagnose</button>
+                  <button type="button" class="btn btn-xs btn-primary" data-constraint-act="solve" data-constraint-id="${c.id}">Satisfy</button>
+                  <button type="button" class="btn btn-xs btn-outline" data-constraint-act="remove" data-constraint-id="${c.id}">✕</button>
+                </div>
+              </div>
+            `).join('') : `
+              <div class="cpanel-empty-state">
+                <span class="empty-icon">🔗</span>
+                <p>No constraints on this document</p>
+                <span class="empty-hint">Select entities, then add a constraint below. Every constraint is one deterministic rule — conflicts never distort geometry.</span>
+              </div>
+            `}
+          </div>
+          ${options.constraintTargets && options.constraintTargets.length > 0 ? `
+            <div class="constraint-adder">
+              <div class="cpanel-section-title" style="margin-top: 0.5rem;">
+                <span>ADD ON SELECTION (${options.constraintTargets.length})</span>
+              </div>
+              <select id="cpanel-constraint-type" class="calc-input" style="width: 100%; font-size: 0.72rem; height: 26px;">
+                ${(options.constraintChoices || []).map(ch => `<option value="${ch.value}">${ch.label}</option>`).join('')}
+              </select>
+              <input type="number" id="cpanel-constraint-param" class="calc-input" placeholder="value (m)" step="0.05" min="0" style="width: 100%; font-size: 0.72rem; height: 26px; margin-top: 4px;" />
+              <button type="button" class="btn btn-xs btn-primary" id="cpanel-constraint-add" style="width: 100%; margin-top: 4px;">+ Add Constraint</button>
+            </div>
+          ` : ''}
+        </div>
       </div>
 
       <!-- Tier 2: Dedicated Architectural Tool Guide & Standards Inspector -->
@@ -202,4 +253,29 @@ export function renderStudioCPanels(container, options = {}) {
       }
     });
   });
+
+  container.querySelectorAll('[data-constraint-act]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const act = btn.dataset.constraintAct;
+      const id = btn.dataset.constraintId;
+      if (typeof options.onConstraintAction === 'function') {
+        options.onConstraintAction(act, id);
+      }
+    });
+  });
+
+  const addBtn = container.querySelector('#cpanel-constraint-add');
+  if (addBtn) {
+    addBtn.addEventListener('click', () => {
+      const typeSel = container.querySelector('#cpanel-constraint-type');
+      const paramInput = container.querySelector('#cpanel-constraint-param');
+      if (typeof options.onAddConstraint === 'function') {
+        options.onAddConstraint(
+          typeSel ? typeSel.value : null,
+          paramInput ? parseFloat(paramInput.value) : null
+        );
+      }
+    });
+  }
 }

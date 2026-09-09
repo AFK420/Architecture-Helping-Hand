@@ -8906,6 +8906,26 @@ select option {
 .checklist-item.unknown .check-icon { color: var(--text-muted, #71717a); }
 .checklist-item .check-text small { font-size: 0.62rem; }
 
+.cpanel-constraint-list { display: flex; flex-direction: column; gap: 0.35rem; }
+.constraint-card {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-subtle, #27272a);
+  border-radius: 6px;
+  padding: 0.4rem 0.5rem;
+}
+.constraint-card.status-conflict { border-color: rgba(244, 63, 94, 0.5); }
+.constraint-card.status-satisfied, .constraint-card.status-adjusted { border-color: rgba(74, 222, 128, 0.4); }
+.constraint-head { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+.constraint-name { font-size: 0.72rem; font-weight: 600; color: var(--text-primary); text-transform: capitalize; }
+.constraint-status { font-size: 0.6rem; font-family: var(--font-mono); padding: 1px 6px; border-radius: 3px; background: rgba(125, 125, 135, 0.2); }
+.constraint-status.status-conflict { background: rgba(244, 63, 94, 0.25); color: #fb7185; }
+.constraint-status.status-satisfied, .constraint-status.status-adjusted { background: rgba(74, 222, 128, 0.2); color: #4ade80; }
+.constraint-msg { font-size: 0.65rem; color: var(--text-secondary); margin-top: 2px; line-height: 1.35; }
+.constraint-targets { font-size: 0.58rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px; }
+.constraint-resolutions { font-size: 0.63rem; color: #fbbf24; margin-top: 3px; }
+.constraint-actions { display: flex; gap: 4px; margin-top: 4px; }
+.constraint-adder { padding: 0 0.3rem 0.4rem; }
+
 .detail-link-card {
   display: flex;
   align-items: center;

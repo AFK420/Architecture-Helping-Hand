@@ -42,6 +42,8 @@ import {
 import {
   CAMERA_PRESETS, buildMassing3DModel, buildMultiStoryMassing3DModel, projectAndSortFaces, generateMassingSVG, projectPoint3D
 } from '../../core/massing-3d.js';
+import { applyParameter as applyParametricParameter, readParameters } from '../../core/parametric.js';
+import { createConstraint, solveConstraint, CONSTRAINT_TYPES } from '../../core/constraints.js';
 import {
   SHEET_SIZES, ARCHITECTURAL_SCALES, createSheetConfig, computeViewportLayout, generateSheetSVG
 } from '../../core/sheet.js';
@@ -1404,6 +1406,129 @@ export function createPlanView(context) {
         : { label: 'Stair Blondel 2R+T Compliance', status: 'unknown', detail: 'no stairs' }
     ];
 
+    // ---- Constraints (deterministic, per document, undoable) ----
+    // Constraint records live on the document so they persist with it and
+    // survive reloads; the solver runs against the live entity list.
+    function docConstraints(d) {
+      if (!Array.isArray(d.constraints)) d.constraints = [];
+      return d.constraints;
+    }
+
+    /** Choices applicable to the current selection's kinds. */
+    function constraintChoicesFor(kinds) {
+      const choices = [
+        { value: 'horizontal', label: 'Horizontal segment', needs: ['wall', 'line', 'dimension'] },
+        { value: 'vertical', label: 'Vertical segment', needs: ['wall', 'line', 'dimension'] },
+        { value: 'wall_thickness', label: 'Wall thickness = value', needs: ['wall'] },
+        { value: 'door_width', label: 'Door width = value', needs: ['door'] },
+        { value: 'window_width', label: 'Window width = value', needs: ['window'] },
+        { value: 'room_min_area', label: 'Room area ≥ value (m²)', needs: ['room'] },
+        { value: 'stair_rise', label: 'Stair riser = value (m)', needs: ['stair'] },
+        { value: 'stair_tread', label: 'Stair tread = value (m)', needs: ['stair'] }
+      ];
+      if (kinds.size >= 2) {
+        choices.push(
+          { value: 'parallel', label: 'Parallel (two segments)', needs: ['wall', 'line'] },
+          { value: 'perpendicular', label: 'Perpendicular (two segments)', needs: ['wall', 'line'] },
+          { value: 'equal_length', label: 'Equal length (two segments)', needs: ['wall', 'line'] },
+          { value: 'fixed_distance', label: 'Fixed distance between (m)', needs: [] },
+          { value: 'corridor_min_width', label: 'Corridor gap ≥ value (m)', needs: ['wall'] }
+        );
+      }
+      return choices.filter(c => c.needs.length === 0 || c.needs.some(k => kinds.has(k)));
+    }
+
+    function addConstraintFromSelection(type, value) {
+      const d = getActiveDocument();
+      const ids = Array.from(state.plan.selectedIds || []);
+      if (!type || ids.length === 0) {
+        showToast('Select one or more entities first', 'warning');
+        return;
+      }
+      const params = {};
+      if (Number.isFinite(value)) {
+        // each type knows its own driving param name
+        const paramName = {
+          wall_thickness: 'thickness', door_width: 'width', window_width: 'width',
+          room_min_area: 'minArea', stair_rise: 'riser', stair_tread: 'tread',
+          fixed_distance: 'distance', corridor_min_width: 'minWidth'
+        }[type];
+        if (paramName) params[paramName] = value;
+      }
+      let c;
+      try {
+        c = createConstraint(type, ids, params);
+      } catch (err) {
+        showToast(err.message, 'warning');
+        return;
+      }
+      c.label = c.type.replace(/_/g, ' ');
+      docConstraints(d).push(c);
+      solveConstraint(c, es); // diagnose immediately — no geometry change yet on SATISFIED paths
+      showToast(`Constraint added: ${c.label} (${ids.length} target${ids.length > 1 ? 's' : ''})`);
+      AudioService.playTick();
+      updateStudioCPanels();
+    }
+
+    function handleConstraintAction(act, constraintId) {
+      const d = getActiveDocument();
+      const list = docConstraints(d);
+      const idx = list.findIndex(c => c.id === constraintId);
+      if (idx === -1) return;
+      const c = list[idx];
+
+      if (act === 'remove') {
+        list.splice(idx, 1);
+        updateStudioCPanels();
+        return;
+      }
+
+      if (act === 'test') {
+        // Diagnose on a deep copy: status only, zero mutation
+        const probe = JSON.parse(JSON.stringify(c));
+        probe.targetIds = c.targetIds;
+        solveConstraint(probe, es);
+        c.status = probe.status;
+        c.message = probe.message;
+        c.resolutions = probe.resolutions || null;
+        showToast(`Constraint ${c.label}: ${probe.status.toUpperCase()}`, probe.status === 'conflict' ? 'warning' : 'success');
+        updateStudioCPanels();
+        return;
+      }
+
+      if (act === 'solve') {
+        // Satisfy for real: snapshot → solve → undoable command
+        const before = JSON.parse(JSON.stringify(es.filter(e => c.targetIds.includes(e.id))));
+        const result = solveConstraint(c, es);
+        const after = JSON.parse(JSON.stringify(es.filter(e => c.targetIds.includes(e.id))));
+        const cmd = {
+          label: `constraint ${c.label}`,
+          redo() { restoreEntities(after); },
+          undo() { restoreEntities(before); }
+        };
+        history.push(cmd);
+        if (result.status === 'conflict') {
+          showToast(`Constraint conflict — geometry untouched. ${c.resolutions ? c.resolutions[0] : ''}`, 'warning');
+        } else {
+          showToast(`Constraint satisfied: ${c.label}`, 'success');
+        }
+        AudioService.playTick();
+        render();
+        updateStudioCPanels();
+      }
+    }
+
+    function restoreEntities(snapshots) {
+      for (const snap of snapshots) {
+        const live = es.find(e => e.id === snap.id);
+        if (live) Object.assign(live, JSON.parse(JSON.stringify(snap)));
+      }
+    }
+
+    const selKinds = new Set(es.filter(e => state.plan.selectedIds && state.plan.selectedIds.has(e.id)).map(e => e.kind));
+    const constraintChoices = constraintChoicesFor(selKinds);
+    const constraintTargets = Array.from(state.plan.selectedIds || []);
+
     renderStudioCPanels(cpanelsHost, {
       activePanelTab: state.activeCPanelTab || 'properties',
       activeToolId: state.plan.tool || 'select',
@@ -1411,6 +1536,11 @@ export function createPlanView(context) {
       entityCount: es.length,
       layerCount: normalizeDocumentLayers(doc).length,
       codeChecks,
+      constraints: docConstraints(doc).map(c => ({ ...c })),
+      constraintChoices,
+      constraintTargets,
+      onConstraintAction: handleConstraintAction,
+      onAddConstraint: addConstraintFromSelection,
       onSelectPanelTab: (tabId) => {
         state.activeCPanelTab = tabId;
         updateStudioCPanels();
@@ -4461,11 +4591,12 @@ export function createPlanView(context) {
       if (rwInput) {
         attachNumericScrubber(rwInput, {
           step: 0.1, min: 0.5, max: 100, precision: 2,
-          onChange: (val) => { selected.width = val; renderScene(); },
-          onCommit: (val) => { selected.width = val; render(); }
+          onChange: (val) => { applyParametricParameter(selected, 'width', val); renderScene(); },
+          onCommit: (val) => { applyParametricParameter(selected, 'width', val); render(); }
         });
         rwInput.addEventListener('change', (e) => {
-          selected.width = Math.max(0.5, parseFloat(e.target.value) || 0.5);
+          const res = applyParametricParameter(selected, 'width', parseFloat(e.target.value) || 0.5);
+          if (!res.ok) showToast(res.error, 'warning');
           render();
         });
       }
@@ -4474,11 +4605,12 @@ export function createPlanView(context) {
       if (rdInput) {
         attachNumericScrubber(rdInput, {
           step: 0.1, min: 0.5, max: 100, precision: 2,
-          onChange: (val) => { selected.depth = val; renderScene(); },
-          onCommit: (val) => { selected.depth = val; render(); }
+          onChange: (val) => { applyParametricParameter(selected, 'depth', val); renderScene(); },
+          onCommit: (val) => { applyParametricParameter(selected, 'depth', val); render(); }
         });
         rdInput.addEventListener('change', (e) => {
-          selected.depth = Math.max(0.5, parseFloat(e.target.value) || 0.5);
+          const res = applyParametricParameter(selected, 'depth', parseFloat(e.target.value) || 0.5);
+          if (!res.ok) showToast(res.error, 'warning');
           render();
         });
       }
@@ -4707,11 +4839,10 @@ export function createPlanView(context) {
         render();
       });
 
+      // Canonical parametric recompute — the same engine the descriptors and
+      // AI context use. The inspector never keeps its own math.
       function updateStairGeometry(keepPanels = false) {
-        selected.riserHeight = selected.rise / selected.risers;
-        selected.tread = selected.run / Math.max(1, selected.risers - 1);
-        selected.blondel = 2 * selected.riserHeight + selected.tread;
-        selected.pitchAngle = Math.atan2(selected.rise, selected.run) * (180 / Math.PI);
+        applyParametricParameter(selected, 'risers', selected.risers);
         if (keepPanels) renderScene(); else render();
       }
 
@@ -4730,41 +4861,55 @@ export function createPlanView(context) {
 
       const stairRunInput = dom.planPropContent.querySelector('#prop-stair-run');
       if (stairRunInput) {
+        // Run drives tread (going) directly: tread = run / (risers − 1)
+        const applyRun = (val) => {
+          const r = Math.max(0.5, val);
+          selected.run = r;
+          selected.tread = r / Math.max(1, (selected.risers || 16) - 1);
+          updateStairGeometry(true);
+        };
         attachNumericScrubber(stairRunInput, {
           step: 0.1, min: 0.5, max: 30, precision: 2,
-          onChange: (val) => { selected.run = val; selected.depth = val; updateStairGeometry(true); },
-          onCommit: (val) => { selected.run = val; selected.depth = val; updateStairGeometry(); }
+          onChange: applyRun,
+          onCommit: (val) => { applyRun(val); render(); }
         });
         stairRunInput.addEventListener('change', (e) => {
-          selected.run = Math.max(0.5, parseFloat(e.target.value) || 0.5);
-          selected.depth = selected.run;
-          updateStairGeometry();
+          applyRun(parseFloat(e.target.value) || 0.5);
+          render();
         });
       }
 
       const stairRiseInput = dom.planPropContent.querySelector('#prop-stair-rise');
       if (stairRiseInput) {
+        const applyRise = (val) => {
+          selected.rise = Math.max(0.2, val);
+          updateStairGeometry(true);
+        };
         attachNumericScrubber(stairRiseInput, {
           step: 0.05, min: 0.2, max: 10, precision: 2,
-          onChange: (val) => { selected.rise = val; updateStairGeometry(true); },
-          onCommit: (val) => { selected.rise = val; updateStairGeometry(); }
+          onChange: applyRise,
+          onCommit: (val) => { applyRise(val); render(); }
         });
         stairRiseInput.addEventListener('change', (e) => {
-          selected.rise = Math.max(0.2, parseFloat(e.target.value) || 0.2);
-          updateStairGeometry();
+          applyRise(parseFloat(e.target.value) || 0.2);
+          render();
         });
       }
 
       const stairRisersInput = dom.planPropContent.querySelector('#prop-stair-risers');
       if (stairRisersInput) {
+        const applyRisers = (val) => {
+          selected.risers = Math.max(2, Math.round(val));
+          updateStairGeometry(true);
+        };
         attachNumericScrubber(stairRisersInput, {
           step: 1, min: 2, max: 50, precision: 0,
-          onChange: (val) => { selected.risers = Math.round(val); updateStairGeometry(true); },
-          onCommit: (val) => { selected.risers = Math.round(val); updateStairGeometry(); }
+          onChange: applyRisers,
+          onCommit: (val) => { applyRisers(val); render(); }
         });
         stairRisersInput.addEventListener('change', (e) => {
-          selected.risers = Math.max(2, Math.round(parseFloat(e.target.value) || 2));
-          updateStairGeometry();
+          applyRisers(parseFloat(e.target.value) || 2);
+          render();
         });
       }
 
@@ -5031,12 +5176,13 @@ export function createPlanView(context) {
       const doorWInput = dom.planPropContent.querySelector('#prop-door-w');
       if (doorWInput) {
         attachNumericScrubber(doorWInput, {
-          step: 0.05, min: 0.5, max: 3.0, precision: 2,
-          onChange: (val) => { selected.width = val; renderScene(); },
-          onCommit: (val) => { selected.width = val; render(); renderContextualToolbar(); }
+          step: 0.05, min: 0.6, max: 2.5, precision: 2,
+          onChange: (val) => { applyParametricParameter(selected, 'width', val); renderScene(); },
+          onCommit: (val) => { applyParametricParameter(selected, 'width', val); render(); renderContextualToolbar(); }
         });
         doorWInput.addEventListener('change', (e) => {
-          selected.width = Math.max(0.5, parseFloat(e.target.value) || 0.9);
+          const res = applyParametricParameter(selected, 'width', parseFloat(e.target.value) || 0.9);
+          if (!res.ok) showToast(res.error, 'warning');
           render();
           renderContextualToolbar();
         });
@@ -5113,12 +5259,13 @@ export function createPlanView(context) {
       const winWInput = dom.planPropContent.querySelector('#prop-win-w');
       if (winWInput) {
         attachNumericScrubber(winWInput, {
-          step: 0.05, min: 0.4, max: 6.0, precision: 2,
-          onChange: (val) => { selected.width = val; renderScene(); },
-          onCommit: (val) => { selected.width = val; render(); renderContextualToolbar(); }
+          step: 0.05, min: 0.4, max: 4, precision: 2,
+          onChange: (val) => { applyParametricParameter(selected, 'width', val); renderScene(); },
+          onCommit: (val) => { applyParametricParameter(selected, 'width', val); render(); renderContextualToolbar(); }
         });
         winWInput.addEventListener('change', (e) => {
-          selected.width = Math.max(0.4, parseFloat(e.target.value) || 1.2);
+          const res = applyParametricParameter(selected, 'width', parseFloat(e.target.value) || 1.2);
+          if (!res.ok) showToast(res.error, 'warning');
           render();
           renderContextualToolbar();
         });
@@ -5140,12 +5287,13 @@ export function createPlanView(context) {
       const winSillInput = dom.planPropContent.querySelector('#prop-win-sill');
       if (winSillInput) {
         attachNumericScrubber(winSillInput, {
-          step: 0.05, min: 0, max: 2.5, precision: 2,
-          onChange: (val) => { selected.sill = val; renderScene(); },
-          onCommit: (val) => { selected.sill = val; render(); }
+          step: 0.05, min: 0, max: 2, precision: 2,
+          onChange: (val) => { applyParametricParameter(selected, 'sill', val); renderScene(); },
+          onCommit: (val) => { applyParametricParameter(selected, 'sill', val); render(); }
         });
         winSillInput.addEventListener('change', (e) => {
-          selected.sill = Math.max(0, parseFloat(e.target.value) || 0.9);
+          const res = applyParametricParameter(selected, 'sill', parseFloat(e.target.value) || 0);
+          if (!res.ok) showToast(res.error, 'warning');
           render();
         });
       }

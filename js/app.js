@@ -19910,9 +19910,19 @@ function solveConstraints(constraints, entities) {
  *   name, label, unit, kind ('length'|'angle'|'enum'|'area'|'count'),
  *   get(entity), apply(entity, value), and optional min/max/derived flag.
  *
- * `apply` recomputes DEPENDENT values (e.g. stair Blondel from rise+tread)
- * so derived truth is never stale. These descriptors are the single source
- * of truth for the inspector UI, the constraint system, and AI context.
+ * `apply` recomputes the FULL dependent chain (geometry + derived scalars +
+ * compliance flags) so derived truth is never stale and the canvas, which
+ * derives all rendering from these fields, regenerates automatically:
+ *
+ *   stair:   risers → riserHeight, run/depth, tread, pitch, Blondel, compliance
+ *   door:    width → opening spans, jambs, swing radius (host wall punching
+ *            is derived at render time via wallOpenings/punchWallSpans)
+ *   window:  sill/head → height relationship
+ *   room:    targetArea → deterministic depth growth (width preserved),
+ *            polygon boundary rescaled consistently
+ *
+ * These descriptors are the single source of truth for the inspector UI,
+ * the constraint system, and AI context.
  */
 
 const PARAMETRIC_OBJECTS = Object.freeze({
@@ -19921,7 +19931,10 @@ const PARAMETRIC_OBJECTS = Object.freeze({
     parameters: Object.freeze([
       { name: 'width', label: 'Width', unit: 'm', kind: 'length', min: 0.6, max: 2.5,
         get: e => e.width,
-        apply: (e, v) => { e.width = v; } },
+        apply: (e, v) => {
+          e.width = v;
+          recomputeDoor(e);
+        } },
       { name: 'height', label: 'Height', unit: 'm', kind: 'length', min: 1.8, max: 2.7,
         get: e => e.height ?? 2.1,
         apply: (e, v) => { e.height = v; } },
@@ -19929,8 +19942,8 @@ const PARAMETRIC_OBJECTS = Object.freeze({
         get: e => e.swing || 'left',
         apply: (e, v) => { e.swing = v === 'right' ? 'right' : 'left'; } },
       { name: 'flipSide', label: 'Hinge', unit: '', kind: 'enum', values: ['near', 'far'],
-        get: e => e.flipSide || 'near',
-        apply: (e, v) => { e.flipSide = v === 'far' ? 'far' : 'near'; } },
+        get: e => e.flipSide ? 'far' : 'near',
+        apply: (e, v) => { e.flipSide = v === 'far'; } },
       { name: 'wallId', label: 'Host wall', unit: '', kind: 'reference',
         get: e => e.wallId || null,
         apply: (e, v) => { e.wallId = v; } }
@@ -19941,13 +19954,22 @@ const PARAMETRIC_OBJECTS = Object.freeze({
     parameters: Object.freeze([
       { name: 'width', label: 'Width', unit: 'm', kind: 'length', min: 0.4, max: 4,
         get: e => e.width,
-        apply: (e, v) => { e.width = v; } },
+        apply: (e, v) => {
+          e.width = v;
+          recomputeWindow(e);
+        } },
       { name: 'sill', label: 'Sill height', unit: 'm', kind: 'length', min: 0, max: 2,
         get: e => e.sill ?? 0.9,
-        apply: (e, v) => { e.sill = v; } },
+        apply: (e, v) => {
+          e.sill = v;
+          recomputeWindow(e);
+        } },
       { name: 'head', label: 'Head height', unit: 'm', kind: 'length', min: 0.5, max: 4,
         get: e => (e.sill ?? 0.9) + (e.height ?? 1.2),
-        apply: (e, v) => { e.height = Math.max(0.1, v - (e.sill ?? 0.9)); } },
+        apply: (e, v) => {
+          e.height = Math.max(0.1, v - (e.sill ?? 0.9));
+          recomputeWindow(e);
+        } },
       { name: 'wallId', label: 'Host wall', unit: '', kind: 'reference',
         get: e => e.wallId || null,
         apply: (e, v) => { e.wallId = v; } }
@@ -19960,28 +19982,32 @@ const PARAMETRIC_OBJECTS = Object.freeze({
         get: e => e.risers ?? 16,
         apply: (e, v) => {
           e.risers = Math.round(v);
-          if (typeof e.rise === 'number') e.riserHeight = e.rise / e.risers;
-          recomputeBlondel(e);
+          recomputeStair(e);
         } },
       { name: 'riserHeight', label: 'Riser height', unit: 'm', kind: 'length', min: 0.1, max: 0.25,
         get: e => e.riserHeight ?? 0.175,
         apply: (e, v) => {
-          e.riserHeight = v;
-          if (typeof e.rise === 'number') e.risers = Math.max(3, Math.round(e.rise / v));
-          recomputeBlondel(e);
+          // rise is the driver: new riser count = rise / riser height
+          if (typeof e.rise === 'number' && e.rise > 0) {
+            e.risers = Math.max(3, Math.round(e.rise / v));
+          }
+          recomputeStair(e);
         } },
       { name: 'tread', label: 'Tread depth', unit: 'm', kind: 'length', min: 0.2, max: 0.45,
         get: e => e.tread ?? 0.28,
         apply: (e, v) => {
           e.tread = v;
-          recomputeBlondel(e);
+          recomputeStair(e);
         } },
       { name: 'width', label: 'Flight width', unit: 'm', kind: 'length', min: 0.6, max: 4,
         get: e => e.width ?? 1.1,
         apply: (e, v) => { e.width = v; } },
       { name: 'blondel', label: 'Blondel 2R+T', unit: 'm', kind: 'length', derived: true,
         get: e => e.blondel ?? (2 * (e.riserHeight ?? 0.175) + (e.tread ?? 0.28)),
-        apply: () => { throw new Error('Blondel 2R+T is derived — set riser height and tread instead.'); } }
+        apply: () => { throw new Error('Blondel 2R+T is derived — set riser height and tread instead.'); } },
+      { name: 'run', label: 'Total run', unit: 'm', kind: 'length', derived: true,
+        get: e => e.run ?? ((e.risers ?? 16) - 1) * (e.tread ?? 0.28),
+        apply: () => { throw new Error('Total run is derived — set tread depth or riser count instead.'); } }
     ])
   }),
   room: Object.freeze({
@@ -19992,15 +20018,23 @@ const PARAMETRIC_OBJECTS = Object.freeze({
         apply: (e, v) => { e.name = String(v).trim() || e.name; } },
       { name: 'width', label: 'Width', unit: 'm', kind: 'length', min: 0.3, max: 100,
         get: e => e.width ?? 0,
-        apply: (e, v) => { e.width = v; } },
+        apply: (e, v) => {
+          e.width = v;
+          recomputeRoom(e);
+        } },
       { name: 'depth', label: 'Depth', unit: 'm', kind: 'length', min: 0.3, max: 100,
         get: e => e.depth ?? 0,
-        apply: (e, v) => { e.depth = v; } },
+        apply: (e, v) => {
+          e.depth = v;
+          recomputeRoom(e);
+        } },
       { name: 'targetArea', label: 'Target area', unit: 'm²', kind: 'area', min: 1, max: 10000,
         get: e => (e.width ?? 0) * (e.depth ?? 0),
         apply: (e, v) => {
-          // keep width, grow depth to the target area (deterministic)
+          // keep width, grow depth to the target area (deterministic);
+          // polygon boundaries rescale consistently — never mixed geometry
           if ((e.width ?? 0) > 0.1) e.depth = v / e.width;
+          recomputeRoom(e);
         } },
       { name: 'type', label: 'Room type', unit: '', kind: 'string',
         get: e => e.zoning || '',
@@ -20023,9 +20057,69 @@ const PARAMETRIC_OBJECTS = Object.freeze({
   })
 });
 
-function recomputeBlondel(stair) {
-  stair.blondel = 2 * (stair.riserHeight ?? 0) + (stair.tread ?? 0);
-  stair.pitchAngle = Math.atan2(stair.riserHeight ?? 0, stair.tread ?? 0.28) * (180 / Math.PI);
+// ---------------------------------------------------------------------------
+// Dependent-chain recompute — one per object family. All fields the canvas
+// and engines read are regenerated here so nothing stays stale.
+// ---------------------------------------------------------------------------
+
+function recomputeStair(stair) {
+  const risers = Math.max(1, Math.round(stair.risers ?? 16));
+  const rise = typeof stair.rise === 'number' && stair.rise > 0 ? stair.rise : 2.7;
+  const tread = stair.tread ?? 0.28;
+  const riserHeight = rise / risers;
+  const run = risers > 1 ? (risers - 1) * tread : tread;
+  const blondel = 2 * riserHeight + tread;
+
+  stair.risers = risers;
+  stair.riserCount = risers; // legacy alias kept in sync
+  stair.rise = rise;
+  stair.totalRise = rise;
+  stair.riserHeight = riserHeight;
+  stair.riser = riserHeight;
+  stair.tread = tread;
+  stair.going = tread;
+  stair.run = run;
+  stair.depth = run; // plan footprint depth follows the run
+  stair.blondel = blondel;
+  stair.pitchAngle = Math.atan2(riserHeight, tread) * (180 / Math.PI);
+  // IBC heuristics (same band the factory uses)
+  stair.isCompliant = blondel >= 0.60 && blondel <= 0.66 && tread >= 0.24 && riserHeight <= 0.19;
+}
+
+function recomputeDoor(door) {
+  // Rendering derives jambs/swing from width+position+swing at draw time
+  // (calcDoorCADGeometry); what stays stale is the door's own dimension
+  // label and any fit data. Recompute the label so measurements stay true.
+  door.name = door.name && !/^\s*Door(\s*\(\d+(\.\d+)?m\))?\s*$/.test(door.name)
+    ? door.name
+    : `Door (${door.width.toFixed(2)}m)`;
+}
+
+function recomputeWindow(win) {
+  // head = sill + height stays a consistent triple; label follows width
+  win.headHeight = (win.sill ?? 0.9) + (win.height ?? 1.2);
+  win.name = win.name && !/^\s*Window(\s*\(\d+(\.\d+)?m\))?\s*$/.test(win.name)
+    ? win.name
+    : `Window (${win.width.toFixed(2)}m)`;
+}
+
+function recomputeRoom(room) {
+  const w = room.width ?? 0;
+  const d = room.depth ?? 0;
+  const area = w * d;
+  room.area = area;
+  if (Array.isArray(room.boundary) && room.boundary.length >= 3) {
+    // rescale boundary about its center so the polygon matches w×d
+    const xs = room.boundary.map(p => p.x);
+    const ys = room.boundary.map(p => p.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const oldW = maxX - minX, oldH = maxY - minY;
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    const sx = oldW > 1e-9 ? w / oldW : 1;
+    const sy = oldH > 1e-9 ? d / oldH : 1;
+    room.boundary = room.boundary.map(p => ({ x: cx + (p.x - cx) * sx, y: cy + (p.y - cy) * sy }));
+  }
 }
 
 /** Parameter descriptors for an entity kind (null when unknown). */
@@ -37695,6 +37789,10 @@ function renderStudioCPanels(container, options = {}) {
           <span class="cpanel-tab-icon">🔍</span>
           <span class="cpanel-tab-text">Details</span>
         </button>
+        <button type="button" class="cpanel-tab-btn ${activeTab === 'constraints' ? 'active' : ''}" data-panel-tab="constraints" title="Deterministic Constraints — diagnose & satisfy">
+          <span class="cpanel-tab-icon">🔗</span>
+          <span class="cpanel-tab-text">Constr</span>
+        </button>
       </div>
 
       <!-- C-Panel Content Body -->
@@ -37831,6 +37929,53 @@ function renderStudioCPanels(container, options = {}) {
             </div>
           </div>
         </div>
+
+        <!-- 5. Constraints (deterministic) -->
+        <div class="cpanel-pane ${activeTab === 'constraints' ? 'active' : ''}" id="cpanel-pane-constraints">
+          <div class="cpanel-section-title">
+            <span>CONSTRAINTS</span>
+            <span class="cpanel-id-badge" id="cpanel-constraint-count">${(options.constraints && options.constraints.length) || 0}</span>
+          </div>
+          <div id="cpanel-constraint-list" class="cpanel-constraint-list">
+            ${(options.constraints && options.constraints.length > 0) ? options.constraints.map(c => `
+              <div class="constraint-card status-${c.status || 'untested'}" data-constraint-id="${c.id}">
+                <div class="constraint-head">
+                  <span class="constraint-name">${c.label || c.type}</span>
+                  <span class="constraint-status status-${c.status || 'untested'}">${(c.status || 'untested').toUpperCase()}</span>
+                </div>
+                ${c.message ? `<div class="constraint-msg">${c.message}</div>` : ''}
+                <div class="constraint-targets">${(c.targetIds || []).join(' · ')}</div>
+                ${c.resolutions && c.resolutions.length ? `
+                  <div class="constraint-resolutions">
+                    ${c.resolutions.map(r => `<div>→ ${r}</div>`).join('')}
+                  </div>` : ''}
+                <div class="constraint-actions">
+                  <button type="button" class="btn btn-xs btn-outline" data-constraint-act="test" data-constraint-id="${c.id}">Diagnose</button>
+                  <button type="button" class="btn btn-xs btn-primary" data-constraint-act="solve" data-constraint-id="${c.id}">Satisfy</button>
+                  <button type="button" class="btn btn-xs btn-outline" data-constraint-act="remove" data-constraint-id="${c.id}">✕</button>
+                </div>
+              </div>
+            `).join('') : `
+              <div class="cpanel-empty-state">
+                <span class="empty-icon">🔗</span>
+                <p>No constraints on this document</p>
+                <span class="empty-hint">Select entities, then add a constraint below. Every constraint is one deterministic rule — conflicts never distort geometry.</span>
+              </div>
+            `}
+          </div>
+          ${options.constraintTargets && options.constraintTargets.length > 0 ? `
+            <div class="constraint-adder">
+              <div class="cpanel-section-title" style="margin-top: 0.5rem;">
+                <span>ADD ON SELECTION (${options.constraintTargets.length})</span>
+              </div>
+              <select id="cpanel-constraint-type" class="calc-input" style="width: 100%; font-size: 0.72rem; height: 26px;">
+                ${(options.constraintChoices || []).map(ch => `<option value="${ch.value}">${ch.label}</option>`).join('')}
+              </select>
+              <input type="number" id="cpanel-constraint-param" class="calc-input" placeholder="value (m)" step="0.05" min="0" style="width: 100%; font-size: 0.72rem; height: 26px; margin-top: 4px;" />
+              <button type="button" class="btn btn-xs btn-primary" id="cpanel-constraint-add" style="width: 100%; margin-top: 4px;">+ Add Constraint</button>
+            </div>
+          ` : ''}
+        </div>
       </div>
 
       <!-- Tier 2: Dedicated Architectural Tool Guide & Standards Inspector -->
@@ -37862,6 +38007,31 @@ function renderStudioCPanels(container, options = {}) {
       }
     });
   });
+
+  container.querySelectorAll('[data-constraint-act]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const act = btn.dataset.constraintAct;
+      const id = btn.dataset.constraintId;
+      if (typeof options.onConstraintAction === 'function') {
+        options.onConstraintAction(act, id);
+      }
+    });
+  });
+
+  const addBtn = container.querySelector('#cpanel-constraint-add');
+  if (addBtn) {
+    addBtn.addEventListener('click', () => {
+      const typeSel = container.querySelector('#cpanel-constraint-type');
+      const paramInput = container.querySelector('#cpanel-constraint-param');
+      if (typeof options.onAddConstraint === 'function') {
+        options.onAddConstraint(
+          typeSel ? typeSel.value : null,
+          paramInput ? parseFloat(paramInput.value) : null
+        );
+      }
+    });
+  }
 }
 
 
@@ -38526,6 +38696,8 @@ function escapeAiHtml(str) {
  *   - Undo/redo = command objects over the in-memory entity arrays (never a
  *     blind full-project replacement), bounded history
  */
+
+
 
 
 
@@ -39873,6 +40045,129 @@ function createPlanView(context) {
         : { label: 'Stair Blondel 2R+T Compliance', status: 'unknown', detail: 'no stairs' }
     ];
 
+    // ---- Constraints (deterministic, per document, undoable) ----
+    // Constraint records live on the document so they persist with it and
+    // survive reloads; the solver runs against the live entity list.
+    function docConstraints(d) {
+      if (!Array.isArray(d.constraints)) d.constraints = [];
+      return d.constraints;
+    }
+
+    /** Choices applicable to the current selection's kinds. */
+    function constraintChoicesFor(kinds) {
+      const choices = [
+        { value: 'horizontal', label: 'Horizontal segment', needs: ['wall', 'line', 'dimension'] },
+        { value: 'vertical', label: 'Vertical segment', needs: ['wall', 'line', 'dimension'] },
+        { value: 'wall_thickness', label: 'Wall thickness = value', needs: ['wall'] },
+        { value: 'door_width', label: 'Door width = value', needs: ['door'] },
+        { value: 'window_width', label: 'Window width = value', needs: ['window'] },
+        { value: 'room_min_area', label: 'Room area ≥ value (m²)', needs: ['room'] },
+        { value: 'stair_rise', label: 'Stair riser = value (m)', needs: ['stair'] },
+        { value: 'stair_tread', label: 'Stair tread = value (m)', needs: ['stair'] }
+      ];
+      if (kinds.size >= 2) {
+        choices.push(
+          { value: 'parallel', label: 'Parallel (two segments)', needs: ['wall', 'line'] },
+          { value: 'perpendicular', label: 'Perpendicular (two segments)', needs: ['wall', 'line'] },
+          { value: 'equal_length', label: 'Equal length (two segments)', needs: ['wall', 'line'] },
+          { value: 'fixed_distance', label: 'Fixed distance between (m)', needs: [] },
+          { value: 'corridor_min_width', label: 'Corridor gap ≥ value (m)', needs: ['wall'] }
+        );
+      }
+      return choices.filter(c => c.needs.length === 0 || c.needs.some(k => kinds.has(k)));
+    }
+
+    function addConstraintFromSelection(type, value) {
+      const d = getActiveDocument();
+      const ids = Array.from(state.plan.selectedIds || []);
+      if (!type || ids.length === 0) {
+        showToast('Select one or more entities first', 'warning');
+        return;
+      }
+      const params = {};
+      if (Number.isFinite(value)) {
+        // each type knows its own driving param name
+        const paramName = {
+          wall_thickness: 'thickness', door_width: 'width', window_width: 'width',
+          room_min_area: 'minArea', stair_rise: 'riser', stair_tread: 'tread',
+          fixed_distance: 'distance', corridor_min_width: 'minWidth'
+        }[type];
+        if (paramName) params[paramName] = value;
+      }
+      let c;
+      try {
+        c = createConstraint(type, ids, params);
+      } catch (err) {
+        showToast(err.message, 'warning');
+        return;
+      }
+      c.label = c.type.replace(/_/g, ' ');
+      docConstraints(d).push(c);
+      solveConstraint(c, es); // diagnose immediately — no geometry change yet on SATISFIED paths
+      showToast(`Constraint added: ${c.label} (${ids.length} target${ids.length > 1 ? 's' : ''})`);
+      AudioService.playTick();
+      updateStudioCPanels();
+    }
+
+    function handleConstraintAction(act, constraintId) {
+      const d = getActiveDocument();
+      const list = docConstraints(d);
+      const idx = list.findIndex(c => c.id === constraintId);
+      if (idx === -1) return;
+      const c = list[idx];
+
+      if (act === 'remove') {
+        list.splice(idx, 1);
+        updateStudioCPanels();
+        return;
+      }
+
+      if (act === 'test') {
+        // Diagnose on a deep copy: status only, zero mutation
+        const probe = JSON.parse(JSON.stringify(c));
+        probe.targetIds = c.targetIds;
+        solveConstraint(probe, es);
+        c.status = probe.status;
+        c.message = probe.message;
+        c.resolutions = probe.resolutions || null;
+        showToast(`Constraint ${c.label}: ${probe.status.toUpperCase()}`, probe.status === 'conflict' ? 'warning' : 'success');
+        updateStudioCPanels();
+        return;
+      }
+
+      if (act === 'solve') {
+        // Satisfy for real: snapshot → solve → undoable command
+        const before = JSON.parse(JSON.stringify(es.filter(e => c.targetIds.includes(e.id))));
+        const result = solveConstraint(c, es);
+        const after = JSON.parse(JSON.stringify(es.filter(e => c.targetIds.includes(e.id))));
+        const cmd = {
+          label: `constraint ${c.label}`,
+          redo() { restoreEntities(after); },
+          undo() { restoreEntities(before); }
+        };
+        history.push(cmd);
+        if (result.status === 'conflict') {
+          showToast(`Constraint conflict — geometry untouched. ${c.resolutions ? c.resolutions[0] : ''}`, 'warning');
+        } else {
+          showToast(`Constraint satisfied: ${c.label}`, 'success');
+        }
+        AudioService.playTick();
+        render();
+        updateStudioCPanels();
+      }
+    }
+
+    function restoreEntities(snapshots) {
+      for (const snap of snapshots) {
+        const live = es.find(e => e.id === snap.id);
+        if (live) Object.assign(live, JSON.parse(JSON.stringify(snap)));
+      }
+    }
+
+    const selKinds = new Set(es.filter(e => state.plan.selectedIds && state.plan.selectedIds.has(e.id)).map(e => e.kind));
+    const constraintChoices = constraintChoicesFor(selKinds);
+    const constraintTargets = Array.from(state.plan.selectedIds || []);
+
     renderStudioCPanels(cpanelsHost, {
       activePanelTab: state.activeCPanelTab || 'properties',
       activeToolId: state.plan.tool || 'select',
@@ -39880,6 +40175,11 @@ function createPlanView(context) {
       entityCount: es.length,
       layerCount: normalizeDocumentLayers(doc).length,
       codeChecks,
+      constraints: docConstraints(doc).map(c => ({ ...c })),
+      constraintChoices,
+      constraintTargets,
+      onConstraintAction: handleConstraintAction,
+      onAddConstraint: addConstraintFromSelection,
       onSelectPanelTab: (tabId) => {
         state.activeCPanelTab = tabId;
         updateStudioCPanels();
@@ -42930,11 +43230,12 @@ function createPlanView(context) {
       if (rwInput) {
         attachNumericScrubber(rwInput, {
           step: 0.1, min: 0.5, max: 100, precision: 2,
-          onChange: (val) => { selected.width = val; renderScene(); },
-          onCommit: (val) => { selected.width = val; render(); }
+          onChange: (val) => { applyParametricParameter(selected, 'width', val); renderScene(); },
+          onCommit: (val) => { applyParametricParameter(selected, 'width', val); render(); }
         });
         rwInput.addEventListener('change', (e) => {
-          selected.width = Math.max(0.5, parseFloat(e.target.value) || 0.5);
+          const res = applyParametricParameter(selected, 'width', parseFloat(e.target.value) || 0.5);
+          if (!res.ok) showToast(res.error, 'warning');
           render();
         });
       }
@@ -42943,11 +43244,12 @@ function createPlanView(context) {
       if (rdInput) {
         attachNumericScrubber(rdInput, {
           step: 0.1, min: 0.5, max: 100, precision: 2,
-          onChange: (val) => { selected.depth = val; renderScene(); },
-          onCommit: (val) => { selected.depth = val; render(); }
+          onChange: (val) => { applyParametricParameter(selected, 'depth', val); renderScene(); },
+          onCommit: (val) => { applyParametricParameter(selected, 'depth', val); render(); }
         });
         rdInput.addEventListener('change', (e) => {
-          selected.depth = Math.max(0.5, parseFloat(e.target.value) || 0.5);
+          const res = applyParametricParameter(selected, 'depth', parseFloat(e.target.value) || 0.5);
+          if (!res.ok) showToast(res.error, 'warning');
           render();
         });
       }
@@ -43176,11 +43478,10 @@ function createPlanView(context) {
         render();
       });
 
+      // Canonical parametric recompute — the same engine the descriptors and
+      // AI context use. The inspector never keeps its own math.
       function updateStairGeometry(keepPanels = false) {
-        selected.riserHeight = selected.rise / selected.risers;
-        selected.tread = selected.run / Math.max(1, selected.risers - 1);
-        selected.blondel = 2 * selected.riserHeight + selected.tread;
-        selected.pitchAngle = Math.atan2(selected.rise, selected.run) * (180 / Math.PI);
+        applyParametricParameter(selected, 'risers', selected.risers);
         if (keepPanels) renderScene(); else render();
       }
 
@@ -43199,41 +43500,55 @@ function createPlanView(context) {
 
       const stairRunInput = dom.planPropContent.querySelector('#prop-stair-run');
       if (stairRunInput) {
+        // Run drives tread (going) directly: tread = run / (risers − 1)
+        const applyRun = (val) => {
+          const r = Math.max(0.5, val);
+          selected.run = r;
+          selected.tread = r / Math.max(1, (selected.risers || 16) - 1);
+          updateStairGeometry(true);
+        };
         attachNumericScrubber(stairRunInput, {
           step: 0.1, min: 0.5, max: 30, precision: 2,
-          onChange: (val) => { selected.run = val; selected.depth = val; updateStairGeometry(true); },
-          onCommit: (val) => { selected.run = val; selected.depth = val; updateStairGeometry(); }
+          onChange: applyRun,
+          onCommit: (val) => { applyRun(val); render(); }
         });
         stairRunInput.addEventListener('change', (e) => {
-          selected.run = Math.max(0.5, parseFloat(e.target.value) || 0.5);
-          selected.depth = selected.run;
-          updateStairGeometry();
+          applyRun(parseFloat(e.target.value) || 0.5);
+          render();
         });
       }
 
       const stairRiseInput = dom.planPropContent.querySelector('#prop-stair-rise');
       if (stairRiseInput) {
+        const applyRise = (val) => {
+          selected.rise = Math.max(0.2, val);
+          updateStairGeometry(true);
+        };
         attachNumericScrubber(stairRiseInput, {
           step: 0.05, min: 0.2, max: 10, precision: 2,
-          onChange: (val) => { selected.rise = val; updateStairGeometry(true); },
-          onCommit: (val) => { selected.rise = val; updateStairGeometry(); }
+          onChange: applyRise,
+          onCommit: (val) => { applyRise(val); render(); }
         });
         stairRiseInput.addEventListener('change', (e) => {
-          selected.rise = Math.max(0.2, parseFloat(e.target.value) || 0.2);
-          updateStairGeometry();
+          applyRise(parseFloat(e.target.value) || 0.2);
+          render();
         });
       }
 
       const stairRisersInput = dom.planPropContent.querySelector('#prop-stair-risers');
       if (stairRisersInput) {
+        const applyRisers = (val) => {
+          selected.risers = Math.max(2, Math.round(val));
+          updateStairGeometry(true);
+        };
         attachNumericScrubber(stairRisersInput, {
           step: 1, min: 2, max: 50, precision: 0,
-          onChange: (val) => { selected.risers = Math.round(val); updateStairGeometry(true); },
-          onCommit: (val) => { selected.risers = Math.round(val); updateStairGeometry(); }
+          onChange: applyRisers,
+          onCommit: (val) => { applyRisers(val); render(); }
         });
         stairRisersInput.addEventListener('change', (e) => {
-          selected.risers = Math.max(2, Math.round(parseFloat(e.target.value) || 2));
-          updateStairGeometry();
+          applyRisers(parseFloat(e.target.value) || 2);
+          render();
         });
       }
 
@@ -43500,12 +43815,13 @@ function createPlanView(context) {
       const doorWInput = dom.planPropContent.querySelector('#prop-door-w');
       if (doorWInput) {
         attachNumericScrubber(doorWInput, {
-          step: 0.05, min: 0.5, max: 3.0, precision: 2,
-          onChange: (val) => { selected.width = val; renderScene(); },
-          onCommit: (val) => { selected.width = val; render(); renderContextualToolbar(); }
+          step: 0.05, min: 0.6, max: 2.5, precision: 2,
+          onChange: (val) => { applyParametricParameter(selected, 'width', val); renderScene(); },
+          onCommit: (val) => { applyParametricParameter(selected, 'width', val); render(); renderContextualToolbar(); }
         });
         doorWInput.addEventListener('change', (e) => {
-          selected.width = Math.max(0.5, parseFloat(e.target.value) || 0.9);
+          const res = applyParametricParameter(selected, 'width', parseFloat(e.target.value) || 0.9);
+          if (!res.ok) showToast(res.error, 'warning');
           render();
           renderContextualToolbar();
         });
@@ -43582,12 +43898,13 @@ function createPlanView(context) {
       const winWInput = dom.planPropContent.querySelector('#prop-win-w');
       if (winWInput) {
         attachNumericScrubber(winWInput, {
-          step: 0.05, min: 0.4, max: 6.0, precision: 2,
-          onChange: (val) => { selected.width = val; renderScene(); },
-          onCommit: (val) => { selected.width = val; render(); renderContextualToolbar(); }
+          step: 0.05, min: 0.4, max: 4, precision: 2,
+          onChange: (val) => { applyParametricParameter(selected, 'width', val); renderScene(); },
+          onCommit: (val) => { applyParametricParameter(selected, 'width', val); render(); renderContextualToolbar(); }
         });
         winWInput.addEventListener('change', (e) => {
-          selected.width = Math.max(0.4, parseFloat(e.target.value) || 1.2);
+          const res = applyParametricParameter(selected, 'width', parseFloat(e.target.value) || 1.2);
+          if (!res.ok) showToast(res.error, 'warning');
           render();
           renderContextualToolbar();
         });
@@ -43609,12 +43926,13 @@ function createPlanView(context) {
       const winSillInput = dom.planPropContent.querySelector('#prop-win-sill');
       if (winSillInput) {
         attachNumericScrubber(winSillInput, {
-          step: 0.05, min: 0, max: 2.5, precision: 2,
-          onChange: (val) => { selected.sill = val; renderScene(); },
-          onCommit: (val) => { selected.sill = val; render(); }
+          step: 0.05, min: 0, max: 2, precision: 2,
+          onChange: (val) => { applyParametricParameter(selected, 'sill', val); renderScene(); },
+          onCommit: (val) => { applyParametricParameter(selected, 'sill', val); render(); }
         });
         winSillInput.addEventListener('change', (e) => {
-          selected.sill = Math.max(0, parseFloat(e.target.value) || 0.9);
+          const res = applyParametricParameter(selected, 'sill', parseFloat(e.target.value) || 0);
+          if (!res.ok) showToast(res.error, 'warning');
           render();
         });
       }
