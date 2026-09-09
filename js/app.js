@@ -38879,6 +38879,96 @@ function createPlanView(context) {
   let activeSidebarTab = 'entities'; // 'entities' | 'layers'
 
   // ------------------------------------------------------------------
+  // Autosave / crash recovery — unsaved canvas work survives tab close.
+  // Snapshots go to a dedicated RECOVERY key (never the project itself);
+  // recovery is offered on the next boot and is the user's explicit call.
+  // ------------------------------------------------------------------
+  const RECOVERY_KEY = 'archiscale_plan_recovery';
+  let autosaveTimer = null;
+  function scheduleAutosave() {
+    if (autosaveTimer) clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(writeRecoverySnapshot, 8000);
+  }
+  function writeRecoverySnapshot() {
+    try {
+      const payload = JSON.stringify({
+        savedAt: new Date().toISOString(),
+        activeDocId: state.plan.activeDocId,
+        documents: state.plan.documents || []
+      });
+      StorageService.setItem(RECOVERY_KEY, payload);
+    } catch (e) { /* recovery is best-effort; never block drawing */ }
+  }
+  function clearRecoverySnapshot() {
+    try { StorageService.removeItem(RECOVERY_KEY); } catch (e) {}
+  }
+  // Flush pending autosave when the tab hides or closes (best effort).
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && autosaveTimer) writeRecoverySnapshot();
+  });
+  window.addEventListener('beforeunload', () => {
+    if (autosaveTimer) writeRecoverySnapshot();
+  });
+  // Every undoable mutation flows through history.push — wrap it so each
+  // mutation also schedules the debounced autosave.
+  const rawHistoryPush = history.push.bind(history);
+  history.push = (cmd) => {
+    rawHistoryPush(cmd);
+    scheduleAutosave();
+  };
+
+  /** Offers unsaved-session recovery once, on mount. Never auto-restores:
+   *  the user explicitly chooses Recover or Discard. */
+  function showRecoveryBannerIfAny() {
+    let snap = null;
+    try {
+      const raw = StorageService.getItem(RECOVERY_KEY);
+      snap = raw ? JSON.parse(raw) : null;
+    } catch (e) { snap = null; }
+    if (!snap || !Array.isArray(snap.documents) || snap.documents.length === 0) return;
+    const entityCount = snap.documents.reduce((n, d) => n + ((d.entities || []).length), 0);
+    if (entityCount === 0) { clearRecoverySnapshot(); return; }
+    const age = snap.savedAt ? Math.round((Date.now() - new Date(snap.savedAt).getTime()) / 60000) : null;
+    const host = dom.planContextualToolbar || document.getElementById('plan-contextual-toolbar');
+    if (!host || !host.parentElement) return;
+    // Insert above the canvas toolbar, inside the same region — never inside
+    // the toolbar itself (it re-renders constantly).
+    const banner = document.createElement('div');
+    banner.id = 'plan-recovery-banner';
+    banner.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;background:rgba(245,158,11,0.14);border:1px solid rgba(245,158,11,0.5);border-radius:6px;margin:0 10px 8px;font-size:0.78rem;z-index:50;';
+    banner.innerHTML = `
+      <span style="color: var(--text-primary);">
+        <strong>Unsaved work from a previous session?</strong> ${entityCount} unsaved entit${entityCount === 1 ? 'y' : 'ies'} found${age != null ? ` (${age} min ago)` : ''}.
+      </span>
+      <span style="display:flex; gap:6px;">
+        <button type="button" id="btn-recovery-discard" class="btn btn-xs btn-outline">Discard</button>
+        <button type="button" id="btn-recovery-restore" class="btn btn-xs btn-primary">Recover</button>
+      </span>`;
+    host.parentElement.insertBefore(banner, host);
+    banner.querySelector('#btn-recovery-discard')?.addEventListener('click', () => {
+      clearRecoverySnapshot();
+      banner.remove();
+      showToast('Discarded unsaved session snapshot');
+    });
+    banner.querySelector('#btn-recovery-restore')?.addEventListener('click', () => {
+      try {
+        state.plan.documents = snap.documents;
+        state.plan.activeDocId = snap.activeDocId || snap.documents[0].id;
+        state.plan.entities = getActiveDocument().entities || [];
+        clearRecoverySnapshot();
+        banner.remove();
+        renderTabs();
+        render();
+        fitToContent();
+        AudioService.playSuccess();
+        showToast(`Recovered ${entityCount} entities — review, then Save to keep them`);
+      } catch (e) {
+        showToast('Recovery failed — snapshot kept', 'warning');
+      }
+    });
+  }
+
+  // ------------------------------------------------------------------
   // CAD command engine (src/core/cad-commands.js) — one registry derived
   // from the live tool catalog; the command bar, canvas clicks and the
   // deterministic core all meet here.
@@ -45889,6 +45979,7 @@ function createPlanView(context) {
       return draft;
     });
     if (res.ok) {
+      clearRecoverySnapshot(); // manual save supersedes recovery
       showToast(`Plan saved to project (${copy.length} entities across ${docsCopy.length} sheets)`);
       AudioService.playSuccess();
     } else {
@@ -46185,6 +46276,7 @@ function createPlanView(context) {
       initDocuments();
       renderTabs();
       setupSidebarTabs();
+      showRecoveryBannerIfAny();
 
       const newDocBtn = dom.btnPlanNewDoc || document.getElementById('btn-plan-new-doc');
       const newTabMenu = document.getElementById('plan-new-tab-menu');

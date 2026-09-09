@@ -260,6 +260,26 @@ console.log('\n--- 9. AI tools wired to live transports + previewable proposals 
   assert(studioSrc.includes('executeAiAction'), 'accept applies through the deterministic action pipeline');
 }
 
+console.log('\n--- 10. Autosave + crash recovery ---');
+{
+  const fs = await import('node:fs');
+  const planSrc = fs.readFileSync('src/ui/views/plan.js', 'utf8');
+  // Debounced autosave on every undoable mutation (history.push wrapper)
+  assert(planSrc.includes('scheduleAutosave()'), 'autosave scheduled from the mutation path');
+  assert(planSrc.includes('rawHistoryPush(cmd);'), 'history.push wrapped without losing the original call');
+  // Dedicated recovery key — never the project itself
+  assert(planSrc.includes("RECOVERY_KEY = 'archiscale_plan_recovery'"), 'dedicated recovery storage key');
+  // Flush on hide/close
+  assert(planSrc.includes("document.visibilityState === 'hidden'"), 'snapshot flushed when the tab hides');
+  assert(planSrc.includes("window.addEventListener('beforeunload'"), 'snapshot flushed before unload');
+  // Manual save clears recovery (work is now durable in the project)
+  assert(planSrc.includes('clearRecoverySnapshot(); // manual save supersedes recovery'), 'manual save clears the recovery snapshot');
+  // Recovery is explicit, never automatic
+  assert(planSrc.includes('showRecoveryBannerIfAny'), 'recovery banner offered on mount');
+  assert(planSrc.includes('btn-recovery-restore'), 'user must click Recover — no silent auto-restore');
+  assert(planSrc.includes('btn-recovery-discard'), 'user can discard the snapshot');
+}
+
 console.log(`\n========================================`);
 console.log(`Engine Wiring (Phase A: parametric): ${passed} passed, ${failed} failed.`);
 console.log(`========================================`);
