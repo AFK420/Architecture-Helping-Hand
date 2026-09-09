@@ -69,6 +69,7 @@ export const BUNDLE_MODULES = [
   { name: 'GeometryEngine', file: path.join(srcDir, 'core', 'geometry-engine.js') },
   { name: 'Icons', file: path.join(srcDir, 'core', 'icons.js') },
   { name: 'CadCommands', file: path.join(srcDir, 'core', 'cad-commands.js') },
+  { name: 'CadModify', file: path.join(srcDir, 'core', 'cad-modify.js') },
   { name: 'Suggestions', file: path.join(srcDir, 'core', 'suggestions.js') },
   { name: 'Constraints', file: path.join(srcDir, 'core', 'constraints.js') },
   { name: 'Parametric', file: path.join(srcDir, 'core', 'parametric.js') },

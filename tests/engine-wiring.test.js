@@ -280,6 +280,75 @@ console.log('\n--- 10. Autosave + crash recovery ---');
   assert(planSrc.includes('btn-recovery-discard'), 'user can discard the snapshot');
 }
 
+console.log('\n--- 11. CAD modify operations (mirror/rotate/scale/offset/array/trim/extend) ---');
+{
+  const m = await import('../src/core/cad-modify.js');
+  const { createWall, createRoom, createFurnitureEntity } = await import('../src/core/entities.js');
+  const { trimExtendToLine } = await import('../src/core/geometry-engine.js');
+
+  // MIRROR: clones across an axis, fresh identity, originals untouched
+  const w = createWall({ id: 'mw1', name: 'MW', x1: 0, y1: 0, x2: 4, y2: 0 });
+  const clones = m.mirrorEntities([w], { x1: 0, y1: 0, x2: 0, y2: 4 });
+  assert(clones.length === 1 && clones[0].id !== w.id, 'mirror returns fresh clones');
+  assert(Math.abs(clones[0].x2 + 4) < 1e-9 && Math.abs(w.x2 - 4) < 1e-9, 'mirrored clone flips across the axis; original untouched');
+  assert(/copy/i.test(clones[0].name), 'clone is labeled a copy');
+
+  // ROTATE: arbitrary angle about a center
+  const w2 = createWall({ id: 'mw2', name: 'MW2', x1: 0, y1: 0, x2: 4, y2: 0 });
+  m.rotateEntities([w2], 90, { x: 0, y: 0 });
+  assert(Math.abs(w2.x2) < 1e-9 && Math.abs(w2.y2 - 4) < 1e-9, '90° rotation maps (4,0)→(0,4)');
+  const w2b = createWall({ id: 'mw2b', name: 'MW2B', x1: 0, y1: 0, x2: 4, y2: 0 });
+  m.rotateEntities([w2b], 45, { x: 0, y: 0 });
+  assert(Math.abs(Math.hypot(w2b.x2, w2b.y2) - 4) < 1e-9, 'arbitrary rotation preserves length');
+  let refusedNaN = false;
+  try { m.rotateEntities([w2b], NaN, { x: 0, y: 0 }); } catch { refusedNaN = true; }
+  assert(refusedNaN, 'non-numeric angle refused');
+
+  // SCALE: factor about center — boundary rooms and plain rects both correct
+  const r = createRoom({ id: 'mr1', name: 'MR', x: 0, y: 0, width: 3, depth: 3 });
+  m.scaleEntities([r], 2, { x: 0, y: 0 });
+  assert(Math.abs(r.width - 6) < 1e-9 && Math.abs(r.depth - 6) < 1e-9, 'boundary room scales 3→6 (no double-count)');
+  assert(Math.abs(r.boundary[2].x - 6) < 1e-9, 'polygon boundary scales consistently');
+  const f = createFurnitureEntity({ catalogId: 'bed-double', name: 'B', x: 1, y: 1, width: 2, depth: 2 });
+  m.scaleEntities([f], 2, { x: 0, y: 0 });
+  assert(Math.abs(f.width - 4) < 1e-9 && Math.abs(f.x - 2) < 1e-9, 'plain rect entity scales once');
+
+  // OFFSET: parallel segment copies at a distance
+  const w3 = createWall({ id: 'mw3', name: 'MW3', x1: 0, y1: 0, x2: 4, y2: 0 });
+  const offs = m.offsetEntities([w3], 0.5);
+  assert(offs.length === 1 && Math.abs(offs[0].y1 - 0.5) < 1e-9 && Math.abs(offs[0].y2 - 0.5) < 1e-9, 'wall offset 0.5 m perpendicular');
+  assert(offs[0].id !== w3.id, 'offset produces a new entity');
+
+  // ARRAY: linear copies with count/spacing/angle
+  const w4 = createWall({ id: 'mw4', name: 'MW4', x1: 0, y1: 0, x2: 1, y2: 0 });
+  const arr = m.arrayEntitiesLinear([w4], 3, 5, 0);
+  assert(arr.length === 2 && Math.abs(arr[0].x1 - 5) < 1e-9 && Math.abs(arr[1].x1 - 10) < 1e-9, 'ARRAY 3 creates 2 copies at 5 m spacing');
+  const arr45 = m.arrayEntitiesLinear([w4], 2, Math.SQRT2, 45);
+  assert(Math.abs(arr45[0].x1 - 1) < 1e-9 && Math.abs(arr45[0].y1 - 1) < 1e-9, 'angled array direction honored');
+
+  // TRIM/EXTEND via the geometry engine (functions existed but had no command)
+  const target = { x1: 0, y1: 0, x2: 4, y2: 0, kind: 'wall', id: 't1', name: 'T' };
+  const cutter = { x1: 2, y1: -2, x2: 2, y2: 2, kind: 'wall', id: 't2', name: 'C' };
+  const res = trimExtendToLine(
+    { x: target.x1, y: target.y1 }, { x: target.x2, y: target.y2 },
+    { x: cutter.x1, y: cutter.y1 }, { x: cutter.x2, y: cutter.y2 }
+  );
+  assert(res.hitWithinLine && Math.abs(res.end.x - 2) < 1e-9, 'trim/extend intersection computed at x=2 (returned as `end`)');
+
+  // Commands registered + executor wired
+  const fs = await import('node:fs');
+  const cmdSrc = fs.readFileSync('src/core/cad-commands.js', 'utf8');
+  for (const name of ['MIRROR', 'ROTATE', 'SCALE', 'OFFSET', 'ARRAY', 'TRIM', 'EXTEND']) {
+    assert(cmdSrc.includes(`name: '${name}'`), `${name} command registered`);
+  }
+  const planSrc = fs.readFileSync('src/ui/views/plan.js', 'utf8');
+  for (const run of ['modify:mirror', 'modify:rotate', 'modify:scale', 'modify:offset', 'modify:array', 'modify:trim', 'modify:extend']) {
+    assert(planSrc.includes(`case '${run}'`), `executor handles ${run}`);
+  }
+  assert(planSrc.includes('ctx-mirror-btn') && planSrc.includes('ctx-scale-btn'), 'contextual toolbar exposes modify buttons');
+  assert(planSrc.includes('restoreEntitySnapshots'), 'in-place ops undo via snapshot commands');
+}
+
 console.log(`\n========================================`);
 console.log(`Engine Wiring (Phase A: parametric): ${passed} passed, ${failed} failed.`);
 console.log(`========================================`);

@@ -44,6 +44,8 @@ import {
 } from '../../core/massing-3d.js';
 import { applyParameter as applyParametricParameter, readParameters } from '../../core/parametric.js';
 import { createConstraint, solveConstraint, CONSTRAINT_TYPES } from '../../core/constraints.js';
+import { mirrorEntities, rotateEntities, scaleEntities, offsetEntities, arrayEntitiesLinear } from '../../core/cad-modify.js';
+import { trimExtendToLine } from '../../core/geometry-engine.js';
 import {
   SHEET_SIZES, ARCHITECTURAL_SCALES, createSheetConfig, computeViewportLayout, generateSheetSVG
 } from '../../core/sheet.js';
@@ -356,6 +358,119 @@ export function createPlanView(context) {
         updateStatusBar();
         return { ok: true, message: `${state.plan.selectedIds.size} selected (all)` };
       }
+      // ---- Modify operations (src/core/cad-modify.js) — undoable ----
+      case 'modify:mirror': {
+        const sel = selectedEntities();
+        if (sel.length === 0) return { ok: false, error: 'MIRROR needs a selection first.' };
+        const [a, b] = args.points || [];
+        if (!a || !b) return { ok: false, error: 'MIRROR needs two axis points: MIRROR x1,y1 x2,y2' };
+        const clones = mirrorEntities(sel, { x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+        for (const c of clones) commitEntity(c, 'mirror');
+        return { ok: true, message: `Mirrored ${clones.length} entit${clones.length === 1 ? 'y' : 'ies'} across the axis.` };
+      }
+      case 'modify:rotate': {
+        const sel = selectedEntities();
+        if (sel.length === 0) return { ok: false, error: 'ROTATE needs a selection first.' };
+        const deg = Number(args.values?.[0]);
+        if (!Number.isFinite(deg)) return { ok: false, error: 'ROTATE needs an angle in degrees: ROTATE 90' };
+        const cx = Number(args.values?.[1]), cy = Number(args.values?.[2]);
+        const center = Number.isFinite(cx) && Number.isFinite(cy) ? { x: cx, y: cy } : undefined;
+        const before = JSON.parse(JSON.stringify(sel));
+        rotateEntities(sel, deg, center);
+        const after = JSON.parse(JSON.stringify(sel));
+        const ids = sel.map(e => e.id);
+        history.push({
+          label: `rotate ${deg}°`,
+          redo() { restoreEntitySnapshots(after, ids); render(); },
+          undo() { restoreEntitySnapshots(before, ids); render(); }
+        });
+        render();
+        updateStudioCPanels();
+        return { ok: true, message: `Rotated ${sel.length} entit${sel.length === 1 ? 'y' : 'ies'} by ${deg}°.` };
+      }
+      case 'modify:scale': {
+        const sel = selectedEntities();
+        if (sel.length === 0) return { ok: false, error: 'SCALE needs a selection first.' };
+        const factor = Number(args.values?.[0]);
+        if (!Number.isFinite(factor) || factor <= 0) return { ok: false, error: 'SCALE needs a positive factor: SCALE 2 or SCALE 0.5' };
+        const before = JSON.parse(JSON.stringify(sel));
+        scaleEntities(sel, factor);
+        const after = JSON.parse(JSON.stringify(sel));
+        const ids = sel.map(e => e.id);
+        history.push({
+          label: `scale ×${factor}`,
+          redo() { restoreEntitySnapshots(after, ids); render(); },
+          undo() { restoreEntitySnapshots(before, ids); render(); }
+        });
+        render();
+        updateStudioCPanels();
+        return { ok: true, message: `Scaled ${sel.length} entit${sel.length === 1 ? 'y' : 'ies'} by ×${factor}.` };
+      }
+      case 'modify:offset': {
+        const sel = selectedEntities();
+        if (sel.length === 0) return { ok: false, error: 'OFFSET needs a selection first.' };
+        const dist = Number(args.values?.[0]);
+        if (!Number.isFinite(dist) || dist === 0) return { ok: false, error: 'OFFSET needs a non-zero distance in meters: OFFSET 0.5' };
+        let clones;
+        try { clones = offsetEntities(sel, dist); } catch (err) { return { ok: false, error: err.message }; }
+        if (clones.length === 0) return { ok: false, error: 'OFFSET works on wall/line/dimension entities (segment geometry).' };
+        for (const c of clones) commitEntity(c, 'offset');
+        return { ok: true, message: `Offset ${clones.length} entit${clones.length === 1 ? 'y' : 'ies'} by ${dist} m.` };
+      }
+      case 'modify:array': {
+        const sel = selectedEntities();
+        if (sel.length === 0) return { ok: false, error: 'ARRAY needs a selection first.' };
+        const count = Number(args.values?.[0]), spacing = Number(args.values?.[1]), deg = Number(args.values?.[2] || 0);
+        if (!Number.isInteger(count) || count < 2) return { ok: false, error: 'ARRAY needs count ≥ 2: ARRAY 3 5 0' };
+        if (!Number.isFinite(spacing) || spacing <= 0) return { ok: false, error: 'ARRAY needs a positive spacing: ARRAY 3 5 0' };
+        let clones;
+        try { clones = arrayEntitiesLinear(sel, count, spacing, deg); } catch (err) { return { ok: false, error: err.message }; }
+        for (const c of clones) commitEntity(c, 'array');
+        state.plan.selectedIds = new Set([...state.plan.selectedIds, ...clones.map(c => c.id)]);
+        return { ok: true, message: `Arrayed ${clones.length} copies (×${count} total, ${spacing} m apart).` };
+      }
+      case 'modify:trim':
+      case 'modify:extend': {
+        const sel = selectedEntities().filter(e => e.kind === 'wall' || e.kind === 'line');
+        if (sel.length < 2) return { ok: false, error: `${run === 'modify:trim' ? 'TRIM' : 'EXTEND'} needs exactly 2 walls/lines selected (the cutter second).` };
+        const [target, cutter] = sel;
+        const before = JSON.parse(JSON.stringify([target]));
+        const res = trimExtendToLine(
+          { x: target.x1, y: target.y1 }, { x: target.x2, y: target.y2 },
+          { x: cutter.x1, y: cutter.y1 }, { x: cutter.x2, y: cutter.y2 }
+        );
+        if (!res.hitWithinLine) {
+          return { ok: false, error: 'The two segments never meet — nothing to trim/extend.' };
+        }
+        // trimExtendToLine returns { start, end } — end is the intersection
+        const hit = res.end;
+        if (run === 'modify:trim') {
+          // keep the LONGER remainder: shorten target to the intersection
+          const lenBefore = Math.hypot(target.x2 - target.x1, target.y2 - target.y1);
+          const lenA = Math.hypot(target.x1 - hit.x, target.y1 - hit.y);
+          const lenB = Math.hypot(hit.x - target.x2, hit.y - target.y2);
+          if (lenB >= lenA) { target.x1 = hit.x; target.y1 = hit.y; }
+          else { target.x2 = hit.x; target.y2 = hit.y; }
+          if (Math.hypot(target.x2 - target.x1, target.y2 - target.y1) >= lenBefore - 1e-9) {
+            return { ok: false, error: 'TRIM would remove nothing (intersection outside the segment).' };
+          }
+        } else {
+          // extend: move the NEARER endpoint to the intersection
+          const lenA = Math.hypot(target.x1 - hit.x, target.y1 - hit.y);
+          const lenB = Math.hypot(hit.x - target.x2, hit.y - target.y2);
+          if (lenA <= lenB) { target.x1 = hit.x; target.y1 = hit.y; }
+          else { target.x2 = hit.x; target.y2 = hit.y; }
+        }
+        const after = JSON.parse(JSON.stringify([target]));
+        const ids = [target.id];
+        history.push({
+          label: run === 'modify:trim' ? 'trim wall' : 'extend wall',
+          redo() { restoreEntitySnapshots(after, ids); render(); },
+          undo() { restoreEntitySnapshots(before, ids); render(); }
+        });
+        render();
+        return { ok: true, message: `${run === 'modify:trim' ? 'Trimmed' : 'Extended'} "${target.name}" at the intersection.` };
+      }
       case 'properties': renderPropertiesInspector(); updateStudioCPanels(); return { ok: true, message: 'Properties panel focused on the current selection.' };
       case 'info': {
         const sel = selectedEntities();
@@ -391,6 +506,15 @@ export function createPlanView(context) {
 
   function selectedEntities() {
     return entities().filter(e => state.plan.selectedIds.has(e.id));
+  }
+
+  /** Restores entity field snapshots by id (undo/redo for in-place ops). */
+  function restoreEntitySnapshots(snapshots, ids) {
+    const byId = new Map(snapshots.map((s, i) => [ids ? ids[i] : s.id, s]));
+    for (const live of entities()) {
+      const snap = byId.get(live.id);
+      if (snap) Object.assign(live, JSON.parse(JSON.stringify(snap)));
+    }
   }
 
   let lastIssuesReport = null;
@@ -2346,11 +2470,45 @@ export function createPlanView(context) {
         <span class="context-tag-badge">${selCount > 1 ? 'MULTI-SELECT' : (sel.kind || 'ITEM').toUpperCase()}</span>
         <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${selCount} selected</span>
         <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate (Ctrl+D)</span></button>
+        <span style="width:1px;height:16px;background:var(--border-subtle);display:inline-block;"></span>
+        <button type="button" class="context-action-btn" id="ctx-rot-free-btn" title="ROTATE — free angle about the selection center"><span>↻ Rotate…</span></button>
+        <button type="button" class="context-action-btn" id="ctx-mirror-btn" title="MIRROR — clone across a vertical axis through the selection"><span>⇋ Mirror</span></button>
+        <button type="button" class="context-action-btn" id="ctx-scale-btn" title="SCALE — factor about the selection center"><span>⤢ Scale…</span></button>
+        <button type="button" class="context-action-btn" id="ctx-array-btn" title="ARRAY — linear copies along +x"><span>⊞ Array…</span></button>
         <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete (Del)</span></button>
       </div>
     `;
     bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
     bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
+
+    // Modify ops: small prompts keep it explicit (no accidental 5× scaling)
+    bar.querySelector('#ctx-rot-free-btn')?.addEventListener('click', () => {
+      const v = prompt('Rotate selection (degrees, + = clockwise about center):', '45');
+      if (v == null) return;
+      const res = executeCadCommand('modify:rotate', { values: [v.trim()] });
+      showToast(res.message || res.error, res.ok ? 'success' : 'warning');
+    });
+    bar.querySelector('#ctx-mirror-btn')?.addEventListener('click', () => {
+      const sel = selectedEntities();
+      if (!sel.length) return;
+      const xs = sel.map(e => (Number.isFinite(e.x1) ? Math.min(e.x1, e.x2) : e.x || 0));
+      const maxX = Math.max(...xs);
+      const res = executeCadCommand('modify:mirror', { points: [{ x: maxX, y: 0 }, { x: maxX, y: 1 }] });
+      showToast(res.message || res.error, res.ok ? 'success' : 'warning');
+    });
+    bar.querySelector('#ctx-scale-btn')?.addEventListener('click', () => {
+      const v = prompt('Scale factor about the selection center (e.g. 2 or 0.5):', '1.5');
+      if (v == null) return;
+      const res = executeCadCommand('modify:scale', { values: [v.trim()] });
+      showToast(res.message || res.error, res.ok ? 'success' : 'warning');
+    });
+    bar.querySelector('#ctx-array-btn')?.addEventListener('click', () => {
+      const v = prompt('Array: total count, spacing (m), angle° — e.g. "3, 5, 0":', '3, 5, 0');
+      if (v == null) return;
+      const parts = v.split(/[, ]+/).map(s => s.trim()).filter(Boolean);
+      const res = executeCadCommand('modify:array', { values: parts });
+      showToast(res.message || res.error, res.ok ? 'success' : 'warning');
+    });
   }
 
   function escapeHtml(str) {

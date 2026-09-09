@@ -18825,6 +18825,13 @@ const SIMPLE = [
   { name: '4VIEW', aliases: ['SPLIT', 'QUAD'], description: 'Switch to the 4-viewport workspace', category: 'view', run: 'view_4split' },
   { name: 'SELECT', aliases: ['SEL', 'V'], description: 'Activate the selection tool', category: 'tool', run: 'tool:select' },
   { name: 'SELECTALL', aliases: ['ALL', 'CTRLA'], description: 'Select every entity in the document', category: 'tool', run: 'select_all' },
+  { name: 'MIRROR', aliases: ['MI'], description: 'Mirror the selection across a two-point axis: MIRROR x1,y1 x2,y2', category: 'edit', run: 'modify:mirror', selection: 'many', undo: true },
+  { name: 'ROTATE', aliases: ['RO'], description: 'Rotate the selection by degrees about its center (or X,Y): ROTATE 90 | ROTATE 45 2,3', category: 'edit', run: 'modify:rotate', selection: 'many', undo: true },
+  { name: 'SCALE', aliases: ['SC'], description: 'Scale the selection by a factor about its center: SCALE 2 | SCALE 0.5', category: 'edit', run: 'modify:scale', selection: 'many', undo: true },
+  { name: 'OFFSET', aliases: ['OFF'], description: 'Create parallel copies of selected walls at a distance (m): OFFSET 0.5', category: 'edit', run: 'modify:offset', selection: 'many', undo: true },
+  { name: 'ARRAY', aliases: ['AR'], description: 'Linear array of the selection: ARRAY count spacing [angle°] — e.g. ARRAY 3 5 0', category: 'edit', run: 'modify:array', selection: 'many', undo: true },
+  { name: 'TRIM', aliases: ['TR'], description: 'Trim the first selected wall at its intersection with the second: TRIM (2 walls selected)', category: 'edit', run: 'modify:trim', selection: 'many', undo: true },
+  { name: 'EXTEND', aliases: ['EX'], description: 'Extend the first selected wall to meet the second: EXTEND (2 walls selected)', category: 'edit', run: 'modify:extend', selection: 'many', undo: true },
   { name: 'PROPERTIES', aliases: ['PROPS', 'CH'], description: 'Inspect the current selection in the properties panel', category: 'inquiry', run: 'properties' },
   { name: 'INFO', aliases: ['INSPECT'], description: 'Show detailed information about the current selection', category: 'inquiry', run: 'info' },
   { name: 'SUGGEST', aliases: ['SUGGESTIONS'], description: 'Ranked, evidence-backed suggestions for the current selection or document', category: 'ai', run: 'suggest' },
@@ -19326,6 +19333,231 @@ function describeCommand(def) {
     help: def.help || def.description || '',
     aiDescription: def.aiDescription || def.description || ''
   };
+}
+
+
+  // =========================================================================
+  // MODULE: CadModify
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — CAD Modify Operations
+ *
+ * Pure geometry transforms for the classic modify toolkit: mirror, arbitrary
+ * rotate, scale-factor, wall offset, and linear array. Every op:
+ *   - takes entities (any canvas shape: segment walls/lines/dims, rect
+ *     entities, polygon-boundary rooms, hosted openings) and parameters,
+ *   - returns NEW cloned entities (input untouched),
+ *   - preserves stable identity (fresh ids via the entity factory),
+ *   - keeps hosted openings consistent with their moved/rotated hosts.
+ *
+ * The plan view wraps these in undoable commands; the command registry
+ * exposes them as MIRROR / ROTATE / SCALE / OFFSET / ARRAY.
+ */
+
+
+
+
+// ---------------------------------------------------------------------------
+// Geometry helpers (shared with the canvas' world model)
+// ---------------------------------------------------------------------------
+
+function rotateDeg(p, cx, cy, deg) {
+  return rotatePointRad(p, { x: cx, y: cy }, (deg * Math.PI) / 180);
+}
+
+function mirrorAcrossAxis(p, axis) {
+  return mirrorPointLine(p, { x: axis.x1, y: axis.y1 }, { x: axis.x2, y: axis.y2 });
+}
+
+function segmentCenter(e) {
+  return { x: (e.x1 + e.x2) / 2, y: (e.y1 + e.y2) / 2 };
+}
+
+function rectCenter(e) {
+  return { x: (e.x || 0) + (e.width || 0) / 2, y: (e.y || 0) + (e.depth || 0) / 2 };
+}
+
+function entityCenter(e) {
+  if (Number.isFinite(e.x1) && Number.isFinite(e.x2)) return segmentCenter(e);
+  if (Array.isArray(e.boundary) && e.boundary.length >= 3) {
+    const xs = e.boundary.map(p => p.x), ys = e.boundary.map(p => p.y);
+    return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  }
+  if (Number.isFinite(e.x)) return rectCenter(e);
+  return { x: 0, y: 0 };
+}
+
+/** True for wall/line/dimension entities stored as x1/y1/x2/y2. */
+function isSegmentEntity(e) {
+  return Number.isFinite(e.x1) && Number.isFinite(e.y1) && Number.isFinite(e.x2) && Number.isFinite(e.y2);
+}
+
+function cloneWithId(e) {
+  const c = JSON.parse(JSON.stringify(e));
+  c.id = generateEntityId(e.kind || 'item');
+  if (c.name && !/copy/i.test(c.name)) c.name = `${c.name} (Copy)`;
+  c.locked = false;
+  return c;
+}
+
+// ---------------------------------------------------------------------------
+// Point-map dispatch — applies fn(p)→p' to every geometric field of an entity
+// ---------------------------------------------------------------------------
+
+function mapEntityPoints(e, fn) {
+  if (isSegmentEntity(e)) {
+    const p1 = fn({ x: e.x1, y: e.y1 });
+    const p2 = fn({ x: e.x2, y: e.y2 });
+    e.x1 = p1.x; e.y1 = p1.y; e.x2 = p2.x; e.y2 = p2.y;
+    if (e.kind === 'dimension') {
+      e.p1 = { x: p1.x, y: p1.y };
+      e.p2 = { x: p2.x, y: p2.y };
+      e.x = Math.min(p1.x, p2.x);
+      e.y = Math.min(p1.y, p2.y);
+      e.width = Math.abs(p2.x - p1.x);
+      e.depth = Math.abs(p2.y - p1.y);
+      e.name = `${Math.hypot(p2.x - p1.x, p2.y - p1.y).toFixed(2)}m`;
+    }
+    return e;
+  }
+  if (Array.isArray(e.p1)) { /* leader points handled below */ }
+  if (Array.isArray(e.boundary) && e.boundary.length >= 3) {
+    e.boundary = e.boundary.map(fn);
+    const xs = e.boundary.map(p => p.x), ys = e.boundary.map(p => p.y);
+    e.x = Math.min(...xs); e.y = Math.min(...ys);
+    e.width = Math.max(...xs) - e.x;
+    e.depth = Math.max(...ys) - e.y;
+    return e;
+  }
+  // leader-style point records
+  if (e.p1 && typeof e.p1.x === 'number') {
+    e.p1 = fn(e.p1);
+    if (e.knee) e.knee = fn(e.knee);
+    if (e.p2) e.p2 = fn(e.p2);
+  }
+  if (Number.isFinite(e.x) && Number.isFinite(e.y)) {
+    const p = fn({ x: e.x, y: e.y });
+    e.x = p.x; e.y = p.y;
+  }
+  return e;
+}
+
+// ---------------------------------------------------------------------------
+// Public operations
+// ---------------------------------------------------------------------------
+
+/**
+ * MIRROR: clones the entities across a mirror axis { x1, y1, x2, y2 }.
+ * Returns the new mirrored clones (originals stay).
+ */
+function mirrorEntities(entities, axis) {
+  if (!Array.isArray(entities) || entities.length === 0) return [];
+  if (!axis || !Number.isFinite(axis.x1) || !Number.isFinite(axis.y1) ||
+      !Number.isFinite(axis.x2) || !Number.isFinite(axis.y2)) {
+    throw new Error('MIRROR needs an axis: two points (x1,y1)-(x2,y2).');
+  }
+  const out = [];
+  for (const e of entities) {
+    if (!e || e.kind === 'door' || e.kind === 'window') continue; // hosted: mirror via their host
+    const c = cloneWithId(e);
+    mapEntityPoints(c, p => mirrorAcrossAxis(p, axis));
+    if (c.kind === 'leader') c.flipSide = !c.flipSide;
+    out.push(c);
+  }
+  return out;
+}
+
+/**
+ * ROTATE: rotates the entities in place by `degrees` about a center point.
+ * Hosted openings rotate around their host's center (kept on the wall).
+ */
+function rotateEntities(entities, degrees, center) {
+  if (!Array.isArray(entities) || entities.length === 0) return entities;
+  if (!Number.isFinite(degrees)) throw new Error('ROTATE needs an angle in degrees.');
+  const cx = Number.isFinite(center?.x) ? center.x : entityCenter(entities[0]).x;
+  const cy = Number.isFinite(center?.y) ? center.y : entityCenter(entities[0]).y;
+  for (const e of entities) {
+    if (!e) continue;
+    mapEntityPoints(e, p => rotateDeg(p, cx, cy, degrees));
+  }
+  return entities;
+}
+
+/**
+ * SCALE: multiplies entity geometry by `factor` about a center point.
+ * Rect entities grow width/depth; segment entities stretch; polygon
+ * boundaries rescale; thickness scales with the wall.
+ */
+function scaleEntities(entities, factor, center) {
+  if (!Array.isArray(entities) || entities.length === 0) return entities;
+  if (!Number.isFinite(factor) || factor <= 0) throw new Error('SCALE needs a positive factor (e.g. 2 or 0.5).');
+  const cx = Number.isFinite(center?.x) ? center.x : entityCenter(entities[0]).x;
+  const cy = Number.isFinite(center?.y) ? center.y : entityCenter(entities[0]).y;
+  for (const e of entities) {
+    if (!e) continue;
+    const hadBoundary = Array.isArray(e.boundary) && e.boundary.length >= 3;
+    mapEntityPoints(e, p => ({ x: cx + (p.x - cx) * factor, y: cy + (p.y - cy) * factor }));
+    // Rect fields: boundary entities already got w/d from the mapped polygon;
+    // plain rect entities (furniture/stairs) need the explicit multiply.
+    if (!hadBoundary && Number.isFinite(e.width)) e.width *= factor;
+    if (!hadBoundary && Number.isFinite(e.depth)) e.depth *= factor;
+    if (Number.isFinite(e.thickness)) e.thickness *= factor;
+  }
+  return entities;
+}
+
+/**
+ * OFFSET (walls): creates one parallel copy of each segment entity at
+ * `distance` meters to the left (+) or right (−) of its direction.
+ */
+function offsetEntities(entities, distance) {
+  if (!Array.isArray(entities) || entities.length === 0) return [];
+  if (!Number.isFinite(distance) || distance === 0) {
+    throw new Error('OFFSET needs a non-zero distance in meters.');
+  }
+  const out = [];
+  for (const e of entities) {
+    if (!isSegmentEntity(e)) continue;
+    const dx = e.x2 - e.x1, dy = e.y2 - e.y1;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-9) continue;
+    const nx = (-dy / len) * distance;
+    const ny = (dx / len) * distance;
+    const c = cloneWithId(e);
+    c.x1 = e.x1 + nx; c.y1 = e.y1 + ny;
+    c.x2 = e.x2 + nx; c.y2 = e.y2 + ny;
+    if (c.kind === 'dimension') {
+      c.p1 = { x: c.x1, y: c.y1 };
+      c.p2 = { x: c.x2, y: c.y2 };
+    }
+    out.push(c);
+  }
+  return out;
+}
+
+/**
+ * ARRAY (linear): creates `count` copies spaced `spacing` meters apart along
+ * direction `deg` (0 = +x), starting from the originals' position.
+ */
+function arrayEntitiesLinear(entities, count, spacing, deg = 0) {
+  if (!Array.isArray(entities) || entities.length === 0) return [];
+  if (!Number.isInteger(count) || count < 2) throw new Error('ARRAY needs a count ≥ 2.');
+  if (!Number.isFinite(spacing) || spacing <= 0) throw new Error('ARRAY needs a positive spacing in meters.');
+  const r = (deg * Math.PI) / 180;
+  const ux = Math.cos(r), uy = Math.sin(r);
+  const out = [];
+  for (let i = 1; i < count; i++) {
+    const dx = ux * spacing * i;
+    const dy = uy * spacing * i;
+    for (const e of entities) {
+      if (!e || e.kind === 'door' || e.kind === 'window') continue;
+      const c = cloneWithId(e);
+      mapEntityPoints(c, p => ({ x: p.x + dx, y: p.y + dy }));
+      out.push(c);
+    }
+  }
+  return out;
 }
 
 
@@ -38841,6 +39073,8 @@ function escapeAiHtml(str) {
 
 
 
+
+
 const svgIconClose = icon('delete', { size: 10 });
 const svgIconPlus = icon('command', { size: 12 });
 const TOOL_ICON_BY_TOOL = {
@@ -39106,6 +39340,119 @@ function createPlanView(context) {
         updateStatusBar();
         return { ok: true, message: `${state.plan.selectedIds.size} selected (all)` };
       }
+      // ---- Modify operations (src/core/cad-modify.js) — undoable ----
+      case 'modify:mirror': {
+        const sel = selectedEntities();
+        if (sel.length === 0) return { ok: false, error: 'MIRROR needs a selection first.' };
+        const [a, b] = args.points || [];
+        if (!a || !b) return { ok: false, error: 'MIRROR needs two axis points: MIRROR x1,y1 x2,y2' };
+        const clones = mirrorEntities(sel, { x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+        for (const c of clones) commitEntity(c, 'mirror');
+        return { ok: true, message: `Mirrored ${clones.length} entit${clones.length === 1 ? 'y' : 'ies'} across the axis.` };
+      }
+      case 'modify:rotate': {
+        const sel = selectedEntities();
+        if (sel.length === 0) return { ok: false, error: 'ROTATE needs a selection first.' };
+        const deg = Number(args.values?.[0]);
+        if (!Number.isFinite(deg)) return { ok: false, error: 'ROTATE needs an angle in degrees: ROTATE 90' };
+        const cx = Number(args.values?.[1]), cy = Number(args.values?.[2]);
+        const center = Number.isFinite(cx) && Number.isFinite(cy) ? { x: cx, y: cy } : undefined;
+        const before = JSON.parse(JSON.stringify(sel));
+        rotateEntities(sel, deg, center);
+        const after = JSON.parse(JSON.stringify(sel));
+        const ids = sel.map(e => e.id);
+        history.push({
+          label: `rotate ${deg}°`,
+          redo() { restoreEntitySnapshots(after, ids); render(); },
+          undo() { restoreEntitySnapshots(before, ids); render(); }
+        });
+        render();
+        updateStudioCPanels();
+        return { ok: true, message: `Rotated ${sel.length} entit${sel.length === 1 ? 'y' : 'ies'} by ${deg}°.` };
+      }
+      case 'modify:scale': {
+        const sel = selectedEntities();
+        if (sel.length === 0) return { ok: false, error: 'SCALE needs a selection first.' };
+        const factor = Number(args.values?.[0]);
+        if (!Number.isFinite(factor) || factor <= 0) return { ok: false, error: 'SCALE needs a positive factor: SCALE 2 or SCALE 0.5' };
+        const before = JSON.parse(JSON.stringify(sel));
+        scaleEntities(sel, factor);
+        const after = JSON.parse(JSON.stringify(sel));
+        const ids = sel.map(e => e.id);
+        history.push({
+          label: `scale ×${factor}`,
+          redo() { restoreEntitySnapshots(after, ids); render(); },
+          undo() { restoreEntitySnapshots(before, ids); render(); }
+        });
+        render();
+        updateStudioCPanels();
+        return { ok: true, message: `Scaled ${sel.length} entit${sel.length === 1 ? 'y' : 'ies'} by ×${factor}.` };
+      }
+      case 'modify:offset': {
+        const sel = selectedEntities();
+        if (sel.length === 0) return { ok: false, error: 'OFFSET needs a selection first.' };
+        const dist = Number(args.values?.[0]);
+        if (!Number.isFinite(dist) || dist === 0) return { ok: false, error: 'OFFSET needs a non-zero distance in meters: OFFSET 0.5' };
+        let clones;
+        try { clones = offsetEntities(sel, dist); } catch (err) { return { ok: false, error: err.message }; }
+        if (clones.length === 0) return { ok: false, error: 'OFFSET works on wall/line/dimension entities (segment geometry).' };
+        for (const c of clones) commitEntity(c, 'offset');
+        return { ok: true, message: `Offset ${clones.length} entit${clones.length === 1 ? 'y' : 'ies'} by ${dist} m.` };
+      }
+      case 'modify:array': {
+        const sel = selectedEntities();
+        if (sel.length === 0) return { ok: false, error: 'ARRAY needs a selection first.' };
+        const count = Number(args.values?.[0]), spacing = Number(args.values?.[1]), deg = Number(args.values?.[2] || 0);
+        if (!Number.isInteger(count) || count < 2) return { ok: false, error: 'ARRAY needs count ≥ 2: ARRAY 3 5 0' };
+        if (!Number.isFinite(spacing) || spacing <= 0) return { ok: false, error: 'ARRAY needs a positive spacing: ARRAY 3 5 0' };
+        let clones;
+        try { clones = arrayEntitiesLinear(sel, count, spacing, deg); } catch (err) { return { ok: false, error: err.message }; }
+        for (const c of clones) commitEntity(c, 'array');
+        state.plan.selectedIds = new Set([...state.plan.selectedIds, ...clones.map(c => c.id)]);
+        return { ok: true, message: `Arrayed ${clones.length} copies (×${count} total, ${spacing} m apart).` };
+      }
+      case 'modify:trim':
+      case 'modify:extend': {
+        const sel = selectedEntities().filter(e => e.kind === 'wall' || e.kind === 'line');
+        if (sel.length < 2) return { ok: false, error: `${run === 'modify:trim' ? 'TRIM' : 'EXTEND'} needs exactly 2 walls/lines selected (the cutter second).` };
+        const [target, cutter] = sel;
+        const before = JSON.parse(JSON.stringify([target]));
+        const res = trimExtendToLine(
+          { x: target.x1, y: target.y1 }, { x: target.x2, y: target.y2 },
+          { x: cutter.x1, y: cutter.y1 }, { x: cutter.x2, y: cutter.y2 }
+        );
+        if (!res.hitWithinLine) {
+          return { ok: false, error: 'The two segments never meet — nothing to trim/extend.' };
+        }
+        // trimExtendToLine returns { start, end } — end is the intersection
+        const hit = res.end;
+        if (run === 'modify:trim') {
+          // keep the LONGER remainder: shorten target to the intersection
+          const lenBefore = Math.hypot(target.x2 - target.x1, target.y2 - target.y1);
+          const lenA = Math.hypot(target.x1 - hit.x, target.y1 - hit.y);
+          const lenB = Math.hypot(hit.x - target.x2, hit.y - target.y2);
+          if (lenB >= lenA) { target.x1 = hit.x; target.y1 = hit.y; }
+          else { target.x2 = hit.x; target.y2 = hit.y; }
+          if (Math.hypot(target.x2 - target.x1, target.y2 - target.y1) >= lenBefore - 1e-9) {
+            return { ok: false, error: 'TRIM would remove nothing (intersection outside the segment).' };
+          }
+        } else {
+          // extend: move the NEARER endpoint to the intersection
+          const lenA = Math.hypot(target.x1 - hit.x, target.y1 - hit.y);
+          const lenB = Math.hypot(hit.x - target.x2, hit.y - target.y2);
+          if (lenA <= lenB) { target.x1 = hit.x; target.y1 = hit.y; }
+          else { target.x2 = hit.x; target.y2 = hit.y; }
+        }
+        const after = JSON.parse(JSON.stringify([target]));
+        const ids = [target.id];
+        history.push({
+          label: run === 'modify:trim' ? 'trim wall' : 'extend wall',
+          redo() { restoreEntitySnapshots(after, ids); render(); },
+          undo() { restoreEntitySnapshots(before, ids); render(); }
+        });
+        render();
+        return { ok: true, message: `${run === 'modify:trim' ? 'Trimmed' : 'Extended'} "${target.name}" at the intersection.` };
+      }
       case 'properties': renderPropertiesInspector(); updateStudioCPanels(); return { ok: true, message: 'Properties panel focused on the current selection.' };
       case 'info': {
         const sel = selectedEntities();
@@ -39141,6 +39488,15 @@ function createPlanView(context) {
 
   function selectedEntities() {
     return entities().filter(e => state.plan.selectedIds.has(e.id));
+  }
+
+  /** Restores entity field snapshots by id (undo/redo for in-place ops). */
+  function restoreEntitySnapshots(snapshots, ids) {
+    const byId = new Map(snapshots.map((s, i) => [ids ? ids[i] : s.id, s]));
+    for (const live of entities()) {
+      const snap = byId.get(live.id);
+      if (snap) Object.assign(live, JSON.parse(JSON.stringify(snap)));
+    }
   }
 
   let lastIssuesReport = null;
@@ -41096,11 +41452,45 @@ function createPlanView(context) {
         <span class="context-tag-badge">${selCount > 1 ? 'MULTI-SELECT' : (sel.kind || 'ITEM').toUpperCase()}</span>
         <span class="context-title" style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${selCount} selected</span>
         <button type="button" class="context-action-btn" id="ctx-dup-btn"><span>📋 Duplicate (Ctrl+D)</span></button>
+        <span style="width:1px;height:16px;background:var(--border-subtle);display:inline-block;"></span>
+        <button type="button" class="context-action-btn" id="ctx-rot-free-btn" title="ROTATE — free angle about the selection center"><span>↻ Rotate…</span></button>
+        <button type="button" class="context-action-btn" id="ctx-mirror-btn" title="MIRROR — clone across a vertical axis through the selection"><span>⇋ Mirror</span></button>
+        <button type="button" class="context-action-btn" id="ctx-scale-btn" title="SCALE — factor about the selection center"><span>⤢ Scale…</span></button>
+        <button type="button" class="context-action-btn" id="ctx-array-btn" title="ARRAY — linear copies along +x"><span>⊞ Array…</span></button>
         <button type="button" class="context-action-btn danger" id="ctx-del-btn"><span>🗑 Delete (Del)</span></button>
       </div>
     `;
     bar.querySelector('#ctx-dup-btn')?.addEventListener('click', duplicateSelected);
     bar.querySelector('#ctx-del-btn')?.addEventListener('click', deleteSelected);
+
+    // Modify ops: small prompts keep it explicit (no accidental 5× scaling)
+    bar.querySelector('#ctx-rot-free-btn')?.addEventListener('click', () => {
+      const v = prompt('Rotate selection (degrees, + = clockwise about center):', '45');
+      if (v == null) return;
+      const res = executeCadCommand('modify:rotate', { values: [v.trim()] });
+      showToast(res.message || res.error, res.ok ? 'success' : 'warning');
+    });
+    bar.querySelector('#ctx-mirror-btn')?.addEventListener('click', () => {
+      const sel = selectedEntities();
+      if (!sel.length) return;
+      const xs = sel.map(e => (Number.isFinite(e.x1) ? Math.min(e.x1, e.x2) : e.x || 0));
+      const maxX = Math.max(...xs);
+      const res = executeCadCommand('modify:mirror', { points: [{ x: maxX, y: 0 }, { x: maxX, y: 1 }] });
+      showToast(res.message || res.error, res.ok ? 'success' : 'warning');
+    });
+    bar.querySelector('#ctx-scale-btn')?.addEventListener('click', () => {
+      const v = prompt('Scale factor about the selection center (e.g. 2 or 0.5):', '1.5');
+      if (v == null) return;
+      const res = executeCadCommand('modify:scale', { values: [v.trim()] });
+      showToast(res.message || res.error, res.ok ? 'success' : 'warning');
+    });
+    bar.querySelector('#ctx-array-btn')?.addEventListener('click', () => {
+      const v = prompt('Array: total count, spacing (m), angle° — e.g. "3, 5, 0":', '3, 5, 0');
+      if (v == null) return;
+      const parts = v.split(/[, ]+/).map(s => s.trim()).filter(Boolean);
+      const res = executeCadCommand('modify:array', { values: parts });
+      showToast(res.message || res.error, res.ok ? 'success' : 'warning');
+    });
   }
 
   function escapeHtml(str) {
