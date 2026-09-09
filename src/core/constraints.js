@@ -224,7 +224,11 @@ export function solveConstraint(constraint, entities) {
         const oldSpan = Math.max(...ys) - Math.min(...ys);
         const sy = oldSpan > 1e-9 ? neededDepth / oldSpan : 1;
         room.boundary = room.boundary.map(p => ({ x: p.x, y: cy + (p.y - cy) * sy }));
+        // re-derive the rect bbox from the moved boundary so both agree
+        const nys = room.boundary.map(p => p.y);
+        room.y = Math.min(...nys);
       }
+      room.area = (room.width || 0) * (room.depth || 0);
       satisfy(constraint, `Room depth grown to ${neededDepth.toFixed(2)} m → ${minArea >= 0 ? minArea.toFixed(1) : ''} m² minimum met.`);
       return constraint;
     }

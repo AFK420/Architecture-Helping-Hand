@@ -20166,7 +20166,11 @@ function solveConstraint(constraint, entities) {
         const oldSpan = Math.max(...ys) - Math.min(...ys);
         const sy = oldSpan > 1e-9 ? neededDepth / oldSpan : 1;
         room.boundary = room.boundary.map(p => ({ x: p.x, y: cy + (p.y - cy) * sy }));
+        // re-derive the rect bbox from the moved boundary so both agree
+        const nys = room.boundary.map(p => p.y);
+        room.y = Math.min(...nys);
       }
+      room.area = (room.width || 0) * (room.depth || 0);
       satisfy(constraint, `Room depth grown to ${neededDepth.toFixed(2)} m → ${minArea >= 0 ? minArea.toFixed(1) : ''} m² minimum met.`);
       return constraint;
     }
@@ -20494,19 +20498,62 @@ function recomputeWindow(win) {
 function recomputeRoom(room) {
   const w = room.width ?? 0;
   const d = room.depth ?? 0;
-  const area = w * d;
-  room.area = area;
   if (Array.isArray(room.boundary) && room.boundary.length >= 3) {
-    // rescale boundary about its center so the polygon matches w×d
-    const xs = room.boundary.map(p => p.x);
-    const ys = room.boundary.map(p => p.y);
-    const minX = Math.min(...xs), maxX = Math.max(...xs);
-    const minY = Math.min(...ys), maxY = Math.max(...ys);
-    const oldW = maxX - minX, oldH = maxY - minY;
-    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-    const sx = oldW > 1e-9 ? w / oldW : 1;
-    const sy = oldH > 1e-9 ? d / oldH : 1;
-    room.boundary = room.boundary.map(p => ({ x: cx + (p.x - cx) * sx, y: cy + (p.y - cy) * sy }));
+    const isRect = (() => {
+      const xs = [...new Set(room.boundary.map(p => +p.x.toFixed(6)))];
+      const ys = [...new Set(room.boundary.map(p => +p.y.toFixed(6)))];
+      return xs.length === 2 && ys.length === 2;
+    })();
+    if (isRect && Number.isFinite(room.x) && Number.isFinite(room.y)) {
+      // Rect-shaped boundary: rebuild corner-anchored from the rect fields so
+      // the drawn polygon sits exactly where x/y/width/depth say it does.
+      room.boundary = [
+        { x: room.x, y: room.y },
+        { x: room.x + w, y: room.y },
+        { x: room.x + w, y: room.y + d },
+        { x: room.x, y: room.y + d }
+      ];
+    } else {
+      // True polygon: rescale about its center to match w×d, then re-derive
+      // the rect bbox so both representations agree.
+      const xs = room.boundary.map(p => p.x);
+      const ys = room.boundary.map(p => p.y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const oldW = maxX - minX, oldH = maxY - minY;
+      const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+      const sx = oldW > 1e-9 ? w / oldW : 1;
+      const sy = oldH > 1e-9 ? d / oldH : 1;
+      room.boundary = room.boundary.map(p => ({ x: cx + (p.x - cx) * sx, y: cy + (p.y - cy) * sy }));
+      const nxs = room.boundary.map(p => p.x);
+      const nys = room.boundary.map(p => p.y);
+      room.x = Math.min(...nxs);
+      room.y = Math.min(...nys);
+      room.width = Math.max(...nxs) - room.x;
+      room.depth = Math.max(...nys) - room.y;
+    }
+  }
+  // Derived data must reflect the DRAWN geometry. The boundary is the source
+  // of truth for what is rendered; a rect-shaped boundary equals w×d, but a
+  // rescaled true polygon does not — so derive from the boundary (shoelace)
+  // when present, else from w×d. Never assign from cached getters.
+  const b = Array.isArray(room.boundary) && room.boundary.length >= 3 ? room.boundary : null;
+  if (b) {
+    let a = 0;
+    for (let i = 0; i < b.length; i++) {
+      const j = (i + 1) % b.length;
+      a += b[i].x * b[j].y - b[j].x * b[i].y;
+    }
+    room.area = Math.abs(a) / 2;
+    let per = 0;
+    for (let i = 0; i < b.length; i++) {
+      const j = (i + 1) % b.length;
+      per += Math.hypot(b[j].x - b[i].x, b[j].y - b[i].y);
+    }
+    room.perimeter = per;
+  } else {
+    room.area = w * d;
+    room.perimeter = 2 * (w + d);
   }
 }
 
@@ -39318,6 +39365,63 @@ function createPlanView(context) {
   // from the live tool catalog; the command bar, canvas clicks and the
   // deterministic core all meet here.
   // ------------------------------------------------------------------
+  /** Rect↔polygon consistency: factories build rooms with BOTH x/y/w/d and
+   *  a boundary polygon, and the renderer draws the polygon. Every mutation
+   *  of the rect fields must therefore re-derive the boundary (for axis-
+   *  aligned rects) or the rect bbox (never let the two diverge silently). */
+  function syncRectBoundary(e) {
+    if (!e || typeof e !== 'object') return e;
+    const isRect = (b) => {
+      // axis-aligned 4-gon with sides parallel to x/y? treat as rect
+      const xs = [...new Set(b.map(p => +p.x.toFixed(6)))];
+      const ys = [...new Set(b.map(p => +p.y.toFixed(6)))];
+      return xs.length === 2 && ys.length === 2;
+    };
+    if (Array.isArray(e.boundary) && e.boundary.length >= 3 && isRect(e.boundary)) {
+      // rect-shaped polygon: rebuild it from the (possibly moved/resized) rect fields
+      if (Number.isFinite(e.x) && Number.isFinite(e.y) && Number.isFinite(e.width) && Number.isFinite(e.depth)) {
+        e.boundary = [
+          { x: e.x, y: e.y },
+          { x: e.x + e.width, y: e.y },
+          { x: e.x + e.width, y: e.y + e.depth },
+          { x: e.x, y: e.y + e.depth }
+        ];
+      }
+    } else if (Array.isArray(e.boundary) && e.boundary.length >= 3) {
+      // true polygon (polygonal-room): re-derive the rect bbox from the boundary
+      const xs = e.boundary.map(p => p.x), ys = e.boundary.map(p => p.y);
+      e.x = Math.min(...xs);
+      e.y = Math.min(...ys);
+      e.width = Math.max(...xs) - e.x;
+      e.depth = Math.max(...ys) - e.y;
+    }
+    // Keep derived area/perimeter truthful after any geometry change.
+    // roomArea/roomPerimeter return the CACHED e.area/e.perimeter first —
+    // assigning from them would re-cache the stale value. Compute from the
+    // geometry directly.
+    if (e.kind === 'room') {
+      const b = Array.isArray(e.boundary) && e.boundary.length >= 3 ? e.boundary : null;
+      if (b) {
+        let a = 0;
+        for (let i = 0; i < b.length; i++) {
+          const j = (i + 1) % b.length;
+          a += b[i].x * b[j].y - b[j].x * b[i].y;
+        }
+        e.area = Math.abs(a) / 2;
+        let per = 0;
+        for (let i = 0; i < b.length; i++) {
+          const j = (i + 1) % b.length;
+          per += Math.hypot(b[j].x - b[i].x, b[j].y - b[i].y);
+        }
+        e.perimeter = per;
+      } else if (Number.isFinite(e.width) && Number.isFinite(e.depth)) {
+        e.area = e.width * e.depth;
+        e.perimeter = 2 * (e.width + e.depth);
+      }
+    }
+    return e;
+  }
+
   function commitEntity(entity, label) {
     const firstEntity = entities().length === 0;
     // Schema v2 identity contract stamped as the entity enters the model.
@@ -45811,6 +45915,7 @@ function createPlanView(context) {
       e.y = minY;
       e.width = Math.max(grid, maxX - minX);
       e.depth = Math.max(grid, maxY - minY);
+      syncRectBoundary(e);
 
       if (e.kind === 'stair') {
         e.run = Math.max(grid, e.depth);
@@ -45915,6 +46020,7 @@ function createPlanView(context) {
         } else {
           dragState.entity.x += dx;
           dragState.entity.y += dy;
+          syncRectBoundary(dragState.entity);
           if (snapOn) {
             activeGuides = computeAlignmentGuides(
               { x: dragState.entity.x, y: dragState.entity.y, width: dragState.entity.width || 0, depth: dragState.entity.depth || 0 },
@@ -45957,6 +46063,7 @@ function createPlanView(context) {
         e.depth = oldW;
         e.x = snapToGrid(cx - e.width / 2, state.plan.grid);
         e.y = snapToGrid(cy - e.depth / 2, state.plan.grid);
+        syncRectBoundary(e);
         const afterState = JSON.parse(JSON.stringify(e));
 
         const cmd = {

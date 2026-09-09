@@ -1,5 +1,34 @@
 # Production Hardening Changelog
 
+## 2026-09-10 (pass 6) — Room resize/move split-brain fix (user-reported)
+
+User bug: "when I make the room rectangle bigger, the drawing stays as it is
+while the points can be moved and made bigger." Root cause was three layers:
+
+1. **Rect↔polygon split-brain** (the visible bug): every factory room carries
+   BOTH `x/y/width/depth` AND a `boundary` polygon, and the renderer draws
+   the polygon — but the resize/move/rotate handlers mutated only the rect
+   fields. The drawn room froze while the handles (computed from rect fields)
+   moved away. Fixed with `syncRectBoundary()` in plan.js called after every
+   rect-field mutation (resize handles, drag-move, 90° rotate): rect-shaped
+   boundaries rebuild corner-anchored from the rect fields; true polygonal
+   boundaries re-derive the rect bbox instead.
+2. **Circular area cache**: `e.area = roomArea(e)` re-cached the STALE area
+   because `roomArea()` returns the cached `e.area` field first. All derived
+   data now computes from geometry (shoelace on the boundary; w×d fallback)
+   — in `syncRectBoundary`, `parametric.recomputeRoom` (which also
+   rescaled the boundary about its CENTER while rect fields are
+   corner-anchored — second divergence path, fixed), and the
+   `ROOM_MIN_AREA` constraint (bbox re-derived after polygon rescale).
+3. **Stale surfaces**: canvas label, inspector Floor Area/Perimeter, and the
+   contextual toolbar now all recompute together after any resize.
+
+Verified live in the browser (programmatic pointer drag, the real code path):
+draw → select → drag the E handle → polygon stretched 480→560, label
+22.8→29.8m², inspector 29.75m²/24.00m perimeter, toolbar 29.8m² — all
+consistent. Pinned by `tests/honesty-pass.test.js` §11 (rect↔boundary sync,
+corner-anchor, area re-derivation, polygonal-room bbox agreement), 63/63.
+
 ## 2026-09-10 (pass 5) — Engine wiring + roadmap items 1–4 (v2.4.0)
 
 Executed the post-audit roadmap in order. Every phase: tests + lint + bundle

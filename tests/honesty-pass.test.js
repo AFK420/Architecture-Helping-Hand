@@ -233,6 +233,51 @@ console.log('\n--- 10. Source honesty pins (static) ---');
   assert(appSrc.includes("hasController('plan', 'addEntity')"), 'NL placement goes through the live canvas controller');
 }
 
+console.log('\n--- 11. Room rect↔boundary consistency (resize/move split-brain) ---');
+{
+  // Every factory room carries BOTH x/y/width/depth AND a boundary polygon,
+  // and the plan renderer draws the polygon. User bug (2026-09-10): dragging
+  // the resize handles updated only the rect fields — the drawn room stayed
+  // frozen while the handles moved. Every mutation path must keep both in
+  // sync. recomputeRoom (parametric inspector edits) is the core path.
+  const { applyParameter } = await import('../src/core/parametric.js');
+  const room = createRoom({ id: 'rr1', name: 'Resize Test', x: 1, y: 1, width: 4, depth: 3 });
+  assert(Array.isArray(room.boundary) && room.boundary.length === 4, 'factory room has a boundary polygon (what the renderer draws)');
+
+  // Inspector width edit 4 → 6
+  const res = applyParameter(room, 'width', 6);
+  assert(res.ok, 'parametric width edit accepted');
+  assert(room.width === 6, 'width field updated to 6');
+  const bx = room.boundary.map(p => p.x);
+  assert(Math.max(...bx) - Math.min(...bx) > 5.9 && Math.max(...bx) - Math.min(...bx) < 6.1,
+    `boundary polygon width follows rect fields (span=${(Math.max(...bx) - Math.min(...bx)).toFixed(2)})`);
+  assert(Math.abs(room.boundary[0].x - room.x) < 1e-9, 'boundary stays corner-anchored at room.x (no center drift)');
+
+  // Inspector depth edit 3 → 5
+  const res2 = applyParameter(room, 'depth', 5);
+  assert(res2.ok && room.depth === 5, 'depth field updated to 5');
+  const by = room.boundary.map(p => p.y);
+  assert(Math.max(...by) - Math.min(...by) > 4.9 && Math.max(...by) - Math.min(...by) < 5.1,
+    `boundary polygon depth follows rect fields (span=${(Math.max(...by) - Math.min(...by)).toFixed(2)})`);
+
+  // Truthful derived data after resize
+  assert(Math.abs(room.area - 30) < 1e-9, `area re-derived after resize (got ${room.area})`);
+
+  // True-polygon rooms: bbox re-derived from the boundary, not vice versa
+  const polyRoom = createRoom({
+    id: 'rr2', name: 'Poly Test',
+    boundary: [{ x: 0, y: 0 }, { x: 6, y: 0 }, { x: 8, y: 4 }, { x: 0, y: 4 }]
+  });
+  assert(Math.abs(polyRoom.width - 8) < 1e-9 && Math.abs(polyRoom.depth - 4) < 1e-9,
+    'polygonal room bbox derived from boundary');
+  const res3 = applyParameter(polyRoom, 'depth', 8);
+  assert(res3.ok, 'polygonal room depth edit accepted');
+  const pys = polyRoom.boundary.map(p => p.y);
+  assert(Math.abs((Math.max(...pys) - Math.min(...pys)) - 8) < 1e-9,
+    'polygon boundary rescaled to requested depth');
+  assert(Math.abs(polyRoom.depth - 8) < 1e-9, 'bbox re-derived from rescaled boundary (representations agree)');
+}
+
 console.log(`\n========================================`);
 console.log(`Honesty Pass Regressions: ${passed} passed, ${failed} failed.`);
 console.log(`========================================`);

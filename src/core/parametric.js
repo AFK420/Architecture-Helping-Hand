@@ -201,19 +201,62 @@ function recomputeWindow(win) {
 function recomputeRoom(room) {
   const w = room.width ?? 0;
   const d = room.depth ?? 0;
-  const area = w * d;
-  room.area = area;
   if (Array.isArray(room.boundary) && room.boundary.length >= 3) {
-    // rescale boundary about its center so the polygon matches w×d
-    const xs = room.boundary.map(p => p.x);
-    const ys = room.boundary.map(p => p.y);
-    const minX = Math.min(...xs), maxX = Math.max(...xs);
-    const minY = Math.min(...ys), maxY = Math.max(...ys);
-    const oldW = maxX - minX, oldH = maxY - minY;
-    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-    const sx = oldW > 1e-9 ? w / oldW : 1;
-    const sy = oldH > 1e-9 ? d / oldH : 1;
-    room.boundary = room.boundary.map(p => ({ x: cx + (p.x - cx) * sx, y: cy + (p.y - cy) * sy }));
+    const isRect = (() => {
+      const xs = [...new Set(room.boundary.map(p => +p.x.toFixed(6)))];
+      const ys = [...new Set(room.boundary.map(p => +p.y.toFixed(6)))];
+      return xs.length === 2 && ys.length === 2;
+    })();
+    if (isRect && Number.isFinite(room.x) && Number.isFinite(room.y)) {
+      // Rect-shaped boundary: rebuild corner-anchored from the rect fields so
+      // the drawn polygon sits exactly where x/y/width/depth say it does.
+      room.boundary = [
+        { x: room.x, y: room.y },
+        { x: room.x + w, y: room.y },
+        { x: room.x + w, y: room.y + d },
+        { x: room.x, y: room.y + d }
+      ];
+    } else {
+      // True polygon: rescale about its center to match w×d, then re-derive
+      // the rect bbox so both representations agree.
+      const xs = room.boundary.map(p => p.x);
+      const ys = room.boundary.map(p => p.y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const oldW = maxX - minX, oldH = maxY - minY;
+      const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+      const sx = oldW > 1e-9 ? w / oldW : 1;
+      const sy = oldH > 1e-9 ? d / oldH : 1;
+      room.boundary = room.boundary.map(p => ({ x: cx + (p.x - cx) * sx, y: cy + (p.y - cy) * sy }));
+      const nxs = room.boundary.map(p => p.x);
+      const nys = room.boundary.map(p => p.y);
+      room.x = Math.min(...nxs);
+      room.y = Math.min(...nys);
+      room.width = Math.max(...nxs) - room.x;
+      room.depth = Math.max(...nys) - room.y;
+    }
+  }
+  // Derived data must reflect the DRAWN geometry. The boundary is the source
+  // of truth for what is rendered; a rect-shaped boundary equals w×d, but a
+  // rescaled true polygon does not — so derive from the boundary (shoelace)
+  // when present, else from w×d. Never assign from cached getters.
+  const b = Array.isArray(room.boundary) && room.boundary.length >= 3 ? room.boundary : null;
+  if (b) {
+    let a = 0;
+    for (let i = 0; i < b.length; i++) {
+      const j = (i + 1) % b.length;
+      a += b[i].x * b[j].y - b[j].x * b[i].y;
+    }
+    room.area = Math.abs(a) / 2;
+    let per = 0;
+    for (let i = 0; i < b.length; i++) {
+      const j = (i + 1) % b.length;
+      per += Math.hypot(b[j].x - b[i].x, b[j].y - b[i].y);
+    }
+    room.perimeter = per;
+  } else {
+    room.area = w * d;
+    room.perimeter = 2 * (w + d);
   }
 }
 
