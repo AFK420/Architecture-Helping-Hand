@@ -1164,7 +1164,7 @@ export function createPlanView(context) {
    * stays primitive and each segment is individually selectable/editable.
    * Keyboard: Esc cancels · Enter finishes the open chain.
    */
-  function finishPolyline() {
+  function finishPolyline(close = false) {
     if (polyLineVertices.length < 2) {
       polyLineVertices = [];
       render();
@@ -1173,9 +1173,15 @@ export function createPlanView(context) {
     }
     const created = [];
     const cmds = [];
-    for (let i = 0; i < polyLineVertices.length - 1; i++) {
-      const a = polyLineVertices[i];
-      const b = polyLineVertices[i + 1];
+    // Open chain: N−1 segments between the picked vertices.
+    // Closed loop (click on the start point / CLOSE): one extra segment
+    // back to the first vertex — the standard CAD close behavior.
+    const vertices = (close && polyLineVertices.length >= 3)
+      ? [...polyLineVertices, polyLineVertices[0]]
+      : polyLineVertices;
+    for (let i = 0; i < vertices.length - 1; i++) {
+      const a = vertices[i];
+      const b = vertices[i + 1];
       if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-4) continue;
       try {
         const line = createLineEntity({ p1: a, p2: b, name: `Polyline ${i + 1}` });
@@ -1193,7 +1199,9 @@ export function createPlanView(context) {
     }
     if (created.length > 0) {
       state.plan.selectedIds = new Set(created);
-      showToast(`Polyline added: ${created.length} segment(s)`, 'success');
+      showToast(close
+        ? `Closed polyline: ${created.length} segment(s) added (loop back to start)`
+        : `Polyline added: ${created.length} segment(s)`, 'success');
     }
     AudioService.playTick();
     render();
@@ -4701,18 +4709,31 @@ export function createPlanView(context) {
     if (polyLineVertices.length > 0) {
       const cur = polyLineCursor || currentMouseWorld;
       const ptsSvg = polyLineVertices.map(pt => worldToSvg(transform, pt.x, pt.y));
-      const curSvg = worldToSvg(transform, cur.x, cur.y);
+      const first = polyLineVertices[0];
+      const closeRadius = Math.max(0.4, state.plan.grid);
+      const cursorNearStart = polyLineVertices.length >= 2 &&
+        Math.hypot(cur.x - first.x, cur.y - first.y) <= closeRadius;
+      // Near the start point the rubber band snaps to it: the user SEES the
+      // closing segment before clicking — the loop will close.
+      const rubberEnd = cursorNearStart ? first : cur;
+      const curSvg = worldToSvg(transform, rubberEnd.x, rubberEnd.y);
       const polylineStr = [...ptsSvg, curSvg].map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
       const dotsStr = ptsSvg.map((p, idx) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" fill="var(--accent-primary, #38bdf8)" stroke="#ffffff" stroke-width="1.5"/>`).join('');
       let total = 0;
       for (let i = 1; i < polyLineVertices.length; i++) total += Math.hypot(polyLineVertices[i].x - polyLineVertices[i - 1].x, polyLineVertices[i].y - polyLineVertices[i - 1].y);
-      total += Math.hypot(cur.x - polyLineVertices[polyLineVertices.length - 1].x, cur.y - polyLineVertices[polyLineVertices.length - 1].y);
+      total += Math.hypot(rubberEnd.x - polyLineVertices[polyLineVertices.length - 1].x, rubberEnd.y - polyLineVertices[polyLineVertices.length - 1].y);
+      const firstSvg = ptsSvg[0];
+      const closeBadge = cursorNearStart ? `
+        <circle cx="${firstSvg.x.toFixed(1)}" cy="${firstSvg.y.toFixed(1)}" r="8" fill="none" stroke="var(--color-success, #4ade80)" stroke-width="2.4"/>
+        <rect x="${(firstSvg.x + 10).toFixed(1)}" y="${(firstSvg.y - 20).toFixed(1)}" width="58" height="16" rx="3" fill="var(--color-success, #4ade80)"/>
+        <text x="${(firstSvg.x + 39).toFixed(1)}" y="${(firstSvg.y - 8).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font-mono)" font-weight="800" fill="#0b1120">CLOSE ✓</text>` : '';
       dragMarkup += `
         <g pointer-events="none">
-          <polyline points="${polylineStr}" fill="none" stroke="var(--accent-primary, #38bdf8)" stroke-width="2" stroke-dasharray="5 3"/>
+          <polyline points="${polylineStr}" fill="none" stroke="${cursorNearStart ? 'var(--color-success, #4ade80)' : 'var(--accent-primary, #38bdf8)'}" stroke-width="2" stroke-dasharray="5 3"/>
           ${dotsStr}
           <circle cx="${curSvg.x.toFixed(1)}" cy="${curSvg.y.toFixed(1)}" r="3.5" fill="var(--color-warning, #fbbf24)"/>
-          <text x="${(curSvg.x + 8).toFixed(1)}" y="${(curSvg.y - 8).toFixed(1)}" font-size="9" font-family="var(--font-mono)" fill="var(--text-secondary,#9aa)">${total.toFixed(2)}m · Enter/Esc ends</text>
+          ${closeBadge}
+          <text x="${(curSvg.x + 8).toFixed(1)}" y="${(curSvg.y - 8).toFixed(1)}" font-size="9" font-family="var(--font-mono)" fill="var(--text-secondary,#9aa)">${cursorNearStart ? 'click to CLOSE the loop' : `${total.toFixed(2)}m · Enter/Esc ends`}</text>
         </g>`;
     }
 
@@ -6962,7 +6983,9 @@ export function createPlanView(context) {
       if (polyLineVertices.length >= 2) {
         const first = polyLineVertices[0];
         if (Math.hypot(targetPt.x - first.x, targetPt.y - first.y) <= Math.max(0.4, state.plan.grid)) {
-          finishPolyline();
+          // click on/near the start point → CLOSE the loop (final segment back
+          // to the first vertex), matching AutoCAD/Rhino close behavior
+          finishPolyline(true);
           return;
         }
       }

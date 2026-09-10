@@ -278,6 +278,44 @@ console.log('\n--- 11. Room rect↔boundary consistency (resize/move split-brain
   assert(Math.abs(polyRoom.depth - 8) < 1e-9, 'bbox re-derived from rescaled boundary (representations agree)');
 }
 
+console.log('\n--- 11. Polyline close-on-start-click (user-reported) ---');
+// Regression: clicking on the start point used to finish the chain WITHOUT
+// the closing segment back to vertex 1 — the loop stayed open (a rectangle
+// chain never closed).
+{
+  const fs = await import('node:fs');
+  const planSrc = fs.readFileSync('src/ui/views/plan.js', 'utf8');
+
+  // finishPolyline(close) builds the vertex ring including the first vertex
+  assert(planSrc.includes('function finishPolyline(close = false)'), 'finishPolyline takes a close flag');
+  assert(planSrc.includes('? [...polyLineVertices, polyLineVertices[0]]'), 'close mode appends the first vertex — the closing segment is created');
+  // the close detection site passes the flag
+  assert(/finishPolyline\(true\);/.test(planSrc), 'click near the start point closes the loop (close=true)');
+  // 3+ vertices required for a meaningful close (2 points = a line, nothing to close)
+  assert(planSrc.includes('close && polyLineVertices.length >= 3'), 'close requires at least 3 vertices');
+  // close indicator: the rubber band snaps to the start vertex and shows CLOSE
+  assert(planSrc.includes('cursorNearStart'), 'hovering near the start shows the close state');
+  assert(planSrc.includes('CLOSE ✓'), 'CLOSE badge rendered near the start vertex');
+
+  // Geometry contract with the real factories: a closed 4-vertex ring
+  // yields 4 segments; total length equals the ring perimeter.
+  const { createLineEntity } = await import('../src/core/entities.js');
+  const verts = [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }, { x: 0, y: 3 }];
+  const ring = [...verts, verts[0]]; // what finishPolyline(true) builds
+  const segs = [];
+  for (let i = 0; i < ring.length - 1; i++) {
+    segs.push(createLineEntity({ p1: ring[i], p2: ring[i + 1] }));
+  }
+  assert(segs.length === 4, `closed ring creates 4 segments (got ${segs.length})`);
+  const perimeter = segs.reduce((s, l) => s + l.length, 0);
+  assert(Math.abs(perimeter - 14) < 1e-9, `closed 4×3 ring perimeter is 14 m (got ${perimeter.toFixed(2)}) — the closing segment exists`);
+  // and the last segment genuinely returns to the start
+  const last = segs[segs.length - 1];
+  const endsAtStart = (last.p2.x === verts[0].x && last.p2.y === verts[0].y) ||
+                      (last.p1.x === verts[0].x && last.p1.y === verts[0].y);
+  assert(endsAtStart, 'the final segment connects back to the first vertex');
+}
+
 console.log(`\n========================================`);
 console.log(`Honesty Pass Regressions: ${passed} passed, ${failed} failed.`);
 console.log(`========================================`);

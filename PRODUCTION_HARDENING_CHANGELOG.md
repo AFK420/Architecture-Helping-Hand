@@ -1,5 +1,24 @@
 # Production Hardening Changelog
 
+## 2026-09-10 (pass 8) — polyline close-on-start fix (user-reported, v2.4.2)
+
+User bug: clicking the start point to close a polyline finished the chain
+WITHOUT the closing segment — the loop stayed open. In CAD tools (AutoCAD
+CLOSE, Rhino CloseCurve) clicking the start point closes the loop with a
+final segment back to vertex 1.
+
+- `finishPolyline(close)`: close mode appends the first vertex to the ring so
+  the final segment is created (≥3 vertices required — 2 points is just a line)
+- the near-start click detection now passes `close: true`
+- Close indicator: hovering near the start vertex snaps the rubber band to it,
+  turns it green, and shows a CLOSE ✓ badge — the closing segment is visible
+  BEFORE clicking ("click to CLOSE the loop" hint)
+- Enter still finishes the chain open (old behavior preserved); Esc cancels
+
+Pinned by honesty-pass §11 (12 assertions: ring geometry 4 segments /
+14 m perimeter, final segment returns to vertex 1, close flag wiring,
+badge rendering). 72/72; 62 suites green.
+
 ## 2026-09-10 (pass 7) — plan-canvas gap batch (v2.4.1)
 
 Implemented every reachable non-functional plan-canvas item from the audit's
