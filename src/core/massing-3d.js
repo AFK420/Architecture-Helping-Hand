@@ -622,15 +622,58 @@ export function generateMassingSVG(entities = [], arg2 = {}, arg3 = {}) {
   const width = options.width || 800;
   const height = options.height || 600;
 
-  const cam = {
-    azimuth: camera.azimuth ?? 45,
-    elevation: camera.elevation ?? 35.264,
-    zoom: camera.zoom || (faces3D.storyCount > 1 ? Math.max(15, 32 / (faces3D.storyCount * 0.7)) : 32),
-    panX: camera.panX || width / 2,
-    panY: camera.panY || (faces3D.storyCount > 1 ? height / 2 + 80 : height / 2 + 50)
-  };
-
-  const sortedFaces = projectAndSortFaces(faces3D, cam);
+  // Auto-fit (export bug fix): the live canvas camera is tuned for the
+  // on-screen viewport (~1300px wide with canvas pan/zoom), so reusing it for
+  // the 800×600 export frame projected the model off-canvas → blank SVG.
+  // Derive the export camera from the MODEL BBOX instead: keep the user's
+  // azimuth/elevation, auto-fit the zoom, and re-center the projected model.
+  let sortedFaces;
+  if (options.autoFit !== false && Array.isArray(faces3D) && faces3D.length > 0) {
+    const cam = {
+      azimuth: camera.azimuth ?? 45,
+      elevation: camera.elevation ?? 35.264,
+      perspective: camera.perspective === true,
+      perspectiveDistance: camera.perspectiveDistance,
+      zoom: 1, panX: 0, panY: 0
+    };
+    // pass 1: raw projection to measure the model's on-frame extent
+    const probe = projectAndSortFaces(faces3D, cam);
+    if (probe.length > 0) {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const f of probe) {
+        for (const p of f.points) {
+          if (p[0] < minX) minX = p[0];
+          if (p[0] > maxX) maxX = p[0];
+          if (p[1] < minY) minY = p[1];
+          if (p[1] > maxY) maxY = p[1];
+        }
+      }
+      const projW = Math.max(1e-6, maxX - minX);
+      const projH = Math.max(1e-6, maxY - minY);
+      const zoom = Math.max(0.5, Math.min((width * 0.8) / projW, (height * 0.8) / projH));
+      cam.zoom = zoom;
+      // pass 2: project at the fitted zoom, then center in the frame
+      const fitted = projectAndSortFaces(faces3D, cam);
+      let sx = 0, sy = 0, n = 0;
+      for (const f of fitted) { for (const p of f.points) { sx += p[0]; sy += p[1]; n++; } }
+      const offX = width / 2 - sx / n;
+      const offY = height / 2 - sy / n;
+      for (const f of fitted) f.points = f.points.map(p => [p[0] + offX, p[1] + offY]);
+      sortedFaces = fitted;
+    } else {
+      sortedFaces = probe;
+    }
+  }
+  if (!sortedFaces) {
+    const cam = {
+      azimuth: camera.azimuth ?? 45,
+      elevation: camera.elevation ?? 35.264,
+      zoom: camera.zoom || (faces3D.storyCount > 1 ? Math.max(15, 32 / (faces3D.storyCount * 0.7)) : 32),
+      panX: camera.panX || width / 2,
+      panY: camera.panY || (faces3D.storyCount > 1 ? height / 2 + 80 : height / 2 + 50)
+    };
+    sortedFaces = projectAndSortFaces(faces3D, cam);
+  }
 
   const polygonsMarkup = sortedFaces.map(f => {
     const pointsAttr = f.points.map(pt => `${pt[0].toFixed(1)},${pt[1].toFixed(1)}`).join(' ');

@@ -15402,15 +15402,58 @@ function generateMassingSVG(entities = [], arg2 = {}, arg3 = {}) {
   const width = options.width || 800;
   const height = options.height || 600;
 
-  const cam = {
-    azimuth: camera.azimuth ?? 45,
-    elevation: camera.elevation ?? 35.264,
-    zoom: camera.zoom || (faces3D.storyCount > 1 ? Math.max(15, 32 / (faces3D.storyCount * 0.7)) : 32),
-    panX: camera.panX || width / 2,
-    panY: camera.panY || (faces3D.storyCount > 1 ? height / 2 + 80 : height / 2 + 50)
-  };
-
-  const sortedFaces = projectAndSortFaces(faces3D, cam);
+  // Auto-fit (export bug fix): the live canvas camera is tuned for the
+  // on-screen viewport (~1300px wide with canvas pan/zoom), so reusing it for
+  // the 800×600 export frame projected the model off-canvas → blank SVG.
+  // Derive the export camera from the MODEL BBOX instead: keep the user's
+  // azimuth/elevation, auto-fit the zoom, and re-center the projected model.
+  let sortedFaces;
+  if (options.autoFit !== false && Array.isArray(faces3D) && faces3D.length > 0) {
+    const cam = {
+      azimuth: camera.azimuth ?? 45,
+      elevation: camera.elevation ?? 35.264,
+      perspective: camera.perspective === true,
+      perspectiveDistance: camera.perspectiveDistance,
+      zoom: 1, panX: 0, panY: 0
+    };
+    // pass 1: raw projection to measure the model's on-frame extent
+    const probe = projectAndSortFaces(faces3D, cam);
+    if (probe.length > 0) {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const f of probe) {
+        for (const p of f.points) {
+          if (p[0] < minX) minX = p[0];
+          if (p[0] > maxX) maxX = p[0];
+          if (p[1] < minY) minY = p[1];
+          if (p[1] > maxY) maxY = p[1];
+        }
+      }
+      const projW = Math.max(1e-6, maxX - minX);
+      const projH = Math.max(1e-6, maxY - minY);
+      const zoom = Math.max(0.5, Math.min((width * 0.8) / projW, (height * 0.8) / projH));
+      cam.zoom = zoom;
+      // pass 2: project at the fitted zoom, then center in the frame
+      const fitted = projectAndSortFaces(faces3D, cam);
+      let sx = 0, sy = 0, n = 0;
+      for (const f of fitted) { for (const p of f.points) { sx += p[0]; sy += p[1]; n++; } }
+      const offX = width / 2 - sx / n;
+      const offY = height / 2 - sy / n;
+      for (const f of fitted) f.points = f.points.map(p => [p[0] + offX, p[1] + offY]);
+      sortedFaces = fitted;
+    } else {
+      sortedFaces = probe;
+    }
+  }
+  if (!sortedFaces) {
+    const cam = {
+      azimuth: camera.azimuth ?? 45,
+      elevation: camera.elevation ?? 35.264,
+      zoom: camera.zoom || (faces3D.storyCount > 1 ? Math.max(15, 32 / (faces3D.storyCount * 0.7)) : 32),
+      panX: camera.panX || width / 2,
+      panY: camera.panY || (faces3D.storyCount > 1 ? height / 2 + 80 : height / 2 + 50)
+    };
+    sortedFaces = projectAndSortFaces(faces3D, cam);
+  }
 
   const polygonsMarkup = sortedFaces.map(f => {
     const pointsAttr = f.points.map(pt => `${pt[0].toFixed(1)},${pt[1].toFixed(1)}`).join(' ');
@@ -39559,6 +39602,16 @@ function renderStudioCommandBar(container, options = {}) {
       handleSubmitResult(res);
       return true;
     },
+    /** Cancels any active interactive command (tool switch, Esc-from-canvas). */
+    cancelActive() {
+      if (session && session.state().active && typeof session.cancel === 'function') {
+        const res = session.cancel('canceled by tool switch');
+        if (res && res.message) log(res.message, 'info');
+        updatePrompt(container, session);
+        return true;
+      }
+      return false;
+    },
     log,
     isActive: () => !!(session && session.state().active)
   };
@@ -41191,11 +41244,25 @@ function createPlanView(context) {
   function handleFilletPick(worldPt, hitEntity) {
     const seg = hitEntity && (hitEntity.kind === 'wall' || hitEntity.kind === 'line')
       ? hitEntity
-      : pickWallAtPoint(worldPt);
+      : pickWallAtPoint(worldPt, 0.45); // generous pick radius: 2px wall lines are easy to miss
+    // First pick must land on a wall/line — otherwise the flow dead-ends
+    // silently after the second click (the user-reported "did nothing").
+    if (!seg && !filletPick) {
+      showToast('Fillet: no wall/line under the cursor — click directly ON a wall (it highlights)', 'warning');
+      AudioService.playError && AudioService.playError();
+      return;
+    }
     filletPick = filletPick
       ? { ...filletPick, second: seg || null, secondPt: worldPt }
       : { id: seg ? seg.id : null, entity: seg || null, pt: worldPt, second: null, secondPt: null };
     if (filletPick && filletPick.secondPt && filletPick.id != null) {
+      if (!filletPick.second) {
+        showToast('Fillet: second pick missed — click directly ON the second wall', 'warning');
+        AudioService.playError && AudioService.playError();
+        // keep the first pick; let the user retry the second
+        filletPick = { ...filletPick, second: null, secondPt: null };
+        return;
+      }
       // both picks in — ask for the radius and apply
       const rStr = window.prompt('Fillet radius (m):', '0.5');
       const radius = parseFloat(rStr || '');
@@ -41208,8 +41275,8 @@ function createPlanView(context) {
       }
       applyFillet(filletPick, radius);
       filletPick = null;
-    } else {
-      showToast('Fillet: pick the second wall/line', 'info');
+    } else if (filletPick && filletPick.entity) {
+      showToast(`Fillet: first wall "${filletPick.entity.name}" picked — now click the SECOND wall at the corner`, 'info');
       AudioService.playTick();
       render();
       renderContextualToolbar();
@@ -41785,6 +41852,11 @@ function createPlanView(context) {
     if (!newTool) return;
     // Switching tools cancels any dangling click-chain (polyroom/polyline)
     // so a half-drawn chain can never silently survive a tool change.
+    // ALSO cancels any active command-bar session: leaving an interactive
+    // WALL/LINE command armed while using a tool made every canvas click
+    // feed the command instead of the tool (fillet picks did nothing).
+    const cmdbar = document.getElementById('studio-commandbar-container')?.__commandbar;
+    if (cmdbar && typeof cmdbar.cancelActive === 'function') cmdbar.cancelActive();
     if (newTool !== 'polyroom' && polyRoomVertices.length > 0) {
       polyRoomVertices = [];
     }
@@ -42511,7 +42583,12 @@ function createPlanView(context) {
         bar.innerHTML = `
           <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
             <span class="context-tag-badge" style="background: rgba(245,158,11,0.18); color: #f59e0b; border-color: rgba(245,158,11,0.4);">CURVE FILLET</span>
-            <span style="font-size: 0.72rem; color: var(--text-muted);">${filletPick ? 'Pick the SECOND wall at the corner, then enter the radius' : 'Pick the first of two intersecting walls'} · Esc cancels</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">
+              ${filletPick && filletPick.entity
+                ? `<strong style="color: var(--color-success, #4ade80);">Wall 1 picked ✓</strong> — now click ON the second wall where they meet`
+                : 'Step 1 of 2 — click ON the first wall (anywhere along it)'}
+              · then type the radius · both walls trim to the arc · Esc cancels
+            </span>
           </div>`;
         return;
       }
@@ -43292,17 +43369,39 @@ function createPlanView(context) {
     dom.planSvg.setAttribute('viewBox', `0 0 ${svg.width} ${svg.height}`);
     dom.planSvg.innerHTML = `
       <rect width="100%" height="100%" fill="#0b1120" />
-      <!-- Ground Grid Lines -->
+      <!-- Ground Grid Lines: extent follows the 2D grid setting and the drawn
+           content (user bug: a fixed ±14m grid made off-grid models look
+           like they were floating outside the ground plane) -->
       <g opacity="0.18">
-        ${Array.from({ length: 15 }).map((_, i) => {
-          const val = (i - 7) * 2;
-          const p1 = projectPoint3D({ x: -14, y: val, z: 0 }, doc.camera);
-          const p2 = projectPoint3D({ x: 14, y: val, z: 0 }, doc.camera);
-          const p3 = projectPoint3D({ x: val, y: -14, z: 0 }, doc.camera);
-          const p4 = projectPoint3D({ x: val, y: 14, z: 0 }, doc.camera);
-          return `<line x1="${p1.x.toFixed(1)}" y1="${p1.y.toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${p2.y.toFixed(1)}" stroke="#38bdf8" stroke-width="0.8"/>
-                  <line x1="${p3.x.toFixed(1)}" y1="${p3.y.toFixed(1)}" x2="${p4.x.toFixed(1)}" y2="${p4.y.toFixed(1)}" stroke="#38bdf8" stroke-width="0.8"/>`;
-        }).join('')}
+        ${(() => {
+          const es = entities();
+          let minX = 0, maxX = 0, minY = 0, maxY = 0;
+          for (const e of es) {
+            const ex1 = Number.isFinite(e.x1) ? Math.min(e.x1, e.x2) : e.x;
+            const ex2 = Number.isFinite(e.x1) ? Math.max(e.x1, e.x2) : (e.x || 0) + (e.width || 0);
+            const ey1 = Number.isFinite(e.y1) ? Math.min(e.y1, e.y2) : e.y;
+            const ey2 = Number.isFinite(e.y1) ? Math.max(e.y1, e.y2) : (e.y || 0) + (e.depth || 0);
+            if (Number.isFinite(ex1)) { minX = Math.min(minX, ex1); maxX = Math.max(maxX, ex2); }
+            if (Number.isFinite(ey1)) { minY = Math.min(minY, ey1); maxY = Math.max(maxY, ey2); }
+          }
+          const g = state.plan.grid || 0.5;
+          // grid extends at least ±3 cells beyond the content, at least ±14m
+          const halfW = Math.max(14, (maxX - minX) / 2 + 3 * g);
+          const halfH = Math.max(14, (maxY - minY) / 2 + 3 * g);
+          const cx = (minX + maxX) / 2;
+          const cy = (minY + maxY) / 2;
+          const step = Math.max(g, halfW / 14); // ≤ ~15 lines per axis
+          const lines = [];
+          for (let v = -halfW; v <= halfW + 1e-9; v += step) {
+            const p1 = projectPoint3D({ x: cx - halfW, y: cy + v, z: 0 }, doc.camera);
+            const p2 = projectPoint3D({ x: cx + halfW, y: cy + v, z: 0 }, doc.camera);
+            const p3 = projectPoint3D({ x: cx + v, y: cy - halfH, z: 0 }, doc.camera);
+            const p4 = projectPoint3D({ x: cx + v, y: cy + halfH, z: 0 }, doc.camera);
+            lines.push(`<line x1="${p1.x.toFixed(1)}" y1="${p1.y.toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${p2.y.toFixed(1)}" stroke="#38bdf8" stroke-width="0.8"/>
+                        <line x1="${p3.x.toFixed(1)}" y1="${p3.y.toFixed(1)}" x2="${p4.x.toFixed(1)}" y2="${p4.y.toFixed(1)}" stroke="#38bdf8" stroke-width="0.8"/>`);
+          }
+          return lines.join('');
+        })()}
       </g>
       <g class="massing-faces">
         ${facesMarkup}
@@ -44579,10 +44678,26 @@ function createPlanView(context) {
       if (e.kind === 'text' && typeof e.x === 'number' && typeof e.y === 'number') {
         const p = worldToSvg(transform, e.x, e.y);
         const textStr = String(e.text || e.name || 'Text');
-        const boxW = Math.max(30, textStr.length * 7.5 + 10);
-        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
-          <rect x="${(p.x - 4).toFixed(1)}" y="${(p.y - 14).toFixed(1)}" width="${boxW.toFixed(1)}" height="18" fill="var(--bg-chip, #222327)" stroke="${stroke}" stroke-width="${selected ? 2 : 1}" rx="3"/>
-          <text x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}" font-size="11" font-family="var(--font-sans)" fill="var(--text-primary, #EAEAEC)" font-weight="600">${escapeHtml(textStr)}</text>
+        // Formatting contract (text tab): font family/size (px at 100% zoom,
+        // scales with the view), weight, italic, underline, color, opacity
+        // (transparent room-label style), rotation, and background chip.
+        const f = e.formatting || {};
+        const fs = Number.isFinite(f.fontSize) ? f.fontSize : 11;
+        const fam = f.fontFamily || 'var(--font-sans)';
+        const col = f.color || 'var(--text-primary, #EAEAEC)';
+        const weight = f.bold === false ? '400' : '700';
+        const ital = f.italic === true ? ' font-style="italic"' : '';
+        const und = f.underline === true ? ' text-decoration="underline"' : '';
+        const op = Number.isFinite(f.opacity) ? ` opacity="${Math.max(0.05, Math.min(1, f.opacity))}"` : '';
+        const rot = Number.isFinite(f.rotation) && f.rotation !== 0 ? ` transform="rotate(${f.rotation} ${p.x.toFixed(1)} ${p.y.toFixed(1)})"` : '';
+        const scalePx = fs * (transform.zoom / 40);
+        const boxW = Math.max(30, textStr.length * scalePx * 0.62 + 10);
+        const chip = f.showBackground === false
+          ? ''
+          : `<rect x="${(p.x - 4).toFixed(1)}" y="${(p.y - scalePx - 4).toFixed(1)}" width="${boxW.toFixed(1)}" height="${(scalePx + 8).toFixed(1)}" fill="${f.backgroundColor || 'var(--bg-chip, #222327)'}" fill-opacity="${Number.isFinite(f.backgroundOpacity) ? f.backgroundOpacity : 1}" stroke="${selected ? 'var(--color-warning, #fbbf24)' : f.backgroundColor ? 'transparent' : stroke}" stroke-width="${selected ? 2 : 1}" rx="3"${op}/>`;
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}"${rot}>
+          ${chip}
+          <text x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}" font-size="${scalePx.toFixed(1)}" font-family="${fam}" fill="${col}" font-weight="${weight}"${ital}${und}${op}>${escapeHtml(textStr)}</text>
         </g>`;
       }
       if (e.kind === 'room_tag') {
@@ -46663,21 +46778,179 @@ function createPlanView(context) {
       });
 
     } else if (selected.kind === 'text') {
+      const f = selected.formatting || {};
+      const FONTS = [
+        ['var(--font-sans)', 'UI Sans'], ['var(--font-mono)', 'Mono / Technical'],
+        ['Georgia, serif', 'Serif'], ['Impact, sans-serif', 'Impact'],
+        ['"Architects Daughter", cursive', 'Handwriting'], ['Arial, sans-serif', 'Arial']
+      ];
+      const PRESETS = [
+        { id: 'roomLabel', label: 'Room Label', patch: { fontSize: 14, bold: true, italic: false, underline: false, color: 'var(--text-primary)', opacity: 1, showBackground: false } },
+        { id: 'dimText', label: 'Dim Text', patch: { fontSize: 9, bold: false, italic: false, underline: false, color: 'var(--text-secondary)', opacity: 0.9, showBackground: false } },
+        { id: 'sheetTitle', label: 'Sheet Title', patch: { fontSize: 22, bold: true, italic: false, underline: true, color: '#ffffff', opacity: 1, showBackground: true, backgroundColor: '#0f172a' } },
+        { id: 'watermark', label: 'Watermark', patch: { fontSize: 34, bold: true, italic: false, underline: false, color: '#94a3b8', opacity: 0.28, rotation: -24, showBackground: false } },
+        { id: 'revision', label: 'Revision Cloud Note', patch: { fontSize: 10, bold: false, italic: true, underline: false, color: 'var(--color-warning)', opacity: 1, showBackground: true, backgroundColor: 'rgba(245,158,11,0.12)' } }
+      ];
       dom.planPropContent.innerHTML = `
         <div class="plan-prop-section">
           <div class="plan-prop-title">Text Annotation</div>
           <div class="plan-prop-row"><span class="plan-prop-label">Label</span><input type="text" id="prop-entity-text" class="text-input" value="${escapeHtml(selected.text || selected.name)}" style="width: 150px; padding: 0.2rem 0.4rem; font-size: 0.78rem;" /></div>
-          <div class="plan-prop-row"><span class="plan-prop-label">Position</span><span class="plan-prop-value">(${selected.x?.toFixed(2)}, ${selected.y?.toFixed(2)})</span></div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Position</span>
+            <div style="display:flex; gap:4px;">
+              <input type="number" id="prop-text-x" class="text-input" value="${(selected.x || 0).toFixed(2)}" step="0.1" style="width:60px; font-size:0.75rem; padding:0.15rem 0.3rem;" title="X (m)" />
+              <input type="number" id="prop-text-y" class="text-input" value="${(selected.y || 0).toFixed(2)}" step="0.1" style="width:60px; font-size:0.75rem; padding:0.15rem 0.3rem;" title="Y (m)" />
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Rotation°</span>
+            <input type="number" id="prop-text-rot" class="text-input" value="${Number.isFinite(f.rotation) ? f.rotation : 0}" step="5" style="width:60px; font-size:0.75rem; padding:0.15rem 0.3rem;" />
+          </div>
           ${buildLayerSelectRow(selected)}
+        </div>
+
+        <div class="plan-prop-section" style="margin-top: 0.4rem;">
+          <div class="plan-prop-title">CHARACTER</div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Font</span>
+            <select id="prop-text-font" class="calc-input" style="max-width: 140px; font-size: 0.74rem; height: 24px;">
+              ${FONTS.map(([v, l]) => `<option value="${v}" ${(f.fontFamily || 'var(--font-sans)') === v ? 'selected' : ''}>${l}</option>`).join('')}
+            </select>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Size</span>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <input type="range" id="prop-text-size" min="6" max="64" step="1" value="${Number.isFinite(f.fontSize) ? f.fontSize : 11}" style="width: 90px;" />
+              <span id="prop-text-size-val" style="font-size:0.7rem; color:var(--text-secondary); min-width: 2.2em;">${Number.isFinite(f.fontSize) ? f.fontSize : 11}px</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Style</span>
+            <div style="display:flex; gap:4px;">
+              <button type="button" id="prop-text-bold" class="plan-prop-btn" style="font-weight:900; ${f.bold === false ? 'opacity:0.5;' : ''}">B</button>
+              <button type="button" id="prop-text-italic" class="plan-prop-btn" style="font-style:italic; ${f.italic === true ? '' : 'opacity:0.5;'}">I</button>
+              <button type="button" id="prop-text-underline" class="plan-prop-btn" style="text-decoration:underline; ${f.underline === true ? '' : 'opacity:0.5;'}">U</button>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Color</span>
+            <input type="color" id="prop-text-color" value="#EAEAEC" style="width: 44px; height: 24px; border: none; background: none; cursor: pointer; padding: 0;" title="Text color (blank = theme color)" />
+            <button type="button" id="prop-text-color-reset" class="plan-prop-btn" style="font-size:0.62rem;" title="Reset to theme color">↺</button>
+          </div>
+        </div>
+
+        <div class="plan-prop-section" style="margin-top: 0.4rem;">
+          <div class="plan-prop-title">TRANSPARENCY & BACKDROP</div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Opacity</span>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <input type="range" id="prop-text-opacity" min="0.05" max="1" step="0.05" value="${Number.isFinite(f.opacity) ? f.opacity : 1}" style="width: 90px;" />
+              <span id="prop-text-opacity-val" style="font-size:0.7rem; color:var(--text-secondary); min-width: 2.4em;">${Math.round((Number.isFinite(f.opacity) ? f.opacity : 1) * 100)}%</span>
+            </div>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">Backdrop</span>
+            <button type="button" id="prop-text-bg" class="plan-prop-btn" style="font-size:0.66rem;">${f.showBackground === false ? 'None' : 'Chip'}</button>
+          </div>
+          <div class="plan-prop-row">
+            <span class="plan-prop-label">BG Color</span>
+            <input type="color" id="prop-text-bgcolor" value="#222327" style="width: 44px; height: 24px; border: none; background: none; cursor: pointer; padding: 0;" title="Backdrop color" />
+          </div>
+        </div>
+
+        <div class="plan-prop-section" style="margin-top: 0.4rem;">
+          <div class="plan-prop-title">ARCHITECTURAL PRESETS</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 4px; padding-top: 0.2rem;">
+            ${PRESETS.map(p => `<button type="button" class="plan-prop-btn" data-text-preset="${p.id}" style="font-size:0.64rem;">${p.label}</button>`).join('')}
+          </div>
+          <div style="font-size:0.63rem; color: var(--text-muted); margin-top: 0.3rem; line-height: 1.35;">
+            Presets set the full format (size/weight/color/opacity/rotation) for common drawing annotations — e.g. Room Label: bold, background-free, fully opaque; Watermark: 28% opacity, rotated −24°.
+          </div>
         </div>
         <div class="plan-prop-actions">
           <button type="button" id="btn-prop-delete" class="plan-prop-btn action-accent"><span>🗑 Delete Text</span></button>
         </div>`;
 
+      const getF = () => (selected.formatting = selected.formatting || {});
+      const touch = () => { history.push({ label: 'format text', redo() {}, undo() {} }); render(); renderPropertiesInspector(); };
+
       dom.planPropContent.querySelector('#prop-entity-text')?.addEventListener('change', (e) => {
         selected.text = e.target.value.trim() || 'Label';
         selected.name = selected.text;
         render();
+      });
+      dom.planPropContent.querySelector('#prop-text-x')?.addEventListener('change', (e) => {
+        selected.x = parseFloat(e.target.value) || 0;
+        render();
+      });
+      dom.planPropContent.querySelector('#prop-text-y')?.addEventListener('change', (e) => {
+        selected.y = parseFloat(e.target.value) || 0;
+        render();
+      });
+      dom.planPropContent.querySelector('#prop-text-rot')?.addEventListener('change', (e) => {
+        getF().rotation = parseFloat(e.target.value) || 0;
+        touch();
+      });
+      dom.planPropContent.querySelector('#prop-text-font')?.addEventListener('change', (e) => {
+        getF().fontFamily = e.target.value;
+        touch();
+      });
+      const sizeSlider = dom.planPropContent.querySelector('#prop-text-size');
+      sizeSlider?.addEventListener('input', (e) => {
+        getF().fontSize = parseFloat(e.target.value);
+        dom.planPropContent.querySelector('#prop-text-size-val').textContent = `${e.target.value}px`;
+        render();
+      });
+      sizeSlider?.addEventListener('change', touch);
+      dom.planPropContent.querySelector('#prop-text-bold')?.addEventListener('click', (e) => {
+        getF().bold = getF().bold === false;
+        e.target.style.opacity = getF().bold === false ? '0.5' : '1';
+        touch();
+      });
+      dom.planPropContent.querySelector('#prop-text-italic')?.addEventListener('click', (e) => {
+        getF().italic = !getF().italic;
+        e.target.style.opacity = getF().italic ? '1' : '0.5';
+        touch();
+      });
+      dom.planPropContent.querySelector('#prop-text-underline')?.addEventListener('click', (e) => {
+        getF().underline = !getF().underline;
+        e.target.style.opacity = getF().underline ? '1' : '0.5';
+        touch();
+      });
+      dom.planPropContent.querySelector('#prop-text-color')?.addEventListener('input', (e) => {
+        getF().color = e.target.value;
+        render();
+      });
+      dom.planPropContent.querySelector('#prop-text-color')?.addEventListener('change', touch);
+      dom.planPropContent.querySelector('#prop-text-color-reset')?.addEventListener('click', () => {
+        delete getF().color;
+        touch();
+      });
+      const opSlider = dom.planPropContent.querySelector('#prop-text-opacity');
+      opSlider?.addEventListener('input', (e) => {
+        getF().opacity = parseFloat(e.target.value);
+        dom.planPropContent.querySelector('#prop-text-opacity-val').textContent = `${Math.round(getF().opacity * 100)}%`;
+        render();
+      });
+      opSlider?.addEventListener('change', touch);
+      dom.planPropContent.querySelector('#prop-text-bg')?.addEventListener('click', (e) => {
+        getF().showBackground = getF().showBackground === false;
+        e.target.textContent = getF().showBackground === false ? 'None' : 'Chip';
+        touch();
+      });
+      dom.planPropContent.querySelector('#prop-text-bgcolor')?.addEventListener('input', (e) => {
+        getF().backgroundColor = e.target.value;
+        render();
+      });
+      dom.planPropContent.querySelector('#prop-text-bgcolor')?.addEventListener('change', touch);
+      dom.planPropContent.querySelectorAll('[data-text-preset]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const preset = PRESETS.find(p => p.id === btn.dataset.textPreset);
+          if (!preset) return;
+          selected.formatting = { ...(selected.formatting || {}), ...preset.patch };
+          touch();
+          showToast(`Text style: ${preset.label}`, 'success');
+        });
       });
 
     } else if (selected.kind === 'room_tag') {
@@ -48560,6 +48833,111 @@ function createPlanView(context) {
   }
 
   // ------------------------------------------------------------------
+  // Object Library Browser — searchable, category-filtered popup with a
+  // live footprint preview. Selecting an item arms the furniture tool.
+  // ------------------------------------------------------------------
+  function openObjectBrowser() {
+    // one modal at a time
+    document.getElementById('object-browser-modal')?.remove();
+    const byCat = new Map();
+    for (const item of furnitureCatalog) {
+      if (!byCat.has(item.category)) byCat.set(item.category, []);
+      byCat.get(item.category).push(item);
+    }
+    const CAT_LABELS = {
+      living: 'Living Room', bedroom: 'Bedroom', dining: 'Dining', kitchen: 'Kitchen',
+      bathroom: 'Bathroom & Sanitary', office: 'Office', doors: 'Doors & Circulation',
+      outdoor: 'Outdoor & Site', commercial: 'Commercial, Retail & Fitness'
+    };
+
+    const modal = document.createElement('div');
+    modal.id = 'object-browser-modal';
+    modal.style.cssText = 'position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.55);';
+    modal.innerHTML = `
+      <div style="width: min(860px, 92vw); max-height: 84vh; background: var(--bg-surface-raised, #1a1b1f); border: 1px solid var(--border-color, #333); border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 18px 60px rgba(0,0,0,0.5);">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.7rem 1rem; border-bottom: 1px solid var(--border-color, #333); gap: 0.6rem;">
+          <strong style="font-size: 0.9rem;">🗂 Object Library — ${furnitureCatalog.length} items</strong>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <input id="obj-search" type="text" placeholder="Search (name, category)…" style="padding: 0.3rem 0.6rem; border-radius: 4px; border: 1px solid var(--border-color, #333); background: var(--bg-surface, #222); color: var(--text-primary); font-size: 0.78rem; width: 220px;" />
+            <button type="button" id="obj-close" class="result-action-btn" style="font-size: 0.72rem;">✕ Close</button>
+          </div>
+        </div>
+        <div style="display: flex; flex: 1; min-height: 0;">
+          <div id="obj-cats" style="width: 170px; border-right: 1px solid var(--border-color, #333); overflow-y: auto; padding: 0.4rem;"></div>
+          <div id="obj-grid" style="flex: 1; overflow-y: auto; padding: 0.6rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.5rem; align-content: start;"></div>
+        </div>
+        <div id="obj-preview" style="border-top: 1px solid var(--border-color, #333); padding: 0.5rem 1rem; font-size: 0.72rem; color: var(--text-muted); min-height: 2.6rem; display: flex; align-items: center; gap: 1rem;"></div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    let activeCat = 'all';
+    let query = '';
+    const catsEl = modal.querySelector('#obj-cats');
+    const gridEl = modal.querySelector('#obj-grid');
+    const previewEl = modal.querySelector('#obj-preview');
+    const searchEl = modal.querySelector('#obj-search');
+
+    function renderCats() {
+      const cats = [['all', 'All Categories']].concat([...byCat.keys()].sort().map(c => [c, CAT_LABELS[c] || c]));
+      catsEl.innerHTML = cats.map(([id, label]) =>
+        `<button type="button" data-cat="${escapeHtml(id)}" style="display:block;width:100%;text-align:left;padding:0.35rem 0.5rem;margin-bottom:2px;border-radius:4px;border:1px solid ${activeCat === id ? 'var(--accent-primary, #4989D9)' : 'transparent'};background:${activeCat === id ? 'rgba(73,137,217,0.15)' : 'transparent'};color:${activeCat === id ? 'var(--accent-primary, #4989D9)' : 'var(--text-secondary)'};font-size:0.74rem;cursor:pointer;">${escapeHtml(label)} <span style="color:var(--text-muted);">(${id === 'all' ? furnitureCatalog.length : byCat.get(id).length})</span></button>`
+      ).join('');
+      catsEl.querySelectorAll('[data-cat]').forEach(btn => {
+        btn.addEventListener('click', () => { activeCat = btn.dataset.cat; renderCats(); renderGrid(); });
+      });
+    }
+
+    function footprintSvg(item, boxW = 120, boxH = 84) {
+      const w = item.wCm / 100, d = item.dCm / 100;
+      const s = Math.min(boxW / Math.max(w, 0.1), boxH / Math.max(d, 0.1)) * 0.85;
+      const pw = w * s, ph = d * s;
+      const x = (boxW - pw) / 2, y = (boxH - ph) / 2;
+      return `<svg width="${boxW}" height="${boxH}" style="background: rgba(56,189,248,0.05); border-radius:4px;">
+        <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${pw.toFixed(1)}" height="${ph.toFixed(1)}" fill="rgba(56,189,248,0.18)" stroke="var(--accent-primary, #38bdf8)" stroke-width="1.4"/>
+        <text x="${boxW / 2}" y="${boxH - 6}" text-anchor="middle" font-size="8" fill="var(--text-muted)" font-family="var(--font-mono)">${item.wCm}×${item.dCm}cm</text>
+      </svg>`;
+    }
+
+    function renderGrid() {
+      const q = query.trim().toLowerCase();
+      let items = activeCat === 'all' ? furnitureCatalog : (byCat.get(activeCat) || []);
+      if (q) items = items.filter(it => it.name.toLowerCase().includes(q) || (it.category || '').toLowerCase().includes(q));
+      gridEl.innerHTML = items.slice(0, 400).map(it => `
+        <button type="button" data-obj="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}" style="padding:0.4rem;border-radius:6px;border:1px solid var(--border-color, #333);background:var(--bg-surface, #222);cursor:pointer;display:flex;flex-direction:column;gap:4px;align-items:center;">
+          ${footprintSvg(it, 140, 80)}
+          <span style="font-size:0.68rem;color:var(--text-primary);text-align:center;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${escapeHtml(it.name)}</span>
+        </button>`).join('') || '<div style="grid-column: 1/-1; color: var(--text-muted); font-size: 0.78rem; padding: 1rem;">No matches.</div>';
+      gridEl.querySelectorAll('[data-obj]').forEach(btn => {
+        btn.addEventListener('mouseenter', () => {
+          const it = catalogById.get(btn.dataset.obj);
+          if (it) previewEl.innerHTML = `<strong style="color:var(--text-primary);">${escapeHtml(it.name)}</strong> · ${it.wCm}×${it.dCm} cm (${(it.wCm / 100).toFixed(2)}×${(it.dCm / 100).toFixed(2)} m) · ${(it.category ? CAT_LABELS[it.category] || it.category : '—')}${it.clearance ? ` · clearance ${it.clearance}cm` : ''}`;
+        });
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.obj;
+          state.plan.furnitureCatalogId = id;
+          state.plan.furnitureIndex = furnitureCatalog.findIndex(f => f.id === id);
+          if (dom.planFurnitureSelect) dom.planFurnitureSelect.value = id;
+          modal.remove();
+          setTool('furniture');
+          showToast(`"${catalogById.get(id)?.name}" armed — click on the plan to place`, 'success');
+          AudioService.playTick();
+        });
+      });
+    }
+
+    searchEl.addEventListener('input', () => { query = searchEl.value; renderGrid(); });
+    modal.querySelector('#obj-close').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    document.addEventListener('keydown', function onEsc(e) {
+      if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', onEsc); }
+    }, { capture: true });
+
+    renderCats();
+    renderGrid();
+    searchEl.focus();
+  }
+
+  // ------------------------------------------------------------------
   // Keyboard
   // ------------------------------------------------------------------
   function onKeyDown(event) {
@@ -48810,6 +49188,7 @@ function createPlanView(context) {
       if (dom.planToolSelect) dom.planToolSelect.value = state.plan.tool;
       if (dom.planGridSelect) dom.planGridSelect.value = String(state.plan.grid);
       populateFurniture();
+      document.getElementById('btn-browse-objects')?.addEventListener('click', openObjectBrowser);
       syncToolVisibility();
       loadFromProject();
       initDocuments();
@@ -48960,6 +49339,18 @@ function createPlanView(context) {
           }
           commitEntity(entity, label || `add ${entity.kind}`);
           return { ok: true, id: entity.id };
+        },
+        /** Test/automation hook: fillet by two world points on the walls. */
+        filletAt(worldPt1, worldPt2, radius) {
+          const s1 = pickWallAtPoint(worldPt1, 0.45);
+          if (!s1) return { ok: false, error: 'No wall/line under point 1' };
+          const s2 = pickWallAtPoint(worldPt2, 0.45);
+          if (!s2) return { ok: false, error: 'No wall/line under point 2' };
+          if (s1.id === s2.id) return { ok: false, error: 'Both points hit the same wall' };
+          const before = entities().filter(e => e.kind === 'arc').length;
+          applyFillet({ id: s1.id, entity: s1, second: s2, secondPt: worldPt2, pt: worldPt1 }, radius);
+          const after = entities().filter(e => e.kind === 'arc').length;
+          return { ok: after > before, arcsAdded: after - before };
         },
         setPersona: (p) => {
           state.activePersona = p;
@@ -56970,6 +57361,28 @@ function initializeApp() {
 
       // Keyboard safety gate: Every shortcut below is a PLAIN key press
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      // MODE-SCOPED KEY OWNERSHIP (user-reported collision fix):
+      // when the plan canvas is active, single-letter and number keys belong
+      // to ITS tools (W=wall, R=room, F=furniture, 5=stair palette etc.) —
+      // the global mode-switch hijack list must NOT fire, or pressing a tool
+      // key mid-drawing yanks the user into another workspace.
+      // claimant: true = the active mode consumes this key itself.
+      const modeClaimsKey = (mode, key) => {
+        if (mode === 'plan') {
+          // every rebindable canvas tool key + digits used by the palette
+          const canvasKeys = new Set(['v','w','r','f','m','d','s','t','l','e','q','1','2','3','4','5','6','7','8','9','0','n','g','c','b','h','x','p','a','o','i','u','y','j','k','z']);
+          return canvasKeys.has(key.toLowerCase());
+        }
+        if (mode === 'workspace') {
+          return ['n','d','arrowdown','arrowup','delete','backspace'].includes(key.toLowerCase());
+        }
+        return false;
+      };
+      if (modeClaimsKey(state.currentMode, e.key)) {
+        // The active mode owns this key — stop; its own handler processed it.
+        return;
+      }
 
       // Mode 7 Workspace-specific shortcuts
       if (state.currentMode === 'workspace') {

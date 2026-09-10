@@ -256,6 +256,16 @@ export function renderStudioCommandBar(container, options = {}) {
       handleSubmitResult(res);
       return true;
     },
+    /** Cancels any active interactive command (tool switch, Esc-from-canvas). */
+    cancelActive() {
+      if (session && session.state().active && typeof session.cancel === 'function') {
+        const res = session.cancel('canceled by tool switch');
+        if (res && res.message) log(res.message, 'info');
+        updatePrompt(container, session);
+        return true;
+      }
+      return false;
+    },
     log,
     isActive: () => !!(session && session.state().active)
   };

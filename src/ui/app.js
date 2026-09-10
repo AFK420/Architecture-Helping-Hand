@@ -6166,6 +6166,28 @@ export function initializeApp() {
       // Keyboard safety gate: Every shortcut below is a PLAIN key press
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
+      // MODE-SCOPED KEY OWNERSHIP (user-reported collision fix):
+      // when the plan canvas is active, single-letter and number keys belong
+      // to ITS tools (W=wall, R=room, F=furniture, 5=stair palette etc.) —
+      // the global mode-switch hijack list must NOT fire, or pressing a tool
+      // key mid-drawing yanks the user into another workspace.
+      // claimant: true = the active mode consumes this key itself.
+      const modeClaimsKey = (mode, key) => {
+        if (mode === 'plan') {
+          // every rebindable canvas tool key + digits used by the palette
+          const canvasKeys = new Set(['v','w','r','f','m','d','s','t','l','e','q','1','2','3','4','5','6','7','8','9','0','n','g','c','b','h','x','p','a','o','i','u','y','j','k','z']);
+          return canvasKeys.has(key.toLowerCase());
+        }
+        if (mode === 'workspace') {
+          return ['n','d','arrowdown','arrowup','delete','backspace'].includes(key.toLowerCase());
+        }
+        return false;
+      };
+      if (modeClaimsKey(state.currentMode, e.key)) {
+        // The active mode owns this key — stop; its own handler processed it.
+        return;
+      }
+
       // Mode 7 Workspace-specific shortcuts
       if (state.currentMode === 'workspace') {
         if (e.key === 'n' || e.key === 'N') {

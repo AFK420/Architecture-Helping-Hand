@@ -3943,7 +3943,10 @@
 
           <div class="input-row-group" id="plan-furniture-group" style="display: none; margin-bottom: 0.75rem;">
             <label for="plan-furniture-select" class="input-label">Furniture Catalog Piece</label>
-            <select id="plan-furniture-select" class="calc-select"></select>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <select id="plan-furniture-select" class="calc-select" style="flex: 1;"></select>
+              <button type="button" id="btn-browse-objects" class="result-action-btn" style="font-size: 0.7rem; padding: 0.3rem 0.55rem; white-space: nowrap;" title="Open the full object library browser (search + categories)">🔍 Browse</button>
+            </div>
           </div>
 
           <div class="input-row-group" style="margin-bottom: 0.75rem;">
@@ -4983,6 +4986,6 @@
   </footer>
 
   <!-- Application Script (Standalone, works via file:// and http://) -->
-  <script src="js/app.js?v=2.5.0"></script>
+  <script src="js/app.js?v=2.5.1"></script>
 </body>
 </html>
