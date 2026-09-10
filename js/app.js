@@ -20703,6 +20703,10 @@ function describeCommand(def) {
   // MODULE: CadModify
   // =========================================================================
 
+
+/* import aliases */
+const rotatePointRad = rotatePoint;
+const mirrorPointLine = mirrorPoint;
 /**
  * Architecture Helping Hand — CAD Modify Operations
  *
@@ -40117,6 +40121,10 @@ function renderStudioCPanels(container, options = {}) {
           <span class="cpanel-tab-icon">🔗</span>
           <span class="cpanel-tab-text">Constr</span>
         </button>
+        <button type="button" class="cpanel-tab-btn ${activeTab === 'transform' ? 'active' : ''}" data-panel-tab="transform" title="Transform — precise numeric position & size">
+          <span class="cpanel-tab-icon">⤢</span>
+          <span class="cpanel-tab-text">Xform</span>
+        </button>
       </div>
 
       <!-- C-Panel Content Body -->
@@ -40300,6 +40308,46 @@ function renderStudioCPanels(container, options = {}) {
             </div>
           ` : ''}
         </div>
+
+        <!-- 6. Transform — precise numeric control of the selection -->
+        <div class="cpanel-pane ${activeTab === 'transform' ? 'active' : ''}" id="cpanel-pane-transform">
+          <div class="cpanel-section-title"><span>TRANSFORM</span></div>
+          ${(options.transformRows && options.transformRows.length > 0) ? `
+            <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+              ${options.transformRows.map(r => `
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 0.68rem; color: var(--text-secondary); min-width: 2.6em; font-family: var(--font-mono);" title="${r.title || ''}">${r.label}</span>
+                  <input type="number" class="calc-input xform-input" data-xform="${r.key}" value="${r.value}" step="${r.step || 0.1}"
+                    style="flex: 1; height: 24px; font-size: 0.72rem; padding: 0 6px; font-family: var(--font-mono);" />
+                  <span style="font-size: 0.62rem; color: var(--text-muted);">${r.unit || 'm'}</span>
+                </div>`).join('')}
+            </div>
+            <div style="font-size: 0.63rem; color: var(--text-muted); margin-top: 0.4rem; line-height: 1.35;">
+              Edit any value and press Enter to apply (undoable). Height applies to walls/solids; rotation spins about the selection center.
+            </div>
+          ` : `
+            <div class="cpanel-empty-state">
+              <span class="empty-icon">⤢</span>
+              <p>No selection</p>
+              <span class="empty-hint">Select any entity — its exact position, size, and rotation become editable numbers here.</span>
+            </div>
+          `}
+          ${options.cameraRows && options.cameraRows.length > 0 ? `
+            <div class="cpanel-section-title" style="margin-top: 0.6rem;"><span>3D CAMERA</span></div>
+            <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+              ${options.cameraRows.map(r => `
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 0.68rem; color: var(--text-secondary); min-width: 2.6em; font-family: var(--font-mono);">${r.label}</span>
+                  <input type="number" class="calc-input xform-input" data-cam="${r.key}" value="${r.value}" step="${r.step || 1}"
+                    style="flex: 1; height: 24px; font-size: 0.72rem; padding: 0 6px; font-family: var(--font-mono);" />
+                  <span style="font-size: 0.62rem; color: var(--text-muted);">${r.unit || ''}</span>
+                </div>`).join('')}
+              <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
+                ${(options.cameraPresets || []).map(p => `<button type="button" class="btn btn-xs btn-outline" data-cam-shot="${p.id}" title="${p.title}">${p.label}</button>`).join('')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
       </div>
 
       <!-- Tier 2: Dedicated Architectural Tool Guide & Standards Inspector -->
@@ -40356,6 +40404,31 @@ function renderStudioCPanels(container, options = {}) {
       }
     });
   }
+
+  // Transform tab: numeric edits apply on Enter/blur; camera fields likewise.
+  container.querySelectorAll('[data-xform]').forEach(inp => {
+    const apply = () => {
+      if (typeof options.onTransformField === 'function') {
+        options.onTransformField(inp.dataset.xform, parseFloat(inp.value));
+      }
+    };
+    inp.addEventListener('change', apply);
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+  });
+  container.querySelectorAll('[data-cam]').forEach(inp => {
+    const apply = () => {
+      if (typeof options.onCameraField === 'function') {
+        options.onCameraField(inp.dataset.cam, parseFloat(inp.value));
+      }
+    };
+    inp.addEventListener('change', apply);
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+  });
+  container.querySelectorAll('[data-cam-shot]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (typeof options.onCameraShot === 'function') options.onCameraShot(btn.dataset.camShot);
+    });
+  });
 }
 
 
@@ -41017,6 +41090,9 @@ function escapeAiHtml(str) {
   // MODULE: ViewPlan
   // =========================================================================
 
+
+/* import aliases */
+const applyParametricParameter = applyParameter;
 /**
  * Architecture Helping Hand - Plan Canvas View (Mode 19)
  * Phase 3+4: SVG plan editor over real project geometry. Owns rendering and
@@ -43363,6 +43439,109 @@ function createPlanView(context) {
     }
 
     const selKinds = new Set(es.filter(e => state.plan.selectedIds && state.plan.selectedIds.has(e.id)).map(e => e.kind));
+
+    // ---- Transform tab data: precise numeric fields for the selection ----
+    const xfSel = selected;
+    const transformRows = [];
+    if (xfSel) {
+      const isSegment = Number.isFinite(xfSel.x1);
+      const num = (v) => Number.isFinite(v) ? v.toFixed(2) : '0';
+      if (isSegment) {
+        transformRows.push(
+          { key: 'x1', label: 'X1', value: num(xfSel.x1), step: 0.1, title: 'Start point X (m)' },
+          { key: 'y1', label: 'Y1', value: num(xfSel.y1), step: 0.1, title: 'Start point Y (m)' },
+          { key: 'x2', label: 'X2', value: num(xfSel.x2), step: 0.1, title: 'End point X (m)' },
+          { key: 'y2', label: 'Y2', value: num(xfSel.y2), step: 0.1, title: 'End point Y (m)' }
+        );
+        if (xfSel.kind === 'wall' || xfSel.kind === 'line') {
+          transformRows.push({ key: 'height', label: 'H', value: num(xfSel.height || 2.7), step: 0.1, title: 'Wall height (m)' });
+        }
+      } else if (Number.isFinite(xfSel.x)) {
+        transformRows.push(
+          { key: 'x', label: 'X', value: num(xfSel.x), step: 0.1, title: 'Origin X (m)' },
+          { key: 'y', label: 'Y', value: num(xfSel.y), step: 0.1, title: 'Origin Y (m)' }
+        );
+        if (Number.isFinite(xfSel.width)) transformRows.push({ key: 'width', label: 'W', value: num(xfSel.width), step: 0.1, title: 'Width (m)' });
+        if (Number.isFinite(xfSel.depth)) transformRows.push({ key: 'depth', label: 'D', value: num(xfSel.depth), step: 0.1, title: 'Depth (m)' });
+        if (Number.isFinite(xfSel.z) || xfSel.kind === 'solid_box' || xfSel.kind === 'subd_solid') transformRows.push({ key: 'z', label: 'Z', value: num(xfSel.z || 0), step: 0.1, title: 'Base height (m)' });
+        if (Number.isFinite(xfSel.height) && (xfSel.kind === 'solid_box' || xfSel.kind === 'subd_solid')) transformRows.push({ key: 'height', label: 'H', value: num(xfSel.height), step: 0.1, title: 'Solid height (m)' });
+        transformRows.push({ key: 'rotation', label: 'Rot°', value: num(xfSel.rotation || 0), step: 5, unit: '°', title: 'Rotation about center (degrees)' });
+      }
+    }
+    function handleTransformField(key, value) {
+      if (!xfSel || !Number.isFinite(value)) return;
+      const before = JSON.parse(JSON.stringify([xfSel]));
+      const ids = [xfSel.id];
+      const numKey = parseFloat(value);
+      if (Number.isFinite(xfSel.x1) && ['x1', 'y1', 'x2', 'y2'].includes(key)) {
+        xfSel[key] = numKey;
+        if (xfSel.kind === 'dimension') {
+          xfSel.p1 = { x: xfSel.x1, y: xfSel.y1 };
+          xfSel.p2 = { x: xfSel.x2, y: xfSel.y2 };
+          xfSel.name = `${Math.hypot(xfSel.x2 - xfSel.x1, xfSel.y2 - xfSel.y1).toFixed(2)}m`;
+        }
+      } else if (key === 'rotation') {
+        // rotate about the entity center via the canonical op
+        const target = [xfSel];
+        rotateEntities(target, numKey - (xfSel.rotation || 0));
+        xfSel.rotation = numKey;
+      } else if (key === 'width') {
+        applyParametricParameter(xfSel, 'width', Math.max(0.05, numKey));
+      } else if (key === 'depth') {
+        applyParametricParameter(xfSel, 'depth', Math.max(0.05, numKey));
+      } else if (key === 'height') {
+        xfSel.height = Math.max(0.1, numKey);
+      } else if (Object.prototype.hasOwnProperty.call(xfSel, key)) {
+        xfSel[key] = numKey;
+      }
+      const after = JSON.parse(JSON.stringify([xfSel]));
+      history.push({
+        label: `transform ${key}`,
+        redo() { restoreEntitySnapshots(after, ids); render(); },
+        undo() { restoreEntitySnapshots(before, ids); render(); }
+      });
+      render();
+      renderPropertiesInspector();
+      updateStudioCPanels();
+    }
+
+    // ---- 3D camera controls (only in the massing view) ----
+    const is3d = doc.type === '3d_massing';
+    const cam = doc.camera || {};
+    const cameraRows = is3d ? [
+      { key: 'azimuth', label: 'Azi', value: (cam.azimuth ?? 45).toFixed(1), step: 5, unit: '°', title: 'Compass azimuth' },
+      { key: 'elevation', label: 'Elev', value: (cam.elevation ?? 35.264).toFixed(1), step: 5, unit: '°', title: 'Camera elevation (−89.9…89.9)' },
+      { key: 'zoom', label: 'Zoom', value: (cam.zoom ?? 32).toFixed(1), step: 2, unit: 'px/m', title: 'Scale (pixels per metre)' },
+      { key: 'panX', label: 'PanX', value: (cam.panX ?? 0).toFixed(0), step: 10, unit: 'px' },
+      { key: 'panY', label: 'PanY', value: (cam.panY ?? 0).toFixed(0), step: 10, unit: 'px' },
+      { key: 'perspectiveDistance', label: 'Focal', value: (cam.perspectiveDistance ?? 30).toFixed(0), step: 5, unit: 'm', title: 'Perspective focal distance (lower = stronger)' }
+    ] : [];
+    const cameraPresets = is3d ? [
+      { id: 'bird', label: 'Bird', title: 'Bird\'s-eye: 60° elevation, NE' },
+      { id: 'eye', label: 'Eye-Level', title: 'Human POV: 8° elevation, 70mm-ish focal' },
+      { id: 'hero', label: 'Hero', title: 'Hero shot: 12° elevation, 45° azimuth, tight focal' },
+      { id: 'topdown', label: 'Top-Down', title: 'True plan: 89.9° elevation' }
+    ] : [];
+    function handleCameraField(key, value) {
+      if (!is3d || !Number.isFinite(value)) return;
+      doc.camera = doc.camera || {};
+      if (key === 'elevation') doc.camera.elevation = Math.max(-89.9, Math.min(89.9, value));
+      else if (key === 'perspectiveDistance') { doc.camera.perspectiveDistance = Math.max(5, value); doc.camera.perspective = true; }
+      else doc.camera[key] = value;
+      render();
+    }
+    function handleCameraShot(shotId) {
+      if (!is3d) return;
+      doc.camera = doc.camera || {};
+      if (shotId === 'bird') { doc.camera.azimuth = 45; doc.camera.elevation = 60; }
+      else if (shotId === 'eye') { doc.camera.azimuth = 45; doc.camera.elevation = 8; doc.camera.perspective = true; doc.camera.perspectiveDistance = 45; }
+      else if (shotId === 'hero') { doc.camera.azimuth = 45; doc.camera.elevation = 12; doc.camera.perspective = true; doc.camera.perspectiveDistance = 22; }
+      else if (shotId === 'topdown') { doc.camera.azimuth = 0; doc.camera.elevation = 89.9; doc.camera.perspective = false; }
+      render();
+      updateStudioCPanels();
+      showToast(`Camera: ${shotId}`);
+    }
+
     const constraintChoices = constraintChoicesFor(selKinds);
     const constraintTargets = Array.from(state.plan.selectedIds || []);
 
@@ -43378,6 +43557,12 @@ function createPlanView(context) {
       constraintTargets,
       onConstraintAction: handleConstraintAction,
       onAddConstraint: addConstraintFromSelection,
+      transformRows,
+      cameraRows,
+      cameraPresets,
+      onTransformField: handleTransformField,
+      onCameraField: handleCameraField,
+      onCameraShot: handleCameraShot,
       onSelectPanelTab: (tabId) => {
         state.activeCPanelTab = tabId;
         updateStudioCPanels();
@@ -53681,6 +53866,21 @@ function initializeApp() {
       </button>
     `;
 
+    // FILE menu — classic app commands (New/Save/Export/Shortcuts), always available
+    html += `
+      <div class="menubar-dropdown-wrap" data-section="File">
+        <button type="button" class="menubar-trigger-btn" aria-haspopup="true" aria-expanded="false" data-section="File" title="File">File ▾</button>
+        <div class="menubar-dropdown" role="menu">
+          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="new_tab" title="New drawing tab in the Plan Canvas">🆕 New Drawing Tab</button>
+          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="save" title="Save the plan into the project store (Ctrl+S)">💾 Save to Project</button>
+          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="open_projects" title="Open the Projects library">🗂 Open Project…</button>
+          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="export" title="Export Center: JSON · DXF · SVG · CSV">📤 Export…</button>
+          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="export_svg" title="Download the current plan as SVG">🖼 Export Plan SVG</button>
+          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="shortcuts" title="Keyboard shortcuts (F1)">⌨ Shortcuts…</button>
+        </div>
+      </div>
+    `;
+
     // Dropdown groups for each architectural section
     for (const section of NAV_SECTIONS) {
       if (section === 'Home') continue;
@@ -53806,6 +54006,34 @@ function initializeApp() {
         e.stopPropagation();
         closeAllMenuBarDropdowns();
         switchMode(btn.dataset.mode);
+      });
+    });
+
+    // File menu commands (classic app menu)
+    container.querySelectorAll('.menubar-dropdown-item[data-file-cmd]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeAllMenuBarDropdowns();
+        const cmd = btn.dataset.fileCmd;
+        if (cmd === 'new_tab') {
+          switchMode('plan');
+          setTimeout(() => views.callController('plan', 'createDocument', 'Level ' + (Date.now() % 1000), '2d_plan'), 300);
+          showToast('New drawing tab created in the Plan Canvas');
+        } else if (cmd === 'save') {
+          if (state.currentMode === 'plan') views.callController('plan', 'saveToProject');
+          else { switchMode('plan'); setTimeout(() => views.callController('plan', 'saveToProject'), 350); }
+        } else if (cmd === 'open_projects') {
+          switchMode('projects');
+        } else if (cmd === 'export') {
+          switchMode('export');
+        } else if (cmd === 'export_svg') {
+          switchMode('plan');
+          setTimeout(() => views.callController('plan', 'exportPlan', 'svg'), 350);
+        } else if (cmd === 'shortcuts') {
+          dom.shortcutsModal?.classList.add('open');
+          dom.modalBackdrop?.classList.add('open');
+          if (dom.shortcutsSearchInput) dom.shortcutsSearchInput.focus();
+        }
       });
     });
   }

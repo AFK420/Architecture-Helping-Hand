@@ -39,6 +39,10 @@ export function renderStudioCPanels(container, options = {}) {
           <span class="cpanel-tab-icon">🔗</span>
           <span class="cpanel-tab-text">Constr</span>
         </button>
+        <button type="button" class="cpanel-tab-btn ${activeTab === 'transform' ? 'active' : ''}" data-panel-tab="transform" title="Transform — precise numeric position & size">
+          <span class="cpanel-tab-icon">⤢</span>
+          <span class="cpanel-tab-text">Xform</span>
+        </button>
       </div>
 
       <!-- C-Panel Content Body -->
@@ -222,6 +226,46 @@ export function renderStudioCPanels(container, options = {}) {
             </div>
           ` : ''}
         </div>
+
+        <!-- 6. Transform — precise numeric control of the selection -->
+        <div class="cpanel-pane ${activeTab === 'transform' ? 'active' : ''}" id="cpanel-pane-transform">
+          <div class="cpanel-section-title"><span>TRANSFORM</span></div>
+          ${(options.transformRows && options.transformRows.length > 0) ? `
+            <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+              ${options.transformRows.map(r => `
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 0.68rem; color: var(--text-secondary); min-width: 2.6em; font-family: var(--font-mono);" title="${r.title || ''}">${r.label}</span>
+                  <input type="number" class="calc-input xform-input" data-xform="${r.key}" value="${r.value}" step="${r.step || 0.1}"
+                    style="flex: 1; height: 24px; font-size: 0.72rem; padding: 0 6px; font-family: var(--font-mono);" />
+                  <span style="font-size: 0.62rem; color: var(--text-muted);">${r.unit || 'm'}</span>
+                </div>`).join('')}
+            </div>
+            <div style="font-size: 0.63rem; color: var(--text-muted); margin-top: 0.4rem; line-height: 1.35;">
+              Edit any value and press Enter to apply (undoable). Height applies to walls/solids; rotation spins about the selection center.
+            </div>
+          ` : `
+            <div class="cpanel-empty-state">
+              <span class="empty-icon">⤢</span>
+              <p>No selection</p>
+              <span class="empty-hint">Select any entity — its exact position, size, and rotation become editable numbers here.</span>
+            </div>
+          `}
+          ${options.cameraRows && options.cameraRows.length > 0 ? `
+            <div class="cpanel-section-title" style="margin-top: 0.6rem;"><span>3D CAMERA</span></div>
+            <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+              ${options.cameraRows.map(r => `
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 0.68rem; color: var(--text-secondary); min-width: 2.6em; font-family: var(--font-mono);">${r.label}</span>
+                  <input type="number" class="calc-input xform-input" data-cam="${r.key}" value="${r.value}" step="${r.step || 1}"
+                    style="flex: 1; height: 24px; font-size: 0.72rem; padding: 0 6px; font-family: var(--font-mono);" />
+                  <span style="font-size: 0.62rem; color: var(--text-muted);">${r.unit || ''}</span>
+                </div>`).join('')}
+              <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
+                ${(options.cameraPresets || []).map(p => `<button type="button" class="btn btn-xs btn-outline" data-cam-shot="${p.id}" title="${p.title}">${p.label}</button>`).join('')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
       </div>
 
       <!-- Tier 2: Dedicated Architectural Tool Guide & Standards Inspector -->
@@ -278,4 +322,29 @@ export function renderStudioCPanels(container, options = {}) {
       }
     });
   }
+
+  // Transform tab: numeric edits apply on Enter/blur; camera fields likewise.
+  container.querySelectorAll('[data-xform]').forEach(inp => {
+    const apply = () => {
+      if (typeof options.onTransformField === 'function') {
+        options.onTransformField(inp.dataset.xform, parseFloat(inp.value));
+      }
+    };
+    inp.addEventListener('change', apply);
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+  });
+  container.querySelectorAll('[data-cam]').forEach(inp => {
+    const apply = () => {
+      if (typeof options.onCameraField === 'function') {
+        options.onCameraField(inp.dataset.cam, parseFloat(inp.value));
+      }
+    };
+    inp.addEventListener('change', apply);
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+  });
+  container.querySelectorAll('[data-cam-shot]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (typeof options.onCameraShot === 'function') options.onCameraShot(btn.dataset.camShot);
+    });
+  });
 }

@@ -1469,6 +1469,21 @@ export function initializeApp() {
       </button>
     `;
 
+    // FILE menu — classic app commands (New/Save/Export/Shortcuts), always available
+    html += `
+      <div class="menubar-dropdown-wrap" data-section="File">
+        <button type="button" class="menubar-trigger-btn" aria-haspopup="true" aria-expanded="false" data-section="File" title="File">File ▾</button>
+        <div class="menubar-dropdown" role="menu">
+          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="new_tab" title="New drawing tab in the Plan Canvas">🆕 New Drawing Tab</button>
+          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="save" title="Save the plan into the project store (Ctrl+S)">💾 Save to Project</button>
+          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="open_projects" title="Open the Projects library">🗂 Open Project…</button>
+          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="export" title="Export Center: JSON · DXF · SVG · CSV">📤 Export…</button>
+          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="export_svg" title="Download the current plan as SVG">🖼 Export Plan SVG</button>
+          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="shortcuts" title="Keyboard shortcuts (F1)">⌨ Shortcuts…</button>
+        </div>
+      </div>
+    `;
+
     // Dropdown groups for each architectural section
     for (const section of NAV_SECTIONS) {
       if (section === 'Home') continue;
@@ -1594,6 +1609,34 @@ export function initializeApp() {
         e.stopPropagation();
         closeAllMenuBarDropdowns();
         switchMode(btn.dataset.mode);
+      });
+    });
+
+    // File menu commands (classic app menu)
+    container.querySelectorAll('.menubar-dropdown-item[data-file-cmd]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeAllMenuBarDropdowns();
+        const cmd = btn.dataset.fileCmd;
+        if (cmd === 'new_tab') {
+          switchMode('plan');
+          setTimeout(() => views.callController('plan', 'createDocument', 'Level ' + (Date.now() % 1000), '2d_plan'), 300);
+          showToast('New drawing tab created in the Plan Canvas');
+        } else if (cmd === 'save') {
+          if (state.currentMode === 'plan') views.callController('plan', 'saveToProject');
+          else { switchMode('plan'); setTimeout(() => views.callController('plan', 'saveToProject'), 350); }
+        } else if (cmd === 'open_projects') {
+          switchMode('projects');
+        } else if (cmd === 'export') {
+          switchMode('export');
+        } else if (cmd === 'export_svg') {
+          switchMode('plan');
+          setTimeout(() => views.callController('plan', 'exportPlan', 'svg'), 350);
+        } else if (cmd === 'shortcuts') {
+          dom.shortcutsModal?.classList.add('open');
+          dom.modalBackdrop?.classList.add('open');
+          if (dom.shortcutsSearchInput) dom.shortcutsSearchInput.focus();
+        }
       });
     });
   }

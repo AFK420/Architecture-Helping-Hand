@@ -161,7 +161,19 @@ export const BUNDLE_MODULES = [
 export const NON_RUNTIME_MODULES = [];
 
 export function stripImportsAndExports(code) {
-  return code
+  // Capture renamed imports (X as Y) BEFORE stripping, so the bundle can
+  // re-declare the alias — the concatenated scope has no module bindings.
+  // Aliases are PREPENDED to the module body (const is TDZ-bound, so they
+  // must precede every use within the module).
+  const aliases = [];
+  code.replace(/import\s+[\s\S]*?from\s+['"][^'"]+['"];?/g, (m) => {
+    for (const match of m.matchAll(/\b([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)/g)) {
+      aliases.push(`const ${match[2]} = ${match[1]};`);
+    }
+    return '';
+  });
+  const aliasPrefix = aliases.length ? `\n/* import aliases */\n${aliases.join('\n')}\n` : '';
+  const stripped = code
     .replace(/import\s+[\s\S]*?from\s+['"][^'"]+['"];?/g, '')
     .replace(/import\s+['"][^'"]+['"];?/g, '')
     .replace(/export\s+default\s+/g, '')
@@ -169,8 +181,9 @@ export function stripImportsAndExports(code) {
     .replace(/export\s+async\s+function\s+/g, 'async function ')
     .replace(/export\s+(const|let|var|function|class)\s+/g, '$1 ')
     // Re-exports: `export { A, B } from './module.js';` (must run before bare export-braces form)
-    .replace(/export\s*\{[^}]*\}\s*from\s*['"][^'"]+['"];?/g, '')
+    .replace(/export\s*\{[^}]*\}\s*from\s+['"][^'"]+['"];?/g, '')
     .replace(/export\s*\{[\s\S]*?\};?/g, '');
+  return aliasPrefix + stripped;
 }
 
 export function generateBundleContent() {

@@ -3,7 +3,7 @@
  * Enables 100% offline operation, instant caching, and standalone desktop installation.
  */
 
-const CACHE_NAME = 'archiscale-v2.6.0';
+const CACHE_NAME = 'archiscale-v2.6.1';
 
 const PRECACHE_ASSETS = [
   './',

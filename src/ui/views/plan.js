@@ -2398,6 +2398,109 @@ export function createPlanView(context) {
     }
 
     const selKinds = new Set(es.filter(e => state.plan.selectedIds && state.plan.selectedIds.has(e.id)).map(e => e.kind));
+
+    // ---- Transform tab data: precise numeric fields for the selection ----
+    const xfSel = selected;
+    const transformRows = [];
+    if (xfSel) {
+      const isSegment = Number.isFinite(xfSel.x1);
+      const num = (v) => Number.isFinite(v) ? v.toFixed(2) : '0';
+      if (isSegment) {
+        transformRows.push(
+          { key: 'x1', label: 'X1', value: num(xfSel.x1), step: 0.1, title: 'Start point X (m)' },
+          { key: 'y1', label: 'Y1', value: num(xfSel.y1), step: 0.1, title: 'Start point Y (m)' },
+          { key: 'x2', label: 'X2', value: num(xfSel.x2), step: 0.1, title: 'End point X (m)' },
+          { key: 'y2', label: 'Y2', value: num(xfSel.y2), step: 0.1, title: 'End point Y (m)' }
+        );
+        if (xfSel.kind === 'wall' || xfSel.kind === 'line') {
+          transformRows.push({ key: 'height', label: 'H', value: num(xfSel.height || 2.7), step: 0.1, title: 'Wall height (m)' });
+        }
+      } else if (Number.isFinite(xfSel.x)) {
+        transformRows.push(
+          { key: 'x', label: 'X', value: num(xfSel.x), step: 0.1, title: 'Origin X (m)' },
+          { key: 'y', label: 'Y', value: num(xfSel.y), step: 0.1, title: 'Origin Y (m)' }
+        );
+        if (Number.isFinite(xfSel.width)) transformRows.push({ key: 'width', label: 'W', value: num(xfSel.width), step: 0.1, title: 'Width (m)' });
+        if (Number.isFinite(xfSel.depth)) transformRows.push({ key: 'depth', label: 'D', value: num(xfSel.depth), step: 0.1, title: 'Depth (m)' });
+        if (Number.isFinite(xfSel.z) || xfSel.kind === 'solid_box' || xfSel.kind === 'subd_solid') transformRows.push({ key: 'z', label: 'Z', value: num(xfSel.z || 0), step: 0.1, title: 'Base height (m)' });
+        if (Number.isFinite(xfSel.height) && (xfSel.kind === 'solid_box' || xfSel.kind === 'subd_solid')) transformRows.push({ key: 'height', label: 'H', value: num(xfSel.height), step: 0.1, title: 'Solid height (m)' });
+        transformRows.push({ key: 'rotation', label: 'Rot°', value: num(xfSel.rotation || 0), step: 5, unit: '°', title: 'Rotation about center (degrees)' });
+      }
+    }
+    function handleTransformField(key, value) {
+      if (!xfSel || !Number.isFinite(value)) return;
+      const before = JSON.parse(JSON.stringify([xfSel]));
+      const ids = [xfSel.id];
+      const numKey = parseFloat(value);
+      if (Number.isFinite(xfSel.x1) && ['x1', 'y1', 'x2', 'y2'].includes(key)) {
+        xfSel[key] = numKey;
+        if (xfSel.kind === 'dimension') {
+          xfSel.p1 = { x: xfSel.x1, y: xfSel.y1 };
+          xfSel.p2 = { x: xfSel.x2, y: xfSel.y2 };
+          xfSel.name = `${Math.hypot(xfSel.x2 - xfSel.x1, xfSel.y2 - xfSel.y1).toFixed(2)}m`;
+        }
+      } else if (key === 'rotation') {
+        // rotate about the entity center via the canonical op
+        const target = [xfSel];
+        rotateEntities(target, numKey - (xfSel.rotation || 0));
+        xfSel.rotation = numKey;
+      } else if (key === 'width') {
+        applyParametricParameter(xfSel, 'width', Math.max(0.05, numKey));
+      } else if (key === 'depth') {
+        applyParametricParameter(xfSel, 'depth', Math.max(0.05, numKey));
+      } else if (key === 'height') {
+        xfSel.height = Math.max(0.1, numKey);
+      } else if (Object.prototype.hasOwnProperty.call(xfSel, key)) {
+        xfSel[key] = numKey;
+      }
+      const after = JSON.parse(JSON.stringify([xfSel]));
+      history.push({
+        label: `transform ${key}`,
+        redo() { restoreEntitySnapshots(after, ids); render(); },
+        undo() { restoreEntitySnapshots(before, ids); render(); }
+      });
+      render();
+      renderPropertiesInspector();
+      updateStudioCPanels();
+    }
+
+    // ---- 3D camera controls (only in the massing view) ----
+    const is3d = doc.type === '3d_massing';
+    const cam = doc.camera || {};
+    const cameraRows = is3d ? [
+      { key: 'azimuth', label: 'Azi', value: (cam.azimuth ?? 45).toFixed(1), step: 5, unit: '°', title: 'Compass azimuth' },
+      { key: 'elevation', label: 'Elev', value: (cam.elevation ?? 35.264).toFixed(1), step: 5, unit: '°', title: 'Camera elevation (−89.9…89.9)' },
+      { key: 'zoom', label: 'Zoom', value: (cam.zoom ?? 32).toFixed(1), step: 2, unit: 'px/m', title: 'Scale (pixels per metre)' },
+      { key: 'panX', label: 'PanX', value: (cam.panX ?? 0).toFixed(0), step: 10, unit: 'px' },
+      { key: 'panY', label: 'PanY', value: (cam.panY ?? 0).toFixed(0), step: 10, unit: 'px' },
+      { key: 'perspectiveDistance', label: 'Focal', value: (cam.perspectiveDistance ?? 30).toFixed(0), step: 5, unit: 'm', title: 'Perspective focal distance (lower = stronger)' }
+    ] : [];
+    const cameraPresets = is3d ? [
+      { id: 'bird', label: 'Bird', title: 'Bird\'s-eye: 60° elevation, NE' },
+      { id: 'eye', label: 'Eye-Level', title: 'Human POV: 8° elevation, 70mm-ish focal' },
+      { id: 'hero', label: 'Hero', title: 'Hero shot: 12° elevation, 45° azimuth, tight focal' },
+      { id: 'topdown', label: 'Top-Down', title: 'True plan: 89.9° elevation' }
+    ] : [];
+    function handleCameraField(key, value) {
+      if (!is3d || !Number.isFinite(value)) return;
+      doc.camera = doc.camera || {};
+      if (key === 'elevation') doc.camera.elevation = Math.max(-89.9, Math.min(89.9, value));
+      else if (key === 'perspectiveDistance') { doc.camera.perspectiveDistance = Math.max(5, value); doc.camera.perspective = true; }
+      else doc.camera[key] = value;
+      render();
+    }
+    function handleCameraShot(shotId) {
+      if (!is3d) return;
+      doc.camera = doc.camera || {};
+      if (shotId === 'bird') { doc.camera.azimuth = 45; doc.camera.elevation = 60; }
+      else if (shotId === 'eye') { doc.camera.azimuth = 45; doc.camera.elevation = 8; doc.camera.perspective = true; doc.camera.perspectiveDistance = 45; }
+      else if (shotId === 'hero') { doc.camera.azimuth = 45; doc.camera.elevation = 12; doc.camera.perspective = true; doc.camera.perspectiveDistance = 22; }
+      else if (shotId === 'topdown') { doc.camera.azimuth = 0; doc.camera.elevation = 89.9; doc.camera.perspective = false; }
+      render();
+      updateStudioCPanels();
+      showToast(`Camera: ${shotId}`);
+    }
+
     const constraintChoices = constraintChoicesFor(selKinds);
     const constraintTargets = Array.from(state.plan.selectedIds || []);
 
@@ -2413,6 +2516,12 @@ export function createPlanView(context) {
       constraintTargets,
       onConstraintAction: handleConstraintAction,
       onAddConstraint: addConstraintFromSelection,
+      transformRows,
+      cameraRows,
+      cameraPresets,
+      onTransformField: handleTransformField,
+      onCameraField: handleCameraField,
+      onCameraShot: handleCameraShot,
       onSelectPanelTab: (tabId) => {
         state.activeCPanelTab = tabId;
         updateStudioCPanels();
