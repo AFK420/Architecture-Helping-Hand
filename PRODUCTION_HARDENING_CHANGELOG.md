@@ -1,5 +1,65 @@
 # Production Hardening Changelog
 
+## 2026-09-10 (pass 10) — user-reported mega-batch (v2.5.1 → v2.6.1)
+
+Four commits answering the full user report, each browser-verified live.
+
+### Hotkey war (v2.5.1)
+Global keydown hijacked 1-0/c/b/q/s/h in EVERY mode — plan tool keys jumped
+workspaces. New mode-scoped key ownership: plan/workspace claim their keys;
+verified W=Wall in plan, 5 stays in plan, 1 works on Home.
+
+### Fillet "did nothing" (v2.5.1)
+Root causes: (a) active command-bar sessions swallowed all later canvas
+clicks — setTool now cancels them (new cancelActive API); (b) a missed
+first-pick dead-ended silently — now warns and retries; 0.45m pick radius,
+step-by-step toolbar. Verified E2E: trimmed walls + arc via the same math
+the click path uses. Boolean union also verified live (32 m² hexagon).
+
+### Blank 3D SVG export (v2.5.1)
+Live canvas camera projected off the 800×600 export frame. Auto-fit now
+derives the export camera from the model bbox (two-pass measure → fit →
+re-center). 3D ground grid extent now follows content + 2D grid setting.
+
+### Text formatting tab (v2.5.1)
+Full character/transparency control: 6 fonts, size slider (view-scaled),
+B/I/U, color, opacity % (transparent room-label style), rotation, backdrop
+chip on/off + color, precise X/Y, and 5 architectural presets (Room Label,
+Dim Text, Sheet Title, Watermark, Revision Note).
+
+### Object Library Browser (v2.5.1)
+🔍 Browse popup: 19-category sidebar, live search, footprint SVG previews,
+hover metrics (clearances), pick-arms-the-tool.
+
+### Unique tool guides (d4e4f2d)
+75 hand-written entries — every catalog tool + flyout + panel now has its
+own PURPOSE / step-by-step WORKFLOW / IBC-ADA-ISO standards note / unique
+PRO TIP. Verified in-browser that wall/stair/dim_chain/nurbs each show
+distinct text. Zero duplicate pairs.
+
+### Object Library — 638 objects (8981843, v2.6.0)
+215 core + 423 new: Healthcare (63), Police/Fire/Civic (34), Sports &
+Stadium (51), Fitness (33), Cinema/Gaming/Caravan/Play (57), Education
+(27), Hospitality/Worship (41), Transport/Parking (39), Landscape/
+Plants/Trees (74) — all real dimensions (ITF/FIFA/ADA…), parametric runs
+for bays/tables/tiers/lockers. tests/object-library.test.js (40).
+
+### Transform tab + File menu + bundler fix (5cbc172, v2.6.1)
+- TRANSFORM C-panel tab: X/Y/W/D/H/X1-Y1-X2-Y2/rotation numeric fields for
+  any selection, one undoable command per edit; rooms re-derive boundary
+  and area via the parametric engine (verified: 4→6m syncs span + 18m²
+  area; 90° truly rotates about center).
+- 3D CAMERA rows in massing view: azimuth/elevation/zoom/pan/focal +
+  POV shot presets (Bird's-eye, Eye-Level perspective, Hero, Top-Down).
+- FILE top-bar menu: New Tab, Save, Open Project, Export Center, Export
+  Plan SVG, Shortcuts — all wired.
+- BUNDLER FIX (systemic): `import {X as Y}` renames were silently
+  dropped — the alias never existed at runtime, breaking the transform
+  tab AND the pre-existing inspector scrubbers. Aliases now hoisted
+  TDZ-correct to each bundled module top.
+
+63 suites, 5,300+ assertions, 0 failures across all four commits.
+
 ## 2026-09-10 (pass 9) — every PLANNED tool implemented (v2.5.0)
 
 The user asked for ALL dimmed/planned plan-canvas tools to be real. The
