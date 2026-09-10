@@ -77,6 +77,7 @@ import { normalizeVector, subtractPoints, dotProduct, closestPointOnSegment } fr
 import { formatFeetInches } from '../../core/formatter.js';
 import { checkFurnitureFit, checkClearance, checkOverlaps } from '../../core/space-planning.js';
 import { FURNITURE_DATABASE } from '../../core/furniture.js';
+import { OBJECT_LIBRARY_PACKS, OBJECT_CATEGORY_LABELS } from '../../core/object-library.js';
 import { getFurniturePlanSVG } from '../visualizer.js';
 import { parseInput } from '../../core/parser.js';
 import { UNITS } from '../../core/units.js';
@@ -8847,20 +8848,20 @@ export function createPlanView(context) {
   // ------------------------------------------------------------------
   function populateFurniture() {
     if (!dom.planFurnitureSelect) return;
-    // Full catalog, grouped by category — the plan canvas should offer the
-    // same breadth as the Furniture tool, not a 60-item slice.
-    furnitureCatalog = FURNITURE_DATABASE.filter(f => f.wCm && f.dCm);
+    // FULL Object Library: residential/commercial core + all domain packs
+    // (healthcare, emergency, sports, fitness, leisure, education,
+    // hospitality, transport, landscape). 638 unique objects.
+    furnitureCatalog = [
+      ...FURNITURE_DATABASE,
+      ...OBJECT_LIBRARY_PACKS
+    ].filter(f => f.wCm && f.dCm);
     catalogById = new Map(furnitureCatalog.map(item => [item.id, item]));
     const byCat = new Map();
     for (const item of furnitureCatalog) {
       if (!byCat.has(item.category)) byCat.set(item.category, []);
       byCat.get(item.category).push(item);
     }
-    const CAT_LABELS = {
-      living: 'Living Room', bedroom: 'Bedroom', dining: 'Dining', kitchen: 'Kitchen',
-      bathroom: 'Bathroom & Sanitary', office: 'Office', doors: 'Doors & Circulation',
-      outdoor: 'Outdoor & Site', commercial: 'Commercial, Retail & Fitness'
-    };
+    const CAT_LABELS = OBJECT_CATEGORY_LABELS;
     let optHtml = '';
     for (const [cat, items] of byCat) {
       optHtml += `<optgroup label="${escapeHtml(CAT_LABELS[cat] || cat)}">`;
@@ -8898,11 +8899,7 @@ export function createPlanView(context) {
       if (!byCat.has(item.category)) byCat.set(item.category, []);
       byCat.get(item.category).push(item);
     }
-    const CAT_LABELS = {
-      living: 'Living Room', bedroom: 'Bedroom', dining: 'Dining', kitchen: 'Kitchen',
-      bathroom: 'Bathroom & Sanitary', office: 'Office', doors: 'Doors & Circulation',
-      outdoor: 'Outdoor & Site', commercial: 'Commercial, Retail & Fitness'
-    };
+    const CAT_LABELS = OBJECT_CATEGORY_LABELS;
 
     const modal = document.createElement('div');
     modal.id = 'object-browser-modal';

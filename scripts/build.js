@@ -35,6 +35,7 @@ export const BUNDLE_MODULES = [
   { name: 'Calculator', file: path.join(srcDir, 'core', 'calculator.js') },
   { name: 'Geometry', file: path.join(srcDir, 'core', 'geometry.js') },
   { name: 'Furniture', file: path.join(srcDir, 'core', 'furniture.js') },
+  { name: 'ObjectLibrary', file: path.join(srcDir, 'core', 'object-library.js') },
 
   // --- Toolkit feature core (dependency order: workspace -> expression ->
   //     cad-clipboard -> multi-scale/chains -> batch-cad/quick-dimension) ---

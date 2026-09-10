@@ -72,7 +72,8 @@ const testFiles = [
   'constraints.test.js',
   'issue-engine.test.js',
   'honesty-pass.test.js',
-  'engine-wiring.test.js'
+  'engine-wiring.test.js',
+  'object-library.test.js'
 ];
 
 console.log('=================================================================');
