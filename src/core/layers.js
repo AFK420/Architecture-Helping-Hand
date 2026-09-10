@@ -111,6 +111,8 @@ export function resolveEntityLayer(entity, layers = DEFAULT_CAD_LAYERS) {
  */
 export function isEntityVisible(entity, doc) {
   if (!entity) return false;
+  // Crop window (crop_tool): entities flagged outside are hidden non-destructively
+  if (entity._cropHidden === true) return false;
   if (!doc) return true;
   const layers = normalizeDocumentLayers(doc);
   const layer = resolveEntityLayer(entity, layers);

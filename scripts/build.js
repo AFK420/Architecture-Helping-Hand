@@ -60,6 +60,8 @@ export const BUNDLE_MODULES = [
   { name: 'Camera3D', file: path.join(srcDir, 'core', 'camera3d.js') },
   { name: 'Entities', file: path.join(srcDir, 'core', 'entities.js') },
   { name: 'ZoningSchedule', file: path.join(srcDir, 'core', 'zoning-schedule.js') },
+  { name: 'NurbsCore', file: path.join(srcDir, 'core', 'nurbs-core.js') },
+  { name: 'Cad3DEntities', file: path.join(srcDir, 'core', 'cad-3d-entities.js') },
   { name: 'Massing3D', file: path.join(srcDir, 'core', 'massing-3d.js') },
   { name: 'SectionsElevations', file: path.join(srcDir, 'core', 'sections-elevations.js') },
   { name: 'Details', file: path.join(srcDir, 'core', 'details.js') },

@@ -512,6 +512,116 @@ console.log('\n--- 13. Plan-canvas tool batch: dim chain, fillet, offset, lasso,
   assert(planSrc.includes("tool === 'curve_offset'"), 'offset tool click path');
 }
 
+console.log('\n--- 14. Advanced CAD tools — full PLANNED batch implemented ---');
+{
+  const C = await import('../src/core/cad-3d-entities.js');
+  const N = await import('../src/core/nurbs-core.js');
+  const M = await import('../src/core/massing-3d.js');
+  const P = await import('../src/core/personas.js');
+  const fs = await import('node:fs');
+
+  // The PLANNED list is now EMPTY and the ghost contract holds
+  assert(P.PLANNED_TOOLS.size === 0, 'PLANNED_TOOLS is empty — nothing dimmed remains');
+  const planSrc = fs.readFileSync('src/ui/views/plan.js', 'utf8');
+  const catalogIds = new Set(P.STUDIO_TOOL_CATALOG.map(t => t.id));
+  const flyoutIds = new Set(P.STUDIO_TOOL_CATALOG.flatMap(t => (t.flyout || []).map(s => s.id)));
+  for (const id of ['curve_nurbs', 'curve_boolean', 'surface_planar', 'surface_extrude', 'surface_loft',
+    'surface_revolve', 'solid_box', 'boolean_union', 'boolean_diff', 'mesh_from_srf', 'quad_remesh',
+    'subd_box', 'subd_crease', 'block_create', 'lasso_poly', 'lasso_magnetic', 'crop_tool']) {
+    assert(catalogIds.has(id) || flyoutIds.has(id), `${id} reachable (catalog or flyout)`);
+    assert(planSrc.includes(`'${id}'`), `${id} has a handler reference in the plan view`);
+  }
+
+  // NURBS core leaf: evaluators work standalone AND via massing re-exports
+  const cp = [{ x: 0, y: 0 }, { x: 2, y: 3 }, { x: 6, y: 1 }];
+  const mid = N.evaluateNurbsCurve(cp, 2, 0.5);
+  assert(Number.isFinite(mid.x) && Number.isFinite(mid.y), 'NURBS curve evaluator runs from the leaf module');
+  assert(typeof M.evaluateNurbsCurve === 'function', 'massing-3d still re-exports the NURBS API');
+
+  // nurbs_curve entity: passes through control points at t=0 and t=1
+  const crv = C.createNurbsCurveEntity({ controlPoints: cp });
+  const pts = C.nurbsCurvePoints(crv, 16);
+  assert(Math.abs(pts[0].x - 0) < 1e-6 && Math.abs(pts[pts.length - 1].x - 6) < 1e-6, 'curve endpoints hit first/last control points');
+  let rejected = false;
+  try { C.createNurbsCurveEntity({ controlPoints: [{ x: 0, y: 0 }] }); } catch { rejected = true; }
+  assert(rejected, 'curve with <2 control points refused');
+
+  // Surfaces: extrude faces, loft parity, revolve strip count
+  const ring = [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }, { x: 0, y: 3 }];
+  const ext = C.createExtrudeEntity({ points: ring, z0: 0, z1: 3 });
+  assert(C.extrudeFaces(ext).length === 6, 'extrusion: 4 sides + 2 caps');
+  let badExtrude = false;
+  try { C.createExtrudeEntity({ points: ring, z0: 3, z1: 3 }); } catch { badExtrude = true; }
+  assert(badExtrude, 'zero-height extrusion refused');
+  const lof = C.createLoftEntity({ points0: ring, points1: ring.map(p => ({ x: p.x + 1, y: p.y + 1 })) });
+  assert(C.loftFaces(lof).length === 6, 'loft: ruled quads + caps');
+  let badLoft = false;
+  try { C.createLoftEntity({ points0: ring, points1: [{ x: 0, y: 0 }] }); } catch { badLoft = true; }
+  assert(badLoft, 'loft vertex-count mismatch refused');
+  const rev = C.createRevolveEntity({ profile: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 }], axisX: 10, segments: 12 });
+  assert(C.revolveFaces(rev).length === 24, 'revolve: 12 segments × 2 profile spans');
+  const planar = C.createPlanarSurfaceEntity({ points: ring });
+  assert(Math.abs(planar.areaM2 - 12) < 1e-9, 'planar surface area = 12 m²');
+
+  // Solid box + mesh + remesh + subd
+  const box = C.createSolidBoxEntity({ width: 2, depth: 2, height: 2 });
+  assert(C.solidBoxFaces(box).length === 6, 'box: 6 faces');
+  const mesh = C.meshFromSurfaceEntity(box);
+  assert(mesh.kind === 'mesh_entity' && mesh.quads.length === 6, 'mesh from surface: 6 quads');
+  assert(C.quadRemeshQuads(mesh.quads, 1).length === 24, 'quad remesh level 1: 6→24');
+  const subd = C.createSubdBoxEntity({ width: 2, depth: 2, height: 2, levels: 1 });
+  const limit = C.subdLimitQuads(subd);
+  assert(limit.length === 24, 'Catmull-Clark 1 level: 6→24 quads');
+  // Correct Catmull-Clark behavior on a box cage: flat-face extremes are
+  // preserved (face planes don't shrink) AND the corner vertex rounds
+  // inward (no limit vertex remains near the cage corner).
+  const all = limit.flat();
+  const zs = all.map(v => v.z);
+  assert(Math.min(...zs) === 0 && Math.max(...zs) === 2, 'subd keeps flat-face extents (z 0..2)');
+  const nearCorner = all.filter(v => v.x < 0.4 && v.y < 0.4 && v.z < 0.4);
+  assert(nearCorner.length === 0, 'cage corner (0,0,0) rounded away — no limit vertex near it');
+
+  // Booleans: exact areas on overlapping 4×4 squares (2,2)-offset
+  const A = [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }, { x: 0, y: 4 }];
+  const B = [{ x: 2, y: 2 }, { x: 6, y: 2 }, { x: 6, y: 6 }, { x: 2, y: 6 }];
+  const bi = C.booleanRings('intersect', A, B);
+  assert(Math.abs(bi.areaM2 - 4) < 1e-9, `intersect area 4 (got ${bi.areaM2})`);
+  const bu = C.booleanRings('union', A, B);
+  assert(Math.abs(bu.areaM2 - 32) < 1e-9 && bu.ring.length === 6, `union hull 6-gon area 32 (got ${bu.areaM2})`);
+  const bs = C.booleanRings('subtract', A, B);
+  assert(Math.abs(bs.areaM2 - 12) < 1e-9 && bs.hole && bs.hole.length === 4, `subtract net 12 with a 4-pt hole (got ${bs.areaM2})`);
+  const bFull = C.booleanRings('subtract', [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }], A);
+  assert(bFull.ring === null && bFull.areaM2 === 0, 'fully-covered subtract → empty');
+  const region = C.createBooleanResultEntity({ ring: bs.ring, hole: bs.hole });
+  assert(Math.abs(region.areaM2 - 12) < 1e-9 && Array.isArray(region.hole), 'region entity keeps net area + hole');
+
+  // 3D massing renders the new solid kinds (leaf-split integration)
+  const faces = M.buildMassing3DModel([ext, box, subd, rev], { wallHeight: 3 });
+  const kinds = new Set(faces.map(f => f.type));
+  assert(['extrude_solid', 'solid_box', 'subd_solid', 'revolve_surface'].every(k => kinds.has(k)),
+    `massing renders extrude/box/subd/revolve (kinds: ${[...kinds].join(',')})`);
+
+  // Crop verdicts
+  const rect = { x: 0, y: 0, width: 4, depth: 4 };
+  assert(C.cropVerdict({ x: 1, y: 1, width: 1, depth: 1 }, rect) === 'inside', 'crop: inside');
+  assert(C.cropVerdict({ x: 10, y: 10, width: 1, depth: 1 }, rect) === 'outside', 'crop: outside');
+  assert(C.cropVerdict({ x: 2, y: 2, width: 4, depth: 1 }, rect) === 'partial', 'crop: partial');
+
+  // Plan-view wiring: previews, gestures, routing
+  assert(planSrc.includes('function finishNurbsCurve'), 'NURBS commit implemented');
+  assert(planSrc.includes("nurbsPoints.length > 0 && event.key === 'Enter'"), 'NURBS Enter binding');
+  assert(planSrc.includes('mode: \'crop\''), 'crop drag mode wired');
+  assert(planSrc.includes('function applyCrop'), 'crop apply + clear');
+  assert(planSrc.includes('_cropHidden'), 'crop hides non-destructively via a flag');
+  const layersSrc = fs.readFileSync('src/core/layers.js', 'utf8');
+  assert(layersSrc.includes('_cropHidden === true'), 'isEntityVisible honors the crop flag');
+  assert(planSrc.includes('function runRingBoolean'), 'boolean runner wired');
+  assert(planSrc.includes('magnetic'), 'magnetic lasso variant wired');
+  assert(planSrc.includes('function runBlockCreate'), 'block create wired');
+  assert(planSrc.includes('memberIds.filter'), 'block click selects members');
+  assert(fs.readFileSync('src/core/massing-3d.js', 'utf8').includes('subdLimitQuads(e)'), 'subd limit evaluation in the 3D massing builder');
+}
+
 console.log(`\n========================================`);
 console.log(`Engine Wiring (Phase A: parametric): ${passed} passed, ${failed} failed.`);
 console.log(`========================================`);

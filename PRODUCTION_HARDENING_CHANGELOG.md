@@ -1,5 +1,42 @@
 # Production Hardening Changelog
 
+## 2026-09-10 (pass 9) — every PLANNED tool implemented (v2.5.0)
+
+The user asked for ALL dimmed/planned plan-canvas tools to be real. The
+PLANNED_TOOLS set is now EMPTY — every catalog tool has a working
+implementation, verified by the ghost-tools contract (39/39) and 64 new
+wiring assertions (245 total). 62 suites green.
+
+New foundation module `src/core/cad-3d-entities.js` (deterministic factories
++ geometry) and `src/core/nurbs-core.js` (de Boor evaluators extracted from
+massing-3d to break a bundler-order cycle; massing re-exports unchanged).
+
+| Tool | Implementation |
+|---|---|
+| CURVE_NURBS | Click control points → smooth curve entity (de Boor); live evaluated preview + dashed cage; Enter commits, Esc cancels; control cage shown on selection |
+| CURVE_BOOLEAN / BOOLEAN_UNION / BOOLEAN_DIFF | Select two closed shapes → exact 2D boolean: intersect (Sutherland-Hodgman), union (convex hull), subtract (region-with-hole, the standard CAD representation; net area). Result replaces sources as ONE undoable command |
+| SURFACE_PLANAR | Closed shape → planar surface entity with exact area |
+| SURFACE_EXTRUDE | Closed shape + height → extrusion solid (side faces + caps) |
+| SURFACE_LOFT | Two same-vertex-count shapes → ruled loft solid |
+| SURFACE_REVOLVE | Profile swept 360° around an axis (parametric segments) |
+| SOLID_BOX | Box primitive with real 6-face body |
+| MESH_FROM_SRF | Any solid/surface entity → quad-mesh entity |
+| QUAD_REMESH | Mesh → deterministic 4-way subdivision (levels 1–3) |
+| SUBD_BOX | Catmull-Clark subdivision solid from a box cage (face/edge/vertex points, distinct-edge R accumulation — corner rounding verified) |
+| SUBD_CREASE | Mark subd faces hard (crease list) |
+| BLOCK_CREATE | Selection → named block instance (member list); clicking the block reselects all members |
+| LASSO_POLY | Click-vertex polygon lasso (Enter selects inside) |
+| LASSO_MAGNETIC | Freehand lasso + also selects walls CROSSED by the loop |
+| CROP_TOOL | Drag a crop window — outside entities hidden non-destructively (`_cropHidden` honored by isEntityVisible); click-drag empty to clear |
+
+All new solids render in BOTH views: plan (footprints/outlines/badges) and
+3D massing (real bodies — extrusions, lofts, revolves, boxes, meshes, subd
+limits emit faces with entity ids, so 3D picking works on them too).
+
+Math pinned: boolean areas exact (4 / 32 / 12-with-hole on the canonical
+overlapping-squares case), Catmull-Clark corner-rounding invariant, NURBS
+endpoint interpolation, extrude/loft/revolve face counts, remesh 6→24.
+
 ## 2026-09-10 (pass 8) — polyline close-on-start fix (user-reported, v2.4.2)
 
 User bug: clicking the start point to close a polyline finished the chain

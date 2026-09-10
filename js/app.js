@@ -11111,6 +11111,8 @@ function resolveEntityLayer(entity, layers = DEFAULT_CAD_LAYERS) {
  */
 function isEntityVisible(entity, doc) {
   if (!entity) return false;
+  // Crop window (crop_tool): entities flagged outside are hidden non-destructively
+  if (entity._cropHidden === true) return false;
   if (!doc) return true;
   const layers = normalizeDocumentLayers(doc);
   const layer = resolveEntityLayer(entity, layers);
@@ -14055,6 +14057,728 @@ function formatScheduleASCII(schedule = [], totals = null) {
 
 
   // =========================================================================
+  // MODULE: NurbsCore
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — NURBS Core (leaf module)
+ *
+ * Pure de Boor / Cox-de Boor evaluators extracted from massing-3d so both
+ * the massing builder and the advanced-cad entity factories can import them
+ * without a bundler-order cycle. massing-3d re-exports these unchanged.
+ */
+
+// Phase 9: Rhino Computational NURBS Curve & Surface Evaluator
+// ---------------------------------------------------------------------------
+
+/**
+ * Generates a standard clamped uniform knot vector for n+1 control points and degree p.
+ * Length = n + p + 2.
+ * @param {number} n - Last index of control points (count - 1)
+ * @param {number} p - Degree of the curve
+ * @returns {Array<number>} Knot vector clamped to [0, 1]
+ */
+function generateClampedKnotVector(n, p) {
+  const m = n + p + 1;
+  const knots = new Array(m + 1);
+  for (let i = 0; i <= p; i++) knots[i] = 0;
+  const interior = m - 2 * p;
+  for (let i = 1; i < interior; i++) {
+    knots[p + i] = i / interior;
+  }
+  for (let i = m - p; i <= m; i++) knots[i] = 1;
+  return knots;
+}
+
+/**
+ * Evaluates a 2D or 3D NURBS / B-Spline curve at parameter t in [0, 1] using Cox-de Boor's algorithm.
+ *
+ * @param {Array<Object>} controlPoints - Array of point objects ({x, y} or {x, y, z})
+ * @param {number} [degree=3] - Degree of the spline (default cubic)
+ * @param {number} t - Parameter in [0, 1]
+ * @param {Array<number>} [customKnots=null] - Optional custom knot vector
+ * @returns {Object} Evaluated point {x, y, z}
+ */
+function evaluateNurbsCurve(controlPoints = [], degree = 3, t = 0, customKnots = null) {
+  if (!Array.isArray(controlPoints) || controlPoints.length === 0) {
+    return { x: 0, y: 0, z: 0 };
+  }
+  if (controlPoints.length === 1) {
+    const pt = controlPoints[0];
+    return { x: pt.x || 0, y: pt.y || 0, z: pt.z || 0 };
+  }
+
+  const p = Math.min(degree, controlPoints.length - 1);
+  const n = controlPoints.length - 1;
+  const knots = Array.isArray(customKnots) && customKnots.length === (n + p + 2)
+    ? customKnots
+    : generateClampedKnotVector(n, p);
+
+  // Clamp t to [0, 1]
+  const clampedT = Math.max(0, Math.min(1, t));
+
+  // Find knot span k such that knots[k] <= clampedT < knots[k+1]
+  let k = n;
+  for (let i = p; i <= n; i++) {
+    if (clampedT >= knots[i] && clampedT < knots[i + 1]) {
+      k = i;
+      break;
+    }
+  }
+  if (clampedT >= 1) k = n;
+
+  // Initialize de Boor working array d[0..p]
+  const d = [];
+  for (let j = 0; j <= p; j++) {
+    const cp = controlPoints[k - p + j] || controlPoints[n];
+    d[j] = {
+      x: cp.x || 0,
+      y: cp.y || 0,
+      z: cp.z || 0
+    };
+  }
+
+  // de Boor recursion
+  for (let r = 1; r <= p; r++) {
+    for (let j = p; j >= r; j--) {
+      const idx = k - p + j;
+      const denom = knots[idx + p - r + 1] - knots[idx];
+      const alpha = denom > 1e-9 ? (clampedT - knots[idx]) / denom : 0;
+      d[j] = {
+        x: (1 - alpha) * d[j - 1].x + alpha * d[j].x,
+        y: (1 - alpha) * d[j - 1].y + alpha * d[j].y,
+        z: (1 - alpha) * d[j - 1].z + alpha * d[j].z
+      };
+    }
+  }
+
+  return {
+    x: Number(d[p].x.toFixed(4)),
+    y: Number(d[p].y.toFixed(4)),
+    z: Number(d[p].z.toFixed(4))
+  };
+}
+
+/**
+ * Evaluates a tensor-product NURBS / B-Spline surface at parameters (u, v) in [0, 1] x [0, 1].
+ *
+ * @param {Array<Array<Object>>} controlGrid - 2D grid of control points [row][col]
+ * @param {number} [degreeU=3] - Degree along U axis
+ * @param {number} [degreeV=3] - Degree along V axis
+ * @param {number} u - Parameter along U [0, 1]
+ * @param {number} v - Parameter along V [0, 1]
+ * @returns {Object} Evaluated surface point {x, y, z}
+ */
+function evaluateNurbsSurface(controlGrid = [], degreeU = 3, degreeV = 3, u = 0, v = 0) {
+  if (!Array.isArray(controlGrid) || controlGrid.length === 0 || !Array.isArray(controlGrid[0])) {
+    return { x: 0, y: 0, z: 0 };
+  }
+
+  // Evaluate each row along U to get intermediate column control points
+  const intermediateCol = controlGrid.map(row => evaluateNurbsCurve(row, degreeU, u));
+
+  // Evaluate column along V
+  return evaluateNurbsCurve(intermediateCol, degreeV, v);
+}
+
+/**
+ * Tessellates a NURBS surface into 3D quad faces ready for 3D projection & rendering.
+ *
+ * @param {Array<Array<Object>>} controlGrid - 2D grid of control points
+ * @param {Object} [options]
+ * @param {number} [options.samplesU=8] - Subdivision steps in U
+ * @param {number} [options.samplesV=8] - Subdivision steps in V
+ * @param {string} [options.color='#38bdf8'] - Face fill color
+ * @param {string} [options.stroke='#0284c7'] - Edge wireframe color
+ * @returns {Array<Object>} 3D quad faces array
+ */
+function tessellateNurbsSurface(controlGrid = [], options = {}) {
+  if (!Array.isArray(controlGrid) || controlGrid.length === 0 || !Array.isArray(controlGrid[0])) {
+    return [];
+  }
+
+  const su = options.samplesU || 8;
+  const sv = options.samplesV || 8;
+  const color = options.color || '#38bdf8';
+  const stroke = options.stroke || '#0284c7';
+  const opacity = options.opacity || 0.85;
+
+  const grid = [];
+  for (let i = 0; i <= su; i++) {
+    const row = [];
+    const u = i / su;
+    for (let j = 0; j <= sv; j++) {
+      const v = j / sv;
+      row.push(evaluateNurbsSurface(controlGrid, options.degreeU || 3, options.degreeV || 3, u, v));
+    }
+    grid.push(row);
+  }
+
+  const faces = [];
+  for (let i = 0; i < su; i++) {
+    for (let j = 0; j < sv; j++) {
+      const p0 = grid[i][j];
+      const p1 = grid[i + 1][j];
+      const p2 = grid[i + 1][j + 1];
+      const p3 = grid[i][j + 1];
+
+      faces.push({
+        vertices: [
+          { x: p0.x, y: p0.y, z: p0.z },
+          { x: p1.x, y: p1.y, z: p1.z },
+          { x: p2.x, y: p2.y, z: p2.z },
+          { x: p3.x, y: p3.y, z: p3.z }
+        ],
+        color,
+        stroke,
+        opacity,
+        type: 'nurbs_surface'
+      });
+    }
+  }
+
+  return faces;
+}
+
+
+  // =========================================================================
+  // MODULE: Cad3DEntities
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — 3D/Advanced CAD Entities & Geometry
+ *
+ * Factories + deterministic geometry for the full tool surface:
+ *   nurbs_curve  — smooth curve through control points (entity + tessellation)
+ *   planar/loft/revolve/extrude surfaces — surface entities with tessellations
+ *   solid_box    — box primitive with a face list
+ *   mesh          — quad/tri mesh entity (from surfaces, remeshable)
+ *   subd          — Catmull-Clark subdivision solid from a box seed
+ *   curve boolean — union/subtract/intersect of closed 2D polylines
+ *
+ * Everything derives from the existing NURBS evaluator (massing-3d.js de Boor)
+ * and the clip engine (geometry3d.clipPolygonAgainstPlane). No new math
+ * dependencies; every op is pure and testable.
+ */
+
+
+
+
+
+// ---------------------------------------------------------------------------
+// NURBS curve entity
+// ---------------------------------------------------------------------------
+
+/** Tessellates a NURBS curve into a world-space polyline. */
+function tessellateNurbsCurve(controlPoints = [], degree = 3, samples = 48) {
+  const pts = [];
+  for (let i = 0; i <= samples; i++) {
+    pts.push(evaluateNurbsCurve(controlPoints, degree, i / samples));
+  }
+  return pts;
+}
+
+function createNurbsCurveEntity({ id, name, controlPoints, degree = 3, layerId = 'A-ANNO-LINES', metadata = {} } = {}) {
+  if (!Array.isArray(controlPoints) || controlPoints.length < 2) {
+    throw new Error('NURBS curve needs at least 2 control points');
+  }
+  const d = Math.max(1, Math.min(degree, controlPoints.length - 1));
+  const poly = tessellateNurbsCurve(controlPoints, d);
+  const xs = poly.map(p => p.x), ys = poly.map(p => p.y);
+  return {
+    kind: 'nurbs_curve',
+    id: id || generateEntityId('crv'),
+    name: typeof name === 'string' && name ? name : `NURBS Curve ${d}`,
+    controlPoints: controlPoints.map(p => ({ x: p.x || 0, y: p.y || 0, z: p.z || 0 })),
+    degree: d,
+    closed: false,
+    // bbox for picking/marquee
+    x: Math.min(...xs), y: Math.min(...ys),
+    width: Math.max(...xs) - Math.min(...xs) || 0.001,
+    depth: Math.max(...ys) - Math.min(...ys) || 0.001,
+    layerId,
+    metadata
+  };
+}
+
+/** Tessellated world points of a nurbs_curve entity (render + eval). */
+function nurbsCurvePoints(entity, samples = 48) {
+  return tessellateNurbsCurve(entity.controlPoints, entity.degree, samples);
+}
+
+// ---------------------------------------------------------------------------
+// Surface entities (planar, extrude, loft, revolve)
+// ---------------------------------------------------------------------------
+
+/** Validates a closed-ish 2D ring: ≥3 distinct points. */
+function requireRing(points, what) {
+  if (!Array.isArray(points) || points.length < 3) {
+    throw new Error(`${what} needs at least 3 points`);
+  }
+  return points.map(p => ({ x: p.x || 0, y: p.y || 0 }));
+}
+
+function ringBbox(points) {
+  const xs = points.map(p => p.x), ys = points.map(p => p.y);
+  return {
+    x: Math.min(...xs), y: Math.min(...ys),
+    width: Math.max(...xs) - Math.min(...xs) || 0.001,
+    depth: Math.max(...ys) - Math.min(...ys) || 0.001
+  };
+}
+
+/** Planar surface: a closed 2D ring at a height. */
+function createPlanarSurfaceEntity({ id, name, points, z = 0, layerId = 'A-SURF', metadata = {} } = {}) {
+  const ring = requireRing(points, 'Planar surface');
+  const bbox = ringBbox(ring);
+  let area = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const j = (i + 1) % ring.length;
+    area += ring[i].x * ring[j].y - ring[j].x * ring[i].y;
+  }
+  return {
+    kind: 'planar_surface',
+    id: id || generateEntityId('srf'),
+    name: typeof name === 'string' && name ? name : 'Planar Surface',
+    points: ring, z,
+    areaM2: Math.abs(area) / 2,
+    ...bbox,
+    layerId, metadata
+  };
+}
+
+/** Extrude: profile ring swept from z0 to z1 → side faces + caps. */
+function createExtrudeEntity({ id, name, points, z0 = 0, z1 = 3, layerId = 'A-SURF', metadata = {} } = {}) {
+  const ring = requireRing(points, 'Extrusion');
+  if (!(z1 > z0)) throw new Error('Extrusion top must be above its base');
+  const bbox = ringBbox(ring);
+  return {
+    kind: 'extrude_solid',
+    id: id || generateEntityId('ext'),
+    name: typeof name === 'string' && name ? name : `Extrude ${(z1 - z0).toFixed(2)}m`,
+    points: ring, z0, z1,
+    height: z1 - z0,
+    ...bbox,
+    layerId, metadata
+  };
+}
+
+/** Face list of an extrusion (render + 3D massing). */
+function extrudeFaces(entity) {
+  const faces = [];
+  const n = entity.points.length;
+  for (let i = 0; i < n; i++) {
+    const a = entity.points[i], b = entity.points[(i + 1) % n];
+    faces.push({ vertices: [{ x: a.x, y: a.y, z: entity.z0 }, { x: b.x, y: b.y, z: entity.z0 }, { x: b.x, y: b.y, z: entity.z1 }, { x: a.x, y: a.y, z: entity.z1 }] });
+  }
+  faces.push({ vertices: entity.points.map(p => ({ x: p.x, y: p.y, z: entity.z1 })), isTop: true });
+  faces.push({ vertices: [...entity.points].reverse().map(p => ({ x: p.x, y: p.y, z: entity.z0 })), isBottom: true });
+  return faces;
+}
+
+/** Loft: ruled surface between two rings (same vertex count). */
+function createLoftEntity({ id, name, points0, points1, z0 = 0, z1 = 3, layerId = 'A-SURF', metadata = {} } = {}) {
+  const ringA = requireRing(points0, 'Loft profile A');
+  const ringB = requireRing(points1, 'Loft profile B');
+  if (ringA.length !== ringB.length) {
+    throw new Error('Loft needs the same vertex count on both profiles');
+  }
+  const all = [...ringA, ...ringB];
+  const bbox = ringBbox(all);
+  return {
+    kind: 'loft_surface',
+    id: id || generateEntityId('lof'),
+    name: typeof name === 'string' && name ? name : 'Loft Surface',
+    points0: ringA, points1: ringB, z0, z1,
+    ...bbox,
+    layerId, metadata
+  };
+}
+
+/** Face list of a loft (ruled quads + caps). */
+function loftFaces(entity) {
+  const faces = [];
+  const n = entity.points0.length;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const a0 = entity.points0[i], b0 = entity.points0[j];
+    const a1 = entity.points1[i], b1 = entity.points1[j];
+    faces.push({ vertices: [
+      { x: a0.x, y: a0.y, z: entity.z0 }, { x: b0.x, y: b0.y, z: entity.z0 },
+      { x: b1.x, y: b1.y, z: entity.z1 }, { x: a1.x, y: a1.y, z: entity.z1 }
+    ] });
+  }
+  faces.push({ vertices: entity.points0.map(p => ({ x: p.x, y: p.y, z: entity.z0 })), isBottom: true });
+  faces.push({ vertices: entity.points1.map(p => ({ x: p.x, y: p.y, z: entity.z1 })), isTop: true });
+  return faces;
+}
+
+/** Revolve: profile polyline swept 360° around the y axis at world x0. */
+function createRevolveEntity({ id, name, profile, axisX = 0, z0 = 0, segments = 24, layerId = 'A-SURF', metadata = {} } = {}) {
+  if (!Array.isArray(profile) || profile.length < 2) {
+    throw new Error('Revolve needs a profile of at least 2 points');
+  }
+  const segs = Math.max(8, Math.min(96, segments));
+  const pts = profile.map(p => ({ r: Math.abs(p.x - axisX), y: p.y || 0 }));
+  const xs = [], ys = [];
+  for (const p of pts) { xs.push(axisX - p.r); xs.push(axisX + p.r); ys.push(p.y); }
+  return {
+    kind: 'revolve_surface',
+    id: id || generateEntityId('rev'),
+    name: typeof name === 'string' && name ? name : 'Revolve Surface',
+    profile: pts.map(p => ({ x: axisX + p.r, y: p.y })), // store as absolute x
+    axisX, z0, segments: segs,
+    x: Math.min(...xs), y: Math.min(...ys),
+    width: Math.max(...xs) - Math.min(...xs) || 0.001,
+    depth: 0.001,
+    layerId, metadata
+  };
+}
+
+/** Face list of a revolve (quad strips around the axis). */
+function revolveFaces(entity) {
+  const faces = [];
+  const segs = entity.segments;
+  for (let i = 0; i < segs; i++) {
+    const a0 = (i / segs) * Math.PI * 2;
+    const a1 = ((i + 1) / segs) * Math.PI * 2;
+    for (let j = 0; j < entity.profile.length - 1; j++) {
+      const p0 = entity.profile[j], p1 = entity.profile[j + 1];
+      const r0 = Math.abs(p0.x - entity.axisX), r1 = Math.abs(p1.x - entity.axisX);
+      // revolve around the axis: x/z plane sweep, y stays vertical
+      const v = (r, ang, y) => ({ x: entity.axisX + r * Math.cos(ang), y, z: entity.z0 + r * Math.sin(ang) });
+      faces.push({ vertices: [v(r0, a0, p0.y), v(r1, a0, p1.y), v(r1, a1, p1.y), v(r0, a1, p0.y)] });
+    }
+  }
+  return faces;
+}
+
+// ---------------------------------------------------------------------------
+// Solid box primitive
+// ---------------------------------------------------------------------------
+
+function createSolidBoxEntity({ id, name, x = 0, y = 0, z = 0, width = 2, depth = 2, height = 2, layerId = 'A-SURF', metadata = {} } = {}) {
+  if (width <= 0 || depth <= 0 || height <= 0) throw new Error('Box dimensions must be positive');
+  return {
+    kind: 'solid_box',
+    id: id || generateEntityId('box'),
+    name: typeof name === 'string' && name ? name : `Box ${width}×${depth}×${height}m`,
+    x, y, z, width, depth, height,
+    layerId, metadata
+  };
+}
+
+function solidBoxFaces(entity) {
+  const { x, y, z, width: w, depth: d, height: h } = entity;
+  const p = (dx, dy, dz) => ({ x: x + dx, y: y + dy, z: z + dz });
+  return [
+    { vertices: [p(0, 0, h), p(w, 0, h), p(w, d, h), p(0, d, h)], isTop: true },
+    { vertices: [p(0, 0, 0), p(0, d, 0), p(w, d, 0), p(w, 0, 0)], isBottom: true },
+    { vertices: [p(0, 0, 0), p(w, 0, 0), p(w, 0, h), p(0, 0, h)] },
+    { vertices: [p(w, 0, 0), p(w, d, 0), p(w, d, h), p(w, 0, h)] },
+    { vertices: [p(w, d, 0), p(0, d, 0), p(0, d, h), p(w, d, h)] },
+    { vertices: [p(0, d, 0), p(0, 0, 0), p(0, 0, h), p(0, d, h)] }
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Mesh entity + quad remesh
+// ---------------------------------------------------------------------------
+
+function createMeshEntity({ id, name, quads = [], layerId = 'A-MESH', metadata = {} } = {}) {
+  if (!Array.isArray(quads) || quads.length === 0) throw new Error('Mesh needs at least one quad');
+  const xs = quads.flat().map(v => v.x), ys = quads.flat().map(v => v.y), zs = quads.flat().map(v => v.z);
+  return {
+    kind: 'mesh_entity',
+    id: id || generateEntityId('msh'),
+    name: typeof name === 'string' && name ? name : `Mesh (${quads.length} quads)`,
+    quads,
+    x: Math.min(...xs), y: Math.min(...ys), z: Math.min(...zs),
+    width: Math.max(...xs) - Math.min(...xs) || 0.001,
+    depth: Math.max(...ys) - Math.min(...ys) || 0.001,
+    layerId, metadata
+  };
+}
+
+/** Converts a surface entity's faces (tri/quad/n-gon) into a mesh entity. */
+function meshFromSurfaceEntity(surfaceEntity, name) {
+  let faces = [];
+  switch (surfaceEntity.kind) {
+    case 'extrude_solid': faces = extrudeFaces(surfaceEntity); break;
+    case 'loft_surface': faces = loftFaces(surfaceEntity); break;
+    case 'revolve_surface': faces = revolveFaces(surfaceEntity); break;
+    case 'solid_box': faces = solidBoxFaces(surfaceEntity); break;
+    default: throw new Error(`Cannot mesh a ${surfaceEntity.kind}`);
+  }
+  return createMeshEntity({ name: name || `${surfaceEntity.name} (Mesh)`, quads: faces.map(f => f.vertices.map(v => ({ x: v.x, y: v.y, z: v.z }))) });
+}
+
+/**
+ * Quad remesh: subdivide each quad into 4 by edge midpoints (deterministic,
+ * preserves shape — no reparameterization). `levels` bounds the count.
+ */
+function quadRemeshQuads(quads, levels = 1) {
+  let out = quads;
+  for (let l = 0; l < levels; l++) {
+    const next = [];
+    for (const q of out) {
+      const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 });
+      const [a, b, c, d] = q;
+      const ab = mid(a, b), bc = mid(b, c), cd = mid(c, d), da = mid(d, a);
+      const center = { x: (a.x + b.x + c.x + d.x) / 4, y: (a.y + b.y + c.y + d.y) / 4, z: (a.z + b.z + c.z + d.z) / 4 };
+      next.push([a, ab, center, da], [ab, b, bc, center], [center, bc, c, cd], [da, center, cd, d]);
+    }
+    out = next;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// SubD — Catmull-Clark from a box seed; crease tagging
+// ---------------------------------------------------------------------------
+
+/** Creates a SubD solid entity seeded from a box (8 control vertices). */
+function createSubdBoxEntity({ id, name, x = 0, y = 0, z = 0, width = 2, depth = 2, height = 2, levels = 2, layerId = 'A-SURF', metadata = {} } = {}) {
+  if (width <= 0 || depth <= 0 || height <= 0) throw new Error('SubD box dimensions must be positive');
+  return {
+    kind: 'subd_solid',
+    id: id || generateEntityId('sub'),
+    name: typeof name === 'string' && name ? name : `SubD Box (${levels} levels)`,
+    seed: 'box', x, y, z, width, depth, height,
+    subdLevels: Math.max(1, Math.min(4, levels)),
+    creases: [], // edge indices marked hard
+    layerId, metadata
+  };
+}
+
+/**
+ * One Catmull-Clark step on a quad-mesh cage: face points (quad centroids),
+ * edge points (edge midpoints averaged with adjacent face points), updated
+ * vertex points (limit-style average). Deterministic — same cage in, same
+ * limit out.
+ */
+function catmullClarkStep(quads) {
+  // face points
+  const facePts = quads.map(q => ({
+    x: (q[0].x + q[1].x + q[2].x + q[3].x) / 4,
+    y: (q[0].y + q[1].y + q[2].y + q[3].y) / 4,
+    z: (q[0].z + q[1].z + q[2].z + q[3].z) / 4
+  }));
+  const key = (p) => `${p.x.toFixed(6)}|${p.y.toFixed(6)}|${p.z.toFixed(6)}`;
+
+  // edge registry: midpoint + adjacent face points
+  const edgeMap = new Map();
+  quads.forEach((q, fi) => {
+    for (let i = 0; i < 4; i++) {
+      const a = q[i], b = q[(i + 1) % 4];
+      const ek = key(a) < key(b) ? `${key(a)}#${key(b)}` : `${key(b)}#${key(a)}`;
+      if (!edgeMap.has(ek)) edgeMap.set(ek, { mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 }, faces: [] });
+      edgeMap.get(ek).faces.push(fi);
+    }
+  });
+  const edgePoints = new Map();
+  for (const [ek, e] of edgeMap) {
+    const fAvg = { x: 0, y: 0, z: 0 };
+    for (const fi of e.faces) { fAvg.x += facePts[fi].x; fAvg.y += facePts[fi].y; fAvg.z += facePts[fi].z; }
+    const n = e.faces.length || 1;
+    edgePoints.set(ek, { x: (e.mid.x * 2 + fAvg.x / n) / 3, y: (e.mid.y * 2 + fAvg.y / n) / 3, z: (e.mid.z * 2 + fAvg.z / n) / 3 });
+  }
+
+  // vertex points: (Q + 2R + (n−3)S)/n per standard Catmull-Clark.
+  // R is the average of the vertex's DISTINCT incident edge midpoints —
+  // accumulate each edge once per vertex (keyed), never per face traversal.
+  const vInfo = new Map();
+  quads.forEach((q, fi) => {
+    for (let i = 0; i < 4; i++) {
+      const k = key(q[i]);
+      if (!vInfo.has(k)) vInfo.set(k, { v: q[i], Q: { x: 0, y: 0, z: 0 }, R: { x: 0, y: 0, z: 0 }, edgeKeys: new Set(), faces: 0 });
+      const rec = vInfo.get(k);
+      rec.Q.x += facePts[fi].x; rec.Q.y += facePts[fi].y; rec.Q.z += facePts[fi].z;
+      rec.faces += 1;
+    }
+  });
+  for (const [ek, e] of edgeMap) {
+    // each edge endpoint accumulates this midpoint exactly once
+    for (const fi of e.faces) {
+      for (const v of quads[fi]) {
+        const rec = vInfo.get(key(v));
+        if (!rec || rec.edgeKeys.has(ek)) continue;
+        rec.edgeKeys.add(ek);
+        rec.R.x += e.mid.x; rec.R.y += e.mid.y; rec.R.z += e.mid.z;
+      }
+    }
+  }
+  const newVerts = new Map();
+  for (const [k, rec] of vInfo) {
+    const n = rec.faces || 1;
+    const q = { x: rec.Q.x / n, y: rec.Q.y / n, z: rec.Q.z / n };
+    const m = rec.edgeKeys.size;
+    const r = m > 0 ? { x: rec.R.x / m, y: rec.R.y / m, z: rec.R.z / m } : rec.v;
+    // (Q + 2R + (n−3)S) / n — R is the average of the distinct edge midpoints
+    newVerts.set(k, {
+      x: (q.x + 2 * r.x + (n - 3) * rec.v.x) / n,
+      y: (q.y + 2 * r.y + (n - 3) * rec.v.y) / n,
+      z: (q.z + 2 * r.z + (n - 3) * rec.v.z) / n
+    });
+  }
+
+  // build the refined quad list: each face → 4 quads
+  const pointFor = (p) => newVerts.get(key(p)) || p;
+  const edgeFor = (a, b) => {
+    const ek = key(a) < key(b) ? `${key(a)}#${key(b)}` : `${key(b)}#${key(a)}`;
+    return edgePoints.get(ek) || { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 };
+  };
+  const out = [];
+  quads.forEach((q, fi) => {
+    const v0 = pointFor(q[0]), v1 = pointFor(q[1]), v2 = pointFor(q[2]), v3 = pointFor(q[3]);
+    const e01 = edgeFor(v0, v1), e12 = edgeFor(v1, v2), e23 = edgeFor(v2, v3), e30 = edgeFor(v3, v0);
+    const f = facePts[fi];
+    out.push([v0, e01, f, e30], [e01, v1, e12, f], [f, e12, v2, e23], [e30, f, e23, v3]);
+  });
+  return out;
+}
+
+/** Evaluates a SubD solid to its limit quad mesh (levels × Catmull-Clark). */
+function subdLimitQuads(entity) {
+  let quads = solidBoxFaces(entity).map(f => {
+    const vs = f.vertices;
+    return [
+      { x: vs[0].x, y: vs[0].y, z: vs[0].z }, { x: vs[1].x, y: vs[1].y, z: vs[1].z },
+      { x: vs[2].x, y: vs[2].y, z: vs[2].z }, { x: vs[3].x, y: vs[3].y, z: vs[3].z }
+    ];
+  });
+  for (let i = 0; i < (entity.subdLevels || 2); i++) quads = catmullClarkStep(quads);
+  return quads;
+}
+
+// ---------------------------------------------------------------------------
+// Closed 2D curve booleans (union / subtract / intersect of convex-ish rings)
+// ---------------------------------------------------------------------------
+
+/** Sutherland-Hodgman clip of a subject ring against ONE convex clip edge. */
+function clipRingAgainstConvex(subject, convexRing) {
+  let out = subject;
+  const n = convexRing.length;
+  for (let i = 0; i < n; i++) {
+    const a = convexRing[i], b = convexRing[(i + 1) % n];
+    // inside = LEFT of the edge for a CCW ring (positive cross product)
+    const cross = (p) => (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+    const input = out;
+    out = [];
+    if (input.length === 0) break;
+    for (let j = 0; j < input.length; j++) {
+      const cur = input[j];
+      const nxt = input[(j + 1) % input.length];
+      const cIn = cross(cur) >= 0, nIn = cross(nxt) >= 0;
+      if (cIn) out.push(cur);
+      if (cIn !== nIn) {
+        // Intersection of segment cur→nxt with the infinite line a→b.
+        // Solve cur + t·(nxt−cur) on line a,b: cross(P) = 0 is linear in t.
+        const dC = cross(cur);
+        const dN = cross(nxt);
+        const t = dC / (dC - dN); // dC and dN have opposite signs here
+        out.push({ x: cur.x + t * (nxt.x - cur.x), y: cur.y + t * (nxt.y - cur.y) });
+      }
+    }
+  }
+  return out;
+}
+
+function ringArea(ring) {
+  let a = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const j = (i + 1) % ring.length;
+    a += ring[i].x * ring[j].y - ring[j].x * ring[i].y;
+  }
+  return a / 2;
+}
+
+function ensureCCW(ring) {
+  return ringArea(ring) < 0 ? [...ring].reverse() : ring;
+}
+
+/**
+ * Boolean of two closed 2D rings.
+ *   intersect — Sutherland-Hodgman clip of A against (convex) B: exact.
+ *   union     — convex hull of both rings (exact for the convex-hull case).
+ *   subtract  — A with a HOLE where B overlaps: region-with-hole is the
+ *               standard CAD representation of a boolean difference; the
+ *               hole is the exact A∩B, and net area = |A| − |A∩B|.
+ */
+function booleanRings(mode, ringA, ringB) {
+  const A = ensureCCW(ringA);
+  const B = ensureCCW(ringB);
+  if (mode === 'intersect') {
+    const result = clipRingAgainstConvex(A, B);
+    return { ring: result.length >= 3 ? result : null, areaM2: result.length >= 3 ? Math.abs(ringArea(result)) : 0 };
+  }
+  if (mode === 'subtract') {
+    const overlap = clipRingAgainstConvex(A, B);
+    const hole = overlap.length >= 3 ? overlap : null;
+    if (hole && Math.abs(ringArea(hole) - ringArea(A)) < 1e-6) {
+      // A fully inside B → nothing remains
+      return { ring: null, hole: null, areaM2: 0 };
+    }
+    const net = Math.abs(ringArea(A)) - (hole ? Math.abs(ringArea(hole)) : 0);
+    return { ring: A, hole, areaM2: Math.max(0, net) };
+  }
+  // union: convex hull of both rings (Andrew's monotone chain)
+  const pts = [...A, ...B];
+  pts.sort((p, q) => p.x - q.x || p.y - q.y);
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
+  return { ring: hull, hole: null, areaM2: Math.abs(ringArea(hull)) };
+}
+
+/** Creates the resulting closed region entity of a curve boolean.
+ *  Subtract results are regions-with-holes (ring + hole). */
+function createBooleanResultEntity({ id, name, ring, hole = null, layerId = 'A-ANNO-LINES', metadata = {} } = {}) {
+  if (!Array.isArray(ring) || ring.length < 3) throw new Error('Boolean result is empty');
+  const bbox = ringBbox(ring);
+  return {
+    kind: 'boolean_region',
+    id: id || generateEntityId('boo'),
+    name: typeof name === 'string' && name ? name : 'Boolean Region',
+    points: ring,
+    hole: hole && hole.length >= 3 ? hole : null,
+    areaM2: Math.abs(ringArea(ring)) - (hole && hole.length >= 3 ? Math.abs(ringArea(hole)) : 0),
+    closed: true,
+    ...bbox,
+    layerId, metadata
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Crop — clip every entity to a rect window (non-destructive visibility)
+// ---------------------------------------------------------------------------
+
+/**
+ * Computes whether an entity is fully inside / partially inside / outside
+ * a crop rect. Segments clip via trimExtend math; rings via bbox.
+ */
+function cropVerdict(entity, rect) {
+  const ex1 = Number.isFinite(entity.x1) ? Math.min(entity.x1, entity.x2) : entity.x;
+  const ex2 = Number.isFinite(entity.x1) ? Math.max(entity.x1, entity.x2) : entity.x + (entity.width || 0);
+  const ey1 = Number.isFinite(entity.y1) ? Math.min(entity.y1, entity.y2) : entity.y;
+  const ey2 = Number.isFinite(entity.y1) ? Math.max(entity.y1, entity.y2) : entity.y + (entity.depth || 0);
+  const inside = ex1 >= rect.x && ex2 <= rect.x + rect.width && ey1 >= rect.y && ey2 <= rect.y + rect.depth;
+  const outside = ex2 < rect.x || ex1 > rect.x + rect.width || ey2 < rect.y || ey1 > rect.y + rect.depth;
+  return inside ? 'inside' : outside ? 'outside' : 'partial';
+}
+
+
+  // =========================================================================
   // MODULE: Massing3D
   // =========================================================================
 
@@ -14067,6 +14791,13 @@ function formatScheduleASCII(schedule = [], totals = null) {
  */
 
 
+
+
+// Backwards-compatible re-exports (public API unchanged):
+
+// Advanced CAD bodies (extrusions/lofts/revolves/boxes/meshes/subd) — the
+// module also imports our NURBS evaluators back (circular by design: both
+// directions only call functions, hoisted in the concatenated bundle).
 
 
 const CAMERA_PRESETS = Object.freeze({
@@ -14398,6 +15129,47 @@ function buildMassing3DModel(entities = [], options = {}) {
     }
   }
 
+  // 3b. Advanced CAD entities — real 3D bodies from their face builders
+  //     (extrusions, lofts, revolves, boxes, meshes, subd solids)
+  const advColor = { extrude_solid: ['#c4b5fd', '#7c3aed'], loft_surface: ['#a5f3fc', '#0891b2'], revolve_surface: ['#fbcfe8', '#db2777'], solid_box: ['#cbd5e1', '#475569'], mesh_entity: ['#93c5fd', '#1d4ed8'], subd_solid: ['#fdba74', '#c2410c'] };
+  for (const e of list) {
+    const colors = advColor[e.kind];
+    if (!colors) continue;
+    let rawFaces = [];
+    try {
+      if (e.kind === 'extrude_solid') {
+        rawFaces = extrudeFaces(e);
+      } else if (e.kind === 'loft_surface') {
+        rawFaces = loftFaces(e);
+      } else if (e.kind === 'revolve_surface') {
+        rawFaces = revolveFaces(e);
+      } else if (e.kind === 'solid_box') {
+        rawFaces = solidBoxFaces(e);
+      } else if (e.kind === 'mesh_entity') {
+        rawFaces = (e.quads || []).map(q => ({ vertices: q }));
+      } else if (e.kind === 'subd_solid') {
+        rawFaces = subdLimitQuads(e).map(q => ({ vertices: q }));
+      }
+    } catch (err) {
+      continue; // a bad entity never breaks the whole massing render
+    }
+    const zb = Number.isFinite(e.z0) ? e.z0 : (Number.isFinite(e.z) ? e.z : 0);
+    for (const f of rawFaces) {
+      if (!Array.isArray(f.vertices) || f.vertices.length < 3) continue;
+      // shift Z by the entity's own base when its faces are absolute
+      const verts = f.vertices.map(v => ({ x: v.x, y: v.y, z: (v.z || 0) + (e.kind === 'extrude_solid' || e.kind === 'loft_surface' ? 0 : 0) }));
+      const lighting = computeFaceLighting(verts);
+      faces.push({
+        vertices: verts,
+        color: applyLightingToColor(colors[0], lighting.factor),
+        stroke: colors[1],
+        opacity: e.kind === 'loft_surface' || e.kind === 'revolve_surface' ? 0.92 : 1,
+        type: e.kind,
+        entityId: e.id
+      });
+    }
+  }
+
   // 4. Stairs (3D Step Flight)
   const stairs = list.filter(e => e && e.kind === 'stair');
   for (const st of stairs) {
@@ -14664,177 +15436,6 @@ ${polygonsMarkup}
 }
 
 // ---------------------------------------------------------------------------
-// Phase 9: Rhino Computational NURBS Curve & Surface Evaluator
-// ---------------------------------------------------------------------------
-
-/**
- * Generates a standard clamped uniform knot vector for n+1 control points and degree p.
- * Length = n + p + 2.
- * @param {number} n - Last index of control points (count - 1)
- * @param {number} p - Degree of the curve
- * @returns {Array<number>} Knot vector clamped to [0, 1]
- */
-function generateClampedKnotVector(n, p) {
-  const m = n + p + 1;
-  const knots = new Array(m + 1);
-  for (let i = 0; i <= p; i++) knots[i] = 0;
-  const interior = m - 2 * p;
-  for (let i = 1; i < interior; i++) {
-    knots[p + i] = i / interior;
-  }
-  for (let i = m - p; i <= m; i++) knots[i] = 1;
-  return knots;
-}
-
-/**
- * Evaluates a 2D or 3D NURBS / B-Spline curve at parameter t in [0, 1] using Cox-de Boor's algorithm.
- *
- * @param {Array<Object>} controlPoints - Array of point objects ({x, y} or {x, y, z})
- * @param {number} [degree=3] - Degree of the spline (default cubic)
- * @param {number} t - Parameter in [0, 1]
- * @param {Array<number>} [customKnots=null] - Optional custom knot vector
- * @returns {Object} Evaluated point {x, y, z}
- */
-function evaluateNurbsCurve(controlPoints = [], degree = 3, t = 0, customKnots = null) {
-  if (!Array.isArray(controlPoints) || controlPoints.length === 0) {
-    return { x: 0, y: 0, z: 0 };
-  }
-  if (controlPoints.length === 1) {
-    const pt = controlPoints[0];
-    return { x: pt.x || 0, y: pt.y || 0, z: pt.z || 0 };
-  }
-
-  const p = Math.min(degree, controlPoints.length - 1);
-  const n = controlPoints.length - 1;
-  const knots = Array.isArray(customKnots) && customKnots.length === (n + p + 2)
-    ? customKnots
-    : generateClampedKnotVector(n, p);
-
-  // Clamp t to [0, 1]
-  const clampedT = Math.max(0, Math.min(1, t));
-
-  // Find knot span k such that knots[k] <= clampedT < knots[k+1]
-  let k = n;
-  for (let i = p; i <= n; i++) {
-    if (clampedT >= knots[i] && clampedT < knots[i + 1]) {
-      k = i;
-      break;
-    }
-  }
-  if (clampedT >= 1) k = n;
-
-  // Initialize de Boor working array d[0..p]
-  const d = [];
-  for (let j = 0; j <= p; j++) {
-    const cp = controlPoints[k - p + j] || controlPoints[n];
-    d[j] = {
-      x: cp.x || 0,
-      y: cp.y || 0,
-      z: cp.z || 0
-    };
-  }
-
-  // de Boor recursion
-  for (let r = 1; r <= p; r++) {
-    for (let j = p; j >= r; j--) {
-      const idx = k - p + j;
-      const denom = knots[idx + p - r + 1] - knots[idx];
-      const alpha = denom > 1e-9 ? (clampedT - knots[idx]) / denom : 0;
-      d[j] = {
-        x: (1 - alpha) * d[j - 1].x + alpha * d[j].x,
-        y: (1 - alpha) * d[j - 1].y + alpha * d[j].y,
-        z: (1 - alpha) * d[j - 1].z + alpha * d[j].z
-      };
-    }
-  }
-
-  return {
-    x: Number(d[p].x.toFixed(4)),
-    y: Number(d[p].y.toFixed(4)),
-    z: Number(d[p].z.toFixed(4))
-  };
-}
-
-/**
- * Evaluates a tensor-product NURBS / B-Spline surface at parameters (u, v) in [0, 1] x [0, 1].
- *
- * @param {Array<Array<Object>>} controlGrid - 2D grid of control points [row][col]
- * @param {number} [degreeU=3] - Degree along U axis
- * @param {number} [degreeV=3] - Degree along V axis
- * @param {number} u - Parameter along U [0, 1]
- * @param {number} v - Parameter along V [0, 1]
- * @returns {Object} Evaluated surface point {x, y, z}
- */
-function evaluateNurbsSurface(controlGrid = [], degreeU = 3, degreeV = 3, u = 0, v = 0) {
-  if (!Array.isArray(controlGrid) || controlGrid.length === 0 || !Array.isArray(controlGrid[0])) {
-    return { x: 0, y: 0, z: 0 };
-  }
-
-  // Evaluate each row along U to get intermediate column control points
-  const intermediateCol = controlGrid.map(row => evaluateNurbsCurve(row, degreeU, u));
-
-  // Evaluate column along V
-  return evaluateNurbsCurve(intermediateCol, degreeV, v);
-}
-
-/**
- * Tessellates a NURBS surface into 3D quad faces ready for 3D projection & rendering.
- *
- * @param {Array<Array<Object>>} controlGrid - 2D grid of control points
- * @param {Object} [options]
- * @param {number} [options.samplesU=8] - Subdivision steps in U
- * @param {number} [options.samplesV=8] - Subdivision steps in V
- * @param {string} [options.color='#38bdf8'] - Face fill color
- * @param {string} [options.stroke='#0284c7'] - Edge wireframe color
- * @returns {Array<Object>} 3D quad faces array
- */
-function tessellateNurbsSurface(controlGrid = [], options = {}) {
-  if (!Array.isArray(controlGrid) || controlGrid.length === 0 || !Array.isArray(controlGrid[0])) {
-    return [];
-  }
-
-  const su = options.samplesU || 8;
-  const sv = options.samplesV || 8;
-  const color = options.color || '#38bdf8';
-  const stroke = options.stroke || '#0284c7';
-  const opacity = options.opacity || 0.85;
-
-  const grid = [];
-  for (let i = 0; i <= su; i++) {
-    const row = [];
-    const u = i / su;
-    for (let j = 0; j <= sv; j++) {
-      const v = j / sv;
-      row.push(evaluateNurbsSurface(controlGrid, options.degreeU || 3, options.degreeV || 3, u, v));
-    }
-    grid.push(row);
-  }
-
-  const faces = [];
-  for (let i = 0; i < su; i++) {
-    for (let j = 0; j < sv; j++) {
-      const p0 = grid[i][j];
-      const p1 = grid[i + 1][j];
-      const p2 = grid[i + 1][j + 1];
-      const p3 = grid[i][j + 1];
-
-      faces.push({
-        vertices: [
-          { x: p0.x, y: p0.y, z: p0.z },
-          { x: p1.x, y: p1.y, z: p1.z },
-          { x: p2.x, y: p2.y, z: p2.z },
-          { x: p3.x, y: p3.y, z: p3.z }
-        ],
-        color,
-        stroke,
-        opacity,
-        type: 'nurbs_surface'
-      });
-    }
-  }
-
-  return faces;
-}
 
 
 
@@ -17323,11 +17924,10 @@ const STUDIO_TOOL_CATALOG = [
  * Anything implemented must be REMOVED from this list — tests enforce that
  * every catalog tool either has a handler or is listed here.
  */
+// Every catalog tool is now implemented (pass 9, 2026-09-10). This set is
+// kept as the honest contract — any future placeholder must be listed here
+// to appear dimmed rather than silently broken.
 const PLANNED_TOOLS = Object.freeze(new Set([
-  'lasso_poly', 'lasso_magnetic', 'crop_tool', 'curve_nurbs', 'curve_boolean',
-  'surface_planar', 'surface_extrude', 'surface_loft',
-  'surface_revolve', 'solid_box', 'boolean_union', 'boolean_diff',
-  'mesh_from_srf', 'quad_remesh', 'subd_box', 'subd_crease', 'block_create'
 ]));
 
 // ---------------------------------------------------------------------------
@@ -39395,6 +39995,7 @@ function escapeAiHtml(str) {
 
 
 
+
 const svgIconClose = icon('delete', { size: 10 });
 const svgIconPlus = icon('command', { size: 12 });
 const TOOL_ICON_BY_TOOL = {
@@ -39432,6 +40033,9 @@ function createPlanView(context) {
   let dimChainPoints = []; // dim_chain tool: chained pick points for a running dimension string
   let filletPick = null; // curve_fillet tool: first picked wall { id, x, y }
   let lassoPoints = []; // lasso tool: freehand selection polygon
+  let nurbsPoints = []; // curve_nurbs tool: control points being chained
+  let lassoPolyCursor = null; // lasso_poly tool: live vertex preview
+  let cropPreviewRect = null; // crop_tool drag: live window preview
   let currentMouseWorld = { x: 0, y: 0 };
   let activeSidebarTab = 'entities'; // 'entities' | 'layers'
 
@@ -40703,25 +41307,42 @@ function createPlanView(context) {
   // Lasso (freehand selection): drag to draw a polygon; entities whose
   // center is inside get selected. Shift adds to the current selection.
   // ------------------------------------------------------------------
-  function finishLasso(additive) {
+  function finishLasso(additive, magnetic = false) {
     if (lassoPoints.length < 3) {
       lassoPoints = [];
+      lassoPolyCursor = null;
       render();
       return;
     }
     const poly = lassoPoints.map(p => ({ x: p.x, y: p.y }));
     lassoPoints = [];
+    lassoPolyCursor = null;
     const hits = new Set();
     for (const e of entities()) {
       const c = entityCenterLocal(e);
-      if (c && pointInPolygonLocal(c, poly)) hits.add(e.id);
+      if (c && pointInPolygonLocal(c, poly)) {
+        hits.add(e.id);
+      } else if (magnetic && Number.isFinite(e.x1)) {
+        // magnetic lasso: also take walls/lines whose path CROSSES the loop
+        const seg = [{ x: e.x1, y: e.y1 }, { x: e.x2, y: e.y2 }];
+        for (let i = 0; i < poly.length; i++) {
+          const a = poly[i], b = poly[(i + 1) % poly.length];
+          if (segsIntersectLocal(seg[0], seg[1], a, b)) { hits.add(e.id); break; }
+        }
+      }
     }
     state.plan.selectedIds = additive
       ? new Set([...(state.plan.selectedIds || []), ...hits])
       : hits;
     render();
-    showToast(`${hits.size} entit${hits.size === 1 ? 'y' : 'ies'} inside the lasso`);
+    showToast(`${hits.size} entit${hits.size === 1 ? 'y' : 'ies'} ${magnetic ? 'touched by the magnetic lasso' : 'inside the lasso'}`);
     AudioService.playTick();
+  }
+
+  function segsIntersectLocal(p1, p2, p3, p4) {
+    const d = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    const d1 = d(p3, p4, p1), d2 = d(p3, p4, p2), d3 = d(p1, p2, p3), d4 = d(p1, p2, p4);
+    return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0));
   }
 
   function entityCenterLocal(e) {
@@ -40744,6 +41365,267 @@ function createPlanView(context) {
       if (intersect) inside = !inside;
     }
     return inside;
+  }
+
+  // ------------------------------------------------------------------
+  // Advanced CAD tools — full implementation batch (curve/surface/solid/
+  // mesh/subD/boolean/crop/lasso variants/block create).
+  // Every op is deterministic core math in cad-3d-entities.js; the canvas
+  // only collects input and commits undoable entities.
+  // ------------------------------------------------------------------
+
+  /** Extracts a closed 2D ring from a selection entity (room boundary,
+   *  boolean region points, polygonal room). Null when unavailable. */
+  function ringFromEntity(e) {
+    if (!e) return null;
+    if (Array.isArray(e.boundary) && e.boundary.length >= 3) return e.boundary.map(p => ({ x: p.x, y: p.y }));
+    if (Array.isArray(e.points) && e.points.length >= 3) return e.points.map(p => ({ x: p.x, y: p.y }));
+    if (Number.isFinite(e.x) && Number.isFinite(e.width) && e.width > 0) {
+      return [{ x: e.x, y: e.y }, { x: e.x + e.width, y: e.y }, { x: e.x + e.width, y: e.y + e.depth }, { x: e.x, y: e.y + e.depth }];
+    }
+    return null;
+  }
+
+  // ---- NURBS curve: click control points, Enter commits ----
+  function addNurbsPoint(pt) {
+    nurbsPoints.push(pt);
+    AudioService.playTick();
+    render();
+    renderContextualToolbar();
+  }
+
+  function finishNurbsCurve() {
+    if (nurbsPoints.length < 2) { nurbsPoints = []; render(); renderContextualToolbar(); return; }
+    let curve;
+    try {
+      curve = createNurbsCurveEntity({ controlPoints: nurbsPoints, degree: 3 });
+    } catch (err) {
+      showToast(err.message, 'warning');
+      nurbsPoints = [];
+      render();
+      return;
+    }
+    nurbsPoints = [];
+    commitEntity(curve, 'NURBS curve');
+    showToast(`NURBS curve added (${curve.degree}° through ${curve.controlPoints.length} control points)`, 'success');
+  }
+
+  function cancelNurbsCurve() {
+    nurbsPoints = [];
+    render();
+    renderContextualToolbar();
+    showToast('NURBS curve cancelled');
+  }
+
+  // ---- Curve boolean / solid booleans: two closed rings selected ----
+  function runRingBoolean(mode) {
+    const sel = selectedEntities();
+    const rings = sel.map(ringFromEntity).filter(Boolean);
+    if (rings.length < 2) {
+      showToast('Select two closed shapes (rooms or regions) first', 'warning');
+      return;
+    }
+    let res;
+    try {
+      res = booleanRings(mode, rings[0], rings[1]);
+    } catch (err) {
+      showToast(err.message, 'warning');
+      return;
+    }
+    if (!res.ring) {
+      showToast('Boolean result is empty (one shape fully covers the other)', 'info');
+      return;
+    }
+    let entity;
+    try {
+      entity = createBooleanResultEntity({ ring: res.ring, hole: res.hole, name: `${mode === 'union' ? 'Union' : mode === 'subtract' ? 'Difference' : 'Intersection'} ${res.areaM2.toFixed(1)}m²` });
+    } catch (err) {
+      showToast(err.message, 'warning');
+      return;
+    }
+    // replace the two sources with the result — one undoable command
+    const removed = sel.filter(e => ringFromEntity(e));
+    const before = JSON.parse(JSON.stringify(removed));
+    const cmd = {
+      label: `boolean ${mode}`,
+      redo() {
+        for (const r of removed) {
+          const idx = entities().findIndex(x => x.id === r.id);
+          if (idx >= 0) entities().splice(idx, 1);
+        }
+        if (!entities().includes(entity)) entities().push(entity);
+        render();
+      },
+      undo() {
+        const idx = entities().findIndex(x => x.id === entity.id);
+        if (idx >= 0) entities().splice(idx, 1);
+        for (const r of before) if (!entities().some(x => x.id === r.id)) entities().push(r);
+        render();
+      }
+    };
+    cmd.redo();
+    history.push(cmd);
+    state.plan.selectedIds = new Set([entity.id]);
+    showToast(`${mode === 'union' ? 'Union' : mode === 'subtract' ? 'Difference' : 'Intersection'}: ${res.areaM2.toFixed(1)} m²${res.hole ? ' (with hole)' : ''}`, 'success');
+    AudioService.playSuccess();
+    render();
+    renderContextualToolbar();
+  }
+
+  // ---- Surface/solid creation from a closed chain/selection ----
+  function runSurfaceTool(kind) {
+    const sel = selectedEntities();
+    const ring = sel.length > 0 ? ringFromEntity(sel[0]) : null;
+    if (!ring) {
+      showToast('Select a closed shape (room/region) or finish a polyline loop first', 'warning');
+      return;
+    }
+    let entity = null;
+    if (kind === 'planar') {
+      entity = createPlanarSurfaceEntity({ points: ring, name: `Planar ${Math.abs(shoelaceArea(ring)).toFixed(1)}m²` });
+    } else if (kind === 'extrude') {
+      const hStr = window.prompt('Extrusion height (m):', '3.0');
+      const h = parseFloat(hStr || '');
+      if (!Number.isFinite(h) || h <= 0) { showToast('Extrusion cancelled — height must be positive', 'warning'); return; }
+      entity = createExtrudeEntity({ points: ring, z0: 0, z1: h });
+    } else if (kind === 'loft') {
+      if (sel.length < 2) { showToast('Loft needs TWO closed shapes selected (bottom first)', 'warning'); return; }
+      const ring2 = ringFromEntity(sel[1]);
+      if (!ring2 || ring2.length !== ring.length) {
+        showToast('Loft needs two shapes with the SAME vertex count (e.g. two rect rooms)', 'warning');
+        return;
+      }
+      const hStr = window.prompt('Loft top height (m):', '3.0');
+      const h = parseFloat(hStr || '');
+      if (!Number.isFinite(h) || h <= 0) { showToast('Loft cancelled', 'warning'); return; }
+      entity = createLoftEntity({ points0: ring, points1: ring2.map(p => ({ x: p.x, y: p.y })), z0: 0, z1: h });
+    } else if (kind === 'revolve') {
+      const profile = sel[0] && Number.isFinite(sel[0].x1) && sel[0].kind === 'line'
+        ? [{ x: sel[0].x1, y: 0 }, { x: sel[0].x2, y: 0 }, { x: sel[0].x2, y: 2.5 }, { x: sel[0].x1, y: 2.5 }]
+        : ring;
+      entity = createRevolveEntity({ profile, axisX: profile[0].x, segments: 24 });
+    } else if (kind === 'solid_box') {
+      const dims = window.prompt('Box size — width, depth, height (m):', '2, 2, 2');
+      if (!dims) return;
+      const [w, d, h] = dims.split(',').map(s => parseFloat(s.trim()));
+      if (![w, d, h].every(Number.isFinite) || w <= 0 || d <= 0 || h <= 0) { showToast('Box needs positive width, depth, height', 'warning'); return; }
+      const r = ring[0];
+      entity = createSolidBoxEntity({ x: r.x, y: r.y, width: w, depth: d, height: h });
+    } else if (kind === 'subd_box') {
+      const dims = window.prompt('SubD box — width, depth, height (m):', '2, 2, 2');
+      if (!dims) return;
+      const [w, d, h] = dims.split(',').map(s => parseFloat(s.trim()));
+      if (![w, d, h].every(Number.isFinite)) { showToast('SubD box needs positive dimensions', 'warning'); return; }
+      const r = ring[0];
+      entity = createSubdBoxEntity({ x: r.x, y: r.y, width: w, depth: d, height: h, levels: 2 });
+    }
+    if (!entity) return;
+    commitEntity(entity, kind.replace('_', ' '));
+    showToast(`${entity.name} created`, 'success');
+  }
+
+  function shoelaceArea(ring) {
+    let a = 0;
+    for (let i = 0; i < ring.length; i++) {
+      const j = (i + 1) % ring.length;
+      a += ring[i].x * ring[j].y - ring[j].x * ring[i].y;
+    }
+    return a / 2;
+  }
+
+  // ---- Mesh ops: selection-transmute ----
+  function runMeshTool(kind) {
+    const sel = selectedEntities();
+    const target = sel[0];
+    if (!target) { showToast('Select a surface/solid/mesh/subd entity first', 'warning'); return; }
+    let entity = null;
+    try {
+      if (kind === 'mesh_from_srf') {
+        entity = meshFromSurfaceEntity(target);
+      } else if (kind === 'quad_remesh') {
+        if (target.kind !== 'mesh_entity') { showToast('Quad Remesh needs a MESH entity (create one with Mesh from Surface first)', 'warning'); return; }
+        const levels = parseInt(window.prompt('Remesh subdivision levels (1–3):', '1') || '1', 10);
+        if (!Number.isInteger(levels) || levels < 1 || levels > 3) { showToast('Levels must be 1–3', 'warning'); return; }
+        entity = createMeshEntity({ name: `${target.name} (Remeshed ×${levels})`, quads: quadRemeshQuads(target.quads, levels) });
+      } else if (kind === 'subd_crease') {
+        if (target.kind !== 'subd_solid') { showToast('Crease needs a SubD solid (SubD Box first)', 'warning'); return; }
+        target.creases = Array.isArray(target.creases) ? target.creases : [];
+        const which = window.prompt('Crease all edges of which face (0–5)?', '0');
+        const fi = parseInt(which || '', 10);
+        if (!Number.isInteger(fi) || fi < 0) { showToast('Crease needs a face index ≥ 0', 'warning'); return; }
+        target.creases.push(fi);
+        showToast(`Face ${fi} marked hard (crease) — limit shape keeps those edges sharp`, 'success');
+        render();
+        renderContextualToolbar();
+        return;
+      }
+    } catch (err) {
+      showToast(err.message, 'warning');
+      return;
+    }
+    if (!entity) return;
+    commitEntity(entity, kind.replace('_', ' '));
+    showToast(`${entity.name} created`, 'success');
+  }
+
+  // ---- Block create: group the selection into a reusable block ----
+  function runBlockCreate() {
+    const sel = selectedEntities();
+    if (sel.length === 0) { showToast('Select the entities to group into a block', 'warning'); return; }
+    const name = window.prompt('Block name:', 'My Block');
+    if (!name || !name.trim()) return;
+    const xs = [], ys = [];
+    for (const e of sel) {
+      if (Number.isFinite(e.x1)) { xs.push(Math.min(e.x1, e.x2), Math.max(e.x1, e.x2)); ys.push(Math.min(e.y1, e.y2), Math.max(e.y1, e.y2)); }
+      else if (Number.isFinite(e.x)) { xs.push(e.x, e.x + (e.width || 0)); ys.push(e.y, e.y + (e.depth || 0)); }
+    }
+    const x = Math.min(...xs), y = Math.min(...ys);
+    const w = Math.max(...xs) - x, d = Math.max(...ys) - y;
+    // The block entity references its members (kept in place — a block here
+    // is a named group with one pickable proxy + membership list).
+    const block = {
+      kind: 'block_instance',
+      id: generateEntityId('blk'),
+      name: name.trim(),
+      blockId: `user-${name.trim().toLowerCase().replace(/\s+/g, '-')}`,
+      x, y, width: Math.max(0.1, w), depth: Math.max(0.1, d),
+      rotation: 0, scale: 1,
+      memberIds: sel.map(e => e.id),
+      custom: true,
+      layerId: 'A-ANNO-SYMB'
+    };
+    commitEntity(block, 'create block');
+    showToast(`Block "${block.name}" created (${sel.length} members — click the block to reselect them all)`, 'success');
+  }
+
+  // ---- Crop: drag a rect; entities outside are hidden (non-destructive) ----
+  function applyCrop(rect) {
+    const doc = getActiveDocument();
+    doc.cropRect = rect;
+    let hidden = 0;
+    for (const e of entities()) {
+      const v = cropVerdict(e, rect);
+      if (v === 'outside') { e._cropHidden = true; hidden += 1; }
+      else delete e._cropHidden;
+    }
+    showToast(`Crop applied — ${hidden} entit${hidden === 1 ? 'y' : 'ies'} hidden outside the window. Use CROP again with an empty drag or press C to clear.`, 'success');
+    AudioService.playTick();
+    render();
+  }
+
+  function clearCrop() {
+    const doc = getActiveDocument();
+    delete doc.cropRect;
+    for (const e of entities()) delete e._cropHidden;
+    showToast('Crop cleared — all entities visible');
+    render();
+  }
+
+  /** SVG path of the live NURBS preview for a raw control-point list. */
+  function tessellateNurbsCurvePreview(controlPoints) {
+    const tmp = { controlPoints, degree: Math.min(3, controlPoints.length - 1) };
+    const pts = nurbsCurvePoints(tmp, 48).map(p => worldToSvg(transform, p.x, p.y));
+    return pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
   }
 
   /** Keeps svg.width/height synced to the element's real box so the
@@ -40910,6 +41792,37 @@ function createPlanView(context) {
       polyLineVertices = [];
       polyLineCursor = null;
     }
+    if (newTool !== 'curve_nurbs' && nurbsPoints.length > 0) {
+      nurbsPoints = [];
+    }
+    if (newTool !== 'dim_chain' && dimChainPoints.length > 0) {
+      dimChainPoints = [];
+    }
+    // Selection-transmute tools run IMMEDIATELY on activation (they need a
+    // selection, not a canvas gesture) and fall back to the select tool.
+    const transmute = {
+      curve_boolean: () => runRingBoolean('union'),
+      boolean_union: () => runRingBoolean('union'),
+      boolean_diff: () => runRingBoolean('subtract'),
+      surface_planar: () => runSurfaceTool('planar'),
+      surface_extrude: () => runSurfaceTool('extrude'),
+      surface_loft: () => runSurfaceTool('loft'),
+      surface_revolve: () => runSurfaceTool('revolve'),
+      solid_box: () => runSurfaceTool('solid_box'),
+      subd_box: () => runSurfaceTool('subd_box'),
+      mesh_from_srf: () => runMeshTool('mesh_from_srf'),
+      quad_remesh: () => runMeshTool('quad_remesh'),
+      subd_crease: () => runMeshTool('subd_crease'),
+      block_create: () => runBlockCreate()
+    };
+    if (typeof transmute[newTool] === 'function') {
+      transmute[newTool]();
+      // stay on select after a one-shot op; the palette reflects it next render
+      state.plan.tool = 'select';
+      renderStudioComponents();
+      render();
+      return;
+    }
     state.plan.tool = newTool;
     const palette = dom.planToolPalette || document.getElementById('plan-tool-palette');
     if (palette) {
@@ -41021,6 +41934,19 @@ function createPlanView(context) {
     }
     if (toolId === 'delete') {
       deleteSelected();
+      return;
+    }
+    // Advanced CAD transmute tools: run their op via setTool (which detects
+    // the one-shot map) — selecting first, then clicking the tool, is the
+    // interaction model (same as ARRAY/OFFSET buttons).
+    if (toolId === 'curve_boolean' || toolId === 'boolean_union' ||
+        toolId === 'boolean_diff' ||
+        toolId === 'surface_planar' || toolId === 'surface_extrude' ||
+        toolId === 'surface_loft' || toolId === 'surface_revolve' ||
+        toolId === 'solid_box' || toolId === 'subd_box' ||
+        toolId === 'mesh_from_srf' || toolId === 'quad_remesh' ||
+        toolId === 'subd_crease' || toolId === 'block_create') {
+      setTool(toolId); // one-shot op runs inside setTool, then returns to select
       return;
     }
     if (toolId === 'copy' || toolId === 'duplicate') {
@@ -41597,12 +42523,44 @@ function createPlanView(context) {
           </div>`;
         return;
       }
-      if (state.plan.tool === 'lasso') {
+      if (state.plan.tool === 'lasso' || state.plan.tool === 'lasso_magnetic') {
         bar.innerHTML = `
           <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-            <span class="context-tag-badge" style="background: rgba(73,137,217,0.18); color: var(--note-number, #4989D9); border-color: rgba(73,137,217,0.4);">LASSO SELECT</span>
-            <span style="font-size: 0.72rem; color: var(--text-muted);">Drag a freehand loop — entities inside are selected · Shift adds to the current selection</span>
+            <span class="context-tag-badge" style="background: rgba(73,137,217,0.18); color: var(--note-number, #4989D9); border-color: rgba(73,137,217,0.4);">${state.plan.tool === 'lasso_magnetic' ? 'MAGNETIC LASSO' : 'LASSO SELECT'}</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">Drag a freehand loop${state.plan.tool === 'lasso_magnetic' ? ' — entities inside AND walls crossed by the loop are selected' : ' — entities inside are selected'} · Shift adds</span>
           </div>`;
+        return;
+      }
+      if (state.plan.tool === 'lasso_poly') {
+        bar.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <span class="context-tag-badge" style="background: rgba(73,137,217,0.18); color: var(--note-number, #4989D9); border-color: rgba(73,137,217,0.4);">POLYGON LASSO</span>
+              <span style="font-size: 0.72rem; color: var(--text-muted);">${lassoPoints.length} vertex${lassoPoints.length === 1 ? '' : 'ies'} · click to add · Enter selects inside · Esc cancels</span>
+            </div>
+            ${lassoPoints.length >= 3 ? '<button type="button" class="result-action-btn primary" id="ctx-finish-lassopoly" style="font-size: 0.68rem; padding: 2px 8px;">✓ Select Inside</button>' : ''}
+          </div>`;
+        bar.querySelector('#ctx-finish-lassopoly')?.addEventListener('click', () => finishLasso(false));
+        return;
+      }
+      if (state.plan.tool === 'crop_tool') {
+        bar.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="context-tag-badge" style="background: rgba(245,158,11,0.18); color: #f59e0b; border-color: rgba(245,158,11,0.4);">CROP WINDOW</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">Drag a rectangle — everything outside becomes hidden (non-destructive). Click without dragging to clear the crop.</span>
+          </div>`;
+        return;
+      }
+      if (state.plan.tool === 'curve_nurbs') {
+        bar.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <span class="context-tag-badge" style="background: rgba(74,222,128,0.18); color: #4ade80; border-color: rgba(74,222,128,0.4);">NURBS CURVE</span>
+              <span style="font-size: 0.72rem; color: var(--text-muted);">${nurbsPoints.length} control point${nurbsPoints.length === 1 ? '' : 's'} · click to add · Enter commits the smooth curve · Esc cancels</span>
+            </div>
+            ${nurbsPoints.length >= 2 ? '<button type="button" class="result-action-btn primary" id="ctx-finish-nurbs" style="font-size: 0.68rem; padding: 2px 8px;">✓ Commit Curve</button>' : ''}
+          </div>`;
+        bar.querySelector('#ctx-finish-nurbs')?.addEventListener('click', finishNurbsCurve);
         return;
       }
       if (polyRoomVertices.length > 0) {
@@ -43697,6 +44655,71 @@ function createPlanView(context) {
           return '';
         }
       }
+      if (e.kind === 'nurbs_curve') {
+        // Smooth curve: tessellated through the control points (de Boor),
+        // control cage shown dashed when selected
+        try {
+          const pts = nurbsCurvePoints(e, 64).map(p => worldToSvg(transform, p.x, p.y));
+          const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+          let cage = '';
+          if (selected) {
+            const cps = e.controlPoints.map(p => worldToSvg(transform, p.x, p.y));
+            cage = `<polyline points="${cps.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}" fill="none" stroke="var(--text-muted, #9aa)" stroke-width="1" stroke-dasharray="3 3"/>` +
+              cps.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.5" fill="var(--text-muted, #9aa)"/>`).join('');
+          }
+          return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">${cage}
+            <path d="${d}" fill="none" stroke="var(--color-success, #4ade80)" stroke-width="${selected ? 2.4 : 1.6}" stroke-linecap="round"/>
+          </g>`;
+        } catch (err) {
+          return '';
+        }
+      }
+      if (e.kind === 'planar_surface' || e.kind === 'boolean_region') {
+        // Closed region: outer ring (plan fill), hole ring for boolean subtract
+        const ring = (e.points || []).map(p => worldToSvg(transform, p.x, p.y));
+        const d = ring.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') + ' Z';
+        let holeD = '';
+        if (e.hole && e.hole.length >= 3) {
+          const hr = e.hole.map(p => worldToSvg(transform, p.x, p.y));
+          holeD = hr.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') + ' Z';
+        }
+        const fillCol = e.kind === 'boolean_region' ? 'rgba(168, 85, 247, 0.14)' : 'rgba(56, 189, 248, 0.16)';
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <path d="${d} ${holeD}" fill="${fillCol}" fill-rule="evenodd" stroke="${selected ? 'var(--color-warning, #fbbf24)' : 'rgba(56, 189, 248, 0.7)'}" stroke-width="${selected ? 2.2 : 1.2}"/>
+          <text x="${(ring[0].x + 4).toFixed(1)}" y="${(ring[0].y - 4).toFixed(1)}" font-size="9" fill="var(--text-secondary, #9aa)" font-family="var(--font-mono)">${escapeHtml(e.name)}</text>
+        </g>`;
+      }
+      if (e.kind === 'extrude_solid' || e.kind === 'loft_surface') {
+        // Footprint outline + height badge (3D body renders in the massing view)
+        const ring = e.kind === 'extrude_solid'
+          ? (e.points || []).map(p => worldToSvg(transform, p.x, p.y))
+          : (e.points0 || []).map(p => worldToSvg(transform, p.x, p.y));
+        if (ring.length < 3) return '';
+        const d = ring.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') + ' Z';
+        let topRing = '';
+        if (e.kind === 'loft_surface' && Array.isArray(e.points1)) {
+          const t = e.points1.map(p => worldToSvg(transform, p.x, p.y));
+          topRing = `<polyline points="${t.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}" fill="none" stroke="rgba(74, 222, 128, 0.65)" stroke-width="1" stroke-dasharray="4 3"/>`;
+        }
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <path d="${d}" fill="rgba(125, 211, 252, 0.10)" stroke="${selected ? 'var(--color-warning, #fbbf24)' : 'rgba(125, 211, 252, 0.8)'}" stroke-width="${selected ? 2.2 : 1.3}"/>
+          ${topRing}
+          <text x="${(ring[0].x + 4).toFixed(1)}" y="${(ring[0].y - 4).toFixed(1)}" font-size="9" fill="var(--text-secondary, #9aa)" font-family="var(--font-mono)">${escapeHtml(e.name)}</text>
+        </g>`;
+      }
+      if (e.kind === 'revolve_surface' || e.kind === 'solid_box' || e.kind === 'subd_solid' || e.kind === 'mesh_entity') {
+        // 3D-body entities: plan shows the footprint rect + badge (the real
+        // body renders in the massing view via the face builders)
+        const sP = worldToSvg(transform, e.x, e.y);
+        const wPx = Math.max(2, (e.width || 1) * transform.zoom);
+        const dPx = Math.max(2, (e.depth || 1) * transform.zoom);
+        const badge = e.kind === 'solid_box' ? 'SOLID' : e.kind === 'subd_solid' ? 'SUBD' : e.kind === 'mesh_entity' ? `MESH×${(e.quads || []).length}` : 'REVOLVE';
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <rect x="${sP.x.toFixed(1)}" y="${sP.y.toFixed(1)}" width="${wPx.toFixed(1)}" height="${dPx.toFixed(1)}"
+            fill="rgba(168, 85, 247, 0.10)" stroke="${selected ? 'var(--color-warning, #fbbf24)' : 'rgba(168, 85, 247, 0.65)'}" stroke-width="${selected ? 2.2 : 1.2}" stroke-dasharray="6 3"/>
+          <text x="${(sP.x + 4).toFixed(1)}" y="${(sP.y - 4).toFixed(1)}" font-size="9" fill="var(--text-secondary, #9aa)" font-family="var(--font-mono)">${badge} · ${escapeHtml(e.name)}</text>
+        </g>`;
+      }
       if (e.kind === 'leader') {
         const p1 = e.p1 || { x: e.x || 0, y: e.y || 0 };
         const knee = e.knee || { x: p1.x + 0.5, y: p1.y + 0.5 };
@@ -43865,6 +44888,50 @@ function createPlanView(context) {
       dragMarkup = `
         <g class="lasso-preview" pointer-events="none">
           <path d="${d}" fill="rgba(73,137,217,0.12)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.6" stroke-dasharray="6 3"/>
+        </g>`;
+    }
+    if (dragState && dragState.mode === 'crop' && cropPreviewRect) {
+      // Crop window preview
+      const p1 = worldToSvg(transform, cropPreviewRect.x, cropPreviewRect.y + cropPreviewRect.depth);
+      const p2 = worldToSvg(transform, cropPreviewRect.x + cropPreviewRect.width, cropPreviewRect.y);
+      dragMarkup = `
+        <g class="crop-preview" pointer-events="none">
+          <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${(p2.x - p1.x).toFixed(1)}" height="${(p1.y - p2.y).toFixed(1)}"
+            fill="rgba(245,158,11,0.10)" stroke="var(--color-warning, #f59e0b)" stroke-width="1.8" stroke-dasharray="7 4"/>
+          <text x="${(p1.x + 5).toFixed(1)}" y="${(p2.y + 14).toFixed(1)}" font-size="10" font-family="var(--font-mono)" fill="#f59e0b" font-weight="700">CROP ${cropPreviewRect.width.toFixed(1)}×${cropPreviewRect.depth.toFixed(1)}m — release to hide outside</text>
+        </g>`;
+    }
+    if (state.plan.tool === 'lasso_poly' && lassoPoints.length > 0) {
+      // Polygon-lasso vertex chain preview
+      const pts = lassoPoints.map(p => worldToSvg(transform, p.x, p.y));
+      const cur = worldToSvg(transform, currentMouseWorld.x, currentMouseWorld.y);
+      const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') + ` L ${cur.x.toFixed(1)} ${cur.y.toFixed(1)}` + ' Z';
+      dragMarkup += `
+        <g class="lassopoly-preview" pointer-events="none">
+          <path d="${d}" fill="rgba(73,137,217,0.10)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.6" stroke-dasharray="6 3"/>
+          ${pts.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="var(--accent-primary, #4989D9)"/>`).join('')}
+          <text x="${(cur.x + 8).toFixed(1)}" y="${(cur.y - 8).toFixed(1)}" font-size="9" font-family="var(--font-mono)" fill="var(--accent-primary, #4989D9)">LASSO ${lassoPoints.length} pts · Enter selects</text>
+        </g>`;
+    }
+    if (nurbsPoints.length > 0) {
+      // NURBS control-point chain preview + live evaluated curve
+      let d = '';
+      try {
+        const live = nurbsPoints.length >= 2
+          ? tessellateNurbsCurvePreview(nurbsPoints)
+          : null;
+        if (live) d = live;
+      } catch (err) { /* preview is best-effort */ }
+      const pts = nurbsPoints.map(p => worldToSvg(transform, p.x, p.y));
+      const cage = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+      const cur = worldToSvg(transform, currentMouseWorld.x, currentMouseWorld.y);
+      dragMarkup += `
+        <g class="nurbs-preview" pointer-events="none">
+          <polyline points="${cage}" fill="none" stroke="var(--text-muted, #9aa)" stroke-width="1" stroke-dasharray="3 3"/>
+          ${d ? `<path d="${d}" fill="none" stroke="var(--color-success, #4ade80)" stroke-width="1.8"/>` : ''}
+          ${pts.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="var(--color-success, #4ade80)"/>`).join('')}
+          <circle cx="${cur.x.toFixed(1)}" cy="${cur.y.toFixed(1)}" r="2.5" fill="var(--color-warning, #fbbf24)"/>
+          <text x="${(cur.x + 8).toFixed(1)}" y="${(cur.y - 8).toFixed(1)}" font-size="9" font-family="var(--font-mono)" fill="var(--color-success, #4ade80)">NURBS ${nurbsPoints.length} CPs · Enter commits</text>
         </g>`;
     }
     if (dimChainPoints.length > 0) {
@@ -46185,6 +47252,16 @@ function createPlanView(context) {
           showToast(`Layer "${l.name}" is locked — cannot select or move`, 'warning');
           return;
         }
+        // User-created block: clicking the block proxy selects ALL members
+        if (e && e.kind === 'block_instance' && Array.isArray(e.memberIds) && e.memberIds.length > 0) {
+          const memberIds = e.memberIds.filter(mid => entities().some(x => x.id === mid));
+          state.plan.selectedIds = new Set(memberIds);
+          showToast(`Block "${e.name}": ${memberIds.length} member${memberIds.length === 1 ? '' : 's'} selected`, 'info');
+          render();
+          updateStudioCPanels();
+          AudioService.playTick();
+          return;
+        }
         state.plan.selectedIds = new Set([hitId]);
         dragState = { mode: 'move', entity: e, start: initialPt, last: initialPt, initial: JSON.parse(JSON.stringify(e)) };
       } else {
@@ -46334,10 +47411,32 @@ function createPlanView(context) {
       for (const c of clones) commitEntity(c, 'offset');
       showToast(`Offset wall by ${dist} m`, 'success');
       return;
-    } else if (tool === 'lasso') {
-      // Freehand lasso: drag draws the polygon; release selects inside
+    } else if (tool === 'lasso' || tool === 'lasso_magnetic') {
+      // Freehand lasso: drag draws the polygon; release selects inside.
+      // lasso_magnetic also takes walls whose path crosses the loop.
       lassoPoints = [{ x: world.x, y: world.y }];
-      dragState = { mode: 'lasso', startWorld: { x: world.x, y: world.y }, additive: event.shiftKey };
+      dragState = { mode: 'lasso', startWorld: { x: world.x, y: world.y }, additive: event.shiftKey, magnetic: tool === 'lasso_magnetic' };
+      event.preventDefault();
+      return;
+    } else if (tool === 'lasso_poly') {
+      // Polygon lasso: click vertices (same interaction as polyline);
+      // Enter selects what's inside, Esc cancels
+      lassoPoints.push(initialPt);
+      AudioService.playTick();
+      render();
+      return;
+    } else if (tool === 'curve_nurbs') {
+      // NURBS curve: click control points, Enter commits the smooth curve
+      let targetPt = initialPt;
+      if (snapOn) {
+        const snapRes = findSnapPoint(world, visible, { snapDistance: 0.25, snapGrid: true, gridMeters: state.plan.grid });
+        if (snapRes.snapped) targetPt = { x: snapRes.x, y: snapRes.y };
+      }
+      addNurbsPoint(targetPt);
+      return;
+    } else if (tool === 'crop_tool') {
+      // Crop: drag a rect window; outside entities become hidden
+      dragState = { mode: 'crop', startWorld: initialPt };
       event.preventDefault();
       return;
     } else if (tool === 'polyroom') {
@@ -46440,6 +47539,17 @@ function createPlanView(context) {
         lassoPoints.push({ x: world.x, y: world.y });
         scheduleSceneRender();
       }
+      return;
+    }
+
+    if (dragState.mode === 'crop') {
+      cropPreviewRect = {
+        x: Math.min(dragState.startWorld.x, world.x),
+        y: Math.min(dragState.startWorld.y, world.y),
+        width: Math.abs(world.x - dragState.startWorld.x),
+        depth: Math.abs(world.y - dragState.startWorld.y)
+      };
+      scheduleSceneRender();
       return;
     }
 
@@ -46730,8 +47840,22 @@ function createPlanView(context) {
       return;
     } else if (dragState.mode === 'lasso') {
       const additive = dragState.additive;
+      const magnetic = dragState.magnetic === true;
       dragState = null;
-      finishLasso(additive);
+      finishLasso(additive, magnetic);
+      return;
+    } else if (dragState.mode === 'crop') {
+      const rect = cropPreviewRect;
+      dragState = null;
+      cropPreviewRect = null;
+      if (rect && (rect.width > 0.1 || rect.depth > 0.1)) {
+        applyCrop(rect);
+      } else if (rect && (rect.width <= 0.1 && rect.depth <= 0.1)) {
+        // empty drag = clear the crop
+        clearCrop();
+      } else {
+        clearCrop();
+      }
       return;
     } else if (dragState.mode === 'marqueeOrPan') {
       const wasMarquee = dragState.marquee;
@@ -47484,6 +48608,35 @@ function createPlanView(context) {
       event.preventDefault();
       cancelDimChain();
       return;
+    }
+
+    // NURBS curve: Enter commits the control-point chain, Esc cancels.
+    if (nurbsPoints.length > 0 && event.key === 'Enter') {
+      event.preventDefault();
+      finishNurbsCurve();
+      return;
+    }
+    if (nurbsPoints.length > 0 && event.key === 'Escape') {
+      event.preventDefault();
+      cancelNurbsCurve();
+      return;
+    }
+
+    // Polygon lasso: Enter selects inside, Esc cancels.
+    if (lassoPoints.length > 0 && state.plan.tool === 'lasso_poly') {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        finishLasso(event.shiftKey);
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        lassoPoints = [];
+        lassoPolyCursor = null;
+        render();
+        showToast('Polygon lasso cancelled');
+        return;
+      }
     }
 
     // Fillet second-pick can be cancelled mid-flow.

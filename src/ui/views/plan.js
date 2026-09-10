@@ -45,6 +45,15 @@ import {
 import { applyParameter as applyParametricParameter, readParameters } from '../../core/parametric.js';
 import { createConstraint, solveConstraint, CONSTRAINT_TYPES } from '../../core/constraints.js';
 import { mirrorEntities, rotateEntities, scaleEntities, offsetEntities, arrayEntitiesLinear } from '../../core/cad-modify.js';
+import {
+  createNurbsCurveEntity, nurbsCurvePoints,
+  createPlanarSurfaceEntity, createExtrudeEntity, extrudeFaces,
+  createLoftEntity, createRevolveEntity,
+  createSolidBoxEntity, solidBoxFaces,
+  createMeshEntity, meshFromSurfaceEntity, quadRemeshQuads,
+  createSubdBoxEntity, subdLimitQuads,
+  booleanRings, createBooleanResultEntity, cropVerdict
+} from '../../core/cad-3d-entities.js';
 import { trimExtendToLine } from '../../core/geometry-engine.js';
 import {
   SHEET_SIZES, ARCHITECTURAL_SCALES, createSheetConfig, computeViewportLayout, generateSheetSVG
@@ -131,6 +140,9 @@ export function createPlanView(context) {
   let dimChainPoints = []; // dim_chain tool: chained pick points for a running dimension string
   let filletPick = null; // curve_fillet tool: first picked wall { id, x, y }
   let lassoPoints = []; // lasso tool: freehand selection polygon
+  let nurbsPoints = []; // curve_nurbs tool: control points being chained
+  let lassoPolyCursor = null; // lasso_poly tool: live vertex preview
+  let cropPreviewRect = null; // crop_tool drag: live window preview
   let currentMouseWorld = { x: 0, y: 0 };
   let activeSidebarTab = 'entities'; // 'entities' | 'layers'
 
@@ -1402,25 +1414,42 @@ export function createPlanView(context) {
   // Lasso (freehand selection): drag to draw a polygon; entities whose
   // center is inside get selected. Shift adds to the current selection.
   // ------------------------------------------------------------------
-  function finishLasso(additive) {
+  function finishLasso(additive, magnetic = false) {
     if (lassoPoints.length < 3) {
       lassoPoints = [];
+      lassoPolyCursor = null;
       render();
       return;
     }
     const poly = lassoPoints.map(p => ({ x: p.x, y: p.y }));
     lassoPoints = [];
+    lassoPolyCursor = null;
     const hits = new Set();
     for (const e of entities()) {
       const c = entityCenterLocal(e);
-      if (c && pointInPolygonLocal(c, poly)) hits.add(e.id);
+      if (c && pointInPolygonLocal(c, poly)) {
+        hits.add(e.id);
+      } else if (magnetic && Number.isFinite(e.x1)) {
+        // magnetic lasso: also take walls/lines whose path CROSSES the loop
+        const seg = [{ x: e.x1, y: e.y1 }, { x: e.x2, y: e.y2 }];
+        for (let i = 0; i < poly.length; i++) {
+          const a = poly[i], b = poly[(i + 1) % poly.length];
+          if (segsIntersectLocal(seg[0], seg[1], a, b)) { hits.add(e.id); break; }
+        }
+      }
     }
     state.plan.selectedIds = additive
       ? new Set([...(state.plan.selectedIds || []), ...hits])
       : hits;
     render();
-    showToast(`${hits.size} entit${hits.size === 1 ? 'y' : 'ies'} inside the lasso`);
+    showToast(`${hits.size} entit${hits.size === 1 ? 'y' : 'ies'} ${magnetic ? 'touched by the magnetic lasso' : 'inside the lasso'}`);
     AudioService.playTick();
+  }
+
+  function segsIntersectLocal(p1, p2, p3, p4) {
+    const d = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    const d1 = d(p3, p4, p1), d2 = d(p3, p4, p2), d3 = d(p1, p2, p3), d4 = d(p1, p2, p4);
+    return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0));
   }
 
   function entityCenterLocal(e) {
@@ -1443,6 +1472,267 @@ export function createPlanView(context) {
       if (intersect) inside = !inside;
     }
     return inside;
+  }
+
+  // ------------------------------------------------------------------
+  // Advanced CAD tools — full implementation batch (curve/surface/solid/
+  // mesh/subD/boolean/crop/lasso variants/block create).
+  // Every op is deterministic core math in cad-3d-entities.js; the canvas
+  // only collects input and commits undoable entities.
+  // ------------------------------------------------------------------
+
+  /** Extracts a closed 2D ring from a selection entity (room boundary,
+   *  boolean region points, polygonal room). Null when unavailable. */
+  function ringFromEntity(e) {
+    if (!e) return null;
+    if (Array.isArray(e.boundary) && e.boundary.length >= 3) return e.boundary.map(p => ({ x: p.x, y: p.y }));
+    if (Array.isArray(e.points) && e.points.length >= 3) return e.points.map(p => ({ x: p.x, y: p.y }));
+    if (Number.isFinite(e.x) && Number.isFinite(e.width) && e.width > 0) {
+      return [{ x: e.x, y: e.y }, { x: e.x + e.width, y: e.y }, { x: e.x + e.width, y: e.y + e.depth }, { x: e.x, y: e.y + e.depth }];
+    }
+    return null;
+  }
+
+  // ---- NURBS curve: click control points, Enter commits ----
+  function addNurbsPoint(pt) {
+    nurbsPoints.push(pt);
+    AudioService.playTick();
+    render();
+    renderContextualToolbar();
+  }
+
+  function finishNurbsCurve() {
+    if (nurbsPoints.length < 2) { nurbsPoints = []; render(); renderContextualToolbar(); return; }
+    let curve;
+    try {
+      curve = createNurbsCurveEntity({ controlPoints: nurbsPoints, degree: 3 });
+    } catch (err) {
+      showToast(err.message, 'warning');
+      nurbsPoints = [];
+      render();
+      return;
+    }
+    nurbsPoints = [];
+    commitEntity(curve, 'NURBS curve');
+    showToast(`NURBS curve added (${curve.degree}° through ${curve.controlPoints.length} control points)`, 'success');
+  }
+
+  function cancelNurbsCurve() {
+    nurbsPoints = [];
+    render();
+    renderContextualToolbar();
+    showToast('NURBS curve cancelled');
+  }
+
+  // ---- Curve boolean / solid booleans: two closed rings selected ----
+  function runRingBoolean(mode) {
+    const sel = selectedEntities();
+    const rings = sel.map(ringFromEntity).filter(Boolean);
+    if (rings.length < 2) {
+      showToast('Select two closed shapes (rooms or regions) first', 'warning');
+      return;
+    }
+    let res;
+    try {
+      res = booleanRings(mode, rings[0], rings[1]);
+    } catch (err) {
+      showToast(err.message, 'warning');
+      return;
+    }
+    if (!res.ring) {
+      showToast('Boolean result is empty (one shape fully covers the other)', 'info');
+      return;
+    }
+    let entity;
+    try {
+      entity = createBooleanResultEntity({ ring: res.ring, hole: res.hole, name: `${mode === 'union' ? 'Union' : mode === 'subtract' ? 'Difference' : 'Intersection'} ${res.areaM2.toFixed(1)}m²` });
+    } catch (err) {
+      showToast(err.message, 'warning');
+      return;
+    }
+    // replace the two sources with the result — one undoable command
+    const removed = sel.filter(e => ringFromEntity(e));
+    const before = JSON.parse(JSON.stringify(removed));
+    const cmd = {
+      label: `boolean ${mode}`,
+      redo() {
+        for (const r of removed) {
+          const idx = entities().findIndex(x => x.id === r.id);
+          if (idx >= 0) entities().splice(idx, 1);
+        }
+        if (!entities().includes(entity)) entities().push(entity);
+        render();
+      },
+      undo() {
+        const idx = entities().findIndex(x => x.id === entity.id);
+        if (idx >= 0) entities().splice(idx, 1);
+        for (const r of before) if (!entities().some(x => x.id === r.id)) entities().push(r);
+        render();
+      }
+    };
+    cmd.redo();
+    history.push(cmd);
+    state.plan.selectedIds = new Set([entity.id]);
+    showToast(`${mode === 'union' ? 'Union' : mode === 'subtract' ? 'Difference' : 'Intersection'}: ${res.areaM2.toFixed(1)} m²${res.hole ? ' (with hole)' : ''}`, 'success');
+    AudioService.playSuccess();
+    render();
+    renderContextualToolbar();
+  }
+
+  // ---- Surface/solid creation from a closed chain/selection ----
+  function runSurfaceTool(kind) {
+    const sel = selectedEntities();
+    const ring = sel.length > 0 ? ringFromEntity(sel[0]) : null;
+    if (!ring) {
+      showToast('Select a closed shape (room/region) or finish a polyline loop first', 'warning');
+      return;
+    }
+    let entity = null;
+    if (kind === 'planar') {
+      entity = createPlanarSurfaceEntity({ points: ring, name: `Planar ${Math.abs(shoelaceArea(ring)).toFixed(1)}m²` });
+    } else if (kind === 'extrude') {
+      const hStr = window.prompt('Extrusion height (m):', '3.0');
+      const h = parseFloat(hStr || '');
+      if (!Number.isFinite(h) || h <= 0) { showToast('Extrusion cancelled — height must be positive', 'warning'); return; }
+      entity = createExtrudeEntity({ points: ring, z0: 0, z1: h });
+    } else if (kind === 'loft') {
+      if (sel.length < 2) { showToast('Loft needs TWO closed shapes selected (bottom first)', 'warning'); return; }
+      const ring2 = ringFromEntity(sel[1]);
+      if (!ring2 || ring2.length !== ring.length) {
+        showToast('Loft needs two shapes with the SAME vertex count (e.g. two rect rooms)', 'warning');
+        return;
+      }
+      const hStr = window.prompt('Loft top height (m):', '3.0');
+      const h = parseFloat(hStr || '');
+      if (!Number.isFinite(h) || h <= 0) { showToast('Loft cancelled', 'warning'); return; }
+      entity = createLoftEntity({ points0: ring, points1: ring2.map(p => ({ x: p.x, y: p.y })), z0: 0, z1: h });
+    } else if (kind === 'revolve') {
+      const profile = sel[0] && Number.isFinite(sel[0].x1) && sel[0].kind === 'line'
+        ? [{ x: sel[0].x1, y: 0 }, { x: sel[0].x2, y: 0 }, { x: sel[0].x2, y: 2.5 }, { x: sel[0].x1, y: 2.5 }]
+        : ring;
+      entity = createRevolveEntity({ profile, axisX: profile[0].x, segments: 24 });
+    } else if (kind === 'solid_box') {
+      const dims = window.prompt('Box size — width, depth, height (m):', '2, 2, 2');
+      if (!dims) return;
+      const [w, d, h] = dims.split(',').map(s => parseFloat(s.trim()));
+      if (![w, d, h].every(Number.isFinite) || w <= 0 || d <= 0 || h <= 0) { showToast('Box needs positive width, depth, height', 'warning'); return; }
+      const r = ring[0];
+      entity = createSolidBoxEntity({ x: r.x, y: r.y, width: w, depth: d, height: h });
+    } else if (kind === 'subd_box') {
+      const dims = window.prompt('SubD box — width, depth, height (m):', '2, 2, 2');
+      if (!dims) return;
+      const [w, d, h] = dims.split(',').map(s => parseFloat(s.trim()));
+      if (![w, d, h].every(Number.isFinite)) { showToast('SubD box needs positive dimensions', 'warning'); return; }
+      const r = ring[0];
+      entity = createSubdBoxEntity({ x: r.x, y: r.y, width: w, depth: d, height: h, levels: 2 });
+    }
+    if (!entity) return;
+    commitEntity(entity, kind.replace('_', ' '));
+    showToast(`${entity.name} created`, 'success');
+  }
+
+  function shoelaceArea(ring) {
+    let a = 0;
+    for (let i = 0; i < ring.length; i++) {
+      const j = (i + 1) % ring.length;
+      a += ring[i].x * ring[j].y - ring[j].x * ring[i].y;
+    }
+    return a / 2;
+  }
+
+  // ---- Mesh ops: selection-transmute ----
+  function runMeshTool(kind) {
+    const sel = selectedEntities();
+    const target = sel[0];
+    if (!target) { showToast('Select a surface/solid/mesh/subd entity first', 'warning'); return; }
+    let entity = null;
+    try {
+      if (kind === 'mesh_from_srf') {
+        entity = meshFromSurfaceEntity(target);
+      } else if (kind === 'quad_remesh') {
+        if (target.kind !== 'mesh_entity') { showToast('Quad Remesh needs a MESH entity (create one with Mesh from Surface first)', 'warning'); return; }
+        const levels = parseInt(window.prompt('Remesh subdivision levels (1–3):', '1') || '1', 10);
+        if (!Number.isInteger(levels) || levels < 1 || levels > 3) { showToast('Levels must be 1–3', 'warning'); return; }
+        entity = createMeshEntity({ name: `${target.name} (Remeshed ×${levels})`, quads: quadRemeshQuads(target.quads, levels) });
+      } else if (kind === 'subd_crease') {
+        if (target.kind !== 'subd_solid') { showToast('Crease needs a SubD solid (SubD Box first)', 'warning'); return; }
+        target.creases = Array.isArray(target.creases) ? target.creases : [];
+        const which = window.prompt('Crease all edges of which face (0–5)?', '0');
+        const fi = parseInt(which || '', 10);
+        if (!Number.isInteger(fi) || fi < 0) { showToast('Crease needs a face index ≥ 0', 'warning'); return; }
+        target.creases.push(fi);
+        showToast(`Face ${fi} marked hard (crease) — limit shape keeps those edges sharp`, 'success');
+        render();
+        renderContextualToolbar();
+        return;
+      }
+    } catch (err) {
+      showToast(err.message, 'warning');
+      return;
+    }
+    if (!entity) return;
+    commitEntity(entity, kind.replace('_', ' '));
+    showToast(`${entity.name} created`, 'success');
+  }
+
+  // ---- Block create: group the selection into a reusable block ----
+  function runBlockCreate() {
+    const sel = selectedEntities();
+    if (sel.length === 0) { showToast('Select the entities to group into a block', 'warning'); return; }
+    const name = window.prompt('Block name:', 'My Block');
+    if (!name || !name.trim()) return;
+    const xs = [], ys = [];
+    for (const e of sel) {
+      if (Number.isFinite(e.x1)) { xs.push(Math.min(e.x1, e.x2), Math.max(e.x1, e.x2)); ys.push(Math.min(e.y1, e.y2), Math.max(e.y1, e.y2)); }
+      else if (Number.isFinite(e.x)) { xs.push(e.x, e.x + (e.width || 0)); ys.push(e.y, e.y + (e.depth || 0)); }
+    }
+    const x = Math.min(...xs), y = Math.min(...ys);
+    const w = Math.max(...xs) - x, d = Math.max(...ys) - y;
+    // The block entity references its members (kept in place — a block here
+    // is a named group with one pickable proxy + membership list).
+    const block = {
+      kind: 'block_instance',
+      id: generateEntityId('blk'),
+      name: name.trim(),
+      blockId: `user-${name.trim().toLowerCase().replace(/\s+/g, '-')}`,
+      x, y, width: Math.max(0.1, w), depth: Math.max(0.1, d),
+      rotation: 0, scale: 1,
+      memberIds: sel.map(e => e.id),
+      custom: true,
+      layerId: 'A-ANNO-SYMB'
+    };
+    commitEntity(block, 'create block');
+    showToast(`Block "${block.name}" created (${sel.length} members — click the block to reselect them all)`, 'success');
+  }
+
+  // ---- Crop: drag a rect; entities outside are hidden (non-destructive) ----
+  function applyCrop(rect) {
+    const doc = getActiveDocument();
+    doc.cropRect = rect;
+    let hidden = 0;
+    for (const e of entities()) {
+      const v = cropVerdict(e, rect);
+      if (v === 'outside') { e._cropHidden = true; hidden += 1; }
+      else delete e._cropHidden;
+    }
+    showToast(`Crop applied — ${hidden} entit${hidden === 1 ? 'y' : 'ies'} hidden outside the window. Use CROP again with an empty drag or press C to clear.`, 'success');
+    AudioService.playTick();
+    render();
+  }
+
+  function clearCrop() {
+    const doc = getActiveDocument();
+    delete doc.cropRect;
+    for (const e of entities()) delete e._cropHidden;
+    showToast('Crop cleared — all entities visible');
+    render();
+  }
+
+  /** SVG path of the live NURBS preview for a raw control-point list. */
+  function tessellateNurbsCurvePreview(controlPoints) {
+    const tmp = { controlPoints, degree: Math.min(3, controlPoints.length - 1) };
+    const pts = nurbsCurvePoints(tmp, 48).map(p => worldToSvg(transform, p.x, p.y));
+    return pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
   }
 
   /** Keeps svg.width/height synced to the element's real box so the
@@ -1609,6 +1899,37 @@ export function createPlanView(context) {
       polyLineVertices = [];
       polyLineCursor = null;
     }
+    if (newTool !== 'curve_nurbs' && nurbsPoints.length > 0) {
+      nurbsPoints = [];
+    }
+    if (newTool !== 'dim_chain' && dimChainPoints.length > 0) {
+      dimChainPoints = [];
+    }
+    // Selection-transmute tools run IMMEDIATELY on activation (they need a
+    // selection, not a canvas gesture) and fall back to the select tool.
+    const transmute = {
+      curve_boolean: () => runRingBoolean('union'),
+      boolean_union: () => runRingBoolean('union'),
+      boolean_diff: () => runRingBoolean('subtract'),
+      surface_planar: () => runSurfaceTool('planar'),
+      surface_extrude: () => runSurfaceTool('extrude'),
+      surface_loft: () => runSurfaceTool('loft'),
+      surface_revolve: () => runSurfaceTool('revolve'),
+      solid_box: () => runSurfaceTool('solid_box'),
+      subd_box: () => runSurfaceTool('subd_box'),
+      mesh_from_srf: () => runMeshTool('mesh_from_srf'),
+      quad_remesh: () => runMeshTool('quad_remesh'),
+      subd_crease: () => runMeshTool('subd_crease'),
+      block_create: () => runBlockCreate()
+    };
+    if (typeof transmute[newTool] === 'function') {
+      transmute[newTool]();
+      // stay on select after a one-shot op; the palette reflects it next render
+      state.plan.tool = 'select';
+      renderStudioComponents();
+      render();
+      return;
+    }
     state.plan.tool = newTool;
     const palette = dom.planToolPalette || document.getElementById('plan-tool-palette');
     if (palette) {
@@ -1720,6 +2041,19 @@ export function createPlanView(context) {
     }
     if (toolId === 'delete') {
       deleteSelected();
+      return;
+    }
+    // Advanced CAD transmute tools: run their op via setTool (which detects
+    // the one-shot map) — selecting first, then clicking the tool, is the
+    // interaction model (same as ARRAY/OFFSET buttons).
+    if (toolId === 'curve_boolean' || toolId === 'boolean_union' ||
+        toolId === 'boolean_diff' ||
+        toolId === 'surface_planar' || toolId === 'surface_extrude' ||
+        toolId === 'surface_loft' || toolId === 'surface_revolve' ||
+        toolId === 'solid_box' || toolId === 'subd_box' ||
+        toolId === 'mesh_from_srf' || toolId === 'quad_remesh' ||
+        toolId === 'subd_crease' || toolId === 'block_create') {
+      setTool(toolId); // one-shot op runs inside setTool, then returns to select
       return;
     }
     if (toolId === 'copy' || toolId === 'duplicate') {
@@ -2296,12 +2630,44 @@ export function createPlanView(context) {
           </div>`;
         return;
       }
-      if (state.plan.tool === 'lasso') {
+      if (state.plan.tool === 'lasso' || state.plan.tool === 'lasso_magnetic') {
         bar.innerHTML = `
           <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-            <span class="context-tag-badge" style="background: rgba(73,137,217,0.18); color: var(--note-number, #4989D9); border-color: rgba(73,137,217,0.4);">LASSO SELECT</span>
-            <span style="font-size: 0.72rem; color: var(--text-muted);">Drag a freehand loop — entities inside are selected · Shift adds to the current selection</span>
+            <span class="context-tag-badge" style="background: rgba(73,137,217,0.18); color: var(--note-number, #4989D9); border-color: rgba(73,137,217,0.4);">${state.plan.tool === 'lasso_magnetic' ? 'MAGNETIC LASSO' : 'LASSO SELECT'}</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">Drag a freehand loop${state.plan.tool === 'lasso_magnetic' ? ' — entities inside AND walls crossed by the loop are selected' : ' — entities inside are selected'} · Shift adds</span>
           </div>`;
+        return;
+      }
+      if (state.plan.tool === 'lasso_poly') {
+        bar.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <span class="context-tag-badge" style="background: rgba(73,137,217,0.18); color: var(--note-number, #4989D9); border-color: rgba(73,137,217,0.4);">POLYGON LASSO</span>
+              <span style="font-size: 0.72rem; color: var(--text-muted);">${lassoPoints.length} vertex${lassoPoints.length === 1 ? '' : 'ies'} · click to add · Enter selects inside · Esc cancels</span>
+            </div>
+            ${lassoPoints.length >= 3 ? '<button type="button" class="result-action-btn primary" id="ctx-finish-lassopoly" style="font-size: 0.68rem; padding: 2px 8px;">✓ Select Inside</button>' : ''}
+          </div>`;
+        bar.querySelector('#ctx-finish-lassopoly')?.addEventListener('click', () => finishLasso(false));
+        return;
+      }
+      if (state.plan.tool === 'crop_tool') {
+        bar.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="context-tag-badge" style="background: rgba(245,158,11,0.18); color: #f59e0b; border-color: rgba(245,158,11,0.4);">CROP WINDOW</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">Drag a rectangle — everything outside becomes hidden (non-destructive). Click without dragging to clear the crop.</span>
+          </div>`;
+        return;
+      }
+      if (state.plan.tool === 'curve_nurbs') {
+        bar.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <span class="context-tag-badge" style="background: rgba(74,222,128,0.18); color: #4ade80; border-color: rgba(74,222,128,0.4);">NURBS CURVE</span>
+              <span style="font-size: 0.72rem; color: var(--text-muted);">${nurbsPoints.length} control point${nurbsPoints.length === 1 ? '' : 's'} · click to add · Enter commits the smooth curve · Esc cancels</span>
+            </div>
+            ${nurbsPoints.length >= 2 ? '<button type="button" class="result-action-btn primary" id="ctx-finish-nurbs" style="font-size: 0.68rem; padding: 2px 8px;">✓ Commit Curve</button>' : ''}
+          </div>`;
+        bar.querySelector('#ctx-finish-nurbs')?.addEventListener('click', finishNurbsCurve);
         return;
       }
       if (polyRoomVertices.length > 0) {
@@ -4396,6 +4762,71 @@ export function createPlanView(context) {
           return '';
         }
       }
+      if (e.kind === 'nurbs_curve') {
+        // Smooth curve: tessellated through the control points (de Boor),
+        // control cage shown dashed when selected
+        try {
+          const pts = nurbsCurvePoints(e, 64).map(p => worldToSvg(transform, p.x, p.y));
+          const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+          let cage = '';
+          if (selected) {
+            const cps = e.controlPoints.map(p => worldToSvg(transform, p.x, p.y));
+            cage = `<polyline points="${cps.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}" fill="none" stroke="var(--text-muted, #9aa)" stroke-width="1" stroke-dasharray="3 3"/>` +
+              cps.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.5" fill="var(--text-muted, #9aa)"/>`).join('');
+          }
+          return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">${cage}
+            <path d="${d}" fill="none" stroke="var(--color-success, #4ade80)" stroke-width="${selected ? 2.4 : 1.6}" stroke-linecap="round"/>
+          </g>`;
+        } catch (err) {
+          return '';
+        }
+      }
+      if (e.kind === 'planar_surface' || e.kind === 'boolean_region') {
+        // Closed region: outer ring (plan fill), hole ring for boolean subtract
+        const ring = (e.points || []).map(p => worldToSvg(transform, p.x, p.y));
+        const d = ring.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') + ' Z';
+        let holeD = '';
+        if (e.hole && e.hole.length >= 3) {
+          const hr = e.hole.map(p => worldToSvg(transform, p.x, p.y));
+          holeD = hr.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') + ' Z';
+        }
+        const fillCol = e.kind === 'boolean_region' ? 'rgba(168, 85, 247, 0.14)' : 'rgba(56, 189, 248, 0.16)';
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <path d="${d} ${holeD}" fill="${fillCol}" fill-rule="evenodd" stroke="${selected ? 'var(--color-warning, #fbbf24)' : 'rgba(56, 189, 248, 0.7)'}" stroke-width="${selected ? 2.2 : 1.2}"/>
+          <text x="${(ring[0].x + 4).toFixed(1)}" y="${(ring[0].y - 4).toFixed(1)}" font-size="9" fill="var(--text-secondary, #9aa)" font-family="var(--font-mono)">${escapeHtml(e.name)}</text>
+        </g>`;
+      }
+      if (e.kind === 'extrude_solid' || e.kind === 'loft_surface') {
+        // Footprint outline + height badge (3D body renders in the massing view)
+        const ring = e.kind === 'extrude_solid'
+          ? (e.points || []).map(p => worldToSvg(transform, p.x, p.y))
+          : (e.points0 || []).map(p => worldToSvg(transform, p.x, p.y));
+        if (ring.length < 3) return '';
+        const d = ring.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') + ' Z';
+        let topRing = '';
+        if (e.kind === 'loft_surface' && Array.isArray(e.points1)) {
+          const t = e.points1.map(p => worldToSvg(transform, p.x, p.y));
+          topRing = `<polyline points="${t.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}" fill="none" stroke="rgba(74, 222, 128, 0.65)" stroke-width="1" stroke-dasharray="4 3"/>`;
+        }
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <path d="${d}" fill="rgba(125, 211, 252, 0.10)" stroke="${selected ? 'var(--color-warning, #fbbf24)' : 'rgba(125, 211, 252, 0.8)'}" stroke-width="${selected ? 2.2 : 1.3}"/>
+          ${topRing}
+          <text x="${(ring[0].x + 4).toFixed(1)}" y="${(ring[0].y - 4).toFixed(1)}" font-size="9" fill="var(--text-secondary, #9aa)" font-family="var(--font-mono)">${escapeHtml(e.name)}</text>
+        </g>`;
+      }
+      if (e.kind === 'revolve_surface' || e.kind === 'solid_box' || e.kind === 'subd_solid' || e.kind === 'mesh_entity') {
+        // 3D-body entities: plan shows the footprint rect + badge (the real
+        // body renders in the massing view via the face builders)
+        const sP = worldToSvg(transform, e.x, e.y);
+        const wPx = Math.max(2, (e.width || 1) * transform.zoom);
+        const dPx = Math.max(2, (e.depth || 1) * transform.zoom);
+        const badge = e.kind === 'solid_box' ? 'SOLID' : e.kind === 'subd_solid' ? 'SUBD' : e.kind === 'mesh_entity' ? `MESH×${(e.quads || []).length}` : 'REVOLVE';
+        return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+          <rect x="${sP.x.toFixed(1)}" y="${sP.y.toFixed(1)}" width="${wPx.toFixed(1)}" height="${dPx.toFixed(1)}"
+            fill="rgba(168, 85, 247, 0.10)" stroke="${selected ? 'var(--color-warning, #fbbf24)' : 'rgba(168, 85, 247, 0.65)'}" stroke-width="${selected ? 2.2 : 1.2}" stroke-dasharray="6 3"/>
+          <text x="${(sP.x + 4).toFixed(1)}" y="${(sP.y - 4).toFixed(1)}" font-size="9" fill="var(--text-secondary, #9aa)" font-family="var(--font-mono)">${badge} · ${escapeHtml(e.name)}</text>
+        </g>`;
+      }
       if (e.kind === 'leader') {
         const p1 = e.p1 || { x: e.x || 0, y: e.y || 0 };
         const knee = e.knee || { x: p1.x + 0.5, y: p1.y + 0.5 };
@@ -4564,6 +4995,50 @@ export function createPlanView(context) {
       dragMarkup = `
         <g class="lasso-preview" pointer-events="none">
           <path d="${d}" fill="rgba(73,137,217,0.12)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.6" stroke-dasharray="6 3"/>
+        </g>`;
+    }
+    if (dragState && dragState.mode === 'crop' && cropPreviewRect) {
+      // Crop window preview
+      const p1 = worldToSvg(transform, cropPreviewRect.x, cropPreviewRect.y + cropPreviewRect.depth);
+      const p2 = worldToSvg(transform, cropPreviewRect.x + cropPreviewRect.width, cropPreviewRect.y);
+      dragMarkup = `
+        <g class="crop-preview" pointer-events="none">
+          <rect x="${p1.x.toFixed(1)}" y="${p2.y.toFixed(1)}" width="${(p2.x - p1.x).toFixed(1)}" height="${(p1.y - p2.y).toFixed(1)}"
+            fill="rgba(245,158,11,0.10)" stroke="var(--color-warning, #f59e0b)" stroke-width="1.8" stroke-dasharray="7 4"/>
+          <text x="${(p1.x + 5).toFixed(1)}" y="${(p2.y + 14).toFixed(1)}" font-size="10" font-family="var(--font-mono)" fill="#f59e0b" font-weight="700">CROP ${cropPreviewRect.width.toFixed(1)}×${cropPreviewRect.depth.toFixed(1)}m — release to hide outside</text>
+        </g>`;
+    }
+    if (state.plan.tool === 'lasso_poly' && lassoPoints.length > 0) {
+      // Polygon-lasso vertex chain preview
+      const pts = lassoPoints.map(p => worldToSvg(transform, p.x, p.y));
+      const cur = worldToSvg(transform, currentMouseWorld.x, currentMouseWorld.y);
+      const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') + ` L ${cur.x.toFixed(1)} ${cur.y.toFixed(1)}` + ' Z';
+      dragMarkup += `
+        <g class="lassopoly-preview" pointer-events="none">
+          <path d="${d}" fill="rgba(73,137,217,0.10)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.6" stroke-dasharray="6 3"/>
+          ${pts.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="var(--accent-primary, #4989D9)"/>`).join('')}
+          <text x="${(cur.x + 8).toFixed(1)}" y="${(cur.y - 8).toFixed(1)}" font-size="9" font-family="var(--font-mono)" fill="var(--accent-primary, #4989D9)">LASSO ${lassoPoints.length} pts · Enter selects</text>
+        </g>`;
+    }
+    if (nurbsPoints.length > 0) {
+      // NURBS control-point chain preview + live evaluated curve
+      let d = '';
+      try {
+        const live = nurbsPoints.length >= 2
+          ? tessellateNurbsCurvePreview(nurbsPoints)
+          : null;
+        if (live) d = live;
+      } catch (err) { /* preview is best-effort */ }
+      const pts = nurbsPoints.map(p => worldToSvg(transform, p.x, p.y));
+      const cage = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+      const cur = worldToSvg(transform, currentMouseWorld.x, currentMouseWorld.y);
+      dragMarkup += `
+        <g class="nurbs-preview" pointer-events="none">
+          <polyline points="${cage}" fill="none" stroke="var(--text-muted, #9aa)" stroke-width="1" stroke-dasharray="3 3"/>
+          ${d ? `<path d="${d}" fill="none" stroke="var(--color-success, #4ade80)" stroke-width="1.8"/>` : ''}
+          ${pts.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="var(--color-success, #4ade80)"/>`).join('')}
+          <circle cx="${cur.x.toFixed(1)}" cy="${cur.y.toFixed(1)}" r="2.5" fill="var(--color-warning, #fbbf24)"/>
+          <text x="${(cur.x + 8).toFixed(1)}" y="${(cur.y - 8).toFixed(1)}" font-size="9" font-family="var(--font-mono)" fill="var(--color-success, #4ade80)">NURBS ${nurbsPoints.length} CPs · Enter commits</text>
         </g>`;
     }
     if (dimChainPoints.length > 0) {
@@ -6884,6 +7359,16 @@ export function createPlanView(context) {
           showToast(`Layer "${l.name}" is locked — cannot select or move`, 'warning');
           return;
         }
+        // User-created block: clicking the block proxy selects ALL members
+        if (e && e.kind === 'block_instance' && Array.isArray(e.memberIds) && e.memberIds.length > 0) {
+          const memberIds = e.memberIds.filter(mid => entities().some(x => x.id === mid));
+          state.plan.selectedIds = new Set(memberIds);
+          showToast(`Block "${e.name}": ${memberIds.length} member${memberIds.length === 1 ? '' : 's'} selected`, 'info');
+          render();
+          updateStudioCPanels();
+          AudioService.playTick();
+          return;
+        }
         state.plan.selectedIds = new Set([hitId]);
         dragState = { mode: 'move', entity: e, start: initialPt, last: initialPt, initial: JSON.parse(JSON.stringify(e)) };
       } else {
@@ -7033,10 +7518,32 @@ export function createPlanView(context) {
       for (const c of clones) commitEntity(c, 'offset');
       showToast(`Offset wall by ${dist} m`, 'success');
       return;
-    } else if (tool === 'lasso') {
-      // Freehand lasso: drag draws the polygon; release selects inside
+    } else if (tool === 'lasso' || tool === 'lasso_magnetic') {
+      // Freehand lasso: drag draws the polygon; release selects inside.
+      // lasso_magnetic also takes walls whose path crosses the loop.
       lassoPoints = [{ x: world.x, y: world.y }];
-      dragState = { mode: 'lasso', startWorld: { x: world.x, y: world.y }, additive: event.shiftKey };
+      dragState = { mode: 'lasso', startWorld: { x: world.x, y: world.y }, additive: event.shiftKey, magnetic: tool === 'lasso_magnetic' };
+      event.preventDefault();
+      return;
+    } else if (tool === 'lasso_poly') {
+      // Polygon lasso: click vertices (same interaction as polyline);
+      // Enter selects what's inside, Esc cancels
+      lassoPoints.push(initialPt);
+      AudioService.playTick();
+      render();
+      return;
+    } else if (tool === 'curve_nurbs') {
+      // NURBS curve: click control points, Enter commits the smooth curve
+      let targetPt = initialPt;
+      if (snapOn) {
+        const snapRes = findSnapPoint(world, visible, { snapDistance: 0.25, snapGrid: true, gridMeters: state.plan.grid });
+        if (snapRes.snapped) targetPt = { x: snapRes.x, y: snapRes.y };
+      }
+      addNurbsPoint(targetPt);
+      return;
+    } else if (tool === 'crop_tool') {
+      // Crop: drag a rect window; outside entities become hidden
+      dragState = { mode: 'crop', startWorld: initialPt };
       event.preventDefault();
       return;
     } else if (tool === 'polyroom') {
@@ -7139,6 +7646,17 @@ export function createPlanView(context) {
         lassoPoints.push({ x: world.x, y: world.y });
         scheduleSceneRender();
       }
+      return;
+    }
+
+    if (dragState.mode === 'crop') {
+      cropPreviewRect = {
+        x: Math.min(dragState.startWorld.x, world.x),
+        y: Math.min(dragState.startWorld.y, world.y),
+        width: Math.abs(world.x - dragState.startWorld.x),
+        depth: Math.abs(world.y - dragState.startWorld.y)
+      };
+      scheduleSceneRender();
       return;
     }
 
@@ -7429,8 +7947,22 @@ export function createPlanView(context) {
       return;
     } else if (dragState.mode === 'lasso') {
       const additive = dragState.additive;
+      const magnetic = dragState.magnetic === true;
       dragState = null;
-      finishLasso(additive);
+      finishLasso(additive, magnetic);
+      return;
+    } else if (dragState.mode === 'crop') {
+      const rect = cropPreviewRect;
+      dragState = null;
+      cropPreviewRect = null;
+      if (rect && (rect.width > 0.1 || rect.depth > 0.1)) {
+        applyCrop(rect);
+      } else if (rect && (rect.width <= 0.1 && rect.depth <= 0.1)) {
+        // empty drag = clear the crop
+        clearCrop();
+      } else {
+        clearCrop();
+      }
       return;
     } else if (dragState.mode === 'marqueeOrPan') {
       const wasMarquee = dragState.marquee;
@@ -8183,6 +8715,35 @@ export function createPlanView(context) {
       event.preventDefault();
       cancelDimChain();
       return;
+    }
+
+    // NURBS curve: Enter commits the control-point chain, Esc cancels.
+    if (nurbsPoints.length > 0 && event.key === 'Enter') {
+      event.preventDefault();
+      finishNurbsCurve();
+      return;
+    }
+    if (nurbsPoints.length > 0 && event.key === 'Escape') {
+      event.preventDefault();
+      cancelNurbsCurve();
+      return;
+    }
+
+    // Polygon lasso: Enter selects inside, Esc cancels.
+    if (lassoPoints.length > 0 && state.plan.tool === 'lasso_poly') {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        finishLasso(event.shiftKey);
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        lassoPoints = [];
+        lassoPolyCursor = null;
+        render();
+        showToast('Polygon lasso cancelled');
+        return;
+      }
     }
 
     // Fillet second-pick can be cancelled mid-flow.

@@ -828,11 +828,10 @@ export const STUDIO_TOOL_CATALOG = [
  * Anything implemented must be REMOVED from this list — tests enforce that
  * every catalog tool either has a handler or is listed here.
  */
+// Every catalog tool is now implemented (pass 9, 2026-09-10). This set is
+// kept as the honest contract — any future placeholder must be listed here
+// to appear dimmed rather than silently broken.
 export const PLANNED_TOOLS = Object.freeze(new Set([
-  'lasso_poly', 'lasso_magnetic', 'crop_tool', 'curve_nurbs', 'curve_boolean',
-  'surface_planar', 'surface_extrude', 'surface_loft',
-  'surface_revolve', 'solid_box', 'boolean_union', 'boolean_diff',
-  'mesh_from_srf', 'quad_remesh', 'subd_box', 'subd_crease', 'block_create'
 ]));
 
 // ---------------------------------------------------------------------------
