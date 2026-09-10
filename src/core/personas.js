@@ -121,6 +121,26 @@ export const STUDIO_TOOL_CATALOG = [
     description: 'Place professional architectural linear dimension strings between geometric endpoints'
   },
   {
+    id: 'text',
+    name: 'Text Note',
+    category: 'measuring',
+    personas: ['studio', 'autocad', 'sketchup', 'rhino'],
+    icon: '🔤',
+    shortcut: 'TX',
+    commandAlias: 'TEXT',
+    description: 'Place a text annotation note on the plan (single-line label)'
+  },
+  {
+    id: 'leader',
+    name: 'Leader Note',
+    category: 'measuring',
+    personas: ['studio', 'autocad', 'rhino'],
+    icon: '➤',
+    shortcut: 'LD',
+    commandAlias: 'LEADER',
+    description: 'Draw an arrow leader callout with a text note attached'
+  },
+  {
     id: 'dim_aligned',
     name: 'Aligned Dimension',
     category: 'measuring',
@@ -809,8 +829,8 @@ export const STUDIO_TOOL_CATALOG = [
  * every catalog tool either has a handler or is listed here.
  */
 export const PLANNED_TOOLS = Object.freeze(new Set([
-  'lasso', 'lasso_poly', 'lasso_magnetic', 'crop_tool', 'dim_chain', 'curve_nurbs', 'curve_fillet', 'curve_offset',
-  'curve_boolean', 'surface_planar', 'surface_extrude', 'surface_loft',
+  'lasso_poly', 'lasso_magnetic', 'crop_tool', 'curve_nurbs', 'curve_boolean',
+  'surface_planar', 'surface_extrude', 'surface_loft',
   'surface_revolve', 'solid_box', 'boolean_union', 'boolean_diff',
   'mesh_from_srf', 'quad_remesh', 'subd_box', 'subd_crease', 'block_create'
 ]));

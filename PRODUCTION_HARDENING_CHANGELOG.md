@@ -1,5 +1,26 @@
 # Production Hardening Changelog
 
+## 2026-09-10 (pass 7) — plan-canvas gap batch (v2.4.1)
+
+Implemented every reachable non-functional plan-canvas item from the audit's
+dead-tool and snap-gap lists. 174 wiring assertions; 62 suites green.
+
+| Was | Now |
+|---|---|
+| `dim_chain` (dimmed PLANNED) | Working tool: click bay points → one running dimension string (snap-aware picks, live rubber preview, Enter finishes / Esc cancels, contextual toolbar with Finish/Cancel) |
+| `curve_fillet` (dimmed PLANNED) | Working tool: pick two intersecting walls → radius prompt → both walls trimmed to the tangent points + a real ARC entity (new `createArcEntity` factory, AutoCAD bulge convention; `through`-point derives the bulge). New arc render path (bulge → SVG A-arc via calcArcBulge). Undoable as one command |
+| `curve_offset` (dimmed PLANNED) | Working tool: click a wall → distance prompt (± = left/right of direction) → parallel copy through the canonical `offsetEntities` op |
+| `lasso` (dimmed PLANNED) | Freehand lasso select: drag a loop, entities inside are selected; Shift adds; live polygon preview |
+| `text` tool | Was HIDDEN (implemented but not in the catalog — undiscoverable). Catalog entry added (TX / TEXT) |
+| `leader` tool | Was static-palette-only (catalog gap). Catalog entry added (LD / LEADER) |
+| Nearest snap (F) | Fallback-tier snap: on-edge foot when no discrete keypoint is near; never beats endpoints/midpoints/intersections (shares the fallback tier with the perpendicular foot — both disabled → 'none'); osnap-toggleable; distinct glyph |
+| Tangent snap (F) | From a drafting start point to circular columns and arcs — both tangent points computed (tan-length + asin(r/d)); on-circle deviation verified 0; toggleable; distinct glyph |
+| Layer isolation (D) | ◎ solo button per layer: hides every other layer, click again restores the exact pre-isolate visibility (snapshot on the doc). New `setLayerVisibility` layers.js export |
+
+Rhino-class tools (NURBS/surfaces/solids/subD/booleans/blocks) deliberately
+stay PLANNED and dimmed — honest placeholders, guarded by the ghost-tools
+contract test.
+
 ## 2026-09-10 (pass 6) — Room resize/move split-brain fix (user-reported)
 
 User bug: "when I make the room rectangle bigger, the drawing stays as it is

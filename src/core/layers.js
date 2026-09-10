@@ -146,6 +146,22 @@ export function toggleLayerVisibility(doc, layerId) {
 }
 
 /**
+ * Sets visibility for a layer explicitly (isolate/restore paths — a toggle
+ * cannot express "hide all others" without races).
+ * @param {Object} doc
+ * @param {string} layerId
+ * @param {boolean} visible
+ * @returns {boolean} Applied state (false when the layer is unknown)
+ */
+export function setLayerVisibility(doc, layerId, visible) {
+  const layers = normalizeDocumentLayers(doc);
+  const layer = layers.find(l => l.id === layerId);
+  if (!layer) return false;
+  layer.visible = Boolean(visible);
+  return layer.visible;
+}
+
+/**
  * Toggles locked state for a specific layer.
  * @param {Object} doc
  * @param {string} layerId

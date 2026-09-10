@@ -16,6 +16,7 @@ import {
   calcDoorCADGeometry,
   calcWindowCADGeometry,
   calcDimensionGeometry,
+  calcArcBulge,
   projectPointOnSegment,
   findPerpendicularProjection,
   findExtensionSnap,
@@ -147,7 +148,7 @@ export function findSnapPoint(point, entities = [], options = {}) {
   let bestHit = null;
   let bestDist = snapDist;
 
-  const PRIORITY = { endpoint: 5, corner: 5, intersection: 5, midpoint: 3, center: 2, perpendicular: 2, extension: 1 };
+  const PRIORITY = { endpoint: 5, corner: 5, intersection: 5, midpoint: 3, center: 2, perpendicular: 2, extension: 1, tangent: 2, nearest: 0 };
 
   const testCandidate = (cand) => {
     if (!isEnabled(cand.type)) return;
@@ -321,6 +322,75 @@ export function findSnapPoint(point, entities = [], options = {}) {
           type: 'extension',
           targetId: w.id,
           guideRay: ext.guideRay
+        });
+      }
+    }
+  }
+
+  // 6. Nearest-on-edge: the closest point on any wall to the cursor.
+  //    Fallback only — never competes with discrete keypoints (endpoints,
+  //    intersections…), matching the perpendicular branch's design.
+  if (isEnabled('nearest') && !bestHit) {
+    for (const w of walls) {
+      const proj = projectPointOnSegment(point, { x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 });
+      if (proj.t >= 0 && proj.t <= 1) {
+        testCandidate({
+          x: proj.point.x,
+          y: proj.point.y,
+          type: 'nearest',
+          targetId: w.id
+        });
+      }
+    }
+    for (const gl of gridLines) {
+      const proj = projectPointOnSegment(point, gl.p1, gl.p2);
+      if (proj.t >= 0 && proj.t <= 1) {
+        testCandidate({ x: proj.point.x, y: proj.point.y, type: 'nearest', targetId: gl.id });
+      }
+    }
+  }
+
+  // 7. Tangent: from the drafting start point to circular targets
+  //    (circular columns; arcs when they carry bulge geometry). Each circle
+  //    yields up to 4 tangent points — the engine picks the one nearest.
+  if (isEnabled('tangent') && startPoint && typeof startPoint.x === 'number') {
+    const circles = [];
+    for (const c of columns) {
+      // circular column: a center + profile radius
+      if (c && (c.profile === 'circle' || c.shape === 'circle' || c.kind === 'column')) {
+        const r = Number.isFinite(c.radius) ? c.radius
+          : (Number.isFinite(c.diameter) ? c.diameter / 2 : null);
+        if (r && Number.isFinite(c.x)) {
+          circles.push({ id: c.id, cx: c.x + (c.width || 0) / 2, cy: c.y + (c.depth || 0) / 2, r });
+        }
+      }
+    }
+    for (const e of entities) {
+      if (e && e.kind === 'arc' && Number.isFinite(e.x1) && e.bulge) {
+        try {
+          const g = calcArcBulge({ x: e.x1, y: e.y1 }, { x: e.x2, y: e.y2 }, e.bulge);
+          if (g && Number.isFinite(g.center?.x) && g.radius > 0) {
+            circles.push({ id: e.id, cx: g.center.x, cy: g.center.y, r: g.radius });
+          }
+        } catch (err) { /* non-derivable arc — skip */ }
+      }
+    }
+    for (const c of circles) {
+      const dx = c.cx - startPoint.x;
+      const dy = c.cy - startPoint.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist <= c.r + 1e-9) continue; // start inside the circle: no real tangent
+      // tangent length + angle to the tangent points
+      const tanLen = Math.sqrt(Math.max(0, dist * dist - c.r * c.r));
+      const baseAng = Math.atan2(dy, dx);
+      const halfOff = Math.asin(Math.max(-1, Math.min(1, c.r / dist)));
+      for (const side of [-1, 1]) {
+        const ang = baseAng + side * halfOff;
+        testCandidate({
+          x: startPoint.x + tanLen * Math.cos(ang),
+          y: startPoint.y + tanLen * Math.sin(ang),
+          type: 'tangent',
+          targetId: c.id
         });
       }
     }

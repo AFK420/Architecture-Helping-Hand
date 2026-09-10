@@ -1002,6 +1002,62 @@ export function createLineEntity({
 }
 
 /**
+ * Factory for an ARC entity: two endpoints + a bulge (AutoCAD convention:
+ * bulge = tan(included angle / 4); sign gives the sweep side). Rendering and
+ * length math derive from calcArcBulge — nothing is stored stale.
+ */
+export function createArcEntity({
+  id,
+  name,
+  p1,
+  p2,
+  bulge = null,
+  through = null, // optional point the arc passes through (e.g. fillet center)
+  layerId = 'A-ANNO-LINES',
+  floorId = 'floor-1',
+  metadata = {}
+} = {}) {
+  requireFiniteNumber(p1.x, 'arc.p1.x');
+  requireFiniteNumber(p1.y, 'arc.p1.y');
+  requireFiniteNumber(p2.x, 'arc.p2.x');
+  requireFiniteNumber(p2.y, 'arc.p2.y');
+  const chord = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+  if (chord < 1e-4) throw new Error('Arc start and end points cannot be identical');
+
+  let b = bulge;
+  if (b == null && through) {
+    // Derive bulge from the through-point: sagitta = signed perpendicular
+    // distance from the chord midpoint to the point; bulge = 2·sagitta/chord.
+    const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+    const nx = -(p2.y - p1.y) / chord, ny = (p2.x - p1.x) / chord;
+    const sag = (through.x - mx) * nx + (through.y - my) * ny;
+    b = (2 * sag) / chord;
+  }
+  if (b == null || !Number.isFinite(b)) b = 1; // 180° semicircle fallback
+  if (Math.abs(b) < 1e-9) {
+    throw new Error('Arc bulge cannot be zero — draw a line instead');
+  }
+
+  return {
+    kind: 'arc',
+    id: id || generateEntityId('arc'),
+    name: typeof name === 'string' && name ? name : 'Arc',
+    p1: { x: p1.x, y: p1.y },
+    p2: { x: p2.x, y: p2.y },
+    bulge: b,
+    x1: p1.x, y1: p1.y,
+    x2: p2.x, y2: p2.y,
+    x: Math.min(p1.x, p2.x),
+    y: Math.min(p1.y, p2.y),
+    width: Math.max(0.001, Math.abs(p2.x - p1.x)),
+    depth: Math.max(0.001, Math.abs(p2.y - p1.y)),
+    layerId,
+    floorId,
+    metadata
+  };
+}
+
+/**
  * Factory for a CAD North Arrow symbol.
  */
 export function createNorthArrow({

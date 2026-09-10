@@ -28,11 +28,11 @@ import {
   WALL_ASSEMBLIES, wallOpenings,
   createRoomTag, createDoorTag, createWindowTag,
   createLeaderNote, createNorthArrow, autoTagDocument,
-  createDetailCallout, createBlockInstanceEntity, createLineEntity
+  createDetailCallout, createBlockInstanceEntity, createLineEntity, createArcEntity
 } from '../../core/entities.js';
 import {
   normalizeDocumentLayers, resolveEntityLayer, isEntityVisible, isEntityLocked,
-  toggleLayerVisibility, toggleLayerLock, addCustomLayer, deleteCustomLayer,
+  toggleLayerVisibility, setLayerVisibility, toggleLayerLock, addCustomLayer, deleteCustomLayer,
   setEntityLayer, DEFAULT_CAD_LAYERS
 } from '../../core/layers.js';
 import {
@@ -62,8 +62,9 @@ import {
 } from '../../core/zoning-schedule.js';
 import {
   calcWallJunctions, punchWallSpans, calcDoorCADGeometry,
-  calcWindowCADGeometry, calcWallPolygon, calcDimensionGeometry
+  calcWindowCADGeometry, calcWallPolygon, calcDimensionGeometry, calcArcBulge, intersectSegments
 } from '../../core/geometry.js';
+import { normalizeVector, subtractPoints, dotProduct, closestPointOnSegment } from '../../core/geometry-engine.js';
 import { formatFeetInches } from '../../core/formatter.js';
 import { checkFurnitureFit, checkClearance, checkOverlaps } from '../../core/space-planning.js';
 import { FURNITURE_DATABASE } from '../../core/furniture.js';
@@ -127,6 +128,9 @@ export function createPlanView(context) {
   let polyRoomVertices = []; // [{x, y}, ...]
   let polyLineVertices = []; // polyline tool: chained vertices, one line entity per segment
   let polyLineCursor = null; // live cursor position for the rubber preview
+  let dimChainPoints = []; // dim_chain tool: chained pick points for a running dimension string
+  let filletPick = null; // curve_fillet tool: first picked wall { id, x, y }
+  let lassoPoints = []; // lasso tool: freehand selection polygon
   let currentMouseWorld = { x: 0, y: 0 };
   let activeSidebarTab = 'entities'; // 'entities' | 'layers'
 
@@ -1204,6 +1208,235 @@ export function createPlanView(context) {
     showToast('Polyline cancelled');
   }
 
+  // ------------------------------------------------------------------
+  // Dimension chain (dim_chain): click a sequence of points along a line;
+  // each consecutive pair becomes a dimension entity, sharing one offset
+  // so they read as a single running dimension string. Enter finishes,
+  // Esc cancels — same interaction model as the polyline tool.
+  // ------------------------------------------------------------------
+  function addDimChainPoint(pt) {
+    dimChainPoints.push(pt);
+    AudioService.playTick();
+    render();
+    renderContextualToolbar();
+  }
+
+  function finishDimChain() {
+    if (dimChainPoints.length < 2) {
+      dimChainPoints = [];
+      render();
+      renderContextualToolbar();
+      return;
+    }
+    const created = [];
+    const cmds = [];
+    for (let i = 0; i < dimChainPoints.length - 1; i++) {
+      const a = dimChainPoints[i];
+      const b = dimChainPoints[i + 1];
+      if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-4) continue;
+      try {
+        const dim = createDimension({
+          p1: a, p2: b,
+          name: `Chain ${i + 1}`,
+          offset: 0.6,
+          style: 'tick',
+          orientation: 'aligned'
+        });
+        const cmd = entityAddRemoveCommand(entities(), dim, `dim chain segment ${i + 1}`);
+        cmds.push({ cmd, dim });
+      } catch (e) {
+        showToast(e.message, 'warning');
+      }
+    }
+    dimChainPoints = [];
+    for (const { cmd, dim } of cmds) {
+      cmd.redo();
+      history.push(cmd);
+      created.push(dim.id);
+    }
+    if (created.length > 0) {
+      state.plan.selectedIds = new Set(created);
+      showToast(`Dimension chain: ${created.length} segment(s) added`, 'success');
+    }
+    AudioService.playSuccess();
+    render();
+    renderContextualToolbar();
+  }
+
+  function cancelDimChain() {
+    dimChainPoints = [];
+    render();
+    renderContextualToolbar();
+    showToast('Dimension chain cancelled');
+  }
+
+  // ------------------------------------------------------------------
+  // Curve fillet (curve_fillet): pick two walls (or two clicks anywhere);
+  // each is trimmed back to the fillet tangent points and an arc entity is
+  // added with the chosen radius. TRIM math reuses the geometry engine.
+  // ------------------------------------------------------------------
+  function handleFilletPick(worldPt, hitEntity) {
+    const seg = hitEntity && (hitEntity.kind === 'wall' || hitEntity.kind === 'line')
+      ? hitEntity
+      : pickWallAtPoint(worldPt);
+    filletPick = filletPick
+      ? { ...filletPick, second: seg || null, secondPt: worldPt }
+      : { id: seg ? seg.id : null, entity: seg || null, pt: worldPt, second: null, secondPt: null };
+    if (filletPick && filletPick.secondPt && filletPick.id != null) {
+      // both picks in — ask for the radius and apply
+      const rStr = window.prompt('Fillet radius (m):', '0.5');
+      const radius = parseFloat(rStr || '');
+      if (!Number.isFinite(radius) || radius <= 0) {
+        filletPick = null;
+        render();
+        renderContextualToolbar();
+        showToast('Fillet cancelled — radius must be positive', 'warning');
+        return;
+      }
+      applyFillet(filletPick, radius);
+      filletPick = null;
+    } else {
+      showToast('Fillet: pick the second wall/line', 'info');
+      AudioService.playTick();
+      render();
+      renderContextualToolbar();
+    }
+  }
+
+  function pickWallAtPoint(pt, tol = 0.3) {
+    let best = null;
+    let bestD = tol;
+    for (const e of entities()) {
+      if ((e.kind !== 'wall' && e.kind !== 'line') || !Number.isFinite(e.x1)) continue;
+      const hit = closestPointOnSegment(pt, { x: e.x1, y: e.y1 }, { x: e.x2, y: e.y2 });
+      if (hit && hit.distance <= bestD) { bestD = hit.distance; best = e; }
+    }
+    return best;
+  }
+
+  function applyFillet(pick, radius) {
+    const e1 = pick.entity || entities().find(e => e.id === pick.id);
+    const e2 = pick.second || pickWallAtPoint(pick.secondPt);
+    if (!e1 || !e2 || e1.id === e2.id) {
+      showToast('Fillet needs two different walls/lines', 'warning');
+      return;
+    }
+    const seg1 = { p1: { x: e1.x1, y: e1.y1 }, p2: { x: e1.x2, y: e1.y2 } };
+    const seg2 = { p1: { x: e2.x1, y: e2.y1 }, p2: { x: e2.x2, y: e2.y2 } };
+    const ip = intersectSegments(seg1.p1, seg1.p2, seg2.p1, seg2.p2);
+    if (!ip) {
+      showToast('The two walls do not intersect — fillet needs a corner', 'warning');
+      return;
+    }
+
+    // Fillet math: the arc center lies on the angle bisector at distance
+    // r/sin(θ/2) from the corner; tangent points at distance r/tan(θ/2)
+    // along each wall.
+    const d1 = normalizeVector(subtractPoints(seg1.p2, seg1.p1));
+    const d2 = normalizeVector(subtractPoints(seg2.p2, seg2.p1));
+    // orient both directions INTO the corner
+    const v1 = dotProduct(subtractPoints(ip, seg1.p1), d1) > 0 ? { x: -d1.x, y: -d1.y } : d1;
+    const v2 = dotProduct(subtractPoints(ip, seg2.p1), d2) > 0 ? { x: -d2.x, y: -d2.y } : d2;
+    const cosTheta = Math.max(-1, Math.min(1, dotProduct(v1, v2)));
+    const theta = Math.acos(cosTheta); // interior angle between the walls at the corner
+    const half = theta / 2;
+    const sinHalf = Math.sin(half);
+    if (sinHalf < 1e-6) { showToast('Walls are parallel — nothing to fillet', 'warning'); return; }
+    const centerDist = radius / sinHalf;
+    const tanDist = radius / Math.tan(half);
+
+    // bisector direction (into the corner region between v1 and v2)
+    const bis = normalizeVector({ x: v1.x + v2.x, y: v1.y + v2.y });
+    const center = { x: ip.x + bis.x * centerDist, y: ip.y + bis.y * centerDist };
+    const t1 = { x: ip.x + v1.x * tanDist, y: ip.y + v1.y * tanDist };
+    const t2 = { x: ip.x + v2.x * tanDist, y: ip.y + v2.y * tanDist };
+
+    const before = JSON.parse(JSON.stringify([e1, e2]));
+    // trim both walls to their tangent points (nearest endpoint to the corner)
+    const len1A = Math.hypot(seg1.p1.x - t1.x, seg1.p1.y - t1.y);
+    const len1B = Math.hypot(seg1.p2.x - t1.x, seg1.p2.y - t1.y);
+    if (len1A <= len1B) { e1.x1 = t1.x; e1.y1 = t1.y; } else { e1.x2 = t1.x; e1.y2 = t1.y; }
+    const len2A = Math.hypot(seg2.p1.x - t2.x, seg2.p1.y - t2.y);
+    const len2B = Math.hypot(seg2.p2.x - t2.x, seg2.p2.y - t2.y);
+    if (len2A <= len2B) { e2.x1 = t2.x; e2.y1 = t2.y; } else { e2.x2 = t2.x; e2.y2 = t2.y; }
+    const after = JSON.parse(JSON.stringify([e1, e2]));
+    const ids = [e1.id, e2.id];
+
+    const arc = createArcEntity({
+      p1: t1, p2: t2, through: center,
+      name: `Fillet R${radius.toFixed(2)}`,
+      layerId: e1.layerId
+    });
+    const arcCmd = entityAddRemoveCommand(entities(), arc, `fillet arc R${radius.toFixed(2)}`);
+    arcCmd.redo();
+
+    history.push({
+      label: `fillet R${radius.toFixed(2)}`,
+      redo() {
+        restoreEntitySnapshots(after, ids);
+        arcCmd.redo();
+        render();
+      },
+      undo() {
+        restoreEntitySnapshots(before, ids);
+        arcCmd.undo();
+        render();
+      }
+    });
+    state.plan.selectedIds = new Set([arc.id]);
+    showToast(`Fillet applied: R${radius.toFixed(2)} m — both walls trimmed`, 'success');
+    AudioService.playSuccess();
+    render();
+    renderContextualToolbar();
+  }
+
+  // ------------------------------------------------------------------
+  // Lasso (freehand selection): drag to draw a polygon; entities whose
+  // center is inside get selected. Shift adds to the current selection.
+  // ------------------------------------------------------------------
+  function finishLasso(additive) {
+    if (lassoPoints.length < 3) {
+      lassoPoints = [];
+      render();
+      return;
+    }
+    const poly = lassoPoints.map(p => ({ x: p.x, y: p.y }));
+    lassoPoints = [];
+    const hits = new Set();
+    for (const e of entities()) {
+      const c = entityCenterLocal(e);
+      if (c && pointInPolygonLocal(c, poly)) hits.add(e.id);
+    }
+    state.plan.selectedIds = additive
+      ? new Set([...(state.plan.selectedIds || []), ...hits])
+      : hits;
+    render();
+    showToast(`${hits.size} entit${hits.size === 1 ? 'y' : 'ies'} inside the lasso`);
+    AudioService.playTick();
+  }
+
+  function entityCenterLocal(e) {
+    if (Number.isFinite(e.x1) && Number.isFinite(e.x2)) return { x: (e.x1 + e.x2) / 2, y: (e.y1 + e.y2) / 2 };
+    if (Array.isArray(e.boundary) && e.boundary.length >= 3) {
+      const xs = e.boundary.map(p => p.x), ys = e.boundary.map(p => p.y);
+      return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+    }
+    if (Number.isFinite(e.x) && Number.isFinite(e.y)) return { x: e.x + (e.width || 0) / 2, y: e.y + (e.depth || 0) / 2 };
+    return null;
+  }
+
+  function pointInPolygonLocal(pt, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i].x, yi = poly[i].y;
+      const xj = poly[j].x, yj = poly[j].y;
+      const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+        (pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
   /** Keeps svg.width/height synced to the element's real box so the
    * viewBox always equals the pixel box — pointer mapping then never
    * drifts (QA bug: clicks landed away from the cursor). */
@@ -2012,6 +2245,55 @@ export function createPlanView(context) {
           </div>`;
         bar.querySelector('#ctx-finish-polyline')?.addEventListener('click', finishPolyline);
         bar.querySelector('#ctx-cancel-polyline')?.addEventListener('click', cancelPolyline);
+        return;
+      }
+      if (dimChainPoints.length > 0) {
+        bar.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <span class="context-tag-badge" style="background: rgba(73,137,217,0.18); color: var(--note-number, #4989D9); border-color: rgba(73,137,217,0.4);">DIM CHAIN</span>
+              <span style="font-size: 0.75rem; color: var(--text-primary); font-weight: 600;">${dimChainPoints.length} point${dimChainPoints.length === 1 ? '' : 's'} picked</span>
+              <span style="font-size: 0.70rem; color: var(--text-muted);">Click along the wall sequence · Enter finishes · Esc cancels</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              ${dimChainPoints.length >= 2 ? '<button type="button" class="result-action-btn primary" id="ctx-finish-dimchain" style="font-size: 0.68rem; padding: 2px 8px;">✓ Finish Chain</button>' : ''}
+              <button type="button" class="result-action-btn" id="ctx-cancel-dimchain" style="font-size: 0.68rem; padding: 2px 8px;">✕ Cancel</button>
+            </div>
+          </div>`;
+        bar.querySelector('#ctx-finish-dimchain')?.addEventListener('click', finishDimChain);
+        bar.querySelector('#ctx-cancel-dimchain')?.addEventListener('click', cancelDimChain);
+        return;
+      }
+      if (state.plan.tool === 'dim_chain') {
+        bar.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="context-tag-badge" style="background: rgba(73,137,217,0.18); color: var(--note-number, #4989D9); border-color: rgba(73,137,217,0.4);">DIMENSION CHAIN</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">Click each bay point along the dimension line — one running dimension string results. Snap to endpoints/intersections for true bay sizes.</span>
+          </div>`;
+        return;
+      }
+      if (state.plan.tool === 'curve_fillet') {
+        bar.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="context-tag-badge" style="background: rgba(245,158,11,0.18); color: #f59e0b; border-color: rgba(245,158,11,0.4);">CURVE FILLET</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">${filletPick ? 'Pick the SECOND wall at the corner, then enter the radius' : 'Pick the first of two intersecting walls'} · Esc cancels</span>
+          </div>`;
+        return;
+      }
+      if (state.plan.tool === 'curve_offset') {
+        bar.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="context-tag-badge" style="background: rgba(245,158,11,0.18); color: #f59e0b; border-color: rgba(245,158,11,0.4);">OFFSET</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">Click a wall to create a parallel copy at a distance (+ left / − right of its direction)</span>
+          </div>`;
+        return;
+      }
+      if (state.plan.tool === 'lasso') {
+        bar.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="context-tag-badge" style="background: rgba(73,137,217,0.18); color: var(--note-number, #4989D9); border-color: rgba(73,137,217,0.4);">LASSO SELECT</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">Drag a freehand loop — entities inside are selected · Shift adds to the current selection</span>
+          </div>`;
         return;
       }
       if (polyRoomVertices.length > 0) {
@@ -4088,6 +4370,24 @@ export function createPlanView(context) {
             stroke="${stroke}" stroke-width="${selected ? 2.4 : 1.3}" stroke-linecap="round"/>
         </g>`;
       }
+      if (e.kind === 'arc') {
+        // Bulge (AutoCAD convention) → SVG A-arc via the chord geometry
+        try {
+          const bulge = calcArcBulge({ x: e.x1, y: e.y1 }, { x: e.x2, y: e.y2 }, e.bulge ?? 1);
+          const sP1 = worldToSvg(transform, e.x1, e.y1);
+          const sP2 = worldToSvg(transform, e.x2, e.y2);
+          const rPx = Math.max(0.5, bulge.radius * transform.zoom);
+          // SVG sweep: bulge > 0 arcs counterclockwise in world (SVG y-flipped → clockwise on screen)
+          const sweep = e.bulge > 0 ? 1 : 0;
+          const largeArc = Math.abs(bulge.includedAngleRad) > Math.PI ? 1 : 0;
+          return `<g class="plan-entity" data-entity-id="${escapeHtml(e.id)}">
+            <path d="M ${sP1.x.toFixed(1)} ${sP1.y.toFixed(1)} A ${rPx.toFixed(1)} ${rPx.toFixed(1)} 0 ${largeArc} ${sweep} ${sP2.x.toFixed(1)} ${sP2.y.toFixed(1)}"
+              fill="none" stroke="${stroke}" stroke-width="${selected ? 2.4 : 1.3}" stroke-linecap="round"/>
+          </g>`;
+        } catch (err) {
+          return '';
+        }
+      }
       if (e.kind === 'leader') {
         const p1 = e.p1 || { x: e.x || 0, y: e.y || 0 };
         const knee = e.knee || { x: p1.x + 0.5, y: p1.y + 0.5 };
@@ -4247,6 +4547,37 @@ export function createPlanView(context) {
             fill="none" stroke="rgba(73,137,217,0.35)" stroke-width="3"/>
           <text x="${(p1.x + 5).toFixed(1)}" y="${(p2.y + 14).toFixed(1)}" font-size="10" font-family="var(--font-mono)"
             fill="#ffffff" font-weight="700" style="paint-order: stroke; stroke: rgba(0,0,0,0.75); stroke-width: 3px;">${dragState.additive ? '+ADD ' : ''}${Math.abs(bx - ax).toFixed(2)} × ${Math.abs(by - ay).toFixed(2)} m</text>
+        </g>`;
+    }
+    if (dragState && dragState.mode === 'lasso' && lassoPoints.length > 1) {
+      // Freehand lasso polygon preview
+      const pts = lassoPoints.map(p => worldToSvg(transform, p.x, p.y));
+      const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') + ' Z';
+      dragMarkup = `
+        <g class="lasso-preview" pointer-events="none">
+          <path d="${d}" fill="rgba(73,137,217,0.12)" stroke="var(--accent-primary, #4989D9)" stroke-width="1.6" stroke-dasharray="6 3"/>
+        </g>`;
+    }
+    if (dimChainPoints.length > 0) {
+      // Dimension-chain rubber preview: picked points + live segment to cursor
+      const col = 'var(--note-number, #4989D9)';
+      let chainMarkup = '';
+      for (let i = 0; i < dimChainPoints.length - 1; i++) {
+        const a = worldToSvg(transform, dimChainPoints[i].x, dimChainPoints[i].y);
+        const b = worldToSvg(transform, dimChainPoints[i + 1].x, dimChainPoints[i + 1].y);
+        chainMarkup += `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${col}" stroke-width="1.6" stroke-dasharray="4 3"/>`;
+      }
+      const cur = worldToSvg(transform, currentMouseWorld.x, currentMouseWorld.y);
+      const lastPt = dimChainPoints[dimChainPoints.length - 1];
+      const lastS = worldToSvg(transform, lastPt.x, lastPt.y);
+      chainMarkup += `<line x1="${lastS.x.toFixed(1)}" y1="${lastS.y.toFixed(1)}" x2="${cur.x.toFixed(1)}" y2="${cur.y.toFixed(1)}" stroke="${col}" stroke-width="1.2" stroke-dasharray="2 3"/>`;
+      for (const p of dimChainPoints) {
+        const s = worldToSvg(transform, p.x, p.y);
+        chainMarkup += `<circle cx="${s.x.toFixed(1)}" cy="${s.y.toFixed(1)}" r="3.2" fill="${col}"/>`;
+      }
+      dragMarkup += `
+        <g class="dimchain-preview" pointer-events="none">${chainMarkup}
+          <text x="${(cur.x + 10).toFixed(1)}" y="${(cur.y - 8).toFixed(1)}" font-size="9" font-family="var(--font-mono)" fill="${col}">DIM CHAIN: ${dimChainPoints.length} pt${dimChainPoints.length === 1 ? '' : 's'} · Enter to finish · Esc cancel</text>
         </g>`;
     }
     if (dragState && dragState.mode === 'create' && dragState.current) {
@@ -4443,6 +4774,19 @@ export function createPlanView(context) {
           <line x1="${(sp.x - 4).toFixed(1)}" y1="${(sp.y - 4).toFixed(1)}" x2="${(sp.x + 4).toFixed(1)}" y2="${(sp.y + 4).toFixed(1)}" stroke="${snapCol}" stroke-width="2"/>
           <line x1="${(sp.x - 4).toFixed(1)}" y1="${(sp.y + 4).toFixed(1)}" x2="${(sp.x + 4).toFixed(1)}" y2="${(sp.y - 4).toFixed(1)}" stroke="${snapCol}" stroke-width="2"/>
         `;
+      } else if (snapType === 'nearest') {
+        snapCol = 'var(--text-secondary, #9aa6b2)';
+        glyphSvg = `
+          <line x1="${(sp.x - 5).toFixed(1)}" y1="${(sp.y + 5).toFixed(1)}" x2="${(sp.x + 5).toFixed(1)}" y2="${(sp.y - 5).toFixed(1)}" stroke="${snapCol}" stroke-width="2"/>
+          <circle cx="${sp.x.toFixed(1)}" cy="${sp.y.toFixed(1)}" r="2" fill="${snapCol}"/>
+        `;
+      } else if (snapType === 'tangent') {
+        snapCol = 'var(--note-number, #c084fc)';
+        glyphSvg = `
+          <circle cx="${sp.x.toFixed(1)}" cy="${sp.y.toFixed(1)}" r="6" fill="none" stroke="${snapCol}" stroke-width="1.8"/>
+          <line x1="${(sp.x - 4).toFixed(1)}" y1="${(sp.y - 4).toFixed(1)}" x2="${(sp.x + 4).toFixed(1)}" y2="${(sp.y + 4).toFixed(1)}" stroke="${snapCol}" stroke-width="2.2"/>
+          <line x1="${(sp.x - 4).toFixed(1)}" y1="${(sp.y + 4).toFixed(1)}" x2="${(sp.x + 4).toFixed(1)}" y2="${(sp.y - 4).toFixed(1)}" stroke="${snapCol}" stroke-width="2.2"/>
+        `;
       } else {
         glyphSvg = `<circle cx="${sp.x.toFixed(1)}" cy="${sp.y.toFixed(1)}" r="4.5" fill="none" stroke="${snapCol}" stroke-width="2"/>`;
       }
@@ -4569,6 +4913,9 @@ export function createPlanView(context) {
             <button type="button" class="layer-toggle-vis" data-layer-id="${escapeHtml(l.id)}" title="${isVis ? 'Hide layer (currently visible)' : 'Show layer (currently hidden)'}" aria-label="${isVis ? 'Hide layer' : 'Show layer'} ${escapeHtml(l.name)}" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; opacity: ${isVis ? '1.0' : '0.4'}; display: inline-flex;">
               ${icon(isVis ? 'visible' : 'hidden', { size: 14 })}
             </button>
+            <button type="button" class="layer-isolate-btn" data-layer-id="${escapeHtml(l.id)}" title="Isolate this layer — hide every other layer (click again to restore)" aria-label="Isolate layer ${escapeHtml(l.name)}" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; opacity: ${isVis ? '0.85' : '0.3'}; display: inline-flex; font-size: 0.68rem; color: var(--note-number, #4989D9);">
+              ◎
+            </button>
             <button type="button" class="layer-toggle-lock" data-layer-id="${escapeHtml(l.id)}" title="${isLck ? 'Unlock layer (currently locked)' : 'Lock layer (currently editable)'}" aria-label="${isLck ? 'Unlock layer' : 'Lock layer'} ${escapeHtml(l.name)}" style="background: transparent; border: none; cursor: pointer; padding: 2px 4px; opacity: ${isLck ? '1.0' : '0.45'}; display: inline-flex;">
               ${icon(isLck ? 'lock' : 'unlock', { size: 14 })}
             </button>
@@ -4598,6 +4945,39 @@ export function createPlanView(context) {
         const lid = btn.dataset.layerId;
         toggleLayerLock(doc, lid);
         AudioService.playTick();
+        render();
+      });
+    });
+
+    // Isolate (solo): hide every other layer; click again restores the
+    // pre-isolate visibility. The snapshot lives on the doc so it survives
+    // re-renders; a fresh isolate overwrites it deliberately.
+    container.querySelectorAll('.layer-isolate-btn').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const lid = btn.dataset.layerId;
+        const layers = normalizeDocumentLayers(doc);
+        if (doc._layerIsolateSnapshot) {
+          // restore
+          const snap = doc._layerIsolateSnapshot;
+          doc._layerIsolateSnapshot = null;
+          for (const l of layers) {
+            const saved = snap[l.id];
+            if (saved !== undefined) setLayerVisibility(doc, l.id, saved);
+          }
+          showToast('Layer isolation off — visibility restored');
+        } else {
+          const snapMap = {};
+          for (const l of layers) {
+            snapMap[l.id] = l.visible !== false;
+            setLayerVisibility(doc, l.id, l.id === lid);
+          }
+          doc._layerIsolateSnapshot = snapMap;
+          const solo = layers.find(l => l.id === lid);
+          showToast(`Isolated: ${solo ? solo.name : lid} (click ◎ again to restore)`, 'success');
+        }
+        AudioService.playTick();
+        renderLayerList();
         render();
       });
     });
@@ -6591,6 +6971,51 @@ export function createPlanView(context) {
       render();
       renderContextualToolbar();
       return;
+    } else if (tool === 'dim_chain') {
+      // Dimension chain: click chained points; Enter finishes, Esc cancels
+      let targetPt = initialPt;
+      if (snapOn) {
+        const snapRes = findSnapPoint(world, visible, { snapDistance: 0.25, snapGrid: true, gridMeters: state.plan.grid, startPoint: dimChainPoints[dimChainPoints.length - 1] });
+        if (snapRes.snapped) targetPt = { x: snapRes.x, y: snapRes.y };
+      }
+      if (dimChainPoints.length >= 2) {
+        const first = dimChainPoints[0];
+        if (Math.hypot(targetPt.x - first.x, targetPt.y - first.y) <= Math.max(0.4, state.plan.grid)) {
+          finishDimChain();
+          return;
+        }
+      }
+      addDimChainPoint(targetPt);
+      return;
+    } else if (tool === 'curve_fillet') {
+      // Fillet: pick wall 1, then wall 2, then radius
+      handleFilletPick(world, null);
+      return;
+    } else if (tool === 'curve_offset') {
+      // Offset tool on click: uses the picked wall (or the selection) with a
+      // prompted distance — same deterministic op as the OFFSET command.
+      const picked = pickWallAtPoint(world) ||
+        (selectedEntities().length > 0 ? selectedEntities().find(e => e.kind === 'wall' || e.kind === 'line') : null);
+      if (!picked) {
+        showToast('Offset: click a wall/line (or select one first)', 'warning');
+        return;
+      }
+      const dStr = window.prompt('Offset distance (m, + = left / − = right of direction):', '0.5');
+      const dist = parseFloat(dStr || '');
+      if (!Number.isFinite(dist) || dist === 0) {
+        showToast('Offset cancelled — distance must be non-zero', 'warning');
+        return;
+      }
+      const clones = offsetEntities([picked], dist);
+      for (const c of clones) commitEntity(c, 'offset');
+      showToast(`Offset wall by ${dist} m`, 'success');
+      return;
+    } else if (tool === 'lasso') {
+      // Freehand lasso: drag draws the polygon; release selects inside
+      lassoPoints = [{ x: world.x, y: world.y }];
+      dragState = { mode: 'lasso', startWorld: { x: world.x, y: world.y }, additive: event.shiftKey };
+      event.preventDefault();
+      return;
     } else if (tool === 'polyroom') {
       let targetPt = initialPt;
       if (snapOn) {
@@ -6681,6 +7106,16 @@ export function createPlanView(context) {
       // Full ±89.9° like camera3d.orbitCamera — bottom views are reachable
       doc.camera.elevation = Math.max(-89.9, Math.min(89.9, (dragState.startCam.elevation || 35.264) - dy * 0.5));
       scheduleSceneRender();
+      return;
+    }
+
+    if (dragState.mode === 'lasso') {
+      // freehand: sample the path while dragged
+      const last = lassoPoints[lassoPoints.length - 1];
+      if (!last || Math.hypot(world.x - last.x, world.y - last.y) > 0.05) {
+        lassoPoints.push({ x: world.x, y: world.y });
+        scheduleSceneRender();
+      }
       return;
     }
 
@@ -6968,6 +7403,11 @@ export function createPlanView(context) {
         }
       }
       render();
+      return;
+    } else if (dragState.mode === 'lasso') {
+      const additive = dragState.additive;
+      dragState = null;
+      finishLasso(additive);
       return;
     } else if (dragState.mode === 'marqueeOrPan') {
       const wasMarquee = dragState.marquee;
@@ -7707,6 +8147,28 @@ export function createPlanView(context) {
     if (polyLineVertices.length > 0 && event.key === 'Escape') {
       event.preventDefault();
       cancelPolyline();
+      return;
+    }
+
+    // Dimension chain: same interaction model as the polyline.
+    if (dimChainPoints.length > 0 && event.key === 'Enter') {
+      event.preventDefault();
+      finishDimChain();
+      return;
+    }
+    if (dimChainPoints.length > 0 && event.key === 'Escape') {
+      event.preventDefault();
+      cancelDimChain();
+      return;
+    }
+
+    // Fillet second-pick can be cancelled mid-flow.
+    if (filletPick && event.key === 'Escape') {
+      event.preventDefault();
+      filletPick = null;
+      render();
+      renderContextualToolbar();
+      showToast('Fillet cancelled');
       return;
     }
 
