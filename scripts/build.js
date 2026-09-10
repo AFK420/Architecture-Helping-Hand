@@ -136,6 +136,7 @@ export const BUNDLE_MODULES = [
   { name: 'ViewProjects', file: path.join(srcDir, 'ui', 'views', 'projects.js') },
   { name: 'StudioRibbon', file: path.join(srcDir, 'ui', 'components', 'ribbon.js') },
   { name: 'StudioPalette', file: path.join(srcDir, 'ui', 'components', 'palette.js') },
+  { name: 'ToolGuides', file: path.join(srcDir, 'core', 'tool-guides.js') },
   { name: 'StudioTooltip', file: path.join(srcDir, 'ui', 'components', 'tooltip.js') },
   { name: 'StudioCPanels', file: path.join(srcDir, 'ui', 'components', 'cpanels.js') },
   { name: 'StudioCommandBar', file: path.join(srcDir, 'ui', 'components', 'commandbar.js') },
