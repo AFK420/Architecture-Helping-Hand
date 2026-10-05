@@ -34,13 +34,15 @@ export const BUNDLE_MODULES = [
   { name: 'Parser', file: path.join(srcDir, 'core', 'parser.js') },
   { name: 'Calculator', file: path.join(srcDir, 'core', 'calculator.js') },
   { name: 'Geometry', file: path.join(srcDir, 'core', 'geometry.js') },
-  { name: 'Furniture', file: path.join(srcDir, 'core', 'furniture.js') },
   { name: 'ObjectLibrary', file: path.join(srcDir, 'core', 'object-library.js') },
+  { name: 'FurnitureTaxonomy', file: path.join(srcDir, 'core', 'furniture-taxonomy.js') },
+  { name: 'Furniture', file: path.join(srcDir, 'core', 'furniture.js') },
+  { name: 'Workspaces', file: path.join(srcDir, 'core', 'workspaces.js') },
 
   // --- Toolkit feature core (dependency order: workspace -> expression ->
   //     cad-clipboard -> multi-scale/chains -> batch-cad/quick-dimension) ---
-  { name: 'DimensionWorkspace', file: path.join(srcDir, 'core', 'dimension-workspace.js') },
   { name: 'DimensionExpression', file: path.join(srcDir, 'core', 'dimension-expression.js') },
+  { name: 'DimensionWorkspace', file: path.join(srcDir, 'core', 'dimension-workspace.js') },
   { name: 'CadClipboard', file: path.join(srcDir, 'core', 'cad-clipboard.js') },
   { name: 'MultiScale', file: path.join(srcDir, 'core', 'multi-scale.js') },
   { name: 'DimensionChains', file: path.join(srcDir, 'core', 'dimension-chains.js') },
@@ -52,6 +54,8 @@ export const BUNDLE_MODULES = [
   { name: 'Ramps', file: path.join(srcDir, 'core', 'ramps.js') },
   { name: 'Slopes', file: path.join(srcDir, 'core', 'slopes.js') },
   { name: 'BuildingCodes', file: path.join(srcDir, 'core', 'building-codes.js') },
+  { name: 'Research', file: path.join(srcDir, 'core', 'research.js') },
+  { name: 'StructuredResearch', file: path.join(srcDir, 'core', 'research-workspace.js') },
   { name: 'Project', file: path.join(srcDir, 'core', 'project.js') },
   { name: 'Layers', file: path.join(srcDir, 'core', 'layers.js') },
   { name: 'GridColumns', file: path.join(srcDir, 'core', 'grid-columns.js') },
@@ -79,13 +83,24 @@ export const BUNDLE_MODULES = [
   { name: 'IssueEngine', file: path.join(srcDir, 'core', 'issue-engine.js') },
   { name: 'Requirements', file: path.join(srcDir, 'core', 'requirements.js') },
   { name: 'AiBridge', file: path.join(srcDir, 'core', 'ai-bridge.js') },
-  { name: 'PlanCanvas', file: path.join(srcDir, 'core', 'plan-canvas.js') },
+  { name: 'GeometryTools', file: path.join(srcDir, 'core', 'geometry-tools.js') },
   { name: 'Sheet', file: path.join(srcDir, 'core', 'sheet.js') },
   { name: 'SpacePlanning', file: path.join(srcDir, 'core', 'space-planning.js') },
   { name: 'Survey', file: path.join(srcDir, 'core', 'survey.js') },
+  { name: 'Solar', file: path.join(srcDir, 'core', 'solar.js') },
+  { name: 'Site', file: path.join(srcDir, 'core', 'site.js') },
+  { name: 'SiteAnalyses', file: path.join(srcDir, 'core', 'site-analysis.js') },
+  { name: 'AnalysisDiagrams', file: path.join(srcDir, 'core', 'analysis-diagrams.js') },
+  { name: 'Concept', file: path.join(srcDir, 'core', 'concept.js') },
   { name: 'Annotations', file: path.join(srcDir, 'core', 'annotations.js') },
   { name: 'ShortcutsManager', file: path.join(srcDir, 'core', 'shortcuts-manager.js') },
   { name: 'ExportModel', file: path.join(srcDir, 'core', 'export', 'export-model.js') },
+
+  { name: 'FurnitureAssets', file: path.join(srcDir, 'core', 'furniture-assets.js') },
+
+  { name: 'ArchitectureDocument', file: path.join(srcDir, 'core', 'reports', 'document-model.js') },
+  { name: 'ReportPagination', file: path.join(srcDir, 'core', 'reports', 'pagination.js') },
+  { name: 'ReportTemplates', file: path.join(srcDir, 'core', 'reports', 'templates.js') },
 
   // --- AI layer (orchestrator last: consumes providers/modes/schemas/tools) ---
   { name: 'AIProvider', file: path.join(srcDir, 'ai', 'providers', 'provider.js') },
@@ -113,7 +128,12 @@ export const BUNDLE_MODULES = [
   { name: 'AITransports', file: path.join(srcDir, 'services', 'ai', 'transports', 'index.js') },
   { name: 'AIProviderManager', file: path.join(srcDir, 'services', 'ai', 'provider-manager.js') },
   { name: 'AIModelCatalog', file: path.join(srcDir, 'services', 'ai', 'model-catalog.js') },
+  { name: 'AIIntent', file: path.join(srcDir, 'core', 'ai-intent.js') },
   { name: 'AIJobRouter', file: path.join(srcDir, 'services', 'ai', 'job-router.js') },
+
+  { name: 'ResearchAssistant', file: path.join(srcDir, 'services', 'research-assistant.js') },
+
+  { name: 'ReportRenderer', file: path.join(srcDir, 'services', 'report-renderer.js') },
 
   // --- UI (last: imports everything above) ---
   { name: 'Scrubber', file: path.join(srcDir, 'ui', 'scrubber.js') },
@@ -142,12 +162,24 @@ export const BUNDLE_MODULES = [
   { name: 'StudioCPanels', file: path.join(srcDir, 'ui', 'components', 'cpanels.js') },
   { name: 'StudioCommandBar', file: path.join(srcDir, 'ui', 'components', 'commandbar.js') },
   { name: 'StudioAiDropdown', file: path.join(srcDir, 'ui', 'components', 'ai-dropdown.js') },
-  { name: 'ViewPlan', file: path.join(srcDir, 'ui', 'views', 'plan.js') },
   { name: 'ViewAiStudio', file: path.join(srcDir, 'ui', 'views', 'ai-studio.js') },
   { name: 'ViewAiControlCenter', file: path.join(srcDir, 'ui', 'views', 'ai-control-center.js') },
   { name: 'ViewImports', file: path.join(srcDir, 'ui', 'views', 'imports.js') },
   { name: 'ViewSurvey', file: path.join(srcDir, 'ui', 'views', 'survey.js') },
   { name: 'ViewRequirements', file: path.join(srcDir, 'ui', 'views', 'requirements.js') },
+  { name: 'WorkspaceUI', file: path.join(srcDir, 'ui', 'components', 'workspace-ui.js') },
+  { name: 'ResearchSectionsView', file: path.join(srcDir, 'ui', 'views', 'research-sections.js') },
+  { name: 'SiteAnalysesView', file: path.join(srcDir, 'ui', 'views', 'site-analyses.js') },
+  { name: 'ConceptView', file: path.join(srcDir, 'ui', 'views', 'concept.js') },
+  { name: 'ViewResearchDashboard', file: path.join(srcDir, 'ui', 'views', 'research-dashboard.js') },
+  { name: 'ViewResearchLibrary', file: path.join(srcDir, 'ui', 'views', 'research-library.js') },
+  { name: 'ViewStandardsExplorer', file: path.join(srcDir, 'ui', 'views', 'standards-explorer.js') },
+  { name: 'ViewSunPath', file: path.join(srcDir, 'ui', 'views', 'sun-path.js') },
+  { name: 'ViewSiteContext', file: path.join(srcDir, 'ui', 'views', 'site-context.js') },
+  { name: 'ViewSiteDashboard', file: path.join(srcDir, 'ui', 'views', 'site-dashboard.js') },
+  { name: 'ViewDimensions', file: path.join(srcDir, 'ui', 'views', 'dimensions.js') },
+  { name: 'ToolHelp', file: path.join(srcDir, 'ui', 'components', 'tool-help.js') },
+  { name: 'ReportsView', file: path.join(srcDir, 'ui', 'views', 'reports.js') },
   { name: 'App', file: path.join(srcDir, 'ui', 'app.js') }
 ];
 

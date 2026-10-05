@@ -1,3 +1,5 @@
+> Historical implementation notes. The Canvas workflows below were retired in the companion redesign and are not current user features. Generic engines and legacy project data remain supported. See [README.md](README.md) and [REDESIGN_STATUS.md](REDESIGN_STATUS.md) for current workflows.
+
 # UI Baseline Audit (Phase 1 — no fixes applied)
 
 Reference: user screenshot showing the app as a centered island with unused

@@ -1,0 +1,88 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { createProject, normalizeProject, parseProject } from '../src/core/project.js';
+import { migrateEnvelope, createProjectStore } from '../src/services/store.js';
+import { WORKSPACES, NAV_TOOLS } from '../src/core/workspaces.js';
+import { DEFAULT_SHORTCUTS } from '../src/core/shortcuts-manager.js';
+import { createDimensionEntry, parseQuickAddString } from '../src/core/dimension-workspace.js';
+import { evaluateExpressionSafe } from '../src/core/dimension-expression.js';
+import { parseSegmentMeasurement } from '../src/core/dimension-chains.js';
+import { FURNITURE_DATABASE, LEGACY_FURNITURE_DATABASE, filterFurnitureCatalog } from '../src/core/furniture.js';
+import { FURNITURE_CATEGORIES } from '../src/core/furniture-taxonomy.js';
+import { createFurnitureAsset, furnitureAssetDXF, furnitureAssetSVG } from '../src/core/furniture-assets.js';
+import { resolveAIIntent } from '../src/core/ai-intent.js';
+import { createJobRouter } from '../src/services/ai/job-router.js';
+import { createReference } from '../src/core/research.js';
+import { ensureStructuredResearch, createResearchClaim, researchBibliography, validateResearchWorkspace } from '../src/core/research-workspace.js';
+import { ensureSiteAnalyses, updateSiteAnalysis, siteAnalysisProgress } from '../src/core/site-analysis.js';
+import { bubbleDiagramSVG, northArrowSVG, directionalAnalysisSVG } from '../src/core/analysis-diagrams.js';
+import { ensureConcept, createDesignDriver } from '../src/core/concept.js';
+import { buildResearchAIRequest } from '../src/services/research-assistant.js';
+import { createArchitectureDocument, REPORT_PAGE_SIZES, validateArchitectureDocument } from '../src/core/reports/document-model.js';
+import { renderArchitectureDocument, reportSafeURL, reportSafeImage } from '../src/core/reports/templates.js';
+import { generateArchitecturePDF } from '../src/services/report-renderer.js';
+import { renderArchitecturePDFOnServer } from '../scripts/report-server.js';
+import { getWorkflowGuide } from '../src/core/tool-guides.js';
+import { renderStoredAnalysisVisual,analysisScaleBarSVG } from '../src/core/analysis-diagrams.js';
+import { parseNaturalLanguageCommand } from '../src/services/commands.js';
+
+let passed=0;
+const test=async(name,fn)=>{await fn();passed++;console.log('PASS: '+name);};
+const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-8,`${a} != ${b}`);
+const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+await test('Every live navigation tool has complete collapsed contextual guidance',()=>{for(const id of NAV_TOOLS.keys()){const guide=getWorkflowGuide(id);assert.ok(guide,id);for(const key of ['what','why','when','how','example','autocad','rhino','sketchup','other'])assert.ok(guide[key],id+' '+key);}});
+await test('Malformed imported Research data is rejected without throwing',()=>{assert.equal(validateResearchWorkspace({sections:{},references:[],claims:[]}).ok,false);assert.equal(validateResearchWorkspace({references:[null],claims:[]}).ok,false);});
+await test('Charts, timelines and view cones retain escaped user labels',()=>{for(const visual of [{type:'bar-chart',values:[{label:'<script>',value:20}],unit:'mm'},{type:'timeline',events:[{date:'2026',label:'<script>'}]},{type:'view-cone',label:'<script>',bearing:45}]){const svg=renderStoredAnalysisVisual(visual);assert.ok(svg.includes('<svg'));assert.ok(svg.includes('&lt;script&gt;'));assert.ok(!svg.includes('NaN'));}assert.throws(()=>analysisScaleBarSVG({distance:5}));assert.ok(analysisScaleBarSVG({distance:5,pixelsPerUnit:20}).includes('5 m'));});
+await test('Natural furniture lookup prefers King Bed over Super King variants',()=>{const result=parseNaturalLanguageCommand('place king bed');assert.equal(result.type,'furniture_lookup');assert.equal(result.furniture.id,'bed-king');assert.ok(result.formattedResult.includes('1800'));});
+await test('Canvas UI, state, actions and shortcuts are removed',()=>{
+  assert.ok(!html.includes('mode-view-plan'));assert.ok(!NAV_TOOLS.has('plan'));
+  assert.ok(!DEFAULT_SHORTCUTS.some(s=>s.category==='canvas'));
+  assert.ok(!fs.existsSync(new URL('../src/ui/views/plan.js',import.meta.url)));
+  const app=fs.readFileSync(new URL('../src/ui/app.js',import.meta.url),'utf8');assert.ok(!app.includes('state.plan'));assert.ok(!html.includes('apply-plan-btn'));
+});
+await test('Legacy v1-v3 projects retain drawing data and load without Canvas',()=>{
+  const p=createProject({id:'legacy'});p.schemaVersion=1;p.plan={entities:[{kind:'room',width:4,depth:3}]};p.documents[0].entities=[{id:'r-old',kind:'room',width:4,depth:3,x:0,y:0}];
+  const original=JSON.stringify(p),migrated=migrateEnvelope({version:1,project:p});assert.equal(JSON.stringify(p),original);
+  assert.equal(migrated.project.plan.entities[0].width,4);assert.equal(migrated.project.documents[0].entities[0].id,'r-old');
+  const map=new Map(),storage={getItem:k=>map.get(k)||null,setItem:(k,v)=>{map.set(k,v);return true;}};
+  const store=createProjectStore({storage});assert.equal(store.setProject(migrated.project).ok,true);assert.equal(store.loadProject().ok,true);
+  assert.equal(parseProject(JSON.stringify(store.getProject())).ok,true);assert.deepEqual(normalizeProject(migrated.project).plan,p.plan);
+});
+await test('One Dimensions navigation entry contains four accessible sub-workflows',()=>{
+  assert.equal(WORKSPACES.length,6);assert.ok(NAV_TOOLS.has('dimensions'));
+  for(const id of ['workspace','expression','chains','multiscale']){assert.ok(!NAV_TOOLS.has(id));assert.ok(html.includes(`dimension-panel-${id}`));assert.ok(html.includes(`aria-controls="dimension-panel-${id}"`));}
+});
+for(const [input,value] of [['2400 + 900',3.3],['2.4m + 600mm',3],['7\' 6" + 2\' 3"',2.9718],['(2.4m + 900mm) / 3',1.1]])await test('Safe mixed-unit Schedule expression: '+input,()=>{const entry=createDimensionEntry({rawInput:input},'mm');assert.equal(entry.isValid,true);close(entry.realMeters,value);close(evaluateExpressionSafe(input,{defaultUnit:'mm'}).canonicalMeters,value);close(parseSegmentMeasurement(input,'mm').canonicalMeters,value);});
+await test('Named quick-add expressions and invalid arithmetic remain controlled',()=>{assert.equal(parseQuickAddString('Bay: (2.4m + 900mm) / 3').name,'Bay');assert.equal(createDimensionEntry({rawInput:'2m / 0'}).isValid,false);assert.equal(createDimensionEntry({rawInput:'window.alert(1)'}).isValid,false);});
+await test('Every legacy furniture ID and dimension survives taxonomy expansion',()=>{for(const old of LEGACY_FURNITURE_DATABASE){const item=FURNITURE_DATABASE.find(i=>i.id===old.id);assert.ok(item);assert.equal(item.wCm,old.wCm);assert.equal(item.dCm,old.dCm);assert.ok(FURNITURE_CATEGORIES[item.category].includes(item.subcategory));assert.ok(item.tags.length);assert.equal(item.dimensionSource.verified,false);}assert.ok(FURNITURE_DATABASE.length>LEGACY_FURNITURE_DATABASE.length);assert.equal(new Set(FURNITURE_DATABASE.map(i=>i.id)).size,FURNITURE_DATABASE.length);});
+for(const query of ['hospital bed','wheelchair','police desk','gym bench','restaurant table','school desk'])await test('Furniture use-case search: '+query,()=>assert.ok(filterFurnitureCatalog(FURNITURE_DATABASE,query).length));
+await test('CAD furniture uses recognizable real-size geometry and actual DXF entities',()=>{
+  const item=FURNITURE_DATABASE.find(i=>i.id==='bed-king'),asset=createFurnitureAsset(item);close(asset.width,1.8);assert.ok(asset.planGeometry.length>=4);
+  const dxf=furnitureAssetDXF(asset);assert.ok(dxf.includes('1800.0000'));assert.ok(dxf.includes('2000.0000'));assert.ok(dxf.includes('POLYLINE'));assert.ok(dxf.endsWith('EOF'));
+  const svg=furnitureAssetSVG(asset);assert.ok(svg.includes('width="1800mm"'));assert.ok(svg.includes('height="2000mm"'));assert.ok(svg.includes('<polygon'));
+  assert.throws(()=>createFurnitureAsset({wCm:NaN,dCm:200}));
+});
+await test('Door swings and optional clearances are separate CAD geometry',()=>{const door=FURNITURE_DATABASE.find(i=>i.type==='door'||/door-single/.test(i.id))||FURNITURE_DATABASE.find(i=>/door/i.test(i.name));const asset=createFurnitureAsset(door);assert.ok(asset.planGeometry.some(e=>e.type==='polyline'&&!e.closed));const cleared=createFurnitureAsset({id:'test',name:'Chair',type:'chair',wCm:50,dCm:60,clearance:90});assert.equal(cleared.clearanceGeometry.length,1);assert.ok(!furnitureAssetDXF(cleared).includes('A-CLEARANCE'));assert.ok(furnitureAssetDXF(cleared,{includeClearance:true}).includes('A-CLEARANCE'));});
+for(const [message,job] of [['Give me concept ideas','ideation'],['Critique my design','studioCritic'],['Be extremely critical','brutalCritic'],['Prepare me for jury','jury'],['Analyze this site image','imageAnalysis'],['Analyze my whole project','projectAnalysis']])await test('Deterministic natural AI route: '+message,()=>assert.equal(resolveAIIntent(message).jobId,job));
+await test('Manual route override and attached image intent remain inspectable',()=>{assert.equal(resolveAIIntent('Ideas',{hasImage:true}).jobId,'imageAnalysis');assert.equal(resolveAIIntent('Ideas',{manualJob:'tutor'}).jobId,'tutor');assert.ok(resolveAIIntent('Ideas').reason);});
+await test('AI defaults configure all compatible jobs and stay within one provider',()=>{
+  const map=new Map(),models=[{modelId:'text',status:'READY',capabilities:{text:true}},{modelId:'vision',status:'READY',capabilities:{text:true,vision:true}},{modelId:'structured',status:'READY',capabilities:{text:true,structuredOutput:true}}];
+  const options={providerManager:{getProviderStatus:id=>({id,enabled:id==='p',hasKey:true,label:'Provider'})},modelCatalog:{getModel:(p,id)=>models.find(m=>m.modelId===id),listModels:()=>models},transports:{get:()=>({})},storage:{getItem:k=>map.get(k),setItem:(k,v)=>map.set(k,v)}};
+  const router=createJobRouter(options);assert.equal(router.configureDefaults({providerId:'p',modelId:'text',automatic:true}).ok,true);assert.equal(router.getAssignment('imageAnalysis').modelId,'vision');assert.equal(router.getAssignment('studioCritic').modelId,'structured');assert.equal(router.getAssignment('studioCritic').providerId,'p');assert.equal(router.getJobStatus('conceptImage').status,'CAPABILITY MISMATCH');
+  assert.equal(router.assignModel('studioCritic',{providerId:'p',modelId:'structured'}).ok,true);assert.equal(router.getAssignment('studioCritic').automatic,undefined);assert.equal(createJobRouter(options).getDefaults().modelId,'text');assert.ok(html.includes('ai-advanced-settings'));
+});
+const p=createProject({id:'research',name:'Community Library'}),r=ensureStructuredResearch(p);
+const source=createReference({id:'source-1',title:'User-supplied climate record',url:'https://example.org/data',publisher:'Project source',author:'Recorder',publicationDate:'2025-01-01',retrievedAt:'2026-10-05',verification:'verified'}).reference;r.references.push(source);r.sections.find(s=>s.id==='overview').body='A community library serving local residents.';
+await test('Sourced facts need existing sources; AI interpretations never become verified facts',()=>{assert.equal(createResearchClaim({text:'Fact',evidenceType:'sourced-fact'},r.references).ok,false);assert.equal(createResearchClaim({text:'Fact',evidenceType:'sourced-fact',sourceIds:['invented']},r.references).ok,false);const fact=createResearchClaim({id:'finding-1',sectionId:'overview',text:'Strong afternoon exposure observed.',evidenceType:'sourced-fact',sourceIds:['source-1'],verification:'verified'},r.references);assert.equal(fact.ok,true);r.claims.push(fact.claim);assert.equal(createResearchClaim({text:'AI opinion',evidenceType:'ai-interpretation',verification:'verified'}).claim.verification,'unverified');assert.equal(validateResearchWorkspace(r).ok,true);});
+await test('Stored references generate provenance-aware citations',()=>{const refs=researchBibliography(r.references);assert.equal(refs.length,1);for(const value of ['Recorder','Project source','2025-01-01','2026-10-05'])assert.ok(refs[0].text.includes(value));});
+await test('Optional site analyses link observations to implications and source IDs',()=>{const analyses=ensureSiteAnalyses(p);assert.ok(analyses.length>=25);assert.equal(updateSiteAnalysis(p,'noise',{data:'Noise from western road',interpretation:'Potential acoustic discomfort',designImplication:'Consider a buffer',sourceIds:['source-1'],visual:{type:'arrows',arrows:[{bearing:270,label:'Noise'}]}}).ok,true);assert.equal(siteAnalysisProgress(analyses).completed,1);assert.equal(updateSiteAnalysis(p,'noise',{data:'a',interpretation:'b',designImplication:'c',sourceIds:['unknown']}).ok,false);});
+await test('SVG diagram output escapes user labels and describes schematic intent',()=>{assert.ok(bubbleDiagramSVG(['<script>','Library'],[['<script>','Library']]).includes('&lt;script&gt;'));assert.ok(!directionalAnalysisSVG({arrows:[{bearing:270,label:'<img>'}]}).includes('<img>'));assert.ok(northArrowSVG().includes('User-defined north'));});
+await test('Concept drivers connect research and site records without dangling links',()=>{ensureConcept(p);assert.equal(createDesignDriver({text:'Shade the west edge',findingId:'finding-1',siteAnalysisId:'noise'},p).ok,true);assert.equal(createDesignDriver({text:'Idea',findingId:'fake'},p).ok,false);});
+await test('AI research requests use stored evidence and disclose lack of source verification',()=>{const req=buildResearchAIRequest(p,{task:'compare'});assert.ok(req.contextText.includes('source-1'));assert.ok(req.systemPrompt.includes('Never invent'));assert.ok(req.systemPrompt.includes('cannot browse'));});
+await test('Report projection is pure and preserves citation linkage',()=>{const before=JSON.stringify(p),doc=createArchitectureDocument(p);assert.equal(JSON.stringify(p),before);assert.ok(doc.bibliography.some(c=>c.id==='source-1'));assert.equal(doc.sections.find(s=>s.id==='research-overview').blocks.find(b=>b.id==='finding-1').sourceIds[0],'source-1');assert.equal(validateArchitectureDocument(doc).ok,true);});
+await test('Document composer supports order, disabled blocks, overrides and custom blocks',()=>{const doc=createArchitectureDocument(p,{sectionOrder:['research-climate','research-overview'],disabledBlocks:['finding-1'],overrides:{'overview-body':{content:'Edited for the report'}},customBlocks:[{id:'custom-quote',sectionId:'research-overview',type:'quote',content:'A design question',sourceIds:[]}]});assert.equal(doc.sections[0].id,'research-climate');assert.ok(!doc.sections.flatMap(s=>s.blocks).some(b=>b.id==='finding-1'));assert.equal(doc.sections.find(s=>s.id==='research-overview').blocks.find(b=>b.id==='overview-body').content,'Edited for the report');assert.ok(doc.sections.flatMap(s=>s.blocks).some(b=>b.id==='custom-quote'));});
+for(const size of Object.keys(REPORT_PAGE_SIZES))await test('Physical report and board template: '+size,()=>{for(const template of ['report','board']){const doc=createArchitectureDocument(p,{documentType:'board',template,pageSize:size}),html=renderArchitectureDocument(doc),paper=REPORT_PAGE_SIZES[size];assert.ok(html.includes(`size:${paper.widthMm}mm ${paper.heightMm}mm`));assert.ok(html.includes('repeat(12'));assert.ok(html.includes('paginateArchitecturePages'));assert.ok(html.includes('<svg'));}});
+await test('Document HTML escapes text and rejects executable links and SVG image data',()=>{const doc=createArchitectureDocument(p);doc.title='</script><script>alert(1)</script>';assert.ok(!renderArchitectureDocument(doc).includes('<script>alert(1)</script>'));assert.equal(reportSafeURL('javascript:alert(1)'),'');assert.equal(reportSafeImage('data:image/svg+xml,<svg onload=alert(1)>'),'');assert.equal(validateArchitectureDocument({...doc,pageSize:'fake'}).ok,false);});
+await test('Offline PDF adapter reports a real limitation; HTTP adapter verifies PDF bytes',async()=>{const doc=createArchitectureDocument(p);assert.equal((await generateArchitecturePDF(doc,{protocol:'file:'})).code,'RENDERER_UNAVAILABLE');const res=await generateArchitecturePDF(doc,{protocol:'http:',fetchImpl:async()=>new Response('%PDF-1.7\nfixture',{headers:{'Content-Type':'application/pdf','X-AHH-Renderer':'chromium'}})});assert.equal(res.ok,true);assert.equal(res.renderer,'chromium');assert.equal((await generateArchitecturePDF(doc,{fetchImpl:async()=>new Response('not pdf',{headers:{'Content-Type':'application/pdf'}})})).ok,false);});
+await test('Vivliostyle failure falls back through the isolated Chromium adapter',async()=>{let calls=0;const res=await renderArchitecturePDFOnServer(createArchitectureDocument(p),{renderer:'vivliostyle',vivliostyle:async()=>{throw Error('Unavailable');},chromium:async html=>{calls++;assert.ok(html.includes('@page'));return Buffer.from('%PDF-1.7');}});assert.equal(calls,1);assert.equal(res.renderer,'chromium-fallback');});
+console.log(`Summary: ${passed} passed, 0 failed.`);

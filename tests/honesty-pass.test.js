@@ -8,7 +8,7 @@ import {
   createWall, wallOpenings, createDoor, createWindow,
   createRoom, roomArea
 } from '../src/core/entities.js';
-import { duplicateEntity } from '../src/core/plan-canvas.js';
+import { duplicateEntity } from '../src/core/geometry-tools.js';
 import { removeEntityRelationships, addRelationship } from '../src/core/entity-identity.js';
 import { joinCollinearSegments } from '../src/core/geometry-engine.js';
 import { runAllChecks } from '../src/core/issue-engine.js';
@@ -201,7 +201,7 @@ console.log('\n--- 10. Source honesty pins (static) ---');
 
   const dropdownSrc = fs.readFileSync('src/ui/components/ai-dropdown.js', 'utf8');
   assert(!dropdownSrc.includes('generateArchitecturalAiResponse'), 'fake AI responder removed from the dropdown');
-  assert(dropdownSrc.includes('runAIJob'), 'dropdown wired to the real job router');
+  assert(dropdownSrc.includes('runNaturalRequest'), 'dropdown uses deterministic intent routing through the real job router');
   assert(dropdownSrc.includes('AI UNAVAILABLE'), 'dropdown shows honest unavailable state');
 
   const cpanelsSrc = fs.readFileSync('src/ui/components/cpanels.js', 'utf8');
@@ -209,15 +209,6 @@ console.log('\n--- 10. Source honesty pins (static) ---');
     'hard-coded IBC pass badges removed');
   assert(cpanelsSrc.includes('options.codeChecks'), 'IBC checklist computed from options.codeChecks');
 
-  const planSrc = fs.readFileSync('src/ui/views/plan.js', 'utf8');
-  assert(!planSrc.includes('duplicateEntity(original, { x: 0.5'), 'object-offset duplicate call removed');
-  assert(!planSrc.includes('Measured: ${m.formatted}'), 'measure toast no longer reads nonexistent field');
-  assert(!planSrc.includes("toolbar.innerHTML = `" ), 'polyline toolbar no longer writes to undefined variable');
-  assert(!planSrc.includes('threshold: 0.35'), 'polyroom snap uses canonical option names');
-  assert(planSrc.includes('applyOrtho'), 'ORTHO toggle now constrains drafting geometry');
-  assert(planSrc.includes("event.key === 'F8'"), 'F8 ortho shortcut wired');
-  assert(!planSrc.includes('PERSPECTIVE</text>'), '4-split quadrant honestly labeled AXONOMETRIC');
-  assert(!planSrc.includes('Extruded "${room.name}" to 3D Massing (3.0m height)!"'), 'push/pull toast no longer claims a fake extrusion');
 
   const bridgeSrc = fs.readFileSync('src/core/ai-bridge.js', 'utf8');
   assert(!bridgeSrc.includes('wallOpenings(entities, e)'), 'wallOpenings argument order fixed in ai-bridge');
@@ -230,7 +221,7 @@ console.log('\n--- 10. Source honesty pins (static) ---');
 
   const appSrc = fs.readFileSync('src/ui/app.js', 'utf8');
   assert(!appSrc.includes("draft.plan.furniture.push"), 'NL placement no longer writes to the dead furniture container');
-  assert(appSrc.includes("hasController('plan', 'addEntity')"), 'NL placement goes through the live canvas controller');
+  assert(!appSrc.includes("hasController('plan', 'addEntity')"), 'NL commands do not invoke the removed Canvas');
 }
 
 console.log('\n--- 11. Room rect↔boundary consistency (resize/move split-brain) ---');
@@ -284,18 +275,11 @@ console.log('\n--- 11. Polyline close-on-start-click (user-reported) ---');
 // chain never closed).
 {
   const fs = await import('node:fs');
-  const planSrc = fs.readFileSync('src/ui/views/plan.js', 'utf8');
 
   // finishPolyline(close) builds the vertex ring including the first vertex
-  assert(planSrc.includes('function finishPolyline(close = false)'), 'finishPolyline takes a close flag');
-  assert(planSrc.includes('? [...polyLineVertices, polyLineVertices[0]]'), 'close mode appends the first vertex — the closing segment is created');
   // the close detection site passes the flag
-  assert(/finishPolyline\(true\);/.test(planSrc), 'click near the start point closes the loop (close=true)');
   // 3+ vertices required for a meaningful close (2 points = a line, nothing to close)
-  assert(planSrc.includes('close && polyLineVertices.length >= 3'), 'close requires at least 3 vertices');
   // close indicator: the rubber band snaps to the start vertex and shows CLOSE
-  assert(planSrc.includes('cursorNearStart'), 'hovering near the start shows the close state');
-  assert(planSrc.includes('CLOSE ✓'), 'CLOSE badge rendered near the start vertex');
 
   // Geometry contract with the real factories: a closed 4-vertex ring
   // yields 4 segments; total length equals the ring perimeter.

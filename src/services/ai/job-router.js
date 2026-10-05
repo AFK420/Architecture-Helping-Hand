@@ -1,3 +1,4 @@
+import { resolveAIIntent } from '../../core/ai-intent.js';
 /**
  * Architecture Helping Hand - AI Job Router (Phase 15, M6)
  * The single entry point the rest of the application uses:
@@ -88,6 +89,7 @@ export function createJobRouter(options = {}) {
   if (!transports || typeof transports.get !== 'function') throw new Error('createJobRouter requires transports');
 
   let assignments = loadAssignments();
+  let defaults = loadDefaults();
   let activityLog = loadActivity();
   const lastErrors = new Map(); // jobId → { at, errorCode, message }
 
@@ -121,9 +123,40 @@ export function createJobRouter(options = {}) {
     return out;
   }
 
+  function loadDefaults() {
+    try { const value=JSON.parse(storage?.getItem(AI_JOB_SETTINGS_KEY)||'{}').defaults;
+      if(value && typeof value.providerId==='string') return {providerId:value.providerId,modelId:String(value.modelId||''),visionModel:String(value.visionModel||'auto'),imageModel:String(value.imageModel||'auto'),automatic:value.automatic!==false};
+    } catch {}
+    return {providerId:'',modelId:'',visionModel:'auto',imageModel:'auto',automatic:true};
+  }
+  function configureDefaults(value) {
+    const next={...defaults,...value};
+    const p=providerManager.getProviderStatus(next.providerId);
+    const model=modelCatalog.getModel(next.providerId,next.modelId);
+    if(!p?.enabled || !model || model.status!=='READY' || !model.capabilities.text) return {ok:false,error:'Choose an enabled provider and an available text model.'};
+    for(const [key,cap] of [['visionModel','vision'],['imageModel','imageGen']]) {
+      if(next[key] && next[key]!=='auto') {
+        const m=modelCatalog.getModel(next.providerId,next[key]);
+        if(!m || m.status!=='READY' || !m.capabilities[cap]) return {ok:false,error:'The selected '+key+' is unavailable or lacks the required capability.'};
+      }
+    }
+    defaults=next;persistAssignments();return {ok:true,defaults:{...defaults}};
+  }
+  function defaultAssignment(jobId) {
+    const def=getJobDefinition(jobId);if(!def || !defaults.providerId)return null;
+    const special=jobId==='imageAnalysis'?defaults.visionModel:jobId==='conceptImage'?defaults.imageModel:defaults.modelId;
+    let modelId=special && special!=='auto'?special:defaults.modelId;
+    const meets=m=>m?.status==='READY' && Object.entries(def.requiredCapabilities).every(([cap,need])=>!need||m.capabilities[cap]);
+    const chosen=modelCatalog.getModel(defaults.providerId,modelId);
+    if(!meets(chosen) && defaults.automatic && (!special || special==='auto' || special===defaults.modelId)) {
+      const candidate=modelCatalog.listModels(defaults.providerId).filter(meets).sort((a,b)=>a.modelId.localeCompare(b.modelId))[0];
+      if(candidate)modelId=candidate.modelId;
+    }
+    return {providerId:defaults.providerId,modelId,fallbackPolicy:FALLBACK_POLICIES.NEVER,automatic:true};
+  }
   function persistAssignments() {
     try {
-      storage?.setItem(AI_JOB_SETTINGS_KEY, JSON.stringify({ version: 1, assignments, updatedAt: now() }));
+      storage?.setItem(AI_JOB_SETTINGS_KEY, JSON.stringify({ version: 1, assignments, defaults, updatedAt: now() }));
     } catch (e) {}
   }
 
@@ -186,7 +219,7 @@ export function createJobRouter(options = {}) {
   }
 
   function getAssignment(jobId) {
-    return assignments[jobId] || null;
+    return assignments[jobId] || defaultAssignment(jobId);
   }
 
   function capName(cap) {
@@ -200,7 +233,7 @@ export function createJobRouter(options = {}) {
   function getJobStatus(jobId) {
     const def = getJobDefinition(jobId);
     if (!def) return { jobId, status: 'UNKNOWN', label: jobId };
-    const a = assignments[jobId];
+    const a = getAssignment(jobId);
     if (!a) return { jobId, status: 'NOT CONFIGURED', label: def.label };
     const providerStatus = providerManager.getProviderStatus(a.providerId);
     if (!providerStatus) return { jobId, status: 'UNKNOWN', label: def.label };
@@ -314,7 +347,7 @@ export function createJobRouter(options = {}) {
       return { ok: false, errorCode: AI_ERROR_CODES.PROVIDER_UNCONFIGURED, message: `No API key for ${status.providerId} — add one in the AI Control Center. The app works fully without AI.` };
     }
 
-    const assignment = assignments[jobId];
+    const assignment = getAssignment(jobId);
     const providerStatus = providerManager.getProviderStatus(assignment.providerId);
     const model = modelCatalog.getModel(assignment.providerId, assignment.modelId);
     const transport = transports.get(assignment.providerId);
@@ -341,10 +374,11 @@ export function createJobRouter(options = {}) {
         ? buildFactsPack({ jobId, scope: request.scope, options: request.factsOptions, request })
         : { text: '', data: {}, factChecks: [] };
       factChecks = facts.factChecks || [];
-      systemPrompt = modeProfile ? modeProfile.systemPrompt : (request.systemPrompt || 'You are an architecture assistant.');
+      systemPrompt = request.systemPrompt || (modeProfile ? modeProfile.systemPrompt : 'You are an architecture assistant.');
       userPrompt = [
         'FACTS PACK (deterministic, from the application — trust these numbers):',
         facts.text || '(no project data available)',
+        request.contextText || '',
         '',
         `STUDENT (${def.label}):`,
         request.userMessage || '(no message)'
@@ -484,6 +518,9 @@ export function createJobRouter(options = {}) {
 
   return {
     runAIJob,
+    runNaturalRequest: (request={}) => {const route=resolveAIIntent(request.userMessage,{hasImage:!!request.image,manualJob:request.manualJob||'auto'});return runAIJob(route.jobId,request).then(result=>({...result,route}));},
+    configureDefaults,
+    getDefaults: () => ({...defaults}),
     assignModel,
     clearAssignment,
     getAssignment,

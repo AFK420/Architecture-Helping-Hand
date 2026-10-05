@@ -4,6 +4,7 @@
  */
 
 import fs from 'fs';
+import { NAV_TOOLS } from '../src/core/workspaces.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -32,40 +33,44 @@ const htmlContent = fs.readFileSync(htmlPath, 'utf-8');
 const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
 
 // 1. Verify Mode Navigation Targets
-// Navigation is now rendered from the NAV_CATALOG in src/ui/app.js (sidebar),
-// so the catalog must list every mode and index.html must contain every view
-// container. Static nav tabs no longer exist; the contract follows the source.
+// Navigation is rendered from the workspace registry (src/core/workspaces.js)
+// consumed by src/ui/app.js, so the registry must list every tool and
+// index.html must contain every view container — no dead sidebar links.
 {
-  const expectedModes = ['home', 'converter', 'rescale', 'detector', 'area_volume', 'furniture', 'reference', 'workspace', 'expression', 'multiscale', 'chains', 'cad_clipboard', 'batch_cad', 'cad_handoff', 'stairs', 'ramps', 'slopes', 'export', 'projects', 'plan', 'ai', 'ai_settings', 'imports', 'survey'];
+  const expectedModes = [...NAV_TOOLS.keys()];
 
-  const catalogMatch = appJsContent.match(/const NAV_CATALOG = \[([\s\S]*?)\];/);
-  assert(catalogMatch, 'src/ui/app.js declares the NAV_CATALOG (single navigation source of truth)');
-  const catalog = catalogMatch ? catalogMatch[1] : '';
+  const registryPath = path.join(rootDir, 'src', 'core', 'workspaces.js');
+  const registryContent = fs.readFileSync(registryPath, 'utf-8');
+  assert(appJsContent.includes("from '../core/workspaces.js'"), 'src/ui/app.js imports the workspace registry');
 
   for (const mode of expectedModes) {
-    const inCatalog = catalog.includes(`id: '${mode}'`);
+    const inRegistry = NAV_TOOLS.has(mode);
     const hasView = htmlContent.includes(`id="mode-view-${mode}"`);
-    assert(inCatalog, `NAV_CATALOG lists mode "${mode}"`);
+    assert(inRegistry, `Workspace registry lists tool "${mode}"`);
     assert(hasView, `index.html has view container "mode-view-${mode}"`);
   }
 
-  // Every catalog id must have a view container (no dead sidebar links)
-  if (catalogMatch) {
-    const catalogIds = [...catalog.matchAll(/id:\s*'([a-z_0-9]+)'/g)].map(m => m[1]);
-    const missingViews = catalogIds.filter(id => !htmlContent.includes(`id="mode-view-${id}"`));
-    assert(missingViews.length === 0, 'Every NAV_CATALOG entry has a matching view container', missingViews);
-  }
+  // Every registry tool id must have a view container (no dead links)
+  const registryToolIds = [...NAV_TOOLS.keys()];
+  const missingViews = registryToolIds.filter(id => !htmlContent.includes(`id="mode-view-${id}"`));
+  assert(missingViews.length === 0, 'Every registry tool has a matching view container', missingViews);
+
+  // The landing screen is a real view with a container
+  assert(htmlContent.includes('id="mode-view-landing"'), 'index.html has the workspace landing container');
 }
 
-// 1b. Application shell contract: sidebar, top bar, and Home screen elements
-//     must exist and the shell CSS must be present (regression pins for the
-//     sidebar/topbar layout that replaced the horizontal mode bar).
+// 1b. Application shell contract: sidebar, top bar, landing, and Home screen
+//     elements must exist and the shell CSS must be present (regression pins
+//     for the Phase A workspace-navigation layout that replaced the old
+//     section list + duplicate menubar ribbon).
 {
   const shellIds = [
     'app-shell', 'app-sidebar', 'app-workbench', 'app-topbar',
-    'app-menubar', 'tool-surface', 'sidebar-toggle-btn', 'sidebar-backdrop',
+    'tool-surface', 'sidebar-toggle-btn', 'sidebar-backdrop',
     'sidebar-search', 'sidebar-search-clear', 'sidebar-nav',
-    'topbar-current-tool', 'topbar-home-btn',
+    'topbar-home-btn', 'topbar-crumb-workspace', 'topbar-crumb-tool',
+    'topbar-project-chip', 'topbar-file-menu', 'topbar-ai-btn',
+    'mode-view-landing', 'landing-content',
     // Home screen
     'mode-view-home', 'home-project-name', 'home-project-badge',
     'home-project-desc', 'home-project-stats', 'home-ai-status',
@@ -76,8 +81,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     assert(htmlContent.includes(`id="${id}"`), `index.html contains shell element: #${id}`);
   }
   assert(appJsContent.includes('renderSidebar'), 'app.js renders the sidebar (renderSidebar)');
-  assert(appJsContent.includes('renderMenuBar'), 'app.js renders the architectural menu bar (renderMenuBar)');
-  assert(appJsContent.includes('NAV_CATALOG'), 'app.js declares NAV_CATALOG');
+  assert(appJsContent.includes('NAV_TOOLS'), 'app.js derives navigation from the workspace registry (NAV_TOOLS)');
 }
 
 // 2. Verify Critical DOM Element IDs exist in index.html
@@ -184,7 +188,6 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'custom-furn-unit',
     'btn-run-custom-furn',
     'custom-furn-result',
-    'btn-planner-custom-furn',
     'btn-copy-custom-furn',
     'btn-send-custom-furn',
 
@@ -592,25 +595,7 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
     'projects-snapshot-label',
     'btn-project-snapshot',
     'projects-snapshots-list',
-    // Plan Canvas (Mode 19)
-    'plan-tool-select',
-    'plan-furniture-group',
-    'plan-furniture-select',
-    'plan-grid-select',
-    'btn-plan-undo',
-    'btn-plan-redo',
-    'btn-plan-delete',
-    'btn-plan-clear',
-    'plan-error-msg',
-    'plan-entity-list',
-    'plan-result-panel',
-    'plan-state-badge',
-    'plan-status-badge',
-    'plan-svg',
-    'plan-svg-wrap',
-    'btn-plan-save',
-    'btn-plan-export-svg',
-    'btn-plan-export-dxf',
+
 
     // Quick Dimension Strip IDs
     'quick-dimension-strip',
@@ -776,18 +761,47 @@ const appJsContent = fs.readFileSync(appJsPath, 'utf-8');
   assert(firstUseIdx !== -1, 'escapeHtml is actually used to guard user-controllable strings');
 }
 
-// 6. Verify Architectural Menu Bar & Shortcuts Guide Modal Contracts
+// 6. Verify Top Bar, Workspace Navigation & Shortcuts Guide Modal Contracts
 {
   const cssPath = path.join(rootDir, 'css', 'main.css');
   const cssContent = fs.readFileSync(cssPath, 'utf-8');
 
-  // Menubar contracts
-  assert(htmlContent.includes('id="app-menubar"'), 'index.html contains #app-menubar ribbon');
-  assert(cssContent.includes('.app-menubar'), 'css/main.css defines .app-menubar styles');
-  assert(cssContent.includes('.menubar-dropdown-menu'), 'css/main.css defines .menubar-dropdown-menu styles');
-  assert(appJsContent.includes('function renderMenuBar'), 'src/ui/app.js defines renderMenuBar');
-  assert(appJsContent.includes('function closeAllMenuBarDropdowns'), 'src/ui/app.js defines closeAllMenuBarDropdowns');
-  assert(appJsContent.includes('SECTION_ICONS'), 'src/ui/app.js defines SECTION_ICONS mapping');
+  // ONE navigation hierarchy: the sidebar registry. The duplicate menubar
+  // ribbon was removed in the Phase A IA redesign — pin its absence so it
+  // cannot quietly return as a second competing navigation system.
+  assert(!htmlContent.includes('id="app-menubar"'), 'index.html no longer contains the duplicate #app-menubar ribbon');
+  assert(!appJsContent.includes('function renderMenuBar'), 'src/ui/app.js no longer defines renderMenuBar');
+  assert(!appJsContent.includes('NAV_CATALOG'), 'src/ui/app.js derives navigation from the workspace registry (NAV_CATALOG removed)');
+
+  // Workspace navigation contracts (sidebar + landing + registry)
+  assert(appJsContent.includes('from \'../core/workspaces.js\''), 'src/ui/app.js imports the workspace registry');
+  assert(appJsContent.includes('function openWorkspace'), 'src/ui/app.js defines openWorkspace');
+  assert(appJsContent.includes('function renderLanding'), 'src/ui/app.js defines renderLanding');
+  assert(appJsContent.includes('function renderSidebar'), 'src/ui/app.js renders the sidebar (renderSidebar)');
+  assert(htmlContent.includes('id="mode-view-landing"'), 'index.html contains the #mode-view-landing landing section');
+  assert(htmlContent.includes('id="landing-content"'), 'index.html contains #landing-content host');
+  assert(cssContent.includes('.sidebar-workspace'), 'css/main.css defines .sidebar-workspace styles');
+  assert(cssContent.includes('.sidebar-tool'), 'css/main.css defines .sidebar-tool styles');
+  assert(cssContent.includes('body.sidebar-rail .app-sidebar'), 'css/main.css defines the collapsed icon-rail mode');
+
+  // Top bar contracts: breadcrumb (workspace + tool crumbs), project chip,
+  // compact File menu, AI drawer trigger
+  assert(htmlContent.includes('id="topbar-crumb-workspace"'), 'index.html contains #topbar-crumb-workspace breadcrumb crumb');
+  assert(htmlContent.includes('id="topbar-crumb-tool"'), 'index.html contains #topbar-crumb-tool breadcrumb crumb');
+  assert(htmlContent.includes('id="topbar-project-chip"'), 'index.html contains #topbar-project-chip');
+  assert(htmlContent.includes('id="topbar-file-menu"'), 'index.html contains #topbar-file-menu');
+  assert(htmlContent.includes('id="topbar-ai-btn"'), 'index.html contains #topbar-ai-btn AI drawer trigger');
+  assert(appJsContent.includes('function wireTopBar'), 'src/ui/app.js wires the top bar (wireTopBar)');
+  assert(appJsContent.includes('function closeTopFileMenu'), 'src/ui/app.js defines closeTopFileMenu');
+  assert(cssContent.includes('.topbar-project-chip'), 'css/main.css defines .topbar-project-chip styles');
+  assert(cssContent.includes('.topbar-file-dropdown'), 'css/main.css defines .topbar-file-dropdown styles');
+
+  // Home workflow orientation
+  assert(htmlContent.includes('home-ws-btn'), 'index.html Home view includes workspace workflow buttons');
+  assert(htmlContent.includes('STUDIO WORKFLOW'), 'index.html Home view includes the studio workflow card');
+
+  // QA hooks
+  assert(appJsContent.includes('__ahhOpenWorkspace'), 'src/ui/app.js exposes the __ahhOpenWorkspace QA hook');
 
   // Guide Modal scrollability & reference content contracts
   assert(cssContent.includes('max-height: 88vh') || cssContent.includes('max-height:88vh'), 'css/main.css bounds .modal-card with max-height: 88vh');

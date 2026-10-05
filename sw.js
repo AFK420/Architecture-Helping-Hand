@@ -3,14 +3,15 @@
  * Enables 100% offline operation, instant caching, and standalone desktop installation.
  */
 
-const CACHE_NAME = 'archiscale-v2.6.1';
+const CACHE_NAME = 'ahh-companion-2026-10-05';
 
 const PRECACHE_ASSETS = [
   './',
   './index.html',
-  './css/main.css?v=2.3.6',
-  './css/themes.css?v=2.3.6',
-  './js/app.js?v=2.3.6',
+  './css/main.css?v=2.7.1',
+  './css/companion.css',
+  './css/themes.css?v=2.7.1',
+  './js/app.js?v=2.7.1',
   './js/app.js',
   './manifest.json',
   './assets/icon.svg',
@@ -48,7 +49,7 @@ self.addEventListener('activate', event => {
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames
-          .filter(name => name.startsWith('archiscale-') && name !== CACHE_NAME)
+          .filter(name => (name.startsWith('archiscale-') || name.startsWith('ahh-')) && name !== CACHE_NAME)
           .map(name => {
             console.log('[PWA ServiceWorker] Deleting obsolete cache:', name);
             return caches.delete(name);

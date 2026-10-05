@@ -17,7 +17,7 @@ import {
   computeAlignmentGuides,
   computeMeasurement,
   duplicateEntity
-} from '../src/core/plan-canvas.js';
+} from '../src/core/geometry-tools.js';
 import { buildDXF } from '../src/core/export/export-model.js';
 import { createProject, validateProject, normalizeProject } from '../src/core/project.js';
 import { parseNaturalLanguageCommand } from '../src/services/commands.js';
@@ -163,7 +163,7 @@ console.log('--- 3. Natural Language Command Bar Parsing ---');
   // Test 3d: Place furniture command
   const cmdPlace = parseNaturalLanguageCommand('place king bed');
   assert(cmdPlace !== null, 'Parses "place king bed"');
-  assertEqual(cmdPlace.type, 'place', 'Command type is "place"');
+  assertEqual(cmdPlace.type, 'furniture_lookup', 'Furniture command opens a CAD asset lookup');
   assert(cmdPlace.furniture.name.toLowerCase().includes('king'), 'Matches King Bed from catalog', cmdPlace.furniture.name);
 
   // Test 3e: Unit conversion command

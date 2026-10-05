@@ -1,3 +1,5 @@
+> Current navigation: Design Tools → Dimensions → Chain. This document describes the retained engine, not a separate primary navigation tab.
+
 # Architecture Helping Hand — Dimension Chains
 
 > **Phase 2.5: Daily Architect Toolkit — Part 5: Dimension Chains**  

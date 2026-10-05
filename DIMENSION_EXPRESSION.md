@@ -1,3 +1,5 @@
+> Current navigation: Design Tools → Dimensions → Quick and expression-enabled measurement inputs. This document describes the retained engine, not a separate primary navigation tab.
+
 # Architecture Helping Hand — Dimension Expression Engine
 
 > **Phase 2.5: Daily Architect Toolkit — Part 3: Dimension Expression Engine**  

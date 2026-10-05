@@ -4,6 +4,7 @@
  * no duplicate ids, and every category resolvable to a label.
  */
 
+import { FURNITURE_CATEGORIES } from '../src/core/furniture-taxonomy.js';
 import { FURNITURE_DATABASE } from '../src/core/furniture.js';
 import { OBJECT_LIBRARY_PACKS, OBJECT_CATEGORY_LABELS } from '../src/core/object-library.js';
 
@@ -13,7 +14,7 @@ function assert(cond, msg) {
   else { failed++; console.error(`  ❌ FAIL: ${msg}`); }
 }
 
-const ALL = [...FURNITURE_DATABASE, ...OBJECT_LIBRARY_PACKS];
+const ALL = FURNITURE_DATABASE;
 
 console.log('\n--- 1. Size + uniqueness ---');
 assert(ALL.length >= 600, `library size ≥ 600 (got ${ALL.length})`);
@@ -30,7 +31,7 @@ assert(ALL.every(o => typeof o.name === 'string' && o.name.length > 0), 'every i
 
 console.log('\n--- 3. Requested domains present ---');
 const byCat = new Map();
-for (const o of ALL) byCat.set(o.category, (byCat.get(o.category) || 0) + 1);
+for (const o of OBJECT_LIBRARY_PACKS) byCat.set(o.category, (byCat.get(o.category) || 0) + 1);
 for (const [cat, min] of [
   ['healthcare', 40], ['emergency', 25], ['sports', 30], ['fitness', 15],
   ['leisure', 30], ['education', 15], ['hospitality', 20], ['transport', 20], ['landscape', 40]
@@ -45,7 +46,7 @@ has('motorhome'); has('arcade'); has('esports'); has('cinema'); has('tree'); has
 has('planter'); has('rain garden'); has('wheelchair');
 
 console.log('\n--- 4. Category labels resolve ---');
-const unlabeled = [...byCat.keys()].filter(c => !OBJECT_CATEGORY_LABELS[c]);
+const unlabeled = [...new Set(ALL.map(o=>o.category))].filter(c => !FURNITURE_CATEGORIES[c]);
 assert(unlabeled.length === 0, `every category has a browser label (missing: ${unlabeled.join(',') || 'none'})`);
 
 console.log('\n--- 5. Real-dimension spot checks ---');

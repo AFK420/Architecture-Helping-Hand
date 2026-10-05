@@ -1,3 +1,5 @@
+> Historical implementation notes. The Canvas workflows below were retired in the companion redesign and are not current user features. Generic engines and legacy project data remain supported. See [README.md](README.md) and [REDESIGN_STATUS.md](REDESIGN_STATUS.md) for current workflows.
+
 # Architectural Studio Transformation: Center-Graph Viewport, Adaptive Software Personas (AutoCAD, Rhino, Photoshop, SketchUp), 16 Tool Categories with Cascades/Flyouts, Omnipresent Top AI Dropdown, and Future AI Specification
 
 ## Executive Overview

@@ -1,0 +1,59 @@
+/* Calm, responsive workspaces built on the existing theme variables. */
+.research-tool-layout{grid-template-columns:minmax(0,1fr)}
+.research-lib-form>.companion-advanced{grid-column:1/-1}
+.report-sections [data-section-move]{min-width:30px;min-height:30px;border:1px solid var(--border-color-light);border-radius:5px;background:var(--bg-surface);color:var(--text-primary);cursor:pointer}
+.companion-lead{color:var(--text-secondary);margin:0 0 1.2rem;max-width:65ch}
+.companion-workspace{display:grid;grid-template-columns:220px minmax(0,1fr);gap:1.3rem;margin-bottom:1.4rem;align-items:start}
+.companion-card{padding:1.4rem;min-width:0}
+.companion-card h2{font-size:1.55rem;font-weight:550;letter-spacing:-.035em;margin:0 0 1rem}
+.companion-card h3{font-size:1.05rem;margin:0 0 .7rem}
+.companion-index{border:1px solid var(--border-color-light);border-radius:10px;background:var(--bg-card);padding:1rem;min-width:0}
+.companion-index h3{font-size:.88rem;margin:0 0 .9rem;color:var(--text-secondary)}
+.companion-index p,.companion-index small{font-size:.76rem;color:var(--text-secondary);overflow-wrap:anywhere}
+.companion-index-row{display:flex;align-items:center;gap:.5rem;margin-bottom:.18rem}
+.companion-index-row input[type=checkbox]{flex:0 0 auto;width:auto;accent-color:var(--accent-primary)}
+.companion-index-row button{flex:1;min-width:0;text-align:left;border:0;border-radius:5px;padding:.55rem .4rem;background:none;font:inherit;font-size:.76rem;color:var(--text-secondary);cursor:pointer}
+.companion-index-row button[aria-current=true],.companion-index-row button:hover{background:var(--bg-card-header);color:var(--accent-primary)}
+.companion-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-bottom:1rem}
+.companion-field{display:flex;flex-direction:column;gap:.4rem;margin:0 0 1rem;font-size:.8rem;color:var(--text-secondary)}
+.companion-field .text-input,.companion-field .calc-select,.companion-form-grid .calc-select{width:100%;min-width:0}
+.companion-field textarea{resize:vertical;line-height:1.6;min-height:3rem}
+.companion-form-grid label{display:flex;flex-direction:column;gap:.4rem;font-size:.8rem;color:var(--text-secondary)}
+.companion-form-grid input[type=checkbox]{width:auto;align-self:start}
+.companion-advanced{border:1px solid var(--border-color-light);border-radius:7px;margin:1rem 0;padding:.9rem 1rem;background:var(--bg-card-header)}
+.companion-advanced>summary{font-size:.8rem;font-weight:550;cursor:pointer;color:var(--text-secondary)}
+.companion-advanced[open]>summary{margin-bottom:1rem}
+.companion-actions{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.6rem 0}
+.companion-findings article,.companion-index article{border-bottom:1px solid var(--border-color-light);padding:.8rem 0}
+.companion-findings article p{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.88rem;line-height:1.6}
+.companion-findings small{font-size:.72rem;color:var(--accent-primary)}
+.analysis-visual svg{display:block;width:100%;height:auto;max-height:420px;border-radius:7px;margin-top:1rem}
+.dimension-tabs{display:flex;gap:.25rem;flex-wrap:wrap;padding:.3rem;border:1px solid var(--border-color-light);background:var(--bg-card-header);border-radius:8px;margin:1rem 0 1.5rem}
+.dimension-tabs button{border:0;background:transparent;color:var(--text-secondary);font:inherit;cursor:pointer;border-radius:5px;padding:.65rem 1.1rem;font-size:.82rem}
+.dimension-tabs button[aria-selected=true]{color:var(--accent-primary);background:var(--bg-card);box-shadow:0 1px 4px #0002}
+.dimension-panel[hidden]{display:none!important}
+.workflow-help{margin:0 0 1rem;border:1px solid var(--border-color-light);border-radius:7px;padding:.7rem 1rem;background:var(--bg-card-header)}
+.workflow-help summary{cursor:pointer;color:var(--text-secondary);font-size:.78rem}
+.workflow-help-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.2rem;padding-top:1.1rem}
+.workflow-help-grid strong{font-size:.64rem;letter-spacing:.08em;color:var(--accent-primary)}
+.workflow-help-grid p{font-size:.77rem;line-height:1.65;color:var(--text-secondary);margin:.4rem 0}
+.furn-tags{font-size:.65rem;color:var(--text-secondary);flex-basis:100%;overflow-wrap:anywhere}
+.furn-tags summary{cursor:pointer}
+.furn-plan-preview-box svg{max-height:150px;width:100%;height:150px;color:var(--text-secondary)}
+.furn-cat-pill{text-transform:capitalize}
+#furniture-subcategory{margin:.5rem 0 1.2rem;max-width:280px}
+.report-composer-toolbar{display:flex;align-items:end;gap:.7rem;flex-wrap:wrap;margin:1rem 0}
+.report-composer-toolbar label{display:flex;flex-direction:column;gap:.35rem;font-size:.75rem;color:var(--text-secondary)}
+.report-composer-toolbar .calc-select{min-width:150px}
+.report-composer-layout{display:grid;grid-template-columns:200px minmax(0,1fr) 270px;gap:1rem;align-items:start}
+.report-preview-scroller{overflow:auto;min-width:0;max-height:80vh;background:#242c2b;border-radius:8px;padding:1rem}
+.report-preview-scroller>label{color:#dfe8e4;font-size:.75rem;display:flex;align-items:center;gap:.5rem;margin-bottom:1rem}
+#report-preview-size{position:relative;margin:auto}
+#report-page-preview{border:0;transform-origin:top left;display:block;position:absolute;top:0;left:0;background:#e6e7e4}
+.report-sections{max-height:80vh;overflow:auto}
+.report-sections article>label{font-size:.76rem;display:flex;gap:.4rem;align-items:center}
+.report-sections input[type=checkbox]{width:auto}
+#report-export-status{font-size:.75rem;color:var(--text-secondary);max-width:45ch;overflow-wrap:anywhere}
+.companion-card button:focus-visible,.companion-index button:focus-visible,.dimension-tabs button:focus-visible,.workflow-help summary:focus-visible{outline:2px solid var(--accent-primary);outline-offset:3px}
+@media(max-width:1100px){.report-composer-layout{grid-template-columns:180px minmax(0,1fr)}#report-block-properties{grid-column:1/-1}.workflow-help-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.companion-workspace,.report-composer-layout{grid-template-columns:1fr}.companion-index{max-height:240px;overflow:auto}.companion-form-grid,.workflow-help-grid{grid-template-columns:1fr}.companion-card{padding:1rem}.dimension-tabs button{flex:1;padding:.6rem .35rem}.report-sections{max-height:240px}}

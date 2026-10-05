@@ -5,7 +5,7 @@
  * provenance (source + verification status) and may stay uncertain —
  * recording never forces geometry. The room proposal is a PROPOSAL: the
  * student accepts/edits it before the plan changes, through the same
- * entity path as drawing on the Plan Canvas.
+ * entity path as drawing on the external CAD.
  *
  * Image calibration is pure math (two-point known distance); image blobs
  * never enter localStorage — only the calibration numbers persist.
@@ -278,8 +278,8 @@ export function createSurveyView(context) {
           <span style="font-family: var(--font-family-mono); font-size: 0.8rem;"> — ${p.widthMeters.toFixed(2)} × ${p.depthMeters.toFixed(2)} m (${(p.widthMeters * p.depthMeters).toFixed(2)} m²)</span>
           <div style="font-size: 0.66rem; color: var(--text-muted);">${escape(p.note)}${result.unverifiedCount ? ` (${result.unverifiedCount} unverified)` : ''}</div>
         </div>
-        <button type="button" id="btn-survey-accept-proposal" class="result-action-btn" title="Create this room on the Plan Canvas">
-          <span>➜ Send to Plan</span>
+        <button type="button" id="btn-survey-accept-proposal" class="result-action-btn" title="Copy room dimensions for external CAD">
+          <span>Copy dimensions</span>
         </button>
       </div>`;
     const accept = dom.surveyProposalBox.querySelector('#btn-survey-accept-proposal');
@@ -288,27 +288,10 @@ export function createSurveyView(context) {
 
   function acceptProposal() {
     const result = proposeRoomFromMeasurements(measurements(), (dom.surveyRoomName?.value || '').trim() || 'Surveyed Room');
-    if (!result.proposal) {
-      showToast('No verified proposal available', 'warning');
-      return;
-    }
+    if (!result.proposal) { showToast('No verified proposal available', 'warning'); return; }
     const p = result.proposal;
-    let room;
-    try {
-      room = createRoom({ name: p.name, x: 0, y: 0, width: p.widthMeters, depth: p.depthMeters });
-    } catch (e) {
-      showError(e.message);
-      return;
-    }
-    state.plan.entities.push(room);
-    if (views.hasController('plan', 'render')) {
-      switchMode('plan');
-      views.callController('plan', 'render');
-    }
-    AudioService.playSuccess();
-    showToast(`Proposal accepted: room "${room.name}" ${p.widthMeters.toFixed(2)} × ${p.depthMeters.toFixed(2)} m added to the Plan Canvas (edit it there)`);
+    context.copyToClipboard(p.name + ': ' + p.widthMeters.toFixed(3) + ' × ' + p.depthMeters.toFixed(3) + ' m', 'Room dimensions for CAD');
   }
-
   // ------------------------------------------------------------------
   // Image calibration (pure numbers; image bytes never persist)
   // ------------------------------------------------------------------

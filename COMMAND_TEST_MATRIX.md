@@ -1,3 +1,5 @@
+> Historical implementation notes. The Canvas workflows below were retired in the companion redesign and are not current user features. Generic engines and legacy project data remain supported. See [README.md](README.md) and [REDESIGN_STATUS.md](REDESIGN_STATUS.md) for current workflows.
+
 # Command Test Matrix
 
 Evidence: **T** = `tests/cad-commands.test.js` (62 assertions) · **B** = operated live in-browser this phase · suite count 57/57, 4,952 assertions.

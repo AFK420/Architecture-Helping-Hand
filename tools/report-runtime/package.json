@@ -1,0 +1,7 @@
+{
+  "name": "ahh-report-runtime",
+  "private": true,
+  "description": "Optional server-side paged-media PDF renderer; separate from the zero-dependency frontend",
+  "dependencies": { "playwright": "1.62.1" },
+  "optionalDependencies": { "@vivliostyle/cli": "^10.0.0" }
+}

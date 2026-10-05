@@ -79,7 +79,8 @@ export function migrateEnvelope(envelope) {
   }
 
   let version = envelope.version;
-  let project = envelope.project;
+  // Migration engines normalize in place; keep the caller's saved snapshot intact.
+  let project = cloneProject(envelope.project);
 
   while (version < CURRENT_STORE_VERSION) {
     const migrate = MIGRATIONS[version - 1];

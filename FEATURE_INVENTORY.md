@@ -1,3 +1,5 @@
+> Historical implementation notes. The Canvas workflows below were retired in the companion redesign and are not current user features. Generic engines and legacy project data remain supported. See [README.md](README.md) and [REDESIGN_STATUS.md](REDESIGN_STATUS.md) for current workflows.
+
 # Feature Inventory (Phase-1 forensic baseline)
 
 Evidence legend: **B** = browser-verified this pass · **T** = unit/integration tests · **S** = static code only. No documentation used as evidence.

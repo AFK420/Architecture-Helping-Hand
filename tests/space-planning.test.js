@@ -314,7 +314,7 @@ console.log('\n--- 8. Annotations ---');
 
 {
   // Undo/redo of annotation add via the plan history (integration with Phase 3)
-  const { createHistory, entityAddRemoveCommand } = await import('../src/core/plan-canvas.js');
+  const { createHistory, entityAddRemoveCommand } = await import('../src/core/geometry-tools.js');
   const history = createHistory(20);
   const list = [];
   const ann = createAnnotation({ kind: 'arrow', x: 0, y: 0, x2: 1, y2: 1 });

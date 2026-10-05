@@ -61,7 +61,7 @@ export function createRequirementsView(context) {
     const host = dom.reqResults;
     if (!host) return;
     const b = brief();
-    const entities = state.plan.entities || [];
+    const entities = []; // Requirements stay editable; external CAD geometry is not an internal model.
     const report = evaluateBriefCompliance(b, entities);
 
     const statusBadge = (s) => {

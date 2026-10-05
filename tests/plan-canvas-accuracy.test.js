@@ -8,7 +8,7 @@
 import {
   createViewTransform, worldToSvg, svgToWorld, zoomAt, panBy,
   snapToGrid, snapRect, pickEntities, wallRect
-} from '../src/core/plan-canvas.js';
+} from '../src/core/geometry-tools.js';
 import { createRoom, roomContainsPoint } from '../src/core/entities.js';
 import { checkFurnitureFit, checkClearance } from '../src/core/space-planning.js';
 

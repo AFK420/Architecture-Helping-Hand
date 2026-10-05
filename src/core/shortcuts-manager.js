@@ -5,31 +5,21 @@
  */
 
 export const DEFAULT_SHORTCUTS = [
-  // Plan Canvas & Drafting (Architectural CAD Standard)
-  { id: 'tool_select', label: 'Select & Transform', category: 'canvas', defaultKey: 'v', key: 'v', description: 'Switch to selection and transform tool' },
-  { id: 'tool_wall', label: 'Draw Wall Segment', category: 'canvas', defaultKey: 'w', key: 'w', description: 'Switch to continuous wall placement' },
-  { id: 'tool_room', label: 'Draw Room Rectangle', category: 'canvas', defaultKey: 'r', key: 'r', description: 'Draw rectangular room footprint' },
-  { id: 'tool_furniture', label: 'Place Furniture', category: 'canvas', defaultKey: 'f', key: 'f', description: 'Place selected furniture block' },
-  { id: 'tool_measure', label: 'Tape Measure', category: 'canvas', defaultKey: 'm', key: 'm', description: 'Measure distance between points' },
-  { id: 'tool_dimension', label: 'Dimension String', category: 'canvas', defaultKey: 'd', key: 'd', description: 'Place aligned architectural dimension string' },
-  { id: 'tool_stair', label: 'Place Stair Flight', category: 'canvas', defaultKey: 't', key: 't', description: 'Place parametric stair flight' },
-  { id: 'tool_ramp', label: 'Place Ramp Wedge', category: 'canvas', defaultKey: 'p', key: 'p', description: 'Place accessible ramp entity' },
-  { id: 'plan_grid', label: 'Cycle Grid Snap', category: 'canvas', defaultKey: 'g', key: 'g', description: 'Cycle grid snap increment' },
-  { id: 'plan_snap', label: 'Toggle Snapping', category: 'canvas', defaultKey: 's', key: 's', description: 'Toggle smart snapping on/off' },
-  { id: 'plan_zoom_fit', label: 'Zoom to Extents', category: 'canvas', defaultKey: 'z', key: 'z', description: 'Frame entire plan on canvas' },
-  { id: 'plan_duplicate', label: 'Duplicate Entity', category: 'canvas', defaultKey: 'ctrl+d', key: 'ctrl+d', description: 'Duplicate selected entity with offset' },
-  { id: 'plan_delete', label: 'Delete Selected', category: 'canvas', defaultKey: 'delete', key: 'delete', description: 'Remove selected entity from plan' },
-  { id: 'plan_cancel', label: 'Cancel / Deselect', category: 'canvas', defaultKey: 'escape', key: 'escape', description: 'Clear selection or cancel active tool' },
-  { id: 'plan_undo', label: 'Undo Plan Action', category: 'canvas', defaultKey: 'ctrl+z', key: 'ctrl+z', description: 'Undo last drafting step' },
-  { id: 'plan_redo', label: 'Redo Plan Action', category: 'canvas', defaultKey: 'ctrl+y', key: 'ctrl+y', description: 'Redo undone drafting step' },
-
   // Studio Navigation & Tools
   { id: 'cmd_palette', label: 'Studio Command Bar', category: 'studio', defaultKey: 'ctrl+k', key: 'ctrl+k', description: 'Open natural language command palette' },
   { id: 'quick_dim', label: 'Quick Dimension Strip', category: 'studio', defaultKey: 'q', key: 'q', description: 'Toggle quick dimension flyout' },
   { id: 'cad_clipboard', label: 'Open CAD Clipboard', category: 'studio', defaultKey: 'c', key: 'c', description: 'Direct CAD clipboard formatter' },
   { id: 'batch_cad', label: 'Batch CAD Converter', category: 'studio', defaultKey: 'b', key: 'b', description: 'Multi-line CAD batch converter' },
   { id: 'history_drawer', label: 'Calculation Journal', category: 'studio', defaultKey: 'h', key: 'h', description: 'Toggle history journal drawer' },
-  { id: 'shortcuts_modal', label: 'Shortcuts Reference', category: 'studio', defaultKey: '?', key: '?', description: 'View and customize keybindings' }
+  { id: 'shortcuts_modal', label: 'Shortcuts Reference', category: 'studio', defaultKey: '?', key: '?', description: 'View and customize keybindings' },
+
+  { id: 'ws_project', label: 'Go to Project', category: 'workspaces', defaultKey: '1', key: '1', description: 'Open Project' },
+  { id: 'ws_tools', label: 'Go to Design Tools', category: 'workspaces', defaultKey: '2', key: '2', description: 'Open Design Tools' },
+  { id: 'ws_cad', label: 'Go to CAD Tools', category: 'workspaces', defaultKey: '3', key: '3', description: 'Open CAD Tools' },
+  { id: 'ws_documents', label: 'Go to Documents', category: 'workspaces', defaultKey: '4', key: '4', description: 'Open Documents' },
+  { id: 'ws_ai', label: 'Go to AI Assistant', category: 'workspaces', defaultKey: '5', key: '5', description: 'Open AI Assistant' },
+  { id: 'ws_settings', label: 'Go to Settings', category: 'workspaces', defaultKey: '6', key: '6', description: 'Open Settings' },
+  { id: 'ws_home', label: 'Go to Home', category: 'workspaces', defaultKey: '0', key: '0', description: 'Home' }
 ];
 
 export const SHORTCUTS_STORAGE_KEY = 'archiscale_custom_shortcuts';

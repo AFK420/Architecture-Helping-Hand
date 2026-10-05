@@ -1,3 +1,4 @@
+import { evaluateExpressionSafe } from './dimension-expression.js';
 /**
  * Architecture Helping Hand - Dimension Workspace Core Model
  * Phase 2.5: Daily Architect Toolkit — Part 2.5: Dimension Workspace v1.1
@@ -93,6 +94,13 @@ export function parseQuickAddString(inputString, defaultUnit = DEFAULT_DISPLAY_U
     }
   }
 
+  const expression = evaluateExpressionSafe(text, { defaultUnit });
+  if (expression.isValid && expression.dimension === 'length' && expression.canonicalMeters > 0) return {name:'Dimension',rawInput:text,dimensionType:detectedType,isValid:true};
+  const named = text.match(/^(.+?):\s*(.+)$/);
+  if (named) {
+    const value = evaluateExpressionSafe(named[2], { defaultUnit });
+    if (value.isValid && value.dimension === 'length' && value.canonicalMeters > 0) return {name:named[1].trim(),rawInput:named[2],dimensionType:detectedType,isValid:true};
+  }
   const tokens = text.split(/\s+/);
   if (tokens.length === 1) {
     const testParse = parseInput(tokens[0]);
@@ -177,7 +185,13 @@ export function createDimensionEntry(data = {}, defaultUnit = DEFAULT_DISPLAY_UN
     isValid = false;
     errorMessage = 'Enter a measurement';
   } else {
-    const parseRes = parseInput(rawInput);
+    let parseRes = parseInput(rawInput);
+    if (!parseRes.isValid) {
+      const expression = evaluateExpressionSafe(rawInput, { defaultUnit: fallbackUnit });
+      parseRes = expression.isValid && expression.dimension === 'length'
+        ? { isValid: true, value: expression.canonicalMeters, detectedUnit: 'm' }
+        : { isValid: false, error: expression.error?.message || 'Enter a length expression' };
+    }
     if (parseRes.isValid && parseRes.value > 0) {
       parsedNumericValue = parseRes.value;
       if (parseRes.detectedUnit) {

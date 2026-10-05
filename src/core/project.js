@@ -1,3 +1,4 @@
+import { validateResearchWorkspace } from './research-workspace.js';
 /**
  * Architecture Helping Hand - Project Document Model
  * Stabilization 2: a pure, deterministic, serializable project envelope.
@@ -136,11 +137,16 @@ export function generateProjectId() {
 
 function normalizeSite(site) {
   const s = site && typeof site === 'object' ? site : {};
-  return {
+  const normalized = {
     location: typeof s.location === 'string' ? s.location : '',
     notes: typeof s.notes === 'string' ? s.notes : '',
-    areaM2: typeof s.areaM2 === 'number' && isFinite(s.areaM2) && s.areaM2 > 0 ? s.areaM2 : null
+    areaM2: typeof s.areaM2 === 'number' && isFinite(s.areaM2) && s.areaM2 > 0 ? s.areaM2 : null,
+    // Phase G site study container: preserved verbatim through normalization
+    // (shape-checked defensively by ensureSiteStudy on access).
+    study: (s.study && typeof s.study === 'object' && !Array.isArray(s.study)) ? s.study : undefined
   };
+  if (!normalized.study) delete normalized.study;
+  return normalized;
 }
 
 /**
@@ -188,6 +194,8 @@ export function validateProject(doc) {
     }
   }
 
+  if (doc.research !== undefined) errors.push(...validateResearchWorkspace(doc.research).errors);
+  if (doc.concept !== undefined && (!doc.concept || typeof doc.concept !== 'object' || Array.isArray(doc.concept))) errors.push('concept must be an object');
   return { ok: errors.length === 0, errors };
 }
 

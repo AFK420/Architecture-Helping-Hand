@@ -1,3 +1,4 @@
+import { resolveAIIntent } from '../../core/ai-intent.js';
 /**
  * Architecture Helping Hand - AI Studio View (Mode 20)
  * Phase 15 (M8): the visible, task-focused AI workspace. NOT a chatbot —
@@ -12,7 +13,6 @@
 
 import { buildScopedFactsPack } from '../../ai/context/project-context.js';
 import { AI_JOB_DEFINITIONS } from '../../services/ai/job-router.js';
-import { parseAiActions, executeAiAction } from '../../core/ai-bridge.js';
 
 export function createAiStudioView(context) {
   const { state, dom, showToast, setUnifiedResultState, AudioService, switchMode, escapeHtml } = context;
@@ -44,7 +44,7 @@ export function createAiStudioView(context) {
   }
 
   function currentPlanEntities() {
-    return Array.isArray(state.plan?.entities) ? state.plan.entities : [];
+    return [];
   }
 
   function showError(message) {
@@ -69,11 +69,13 @@ export function createAiStudioView(context) {
   function populateJobs() {
     if (!dom.aiJobSelect) return;
     const statuses = router() ? router().listJobStatuses() : [];
-    dom.aiJobSelect.innerHTML = AI_JOB_DEFINITIONS.map(def => {
+    const selected = dom.aiJobSelect.value || 'auto';
+    dom.aiJobSelect.innerHTML = '<option value="auto">Automatic — choose from my question</option>' + AI_JOB_DEFINITIONS.map(def => {
       const st = statuses.find(s => s.jobId === def.jobId);
       const mark = !st ? '' : (st.status === 'READY' ? '✓' : `· ${st.status.toLowerCase()}`);
       return `<option value="${escape(def.jobId)}">${escape(def.label)} ${escape(mark)}</option>`;
     }).join('');
+    dom.aiJobSelect.value = selected;
     renderJobHint();
   }
 
@@ -91,7 +93,8 @@ export function createAiStudioView(context) {
       .filter(([, needed]) => needed)
       .map(([cap]) => capName(cap));
     const capText = caps.length > 0 ? ` Needs: ${caps.join(', ')}.` : '';
-    dom.aiJobHint.textContent = `${def.description}${capText}`;
+    const route = resolveAIIntent(dom.aiQuestionInput?.value,{hasImage:!!imageData,manualJob:dom.aiJobSelect?.value||'auto'});
+    dom.aiJobHint.textContent = `${def.label} · ${route.reason}. ${def.description}${capText}`;
     dom.aiJobHint.style.display = 'block';
   }
 
@@ -107,7 +110,7 @@ export function createAiStudioView(context) {
   }
 
   function selectedJobId() {
-    return dom.aiJobSelect?.value || 'generalAssistant';
+    return resolveAIIntent(dom.aiQuestionInput?.value, {hasImage:!!imageData,manualJob:dom.aiJobSelect?.value||'auto'}).jobId;
   }
 
   function requiresImage(jobId) {
@@ -117,7 +120,7 @@ export function createAiStudioView(context) {
 
   function refreshImageGroup() {
     if (dom.aiImageGroup) {
-      dom.aiImageGroup.style.display = requiresImage(selectedJobId()) ? 'block' : 'none';
+      dom.aiImageGroup.style.display = 'block';
     }
     renderJobHint();
   }
@@ -146,72 +149,14 @@ export function createAiStudioView(context) {
       dom.aiResponseBody.innerHTML = renderStructured(lastResult.structured);
     } else {
       dom.aiResponseBody.innerHTML = `<div class="ai-prose">${escape(lastResult.text || '')}</div>`;
-      renderProposals(lastResult.text || '');
+
     }
 
     renderConsistency();
   }
 
   // ------------------------------------------------------------------
-  // Previewable proposals (write-permission contract, rule 46): the model
-  // can PROPOSE canvas changes via structured JSON in its answer; the user
-  // previews and explicitly accepts. Nothing is ever auto-applied.
-  // ------------------------------------------------------------------
-  function renderProposals(text) {
-    const actions = parseAiActions(text);
-    if (!actions.length) return;
-    const cards = actions.map((act, i) => `
-      <div class="ai-proposal-card" data-proposal-idx="${i}" style="border: 1px solid var(--border-subtle); border-left: 3px solid var(--accent-primary, #4989D9); border-radius: 6px; padding: 0.55rem 0.7rem; margin: 0.5rem 0; background: var(--bg-surface-elevated, #28292e);">
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-          <div style="font-size: 0.74rem;"><strong>Proposed:</strong> ${escapeHtml(describeAction(act))}</div>
-          <div style="display: flex; gap: 6px; flex-shrink: 0;">
-            <button type="button" class="btn btn-xs btn-outline" data-proposal-act="reject" data-proposal-idx="${i}">✕ Reject</button>
-            <button type="button" class="btn btn-xs btn-primary" data-proposal-act="accept" data-proposal-idx="${i}">✓ Preview &amp; Apply</button>
-          </div>
-        </div>
-      </div>`).join('');
-    const wrap = document.createElement('div');
-    wrap.className = 'ai-proposals-wrap';
-    wrap.innerHTML = `<div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 0.7rem;">Model proposals (${actions.length}) — apply is your call</div>${cards}`;
-    dom.aiResponseBody.appendChild(wrap);
-
-    wrap.querySelectorAll('[data-proposal-act]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const idx = parseInt(btn.dataset.proposalIdx, 10);
-        const act = actions[idx];
-        if (!act) return;
-        const card = wrap.querySelector(`[data-proposal-idx="${idx}"]`);
-        if (btn.dataset.proposalAct === 'reject') {
-          if (card) card.style.opacity = '0.45';
-          btn.textContent = 'Rejected';
-          btn.disabled = true;
-          showToast('Proposal rejected — nothing changed');
-          return;
-        }
-        // Accept: apply deterministically through the action pipeline, then
-        // re-render the plan. The user clicked; this is explicit approval.
-        const res = executeAiAction(act, state);
-        if (res && res.success === false) {
-          showToast(`Proposal failed: ${res.error || 'unknown'}`, 'warning');
-          return;
-        }
-        if (card) card.style.opacity = '0.45';
-        btn.textContent = 'Applied ✓';
-        btn.disabled = true;
-        showToast(`Applied proposal to the Plan Canvas${res && res.count ? ` (${res.count} item${res.count > 1 ? 's' : ''})` : ''}`, 'success');
-        AudioService.playSuccess();
-        if (state.currentMode !== 'plan') switchMode('plan');
-      });
-    });
-  }
-
-  function describeAction(act) {
-    const t = String(act.type || act.action || '').replace(/_/g, ' ');
-    const name = act.name ? `"${act.name}"` : '';
-    const dims = act.width ? ` ${act.width}×${act.depth ?? '?'}m` : '';
-    return `${t}${name ? ' ' + name : ''}${dims}`;
-  }
-
+  // Evidence badges describe the provider response without applying geometry.
   function trustBadge(trust) {
     if (!trust) return '';
     const t = String(trust).toUpperCase();
@@ -494,6 +439,7 @@ export function createAiStudioView(context) {
   return {
     id: 'ai',
     mount() {
+      dom.aiQuestionInput?.addEventListener('input', renderJobHint);
       populateJobs();
       refreshImageGroup();
       renderResponse();

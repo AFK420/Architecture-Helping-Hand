@@ -1,21 +1,13 @@
 /**
  * Architecture Helping Hand - Omnipresent Top AI Dropdown Assistant Component
  * Provides a slide-down AI drawer accessible from anywhere in the app without
- * leaving the canvas.
+ * leaving the current workspace.
  *
  * Honesty contract (AI_ARCHITECTURE): this drawer is a thin client of the
  * real AI job router. It never fabricates answers. Without a configured
  * provider/key it shows AI UNAVAILABLE and lists what still works. Model
- * answers are rendered verbatim with a provider label; any canvas mutations
- * happen only through the deterministic action pipeline applied by the user.
+ * answers are rendered verbatim with a provider label and cannot apply drawing changes.
  */
-
-import {
-  serializeDrawingContext,
-  buildArchitecturalPrompt,
-  parseAiActions,
-  executeAiAction
-} from '../../core/ai-bridge.js';
 
 const CHAT_JOB_ID = 'generalAssistant';
 
@@ -54,7 +46,7 @@ export function initAiDropdownDrawer(container, state, options = {}) {
         <p>${escapeAiHtml(reason)}</p>
         <p style="font-size: 0.72rem; color: var(--text-muted);">Configure a provider in the AI Control Center. The app works fully without AI:</p>
         <ul style="font-size: 0.72rem; color: var(--text-muted); text-align: left; margin: 0.3rem 0 0 1rem;">
-          <li>Drawing &amp; geometry tools</li>
+          <li>Research, site and concept workspaces</li>
           <li>Measurements &amp; calculations</li>
           <li>Issues (QA) &amp; requirements</li>
           <li>Exports &amp; project management</li>
@@ -63,7 +55,7 @@ export function initAiDropdownDrawer(container, state, options = {}) {
   }
 
   function renderDrawer() {
-    const ctx = serializeDrawingContext(state);
+    const project=options.getProject?.();
     const status = chatJobStatus();
     const aiReady = status && status.status === 'READY';
 
@@ -77,7 +69,7 @@ export function initAiDropdownDrawer(container, state, options = {}) {
               <span class="ai-sparkle-icon">✨</span>
               <span class="ai-title">Architectural AI Co-Pilot</span>
               <span class="ai-context-pill" title="Live context passed to the configured AI provider">
-                📍 ${ctx.documentName} · ${ctx.entityCount} entities · Mode: ${ctx.persona.toUpperCase()}
+                📍 ${escapeAiHtml(project?.metadata?.name||'No project')} · ${escapeAiHtml(state.currentMode||'Assistant')}
               </span>
             </div>
             <div class="ai-header-right">
@@ -120,14 +112,7 @@ export function initAiDropdownDrawer(container, state, options = {}) {
               <div class="ai-message-bubble ${item.role}">
                 <div class="message-sender">${item.role === 'user' ? 'You' : `AI · ${escapeAiHtml(item.sourceLabel || 'model')}`}</div>
                 <div class="message-body">${item.htmlContent}</div>
-                ${item.actions && item.actions.length > 0 ? `
-                  <div class="ai-action-card">
-                    <span class="action-summary">✨ Model proposed ${item.actions.length} action(s):</span>
-                    <button type="button" class="btn btn-sm btn-primary ai-apply-btn" data-action-idx="${item.id}">
-                      ➕ Apply to Viewport
-                    </button>
-                  </div>
-                ` : ''}
+                
               </div>
             `).join('')}
           </div>
@@ -135,7 +120,7 @@ export function initAiDropdownDrawer(container, state, options = {}) {
           <!-- Input Bar -->
           <div class="ai-drawer-input-strip">
             <input type="text" id="ai-drawer-prompt-input" class="ai-drawer-input"
-              placeholder="${aiReady ? 'Ask AI about your drawing or design…' : 'AI unavailable — configure a provider in the AI Control Center'}"
+              placeholder="${aiReady ? 'Ask AI about your research or design…' : 'AI unavailable — configure a provider in the AI Control Center'}"
               autocomplete="off" ${aiReady ? '' : 'disabled'} />
             <button type="button" id="btn-ai-drawer-send" class="btn btn-primary ai-send-btn" ${aiReady && !busy ? '' : 'disabled'}>${busy ? '…' : 'Send'}</button>
           </div>
@@ -174,23 +159,7 @@ export function initAiDropdownDrawer(container, state, options = {}) {
       });
     });
 
-    container.querySelectorAll('.ai-apply-btn').forEach(applyBtn => {
-      applyBtn.addEventListener('click', () => {
-        const item = chatHistory.find(h => h.id === applyBtn.dataset.actionIdx);
-        if (item && item.actions) {
-          let appliedCount = 0;
-          for (const act of item.actions) {
-            executeAiAction(act, state.plan);
-            appliedCount++;
-          }
-          if (typeof options.onActionApplied === 'function') {
-            options.onActionApplied(appliedCount);
-          }
-          applyBtn.textContent = '✅ Applied to Canvas!';
-          applyBtn.disabled = true;
-        }
-      });
-    });
+
   }
 
   async function handleSend() {
@@ -212,7 +181,7 @@ export function initAiDropdownDrawer(container, state, options = {}) {
         id: 'resp-' + Date.now(),
         role: 'assistant',
         sourceLabel: 'system',
-        htmlContent: `<p><strong>AI UNAVAILABLE</strong></p><p>${escapeAiHtml(status ? (status.status === 'NO KEY' ? 'No API key configured for the assigned provider.' : `Assigned model not ready (${status.status}).`) : 'No AI provider is configured.')}</p><p>Open the AI Control Center to configure a provider. All drawing, measurement, QA, and export tools work without AI.</p>`
+        htmlContent: `<p><strong>AI UNAVAILABLE</strong></p><p>${escapeAiHtml(status ? (status.status === 'NO KEY' ? 'No API key configured for the assigned provider.' : `Assigned model not ready (${status.status}).`) : 'No AI provider is configured.')}</p><p>Open the AI Control Center to configure a provider. All research, measurement, requirements, and export tools work without AI.</p>`
       });
       renderDrawer();
       return;
@@ -230,18 +199,10 @@ export function initAiDropdownDrawer(container, state, options = {}) {
     const stream = container.querySelector('#ai-conversation-stream');
     if (stream) stream.scrollTop = stream.scrollHeight;
 
-    // Real call through the job router — the same path the AI Studio uses.
-    // The router builds its own scoped facts pack; the enriched prompt is
-    // kept only for logging/debug parity with the legacy path.
-    const ctx = serializeDrawingContext(state);
-    const enrichedPrompt = buildArchitecturalPrompt(prompt, ctx);
-    if (enrichedPrompt && typeof options.onEnrichedPrompt === 'function') {
-      options.onEnrichedPrompt(enrichedPrompt);
-    }
-
+    // The router supplies project facts and chooses an inspectable task.
     let result;
     try {
-      result = await r.runAIJob(CHAT_JOB_ID, {
+      result = await r.runNaturalRequest({
         userMessage: prompt,
         scopeHint: prompt
       });
@@ -255,15 +216,11 @@ export function initAiDropdownDrawer(container, state, options = {}) {
       : 'system';
 
     if (result.ok) {
-      // Deterministic action pipeline: parse structured proposals (if any)
-      // and offer them for user-approved apply. Never auto-mutate.
-      const actions = parseAiActions(result.text || '');
-      chatHistory.push({
+chatHistory.push({
         id: 'resp-' + Date.now(),
         role: 'assistant',
         sourceLabel,
         htmlContent: `<p>${escapeAiHtml(String(result.text || '')).replace(/\n/g, '<br>')}</p>`,
-        actions
       });
     } else {
       chatHistory.push({

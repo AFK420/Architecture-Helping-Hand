@@ -1,3 +1,5 @@
+> Current navigation: Design Tools → Dimensions → Compare Scales. This document describes the retained engine, not a separate primary navigation tab.
+
 # Architecture Helping Hand — Multi-Scale Comparison Workspace
 
 > **Phase 2.5: Daily Architect Toolkit — Part 4: Multi-Scale Comparison**  

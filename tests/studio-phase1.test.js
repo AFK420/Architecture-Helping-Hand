@@ -29,7 +29,7 @@ import {
 import {
   pickEntities,
   planToExportGeometry
-} from '../src/core/plan-canvas.js';
+} from '../src/core/geometry-tools.js';
 
 import {
   createProject,

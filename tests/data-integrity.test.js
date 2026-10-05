@@ -4,6 +4,7 @@
 
 import { SCALE_PRESETS, REAL_WORLD_REFERENCES } from '../src/core/presets.js';
 import { FURNITURE_DATABASE } from '../src/core/furniture.js';
+import { FURNITURE_CATEGORIES } from '../src/core/furniture-taxonomy.js';
 import { UNITS, AREA_UNITS, VOLUME_UNITS } from '../src/core/units.js';
 
 let passed = 0;
@@ -53,7 +54,7 @@ console.log('🧪 Running tests/data-integrity.test.js...');
   const furnIds = new Set();
   let uniqueFurnIds = true;
   let validDimensions = true;
-  const validFurnCategories = new Set(['living', 'bedroom', 'dining', 'kitchen', 'bathroom', 'office', 'doors', 'outdoor', 'commercial']);
+  const validFurnCategories = new Set(Object.keys(FURNITURE_CATEGORIES));
 
   for (const item of FURNITURE_DATABASE) {
     if (furnIds.has(item.id)) {

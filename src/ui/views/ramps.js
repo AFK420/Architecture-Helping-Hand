@@ -543,39 +543,6 @@ export function createRampsView(context) {
     }
   }
 
-  function applyToPlan() {
-    const r = requireResult();
-    if (!r) return;
-    const g = r.geometry;
-    const ramp = createRampEntity({
-      x: 1.0,
-      y: 1.0,
-      width: 1.2,
-      run: g.runMeters,
-      rise: g.riseMeters,
-      name: `Ramp ${r.formatted.ratio}`
-    });
-    if (projectStore && typeof projectStore.updateProject === 'function') {
-      projectStore.updateProject(draft => {
-        if (!draft.plan) draft.plan = { rooms: [], walls: [], doors: [], windows: [], furniture: [], dimensions: [], stairs: [], ramps: [] };
-        if (!Array.isArray(draft.plan.ramps)) draft.plan.ramps = [];
-        draft.plan.ramps.push(ramp);
-        return draft;
-      });
-    }
-    if (state.plan && state.plan.document) {
-      if (!Array.isArray(state.plan.document.ramps)) state.plan.document.ramps = [];
-      state.plan.document.ramps.push(ramp);
-      state.plan.selectedIds = new Set([ramp.id]);
-    }
-    switchMode('plan');
-    if (views && typeof views.callController === 'function') {
-      views.callController('plan', 'render');
-    }
-    AudioService.playSuccess();
-    showToast(`Ramp (${r.formatted.ratio}) placed onto Plan Canvas`);
-  }
-
   function sendToScratchpad() {
     const r = requireResult();
     if (!r) return;
@@ -636,7 +603,7 @@ export function createRampsView(context) {
       return {
         calculate, syncCodeSelection, syncModeVisibility, renderTargets,
         toggleFigure, copyRevit, copyResult, copySchedule, sendToCad,
-        sendToWorkspace, saveToJournal, saveToProject, sendToScratchpad, applyToPlan
+        sendToWorkspace, saveToJournal, saveToProject, sendToScratchpad
       };
     }
   };

@@ -94,7 +94,7 @@ console.log('🧪 Running tests/furniture.test.js...');
   const adaToilet = FURNITURE_DATABASE.find(i => i.id === 'toilet-ada');
   if (adaToilet) {
     const adaScaled = getScaledFurnitureDimensions(adaToilet, 50, 'cm');
-    assert(adaScaled.standardTag.includes('ADA'), 'ADA toilet has ADA standard classification tag', adaScaled.standardTag);
+    assert(adaScaled.standardTag.includes('Accessibility reference'), 'ADA toilet has ADA standard classification tag', adaScaled.standardTag);
   }
 }
 

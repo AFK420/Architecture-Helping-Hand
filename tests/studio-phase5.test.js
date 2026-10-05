@@ -36,7 +36,7 @@ import {
   generateSheetSVG
 } from '../src/core/sheet.js';
 
-import { planToExportGeometry } from '../src/core/plan-canvas.js';
+import { planToExportGeometry } from '../src/core/geometry-tools.js';
 import { DEFAULT_CAD_LAYERS, resolveEntityLayer } from '../src/core/layers.js';
 
 let passed = 0;

@@ -31,7 +31,7 @@ import {
   buildExport, decisionsToTable, roomsToDXFEntities, wrapSVGDocument,
   serializeProjectJSON, deserializeProjectJSON, createExportProvenance, EXPORT_FORMATS
 } from '../src/core/export/export-model.js';
-import { planToExportGeometry, generatePlanSVG } from '../src/core/plan-canvas.js';
+import { planToExportGeometry, generatePlanSVG } from '../src/core/geometry-tools.js';
 import { buildFactsPack } from '../src/ai/context/facts-pack.js';
 import { createOrchestrator } from '../src/ai/orchestrator.js';
 import { createProvider } from '../src/ai/providers/provider.js';

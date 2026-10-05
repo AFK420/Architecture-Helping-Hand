@@ -1,6 +1,6 @@
 /**
- * Architecture Helping Hand - Plan Canvas Core
- * Phase 3: pure view/interaction math for the SVG plan editor.
+ * Architecture Helping Hand - Geometry Tools
+ * Phase 3: reusable transforms, snapping, geometry, history and vector serialization.
  *
  * The Plan Canvas never mixes pixel and project coordinates:
  *   world coordinates (meters) → view transform → SVG coordinates

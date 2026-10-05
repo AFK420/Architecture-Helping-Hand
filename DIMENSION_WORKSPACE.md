@@ -1,3 +1,5 @@
+> Current navigation: Design Tools → Dimensions → Schedule. This document describes the retained engine, not a separate primary navigation tab.
+
 # Architecture Helping Hand — Dimension Workspace
 
 > **Phase 2.5: Daily Architect Toolkit — Part 2.5: Dimension Workspace v1.1**  

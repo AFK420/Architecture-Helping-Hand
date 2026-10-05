@@ -36,7 +36,7 @@ import {
 import { createRoom, roomArea } from '../src/core/entities.js';
 import {
   planToExportGeometry, generatePlanSVG
-} from '../src/core/plan-canvas.js';
+} from '../src/core/geometry-tools.js';
 
 let passed = 0;
 let failed = 0;

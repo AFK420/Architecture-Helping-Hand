@@ -27,7 +27,7 @@ const DEFAULT_COMMANDS = [
     category: 'Navigation',
     icon: '📐',
     keywords: ['scale', 'converter', 'drawing', 'real', 'paper', 'metric', 'imperial', 'ratio', 'dimension', 'mode 1'],
-    shortcut: '1',
+    shortcut: null, // digit keys now open the primary workspaces (rebindable)
     actionType: 'navigation',
     available: true
   },
@@ -38,7 +38,7 @@ const DEFAULT_COMMANDS = [
     category: 'Navigation',
     icon: '🔄',
     keywords: ['rescale', 'sheet', 'transfer', 'ratio', 'sheet a', 'sheet b', 're-scale', 'mode 2'],
-    shortcut: '2',
+    shortcut: null, // digit keys now open the primary workspaces (rebindable)
     actionType: 'navigation',
     available: true
   },
@@ -49,7 +49,7 @@ const DEFAULT_COMMANDS = [
     category: 'Navigation',
     icon: '🔍',
     keywords: ['detector', 'find', 'identify', 'ratio', 'unknown scale', 'calculate scale', 'mode 3'],
-    shortcut: '3',
+    shortcut: null, // digit keys now open the primary workspaces (rebindable)
     actionType: 'navigation',
     available: true
   },
@@ -60,7 +60,7 @@ const DEFAULT_COMMANDS = [
     category: 'Navigation',
     icon: '📦',
     keywords: ['area', 'volume', 'square', 'cubic', 'm2', 'sqft', 'floor area', 'room', 'mode 4'],
-    shortcut: '4',
+    shortcut: null, // digit keys now open the primary workspaces (rebindable)
     actionType: 'navigation',
     available: true
   },
@@ -71,7 +71,7 @@ const DEFAULT_COMMANDS = [
     category: 'Navigation',
     icon: '🛋️',
     keywords: ['furniture', 'fixture', 'desk', 'bed', 'door', 'chair', 'table', 'ada', 'clearance', 'catalog', 'planner', 'mode 5'],
-    shortcut: '5',
+    shortcut: null, // digit keys now open the primary workspaces (rebindable)
     actionType: 'navigation',
     available: true
   },
@@ -82,7 +82,7 @@ const DEFAULT_COMMANDS = [
     category: 'Navigation',
     icon: '📚',
     keywords: ['reference', 'chart', 'ruler', 'calibration', 'print', 'sheet', 'benchmarks', 'metric', 'imperial', 'mode 6'],
-    shortcut: '6',
+    shortcut: null, // digit keys now open the primary workspaces (rebindable)
     actionType: 'navigation',
     available: true
   },
@@ -93,7 +93,7 @@ const DEFAULT_COMMANDS = [
     category: 'Navigation',
     icon: '📐',
     keywords: ['dimension', 'workspace', 'schedule', 'scratchpad', 'batch', 'multi', 'totals', 'mode 7'],
-    shortcut: '7',
+    shortcut: null, // digit keys now open the primary workspaces (rebindable)
     actionType: 'navigation',
     available: true
   },
@@ -200,7 +200,7 @@ const DEFAULT_COMMANDS = [
     category: 'Navigation',
     icon: '🧮',
     keywords: ['expression', 'calculator', 'math', 'eval', 'mixed units', 'arithmetic', 'sum', 'subtraction', 'multiply', 'divide', 'mode 8'],
-    shortcut: '8',
+    shortcut: null, // digit keys now open the primary workspaces (rebindable)
     actionType: 'navigation',
     available: true
   },
@@ -211,7 +211,7 @@ const DEFAULT_COMMANDS = [
     category: 'Navigation',
     icon: '📊',
     keywords: ['multi-scale', 'compare', 'comparison', 'scales', 'drawing size', 'fit', 'paper', 'proportions', 'mode 9', 'batch scale'],
-    shortcut: '9',
+    shortcut: null, // digit keys now open the primary workspaces (rebindable)
     actionType: 'navigation',
     available: true
   },
@@ -222,7 +222,7 @@ const DEFAULT_COMMANDS = [
     category: 'Navigation',
     icon: '🔗',
     keywords: ['chain', 'dimension string', 'cumulative', 'running totals', 'grid', 'sequence', 'offsets', 'mode 10', '0'],
-    shortcut: '0',
+    shortcut: null, // digit keys now open the primary workspaces (rebindable)
     actionType: 'navigation',
     available: true
   },
@@ -253,16 +253,6 @@ const DEFAULT_COMMANDS = [
     category: 'Navigation',
     icon: '🗂',
     keywords: ['project', 'workspace', 'open', 'save', 'snapshot', 'duplicate', 'import', 'new', 'mode 18'],
-    actionType: 'navigation',
-    available: true
-  },
-  {
-    id: 'nav-plan',
-    title: 'Plan Canvas',
-    description: 'Lightweight 2D SVG plan editor: rooms, walls, furniture placement, grid snapping, undo/redo',
-    category: 'Navigation',
-    icon: 'Plot',
-    keywords: ['plan', 'canvas', 'draw', 'room', 'wall', 'furniture', 'layout', '2d', 'mode 19'],
     actionType: 'navigation',
     available: true
   },
@@ -387,18 +377,6 @@ const DEFAULT_COMMANDS = [
     keywords: ['ai', 'test', 'connection', 'provider', 'key', 'check'],
     actionType: 'action',
     available: true
-  },
-
-  {
-    id: 'future-space-planner',
-    title: 'Interactive Space Planner',
-    description: 'Interactive top-down 2D canvas for room layout and furniture placement',
-    category: 'Upcoming Tool',
-    icon: '🏢',
-    keywords: ['planner', 'space', 'canvas', 'room', 'layout', '2d', 'phase 2.5'],
-    actionType: 'placeholder',
-    available: false,
-    badge: 'Phase 2.5'
   }
 ];
 
@@ -751,19 +729,20 @@ export function parseNaturalLanguageCommand(query) {
   const placeMatch = q.match(/^(?:place|add|insert)\s+([a-z0-9\s-]+)/i);
   if (placeMatch) {
     const furnName = placeMatch[1].trim().toLowerCase();
-    const piece = FURNITURE_DATABASE.find(f =>
+    const matches = FURNITURE_DATABASE.filter(f =>
       f.name.toLowerCase().includes(furnName) ||
       f.id.toLowerCase().includes(furnName) ||
       f.category.toLowerCase() === furnName
     );
+    const piece=matches.find(f=>f.id===furnName||f.name.toLowerCase().startsWith(furnName))||matches[0];
     if (piece) {
       return {
-        type: 'place',
+        type: 'furniture_lookup',
         query: q,
         furniture: piece,
-        formattedResult: `${piece.name} (${(piece.width * 1000).toFixed(0)} × ${(piece.depth * 1000).toFixed(0)}mm)`,
-        title: `Place ${piece.name} (${(piece.width * 1000).toFixed(0)} × ${(piece.depth * 1000).toFixed(0)}mm)`,
-        description: `Category: ${piece.category} | Clearance: ${piece.clearance ? (piece.clearance * 1000).toFixed(0) + 'mm' : 'None'}`
+        formattedResult: `${piece.name} (${(piece.wCm * 10).toFixed(0)} × ${(piece.dCm * 10).toFixed(0)}mm)`,
+        title: `Find ${piece.name} (${(piece.wCm * 10).toFixed(0)} × ${(piece.dCm * 10).toFixed(0)}mm)`,
+        description: `Category: ${piece.category} | Clearance: ${piece.clearance ? (piece.clearance * 10).toFixed(0) + 'mm' : 'None'}`
       };
     }
   }

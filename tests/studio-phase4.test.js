@@ -32,7 +32,7 @@ import {
   autoTagDocument
 } from '../src/core/entities.js';
 
-import { planToExportGeometry } from '../src/core/plan-canvas.js';
+import { planToExportGeometry } from '../src/core/geometry-tools.js';
 import { buildDXF } from '../src/core/export/export-model.js';
 
 let passed = 0;

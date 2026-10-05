@@ -21,7 +21,7 @@ import {
   createRoom,
   placeFurniture
 } from '../src/core/entities.js';
-import { findSnapPoint } from '../src/core/plan-canvas.js';
+import { findSnapPoint } from '../src/core/geometry-tools.js';
 import { formatFeetInches } from '../src/core/formatter.js';
 
 let passed = 0;

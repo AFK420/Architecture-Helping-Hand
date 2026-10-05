@@ -348,10 +348,7 @@ test('AI Bridge: executeAiAction executes actions on plan state', () => {
 test('DOM Integration: index.html has omnipresent AI drawer and studio containers', () => {
   const indexHtml = fs.readFileSync(path.join(rootDir, 'index.html'), 'utf-8');
   assert.ok(indexHtml.includes('id="omnipresent-ai-drawer-host"'), 'Must have omnipresent AI drawer host');
-  assert.ok(indexHtml.includes('id="studio-ribbon-container"'), 'Must have studio ribbon container');
-  assert.ok(indexHtml.includes('id="studio-palette-container"'), 'Must have studio palette container');
-  assert.ok(indexHtml.includes('id="studio-commandbar-container"'), 'Must have studio command bar container');
-  assert.ok(indexHtml.includes('id="studio-cpanels-container"'), 'Must have studio C-panels container');
+  assert.ok(!indexHtml.includes('id="studio-ribbon-container"'), 'The obsolete Canvas ribbon is removed');
 });
 
 test('CSS Integration: css/main.css has Section 20 studio styles', () => {

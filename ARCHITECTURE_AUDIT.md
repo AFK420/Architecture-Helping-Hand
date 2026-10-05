@@ -1,3 +1,5 @@
+> Historical implementation notes. The Canvas workflows below were retired in the companion redesign and are not current user features. Generic engines and legacy project data remain supported. See [README.md](README.md) and [REDESIGN_STATUS.md](REDESIGN_STATUS.md) for current workflows.
+
 # Architecture Helping Hand — Codebase Audit & Core Architecture
 
 **Date**: September 3, 2026 (UI/UX reconstruction appended September 4, 2026; focused correction pass appended September 4, 2026)  

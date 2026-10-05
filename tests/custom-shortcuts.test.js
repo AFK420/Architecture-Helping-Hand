@@ -31,42 +31,12 @@ function assertEqual(actual, expected, message) {
 
 console.log('🧪 Running tests/custom-shortcuts.test.js...');
 
-// --- 1. Architectural CAD Defaults ---
-console.log('\n--- 1. Architectural CAD Defaults ---');
+// --- 1. Companion defaults ---
 {
-  const sm = new ShortcutsManagerClass();
-  const wall = sm.getShortcut('tool_wall');
-  assertEqual(wall.defaultKey, 'w', 'Wall tool defaults to "W" (Revit / AutoCAD WA standard)');
-
-  const room = sm.getShortcut('tool_room');
-  assertEqual(room.defaultKey, 'r', 'Room tool defaults to "R" (Rectangle / Space standard)');
-
-  const select = sm.getShortcut('tool_select');
-  assertEqual(select.defaultKey, 'v', 'Select tool defaults to "V" (Pointer / Modify tool standard)');
-
-  const measure = sm.getShortcut('tool_measure');
-  assertEqual(measure.defaultKey, 'm', 'Measure tool defaults to "M" (AutoCAD DIST/MEASURE standard)');
-
-  const dimension = sm.getShortcut('tool_dimension');
-  assertEqual(dimension.defaultKey, 'd', 'Dimension tool defaults to "D" (AutoCAD DIM / Revit DI standard)');
-
-  const stair = sm.getShortcut('tool_stair');
-  assertEqual(stair.defaultKey, 't', 'Stair tool defaults to "T" (Tread/Stair standard)');
-
-  const ramp = sm.getShortcut('tool_ramp');
-  assertEqual(ramp.defaultKey, 'p', 'Ramp tool defaults to "P" (Path/Ramp standard)');
-
-  const grid = sm.getShortcut('plan_grid');
-  assertEqual(grid.defaultKey, 'g', 'Grid snap defaults to "G" (AutoCAD GRID toggle standard)');
-
-  const snap = sm.getShortcut('plan_snap');
-  assertEqual(snap.defaultKey, 's', 'Snapping toggle defaults to "S"');
-
-  const duplicate = sm.getShortcut('plan_duplicate');
-  assertEqual(duplicate.defaultKey, 'ctrl+d', 'Duplicate entity defaults to "Ctrl+D"');
-
-  const palette = sm.getShortcut('cmd_palette');
-  assertEqual(palette.defaultKey, 'ctrl+k', 'Command palette defaults to "Ctrl+K"');
+ const sm=new ShortcutsManagerClass();
+ for(const [id,key] of [['cad_clipboard','c'],['batch_cad','b'],['quick_dim','q'],['cmd_palette','ctrl+k']])assertEqual(sm.getShortcut(id).defaultKey,key,id+' default');
+ assert(!DEFAULT_SHORTCUTS.some(s=>s.category==='canvas'),'Canvas shortcuts are removed');
+ for(const id of ['project','tools','cad','documents','ai','settings'])assert(sm.getShortcut('ws_'+id),'Workspace shortcut '+id);
 }
 
 // --- 2. Key Normalization & Display Formatting ---
@@ -94,30 +64,30 @@ console.log('\n--- 3. Rebinding & Conflict Detection ---');
   const sm = new ShortcutsManagerClass();
 
   // Custom rebind
-  const res1 = sm.bindShortcut('tool_wall', 'x');
-  assert(res1.success, 'Successfully rebinds wall tool to "X"');
-  assertEqual(sm.getKeyForAction('tool_wall'), 'x', 'Wall tool now bound to "X"');
-  assert(sm.getShortcut('tool_wall').isCustom, 'Wall tool marked as isCustom');
+  const res1 = sm.bindShortcut('cad_clipboard', 'x');
+  assert(res1.success, 'Successfully rebinds CAD clipboard to "X"');
+  assertEqual(sm.getKeyForAction('cad_clipboard'), 'x', 'CAD clipboard now bound to "X"');
+  assert(sm.getShortcut('cad_clipboard').isCustom, 'CAD clipboard marked as isCustom');
 
-  // Conflict detection: Attempt to bind room tool to "X" (already used by wall)
-  const res2 = sm.bindShortcut('tool_room', 'x');
-  assert(!res2.success, 'Conflict detected when binding room tool to "X"');
-  assert(res2.conflict && res2.conflict.id === 'tool_wall', 'Conflict reports colliding action ID');
-  assertEqual(sm.getKeyForAction('tool_room'), 'r', 'Room tool retains its previous binding');
+  // Conflict detection: Attempt to bind Batch CAD to "X" (already used by wall)
+  const res2 = sm.bindShortcut('batch_cad', 'x');
+  assert(!res2.success, 'Conflict detected when binding Batch CAD to "X"');
+  assert(res2.conflict && res2.conflict.id === 'cad_clipboard', 'Conflict reports colliding action ID');
+  assertEqual(sm.getKeyForAction('batch_cad'), 'b', 'Batch CAD retains its previous binding');
 
   // Force bind resolves collision
-  const res3 = sm.forceBindShortcut('tool_room', 'x');
+  const res3 = sm.forceBindShortcut('batch_cad', 'x');
   assert(res3.success, 'forceBindShortcut succeeds');
-  assertEqual(sm.getKeyForAction('tool_room'), 'x', 'Room tool now has "X"');
+  assertEqual(sm.getKeyForAction('batch_cad'), 'x', 'Batch CAD now has "X"');
 
   // Reset single shortcut
-  sm.resetShortcut('tool_wall');
-  assertEqual(sm.getKeyForAction('tool_wall'), 'w', 'Wall tool reset to default "W"');
+  sm.resetShortcut('cad_clipboard');
+  assertEqual(sm.getKeyForAction('cad_clipboard'), 'c', 'CAD clipboard reset to default "W"');
 
   // Reset all shortcuts
   sm.resetAllShortcuts();
-  assertEqual(sm.getKeyForAction('tool_room'), 'r', 'All shortcuts reset to defaults');
-  assert(!sm.getShortcut('tool_room').isCustom, 'isCustom is false after resetAll');
+  assertEqual(sm.getKeyForAction('batch_cad'), 'b', 'All shortcuts reset to defaults');
+  assert(!sm.getShortcut('batch_cad').isCustom, 'isCustom is false after resetAll');
 }
 
 // --- 4. Persistence Round-Trip ---
@@ -132,15 +102,15 @@ console.log('\n--- 4. Persistence Round-Trip ---');
 
   const sm1 = new ShortcutsManagerClass();
   sm1.setStorage(storageAdapter);
-  sm1.bindShortcut('tool_wall', 'e');
-  sm1.bindShortcut('tool_measure', 'j');
+  sm1.bindShortcut('cad_clipboard', 'e');
+  sm1.bindShortcut('quick_dim', 'j');
 
   // Load from second instance
   const sm2 = new ShortcutsManagerClass();
   sm2.setStorage(storageAdapter);
-  assertEqual(sm2.getKeyForAction('tool_wall'), 'e', 'Custom wall binding survived persistence');
-  assertEqual(sm2.getKeyForAction('tool_measure'), 'j', 'Custom measure binding survived persistence');
-  assertEqual(sm2.getKeyForAction('tool_room'), 'r', 'Unmodified shortcut keeps default');
+  assertEqual(sm2.getKeyForAction('cad_clipboard'), 'e', 'Custom wall binding survived persistence');
+  assertEqual(sm2.getKeyForAction('quick_dim'), 'j', 'Custom measure binding survived persistence');
+  assertEqual(sm2.getKeyForAction('batch_cad'), 'b', 'Unmodified shortcut keeps default');
 }
 
 // --- 5. KeyboardEvent Matching ---
@@ -148,11 +118,11 @@ console.log('\n--- 5. KeyboardEvent Matching ---');
 {
   const sm = new ShortcutsManagerClass();
 
-  assert(sm.matchesEvent('tool_wall', { key: 'w' }), 'matchesEvent identifies "W" for wall');
-  assert(sm.matchesEvent('tool_wall', { key: 'W' }), 'matchesEvent handles uppercase "W"');
-  assert(!sm.matchesEvent('tool_wall', { key: 'r' }), 'matchesEvent rejects mismatched key');
-  assert(sm.matchesEvent('plan_duplicate', { ctrlKey: true, key: 'd' }), 'matchesEvent identifies Ctrl+D');
-  assert(!sm.matchesEvent('plan_duplicate', { ctrlKey: false, key: 'd' }), 'matchesEvent rejects D without Ctrl');
+  assert(sm.matchesEvent('cad_clipboard', { key: 'c' }), 'matchesEvent identifies "W" for wall');
+  assert(sm.matchesEvent('cad_clipboard', { key: 'C' }), 'matchesEvent handles uppercase "W"');
+  assert(!sm.matchesEvent('cad_clipboard', { key: 'r' }), 'matchesEvent rejects mismatched key');
+  assert(sm.matchesEvent('cmd_palette', { ctrlKey: true, key: 'k' }), 'matchesEvent identifies Ctrl+K');
+  assert(!sm.matchesEvent('cmd_palette', { ctrlKey: false, key: 'k' }), 'matchesEvent rejects D without Ctrl');
 }
 
 // --- 7. Legacy binding migration (defaults win, no duplicates) ---
@@ -171,18 +141,18 @@ console.log('\n--- 7. Legacy binding migration on load ---');
   }
 
   // Legacy duplicate: two customs collapsed onto the same key
-  const c1 = makeManager({ tool_room: 'm', tool_measure: 'm' });
-  assertEqual(c1.sm.getKeyForAction('tool_room'), 'r', 'Colliding custom resets to its default (room)');
-  assertEqual(c1.sm.getKeyForAction('tool_measure'), 'm', 'Custom matching its default stays (measure)');
-  assert(!c1.store.data.includes('tool_room'), 'Discarded binding removed from persisted storage');
+  const c1 = makeManager({ batch_cad: 'q', quick_dim: 'q' });
+  assertEqual(c1.sm.getKeyForAction('batch_cad'), 'b', 'Colliding custom resets to its default (room)');
+  assertEqual(c1.sm.getKeyForAction('quick_dim'), 'q', 'Custom matching its default stays (measure)');
+  assert(!c1.store.data.includes('batch_cad'), 'Discarded binding removed from persisted storage');
 
   // Custom colliding with another action's default is discarded
-  const c2 = makeManager({ tool_room: 'w' });
-  assertEqual(c2.sm.getKeyForAction('tool_room'), 'r', 'Custom that hijacks another default is discarded');
+  const c2 = makeManager({ batch_cad: 'c' });
+  assertEqual(c2.sm.getKeyForAction('batch_cad'), 'b', 'Custom that hijacks another default is discarded');
 
   // Collision-free custom survives
-  const c3 = makeManager({ tool_measure: 'shift+m' });
-  assertEqual(c3.sm.getKeyForAction('tool_measure'), 'shift+m', 'Collision-free custom binding is preserved');
+  const c3 = makeManager({ quick_dim: 'shift+m' });
+  assertEqual(c3.sm.getKeyForAction('quick_dim'), 'shift+m', 'Collision-free custom binding is preserved');
 
   // Loaded set never contains duplicates
   const keys = c3.sm.getAllShortcuts().map(s => s.key);

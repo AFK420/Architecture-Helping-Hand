@@ -132,6 +132,21 @@ const ICONS = {
   hidden: '<path d="M4 4l16 16" stroke-linecap="round"/><path d="M9.9 5.2A10 10 0 0112 5c6 0 9.5 7 9.5 7a17 17 0 01-2.9 3.5M6.2 6.9A16.6 16.6 0 002.5 12s3.5 7 9.5 7a10 10 0 004-.8" stroke-width="1.1"/>',
   lock: '<rect x="5.5" y="10.5" width="13" height="9" rx="1.4"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5" stroke-width="1.2"/>',
   unlock: '<rect x="5.5" y="10.5" width="13" height="9" rx="1.4"/><path d="M8.5 10.5V8a3.5 3.5 0 016.6-1.7" stroke-width="1.2"/>',
+  research: '<path d="M5 4h10.5A2.5 2.5 0 0118 6.5V20H7.5A2.5 2.5 0 015 17.5z" stroke-linejoin="round"/><path d="M5 17.5A2.5 2.5 0 017.5 20" stroke-linejoin="round"/><path d="M9 8.5h5.5M9 12h5.5M9 15.5h3" stroke-width="1.1" stroke-linecap="round"/>',
+  research_dashboard: '<path d="M4 4h16v16H4z" stroke-linejoin="round"/><path d="M4 9h16M10 9v11M4 14h6M14 14h6M14 9v11" stroke-width="1" opacity="0.9"/>',
+  sun_path: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5 5l2.1 2.1M16.9 16.9L19 19M19 5l-2.1 2.1M7.1 16.9L5 19" stroke-width="1.1" stroke-linecap="round"/><path d="M4 16c2.5 0 3-9 8-9s5.5 9 8 9" stroke-width="1" stroke-dasharray="2.6 2.2" opacity="0.8"/>',
+  site_dashboard: '<path d="M3 20h18M6 20V8M18 20V8" stroke-linecap="round"/><path d="M6 8l6-4.5L18 8" stroke-linejoin="round"/><path d="M12 3.5V20" stroke-width="1" opacity="0.5"/><path d="M9 12h6M9 16h6" stroke-width="1" opacity="0.8"/>',
+  site_context: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M3.5 12h17" stroke-width="1"/><path d="M12 12l4.5-4.5" stroke-width="1.1" stroke-linecap="round"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/>',
+  research_library: '<path d="M4 5.5A1.5 1.5 0 015.5 4H9l3 2.5h6.5A1.5 1.5 0 0120 8v10.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5z" stroke-linejoin="round"/><path d="M4 8.5h16" stroke-width="1"/><path d="M8 12h6M8 15.5h4" stroke-width="1" stroke-linecap="round"/>',
+  standards: '<path d="M6 3h12v18H6z" stroke-linejoin="round"/><path d="M9 7h6M9 10.5h6M9 14h4" stroke-width="1" stroke-linecap="round"/><circle cx="15.2" cy="17" r="2.4"/><path d="M15.2 17h3.8" stroke-width="1.1" stroke-linecap="round"/>',
+  site: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.4 2.6 14.2 0 17M12 3.5c-2.6 2.4-2.6 14.2 0 17" stroke-width="0.9"/><path d="M7.2 6.2C5.4 8 4.5 10 4.5 12s.9 4 2.7 5.8M16.8 6.2C18.6 8 19.5 10 19.5 12s-.9 4-2.7 5.8" stroke-width="0.9" opacity="0.7"/>',
+  concept: '<circle cx="6" cy="6" r="2.2"/><circle cx="17.5" cy="7.5" r="2.2"/><circle cx="12" cy="17" r="2.2"/><circle cx="5.5" cy="15" r="1.4"/><circle cx="19" cy="15.5" r="1.4"/><path d="M7.9 7.2l7.8-.2M17.4 9.4l-4.1 5.6M7.3 7.5L5.9 13.7M13.9 16.3l3.7-.7" stroke-width="1" opacity="0.85"/>',
+  dimensions: '<path d="M4 15V9M20 15V9" stroke-linecap="round"/><path d="M4 12h16" stroke-linecap="round"/><path d="M6.5 9.5L4 12l2.5 2.5M17.5 9.5L20 12l-2.5 2.5" stroke-width="1.2"/><path d="M10.5 10.2v3.6M13.5 10.2v3.6" stroke-width="0.9" stroke-linecap="round"/>',
+  cad: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" stroke-linejoin="round"/><path d="M12 3v9m0 0l8 4.5M12 12l-8 4.5" stroke-width="0.9" opacity="0.7"/>',
+  cad_workspace: '<path d="M4 4v16h16" stroke-linecap="round"/><path d="M7.5 16.5L18 6" stroke-linecap="round"/><path d="M7.5 16.5l1.2-3.2M8.7 13.3l3.2-1.2M11.9 12.1l2.3-2.3M14.2 9.8L18 6" stroke-width="0.95" stroke-linecap="round"/>',
+  architecture: '<path d="M4 20h16M6 20V9M18 20V9" stroke-linecap="round"/><path d="M12 4l8 5M12 4L4 9" stroke-linejoin="round"/><path d="M4 9h16" stroke-linecap="round"/><path d="M9.5 20v-4.5h5V20" stroke-width="1" stroke-linejoin="round"/>',
+  space: '<rect x="4" y="7" width="16" height="13" rx="1"/><path d="M4 11h16M11 11v9M7 11v9M15 11v9" stroke-width="1"/><path d="M7.5 4.5h9M9 4.5V7M15 4.5V7" stroke-linecap="round" stroke-width="1" opacity="0.8"/>',
+  project: '<path d="M5.5 3.5h13v17h-13z" stroke-linejoin="round"/><path d="M9 3.5v17M5.5 8.5H9" stroke-width="1"/><path d="M12.5 7h3.5v3h-3.5zM12.5 12h3.5M12.5 16h3.5" stroke-width="1" stroke-linecap="round"/>',
   generic: '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9z" stroke-width="1"/>'
 };
 
@@ -192,12 +207,20 @@ const DOC_TYPES = {
 /** Sidebar navigation ids -> icon names. */
 const NAV = {
   home: 'home', converter: 'converter', rescale: 'rescale', detector: 'detector',
-  area_volume: 'area', workspace: 'workspace', expression: 'expression',
+  area_volume: 'area', dimensions:'dimensions', concept:'concept', reports:'sheet', workspace: 'workspace', expression: 'expression',
   multiscale: 'multiscale', chains: 'chains', cad_clipboard: 'clipboard',
   batch_cad: 'batch', cad_handoff: 'handoff', stairs: 'stair', ramps: 'ramp',
   slopes: 'measure', furniture: 'furniture', reference: 'reference',
   projects: 'projects', plan: 'room', survey: 'survey', imports: 'imports',
-  export: 'export', ai: 'ai', ai_settings: 'settings'
+  export: 'export', ai: 'ai', ai_settings: 'settings',
+  research_dashboard: 'research_dashboard', research_library: 'research_library',
+  standards_explorer: 'standards',
+  site_dashboard: 'site_dashboard', sun_path: 'sun_path', site_context: 'site_context',
+  // Primary workspaces (sidebar level) — resolve via navIcon too
+  ws_research: 'research', ws_site: 'site', ws_concept: 'concept',
+  ws_dimensions: 'dimensions', ws_cad: 'cad', ws_architecture: 'architecture',
+  ws_space: 'space', ws_project: 'project', ws_ai: 'ai',
+  ws_tools: 'dimensions', ws_documents: 'sheet', ws_settings: 'settings'
 };
 
 /** Command palette command ids -> icon names (fallback: generic). */
@@ -207,7 +230,11 @@ const COMMANDS = {
   nav_export: 'export', nav_imports: 'imports', nav_survey: 'survey',
   nav_furniture: 'furniture', nav_reference: 'reference',
   tool_palette: 'select', zoom_fit: 'fit', undo: 'undo', redo: 'redo',
-  save_project: 'save', export_report: 'export', analyze_plan: 'ai'
+  save_project: 'save', export_report: 'export', analyze_plan: 'ai',
+  // Workspace-level palette commands (derived ids: nav-ws-<workspace>)
+  'nav-ws-research': 'research', 'nav-ws-site': 'site', 'nav-ws-concept': 'concept',
+  'nav-ws-dimensions': 'dimensions', 'nav-ws-cad': 'cad', 'nav-ws-architecture': 'architecture',
+  'nav-ws-space': 'space', 'nav-ws-project': 'project', 'nav-ws-ai': 'ai'
 };
 
 const cache = new Map();

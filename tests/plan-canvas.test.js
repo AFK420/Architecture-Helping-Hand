@@ -11,7 +11,7 @@ import {
   buildGrid, snapToGrid, snapRect, pickEntities, wallRect,
   createHistory, entityAddRemoveCommand, entityMoveCommand,
   planToExportGeometry, generatePlanSVG
-} from '../src/core/plan-canvas.js';
+} from '../src/core/geometry-tools.js';
 import {
   createRoom, roomArea, roomPerimeter, roomAspectRatio, roomContainsPoint, rectsIntersect,
   createWall, wallLength, wallDirection,

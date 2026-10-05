@@ -12,7 +12,7 @@
  */
 
 import { roomArea, roomContainsPoint, rectsIntersect } from './entities.js';
-import { wallRect } from './plan-canvas.js';
+import { wallRect } from './geometry-tools.js';
 
 /** Default clearance envelopes (educational study values, user-configurable). */
 export const DEFAULT_CLEARANCES = Object.freeze({

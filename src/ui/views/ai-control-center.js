@@ -241,10 +241,10 @@ export function createAiControlCenterView(context) {
         statusEl.textContent = '✕ Set an API key before refreshing models.';
         statusEl.style.color = 'var(--color-error)';
       }
-      return;
+      return {ok:false,message:'Save an API key before refreshing models.'};
     }
     const transport = svc.transports.get(providerId);
-    if (!transport?.listModels) return;
+    if (!transport?.listModels) return {ok:false,message:'Model discovery is unavailable. Use Advanced to enter a model.'};
     if (btn) btn.disabled = true;
     if (statusEl) statusEl.textContent = 'Discovering models…';
     const status = svc.providerManager.getProviderStatus(providerId);
@@ -271,6 +271,7 @@ export function createAiControlCenterView(context) {
         statusEl.style.color = 'var(--color-warning)';
       }
     }
+    return res;
   }
 
   // ------------------------------------------------------------------
@@ -512,7 +513,39 @@ export function createAiControlCenterView(context) {
   // View contract
   // ------------------------------------------------------------------
 
+  function renderSimple() {
+    const svc=ai(),host=document.getElementById('ai-simple-settings');if(!svc||!host)return;
+    const saved=svc.router.getDefaults();const providers=svc.providerManager.listProviderStatuses();
+    const pid=saved.providerId || providers.find(p=>p.enabled)?.id || providers[0]?.id || '';
+    const models=svc.modelCatalog.listModels(pid).filter(m=>m.status==='READY');
+    const opts=(cap,selected,auto)=> (auto?'<option value="auto">Automatic</option>':'<option value="">Choose a model</option>')+models.filter(m=>m.capabilities[cap]).map(m=>'<option value="'+escape(m.modelId)+'" '+(m.modelId===selected?'selected':'')+'>'+escape(m.displayName||m.modelId)+'</option>').join('');
+    host.innerHTML='<h2>AI Provider</h2><div class="companion-form-grid"><label>Provider<select id="ai-default-provider" class="calc-select">'+providers.map(p=>'<option value="'+escape(p.id)+'" '+(pid===p.id?'selected':'')+'>'+escape(p.label)+'</option>').join('')+'</select></label><label>API key<input id="ai-simple-key" type="password" class="text-input" autocomplete="off" placeholder="Paste a key to replace the stored key"></label><label>Default model<select id="ai-default-model" class="calc-select">'+opts('text',saved.modelId,false)+'</select></label><label>Vision model<select id="ai-default-vision" class="calc-select">'+opts('vision',saved.visionModel,true)+'</select></label><label>Image model<select id="ai-default-image" class="calc-select">'+opts('imageGen',saved.imageModel,true)+'</select></label><label><input type="checkbox" id="ai-automatic-routing" '+(saved.automatic?'checked':'')+'> Automatically choose a capable model for each task</label></div><p class="field-hint">Keys are session-only by default. Advanced settings allow local persistence and explicit job overrides.</p><div class="companion-actions"><button type="button" id="ai-simple-save" class="action-tool-btn primary">Save settings</button><button type="button" id="ai-simple-refresh" class="action-tool-btn">Refresh models</button><button type="button" id="ai-simple-test" class="action-tool-btn">Test connection</button><span id="ai-simple-status" role="status"></span></div>';
+    const get=id=>host.querySelector('#'+id);
+    get('ai-default-provider').addEventListener('change',()=>{
+      const provider=get('ai-default-provider').value;const ms=svc.modelCatalog.listModels(provider).filter(m=>m.status==='READY');
+      for(const [id,cap,auto] of [['ai-default-model','text',false],['ai-default-vision','vision',true],['ai-default-image','imageGen',true]])get(id).innerHTML=(auto?'<option value="auto">Automatic</option>':'<option value="">Choose a model</option>')+ms.filter(m=>m.capabilities[cap]).map(m=>'<option value="'+escape(m.modelId)+'">'+escape(m.displayName||m.modelId)+'</option>').join('');
+    });
+    const save=()=>{
+      const providerId=get('ai-default-provider').value;svc.providerManager.setEnabled(providerId,true);
+      const res=svc.router.configureDefaults({providerId,modelId:get('ai-default-model').value,visionModel:get('ai-default-vision').value,imageModel:get('ai-default-image').value,automatic:get('ai-automatic-routing').checked});
+      if(!res.ok){get('ai-simple-status').textContent=res.error;return false;}
+      const key=get('ai-simple-key').value.trim();if(key){const k=svc.providerManager.setKey(providerId,key);get('ai-simple-key').value='';if(!k.ok){get('ai-simple-status').textContent=k.error;return false;}}
+      get('ai-simple-status').textContent='Settings saved';renderProviders();renderJobs();return true;
+    };
+    get('ai-simple-save').addEventListener('click',save);
+    get('ai-simple-refresh').addEventListener('click',async()=>{
+      const provider=get('ai-default-provider').value,key=get('ai-simple-key').value.trim();
+      if(key){const result=svc.providerManager.setKey(provider,key);if(!result.ok){get('ai-simple-status').textContent=result.error;return;}get('ai-simple-key').value='';}
+      const button=get('ai-simple-refresh');button.disabled=true;get('ai-simple-status').textContent='Refreshing model list…';
+      try{const result=await discoverModels(provider);if(!result?.ok){get('ai-simple-status').textContent=result?.message||'Discovery unavailable; use Advanced for manual model entry.';return;}const models=svc.modelCatalog.listModels(provider).filter(m=>m.status==='READY');for(const [id,cap,auto] of [['ai-default-model','text',false],['ai-default-vision','vision',true],['ai-default-image','imageGen',true]]){const previous=get(id).value;get(id).innerHTML=(auto?'<option value="auto">Automatic</option>':'<option value="">Choose a model</option>')+models.filter(m=>m.capabilities[cap]).map(m=>'<option value="'+escape(m.modelId)+'">'+escape(m.displayName||m.modelId)+'</option>').join('');get(id).value=previous;}get('ai-simple-status').textContent='Models refreshed; choose the model you want.';}finally{button.disabled=false;}
+    });
+    get('ai-simple-test').addEventListener('click',async()=>{
+      if(!save())return;const btn=get('ai-simple-test');btn.disabled=true;
+      try{const provider=get('ai-default-provider').value;const res=await svc.providerManager.testConnection(provider,{transport:svc.transports.get(provider),modelId:get('ai-default-model').value});get('ai-simple-status').textContent=res.ok?'Connected':res.message||'Connection failed';}finally{btn.disabled=false;}
+    });
+  }
   function renderAll() {
+    renderSimple();
     populateProviderFilters();
     renderProviders();
     renderJobs();

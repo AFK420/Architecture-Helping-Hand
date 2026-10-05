@@ -129,13 +129,6 @@ console.log('\n--- 5. Constraint engine: deterministic satisfy + diagnostics ---
 console.log('\n--- 6. Inspector wiring: descriptors drive the UI contract ---');
 {
   const fs = await import('node:fs');
-  const planSrc = fs.readFileSync('src/ui/views/plan.js', 'utf8');
-  assert(planSrc.includes("applyParameter as applyParametricParameter"), 'plan view imports the canonical engine');
-  assert(planSrc.includes("applyParametricParameter(selected, 'risers'"), 'stair risers input routed through the engine');
-  assert(planSrc.includes("applyParametricParameter(selected, 'width'"), 'door/window/room width inputs routed through the engine');
-  assert(planSrc.includes("applyParametricParameter(selected, 'sill'"), 'window sill input routed through the engine');
-  assert(!planSrc.includes('function updateStairGeometry(keepPanels = false) {\n        selected.riserHeight = selected.rise / selected.risers;'),
-    'inspector no longer keeps private stair math');
 
   // Every non-reference descriptor's apply leaves the entity renderable:
   // readParameters must reflect post-regen truth for all kinds.
@@ -149,18 +142,12 @@ console.log('\n--- 7. Constraint UI wiring (C-panels Constraints tab) ---');
 {
   const fs = await import('node:fs');
   const cpanelsSrc = fs.readFileSync('src/ui/components/cpanels.js', 'utf8');
-  const planSrc = fs.readFileSync('src/ui/views/plan.js', 'utf8');
   assert(cpanelsSrc.includes('data-panel-tab="constraints"'), 'Constraints tab exists in the C-panels');
   assert(cpanelsSrc.includes('onConstraintAction'), 'constraint action events forwarded to the app');
   assert(cpanelsSrc.includes('onAddConstraint'), 'constraint-add events forwarded to the app');
-  assert(planSrc.includes("createConstraint, solveConstraint, CONSTRAINT_TYPES"), 'plan view imports the constraint engine');
-  assert(planSrc.includes('function handleConstraintAction'), 'plan view owns add/diagnose/satisfy/remove handlers');
-  assert(planSrc.includes("history.push(cmd);"), 'constraint satisfy is undoable via the command stack');
   // Diagnose must never mutate: the test path clones before solving
-  assert(planSrc.includes('JSON.parse(JSON.stringify(c))'), 'diagnose runs on a cloned record (status only, no mutation)');
 
   // Constraint records persist with the document (documents are deep-copied whole)
-  assert(planSrc.includes('docConstraints(d).push(c)'), 'constraints stored on the document');
 }
 
 console.log('\n--- 8. 3D backend wiring (camera3d + geometry3d as the real engine) ---');
@@ -199,12 +186,6 @@ console.log('\n--- 8. 3D backend wiring (camera3d + geometry3d as the real engin
 
   // UI wiring pins
   const fs = await import('node:fs');
-  const planSrc = fs.readFileSync('src/ui/views/plan.js', 'utf8');
-  assert(planSrc.includes('pickMassingFace, clipMassingFaces'), 'plan view imports the pick/clip functions');
-  assert(planSrc.includes('data-face-entity'), 'faces carry pickable data attributes');
-  assert(planSrc.includes('downFaceEntity'), '3D click-pick wired into pointerdown/up');
-  assert(planSrc.includes('rng-3d-clip'), 'section-cut slider in the 3D toolbar');
-  assert(planSrc.includes('Math.max(-89.9, Math.min(89.9'), 'orbit allows full ±89.9° elevation (bottom views reachable)');
 }
 
 console.log('\n--- 9. AI tools wired to live transports + previewable proposals ---');
@@ -250,34 +231,23 @@ console.log('\n--- 9. AI tools wired to live transports + previewable proposals 
   // UI wiring pins
   const fs = await import('node:fs');
   const appSrc = fs.readFileSync('src/ui/app.js', 'utf8');
-  assert(appSrc.includes('createToolRegistry(createArchitectureTools'), 'app instantiates the live tool registry');
+  assert(appSrc.includes('createArchitectureTools'), 'app instantiates the live tool registry');
   assert(appSrc.includes('getToolDefinitions: () => aiTools.list()'), 'registry definitions injected into the router');
   const routerSrc = fs.readFileSync('src/services/ai/job-router.js', 'utf8');
   assert(routerSrc.includes('getToolDefinitions'), 'router forwards tool definitions to transports');
   const studioSrc = fs.readFileSync('src/ui/views/ai-studio.js', 'utf8');
-  assert(studioSrc.includes('renderProposals'), 'AI Studio renders proposal cards');
-  assert(studioSrc.includes("data-proposal-act"), 'proposal cards expose explicit Accept/Reject buttons');
-  assert(studioSrc.includes('executeAiAction'), 'accept applies through the deterministic action pipeline');
+  assert(!studioSrc.includes('renderProposals'), 'Assistant does not propose mutations of the removed Canvas');
+  assert(!studioSrc.includes('executeAiAction'), 'Removed Canvas action executor is not exposed in the Assistant');
 }
 
 console.log('\n--- 10. Autosave + crash recovery ---');
 {
   const fs = await import('node:fs');
-  const planSrc = fs.readFileSync('src/ui/views/plan.js', 'utf8');
   // Debounced autosave on every undoable mutation (history.push wrapper)
-  assert(planSrc.includes('scheduleAutosave()'), 'autosave scheduled from the mutation path');
-  assert(planSrc.includes('rawHistoryPush(cmd);'), 'history.push wrapped without losing the original call');
   // Dedicated recovery key — never the project itself
-  assert(planSrc.includes("RECOVERY_KEY = 'archiscale_plan_recovery'"), 'dedicated recovery storage key');
   // Flush on hide/close
-  assert(planSrc.includes("document.visibilityState === 'hidden'"), 'snapshot flushed when the tab hides');
-  assert(planSrc.includes("window.addEventListener('beforeunload'"), 'snapshot flushed before unload');
   // Manual save clears recovery (work is now durable in the project)
-  assert(planSrc.includes('clearRecoverySnapshot(); // manual save supersedes recovery'), 'manual save clears the recovery snapshot');
   // Recovery is explicit, never automatic
-  assert(planSrc.includes('showRecoveryBannerIfAny'), 'recovery banner offered on mount');
-  assert(planSrc.includes('btn-recovery-restore'), 'user must click Recover — no silent auto-restore');
-  assert(planSrc.includes('btn-recovery-discard'), 'user can discard the snapshot');
 }
 
 console.log('\n--- 11. CAD modify operations (mirror/rotate/scale/offset/array/trim/extend) ---');
@@ -341,12 +311,8 @@ console.log('\n--- 11. CAD modify operations (mirror/rotate/scale/offset/array/t
   for (const name of ['MIRROR', 'ROTATE', 'SCALE', 'OFFSET', 'ARRAY', 'TRIM', 'EXTEND']) {
     assert(cmdSrc.includes(`name: '${name}'`), `${name} command registered`);
   }
-  const planSrc = fs.readFileSync('src/ui/views/plan.js', 'utf8');
   for (const run of ['modify:mirror', 'modify:rotate', 'modify:scale', 'modify:offset', 'modify:array', 'modify:trim', 'modify:extend']) {
-    assert(planSrc.includes(`case '${run}'`), `executor handles ${run}`);
   }
-  assert(planSrc.includes('ctx-mirror-btn') && planSrc.includes('ctx-scale-btn'), 'contextual toolbar exposes modify buttons');
-  assert(planSrc.includes('restoreEntitySnapshots'), 'in-place ops undo via snapshot commands');
 }
 
 console.log('\n--- 12. Levels/floors (schema v3) ---');
@@ -418,18 +384,13 @@ console.log('\n--- 12. Levels/floors (schema v3) ---');
 
   // UI wiring pins
   const fs = await import('node:fs');
-  const planSrc = fs.readFileSync('src/ui/views/plan.js', 'utf8');
-  assert(planSrc.includes('function renderLevelsList'), 'levels manager renders in the schedule panel');
-  assert(planSrc.includes('function setupLevelsPanel'), 'levels panel initialized on mount');
-  assert(planSrc.includes("entity.levelId = (linked || lvls[0] || {}).id", 'entities stamped with levelId on commit' ) || planSrc.includes('entity.levelId = (linked || lvls[0] || {}).id'), 'entities stamped with levelId on commit');
-  assert(planSrc.includes('levels: projectLevels'), 'massing receives project levels');
 }
 
 console.log('\n--- 13. Plan-canvas tool batch: dim chain, fillet, offset, lasso, snaps, isolate ---');
 {
   const E = await import('../src/core/entities.js');
   const G = await import('../src/core/geometry.js');
-  const PC = await import('../src/core/plan-canvas.js');
+  const PC = await import('../src/core/geometry-tools.js');
   const P = await import('../src/core/personas.js');
   const L = await import('../src/core/layers.js');
   const fs = await import('node:fs');
@@ -500,16 +461,6 @@ console.log('\n--- 13. Plan-canvas tool batch: dim chain, fillet, offset, lasso,
   assert(target.visible !== false, 'target layer stays visible through isolate');
 
   // UI wiring pins
-  const planSrc = fs.readFileSync('src/ui/views/plan.js', 'utf8');
-  assert(planSrc.includes('function finishDimChain'), 'dim-chain finish implemented');
-  assert(planSrc.includes("dimChainPoints.length > 0 && event.key === 'Enter'"), 'dim-chain Enter binding');
-  assert(planSrc.includes('function applyFillet'), 'fillet apply implemented');
-  assert(planSrc.includes("e.kind === 'arc'"), 'arc entities render');
-  assert(planSrc.includes("mode: 'lasso'"), 'lasso drag mode wired');
-  assert(planSrc.includes('function finishLasso'), 'lasso finish selects inside the polygon');
-  assert(planSrc.includes('layer-isolate-btn'), 'layer isolate button rendered');
-  assert(planSrc.includes('_layerIsolateSnapshot'), 'isolate restore snapshot kept');
-  assert(planSrc.includes("tool === 'curve_offset'"), 'offset tool click path');
 }
 
 console.log('\n--- 14. Advanced CAD tools — full PLANNED batch implemented ---');
@@ -522,14 +473,12 @@ console.log('\n--- 14. Advanced CAD tools — full PLANNED batch implemented ---
 
   // The PLANNED list is now EMPTY and the ghost contract holds
   assert(P.PLANNED_TOOLS.size === 0, 'PLANNED_TOOLS is empty — nothing dimmed remains');
-  const planSrc = fs.readFileSync('src/ui/views/plan.js', 'utf8');
   const catalogIds = new Set(P.STUDIO_TOOL_CATALOG.map(t => t.id));
   const flyoutIds = new Set(P.STUDIO_TOOL_CATALOG.flatMap(t => (t.flyout || []).map(s => s.id)));
   for (const id of ['curve_nurbs', 'curve_boolean', 'surface_planar', 'surface_extrude', 'surface_loft',
     'surface_revolve', 'solid_box', 'boolean_union', 'boolean_diff', 'mesh_from_srf', 'quad_remesh',
     'subd_box', 'subd_crease', 'block_create', 'lasso_poly', 'lasso_magnetic', 'crop_tool']) {
     assert(catalogIds.has(id) || flyoutIds.has(id), `${id} reachable (catalog or flyout)`);
-    assert(planSrc.includes(`'${id}'`), `${id} has a handler reference in the plan view`);
   }
 
   // NURBS core leaf: evaluators work standalone AND via massing re-exports
@@ -608,17 +557,8 @@ console.log('\n--- 14. Advanced CAD tools — full PLANNED batch implemented ---
   assert(C.cropVerdict({ x: 2, y: 2, width: 4, depth: 1 }, rect) === 'partial', 'crop: partial');
 
   // Plan-view wiring: previews, gestures, routing
-  assert(planSrc.includes('function finishNurbsCurve'), 'NURBS commit implemented');
-  assert(planSrc.includes("nurbsPoints.length > 0 && event.key === 'Enter'"), 'NURBS Enter binding');
-  assert(planSrc.includes('mode: \'crop\''), 'crop drag mode wired');
-  assert(planSrc.includes('function applyCrop'), 'crop apply + clear');
-  assert(planSrc.includes('_cropHidden'), 'crop hides non-destructively via a flag');
   const layersSrc = fs.readFileSync('src/core/layers.js', 'utf8');
   assert(layersSrc.includes('_cropHidden === true'), 'isEntityVisible honors the crop flag');
-  assert(planSrc.includes('function runRingBoolean'), 'boolean runner wired');
-  assert(planSrc.includes('magnetic'), 'magnetic lasso variant wired');
-  assert(planSrc.includes('function runBlockCreate'), 'block create wired');
-  assert(planSrc.includes('memberIds.filter'), 'block click selects members');
   assert(fs.readFileSync('src/core/massing-3d.js', 'utf8').includes('subdLimitQuads(e)'), 'subd limit evaluation in the 3D massing builder');
 }
 

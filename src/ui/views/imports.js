@@ -2,9 +2,9 @@
  * Architecture Helping Hand - Importer View (Mode 22)
  * Phase 15 (M10): normalized ingestion surface. Paste or choose a file,
  * preview the outcome (entities / units / confidence / warnings),
- * then send accepted geometry to the Plan Canvas or the dimension
+ * then send accepted geometry to the external CAD or the dimension
  * workspace. The importer NEVER mutates the project directly — entities
- * land in the plan state through the same user-visible path as drawing.
+ * land in the project reference through the same user-visible path as drawing.
  */
 
 import {
@@ -143,61 +143,15 @@ export function createImportsView(context) {
     return typeof v === 'number' && isFinite(v) ? v.toFixed(2) : '?';
   }
 
-  function sendToPlan() {
-    if (!lastReport || !lastReport.ok) {
-      showToast('Run a successful import first', 'warning');
-      return;
-    }
-    // Convert import entities into plan-canvas entity candidates (meters).
-    const convert = e => {
-      const id = `imp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-      if (e.kind === 'room') {
-        return { kind: 'room', id, name: e.name, x: e.x, y: e.y, width: e.width, depth: e.depth };
-      }
-      if (e.kind === 'line') {
-        return { kind: 'wall', id, name: e.name, x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, thickness: 0.1 };
-      }
-      if (e.kind === 'furniture') {
-        return { kind: 'furniture', id, name: e.name, x: 0, y: 0, width: e.width, depth: e.depth };
-      }
-      if (e.kind === 'measurement') {
-        return null; // measurements go to workspace, not the canvas
-      }
-      return null; // polylines/labels/circles: plan canvas supports rects+walls in scope
-    };
-    const imported = [];
-    let skipped = 0;
-    for (const e of lastReport.entities) {
-      const c = convert(e);
-      if (c) imported.push(c); else skipped++;
-    }
-    const measurements = lastReport.entities.filter(e => e.kind === 'measurement');
-    if (measurements.length > 0 && context.projectStore) {
-      context.projectStore.updateProject(draft => {
-        for (const m of measurements) {
-          draft.measurements.push({
-            id: `meas-imp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-            label: m.name, value: Number(m.value.toFixed(3)), unit: 'm',
-            source: 'Imported', status: 'Needs Verification', createdAt: new Date().toISOString()
-          });
-        }
-        return draft;
-      });
-    }
-    if (imported.length === 0 && measurements.length === 0) {
-      showToast(`Nothing sendable — ${skipped} unsupported elements`, 'warning');
-      return;
-    }
-    state.plan.entities.push(...imported);
-    showToast(`Sent ${imported.length} entities to the Plan Canvas${measurements.length ? ` and ${measurements.length} measurements to the project (Needs Verification)` : ''}`);
-    savePrefs({ lastFormat: dom.importsFormatSelect?.value });
-    AudioService.playSuccess();
-    if (imported.length > 0) {
-      switchMode('plan');
-      views.callController('plan', 'render');
-    }
+  function saveToProject() {
+    if (!lastReport?.ok) { showToast('Review a successful import first', 'warning'); return; }
+    const result = context.projectStore.updateProject(draft => {
+      if (!Array.isArray(draft.imports)) draft.imports = [];
+      draft.imports.push({ id: 'import-' + Date.now(), format: dom.importsFormatSelect?.value, createdAt: new Date().toISOString(), entities: lastReport.entities, status: 'Needs Verification' });
+      return draft;
+    });
+    showToast(result.ok ? 'Imported data saved as a project reference' : result.errors?.join('; ') || 'Save failed', result.ok ? 'success' : 'error');
   }
-
   const views = context.views;
 
   return {
@@ -213,7 +167,7 @@ export function createImportsView(context) {
       renderReport();
     },
     getController() {
-      return { runImport, handleFile, sendToPlan };
+      return { runImport, handleFile, saveToProject };
     }
   };
 }

@@ -7,18 +7,14 @@
   <title>Architecture Helping Hand — Scaling & Furniture Studio</title>
   
   <!-- CSS Stylesheets -->
-  <link rel="stylesheet" href="css/themes.css?v=2.3.6">
-  <link rel="stylesheet" href="css/main.css?v=2.3.6">
+  <link rel="stylesheet" href="css/themes.css?v=2.7.1">
+  <link rel="stylesheet" href="css/main.css?v=2.7.1">
   
   <!-- Fail-safe immediate overrides for mode views & form controls -->
   <style>
     .tool-mode-view[hidden],
     .tool-mode-view:not(.active),
-    #mode-view-plan[hidden],
-    #mode-view-plan:not(.active),
-    body:not(.mode-active-plan) #mode-view-plan {
-      display: none !important;
-    }
+
     textarea,
     .cad-preview-textarea,
     .form-textarea {
@@ -39,6 +35,7 @@
   <link rel="apple-touch-icon" href="assets/icon-192.png">
   
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cpath d='M3 9h18M9 21V9'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/companion.css">
 </head>
 <body>
 
@@ -166,7 +163,7 @@
           </button>
         </div>
         <div class="quick-dim-actions-right">
-          <button type="button" id="quick-dim-send-workspace-btn" class="result-action-btn secondary" title="Add to Dimension Workspace (Mode 7)">
+          <button type="button" id="quick-dim-send-workspace-btn" class="result-action-btn secondary" title="Add to Dimension Schedule (Mode 7)">
             <span>📐 Workspace</span>
           </button>
           <button type="button" id="quick-dim-send-multiscale-btn" class="result-action-btn secondary" title="Compare in Multi-Scale (Mode 9)">
@@ -245,11 +242,38 @@
             <button type="button" id="topbar-home-btn" class="topbar-breadcrumb" title="Back to Home">
               <span class="topbar-crumb-root">Helping Hand</span>
               <span class="topbar-crumb-sep" aria-hidden="true">/</span>
-              <span id="topbar-current-tool" class="topbar-crumb-current">Home</span>
+              <span id="topbar-crumb-workspace" class="topbar-crumb-workspace" hidden></span>
+              <span id="topbar-crumb-tool" class="topbar-crumb-current" hidden>Home</span>
+            </button>
+            <button type="button" id="topbar-project-chip" class="topbar-project-chip" title="Current project — click to open the Project workspace">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5.5 3.5h13v17h-13z"/><path d="M9 3.5v17M5.5 8.5H9"/>
+              </svg>
+              <span id="topbar-project-name">No project</span>
             </button>
           </div>
 
           <div class="topbar-controls">
+            <!-- Compact classic File menu (New / Save / Export / Shortcuts) -->
+            <div class="topbar-file-menu" id="topbar-file-menu">
+              <button type="button" class="control-btn topbar-file-trigger" aria-haspopup="true" aria-expanded="false" title="File">File ▾</button>
+              <div class="topbar-file-dropdown" role="menu" aria-label="File menu">
+                <button type="button" class="topbar-file-item" role="menuitem" data-file-cmd="save" title="Save the current project">💾 Save to Project</button>
+                <button type="button" class="topbar-file-item" role="menuitem" data-file-cmd="open_projects" title="Open the Projects library">🗂 Open Project…</button>
+                <button type="button" class="topbar-file-item" role="menuitem" data-file-cmd="export" title="Export Center: JSON · DXF · SVG · CSV">📤 Export…</button>
+                <button type="button" class="topbar-file-item" role="menuitem" data-file-cmd="shortcuts" title="Keyboard shortcuts (F1)">⌨ Shortcuts…</button>
+              </div>
+            </div>
+
+            <!-- Omnipresent AI Co-Pilot drawer trigger -->
+            <button id="topbar-ai-btn" class="control-btn topbar-ai-btn" title="Omnipresent AI Co-Pilot (Ctrl+Space)" aria-label="Open the AI assistant drawer">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4z"/><circle cx="18.5" cy="16.5" r="1.6"/><circle cx="6" cy="17.5" r="1.2"/>
+              </svg>
+              <span class="cmd-palette-btn-text">AI</span>
+              <span class="cmd-palette-kbd-hint"><kbd>Ctrl</kbd><kbd>Space</kbd></span>
+            </button>
+
             <!-- Global Search (opens the command palette; same engine) -->
             <button id="command-palette-btn" class="control-btn topbar-search-trigger" title="Search everything (Ctrl+K / ⌘K)" aria-label="Global search and commands">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -326,9 +350,6 @@
           </div>
         </header>
 
-        <!-- Architectural Menu Bar: Always-accessible tool navigation ribbon -->
-        <nav class="app-menubar" id="app-menubar" aria-label="Tool Menu Bar"></nav>
-
         <!-- Omnipresent Top AI Assistant Dropdown Drawer Host -->
         <div id="omnipresent-ai-drawer-host"></div>
 
@@ -336,6 +357,8 @@
         <main class="tool-surface" id="tool-surface">
 
 <!-- HOME VIEW: orientation, project snapshot, quick access -->
+<section id="mode-view-reports" class="tool-mode-view" hidden aria-labelledby="heading-reports"><h1 id="heading-reports">Reports &amp; Boards</h1><p class="companion-lead">One research project, multiple architecture documents. Physical page preview and vector diagrams.</p><div id="reports-workspace"></div></section>
+<section id="mode-view-concept" class="tool-mode-view" hidden aria-labelledby="heading-concept"><h1 id="heading-concept">Concept</h1><div id="concept-workspace"></div></section>
     <section id="mode-view-home" class="tool-mode-view active" aria-labelledby="heading-home">
       <div class="home-wrap">
         <div class="home-hero archi-card">
@@ -346,7 +369,7 @@
           <div class="home-hero-inner">
             <span class="card-tag">PERSONAL ARCHITECTURAL WORKBENCH</span>
             <h2 id="heading-home" class="home-title">Architecture Helping Hand</h2>
-            <p class="home-subtitle">Scale, dimension, plan, and review architectural work — everything reachable from the sidebar, no zoom tricks needed.</p>
+            <p class="home-subtitle">Research, analyze, calculate, and present architectural work — everything reachable from the sidebar, no zoom tricks needed.</p>
           </div>
         </div>
 
@@ -366,42 +389,31 @@
             <div id="home-project-stats" class="home-project-stats"></div>
             <div class="result-actions-strip">
               <button type="button" class="result-action-btn home-nav-btn" data-mode="projects"><span>🗂 Open Projects</span></button>
-              <button type="button" class="result-action-btn home-nav-btn" data-mode="plan"><span>▭ Open Plan Canvas</span></button>
             </div>
           </div>
 
-          <!-- QUICK TOOLS -->
-          <div class="archi-card home-card">
+          <!-- STUDIO WORKFLOW (guidance, not a wizard) -->
+          <div class="archi-card home-card home-workflow">
             <div class="corner-mark top-left"></div>
             <div class="corner-mark top-right"></div>
             <div class="corner-mark bottom-left"></div>
             <div class="corner-mark bottom-right"></div>
-            <div class="result-header"><span class="result-label">QUICK TOOLS</span></div>
-            <div class="home-links-grid">
-              <button type="button" class="home-nav-btn" data-mode="converter"><strong>Scale Converter</strong><span>Paper ⇄ real world</span></button>
-              <button type="button" class="home-nav-btn" data-mode="stairs"><strong>Stairs</strong><span>Risers, goings, Blondel</span></button>
-              <button type="button" class="home-nav-btn" data-mode="ramps"><strong>Ramps</strong><span>Rise, run, 1:X ratio</span></button>
-              <button type="button" class="home-nav-btn" data-mode="slopes"><strong>Slopes</strong><span>Grade analysis</span></button>
-              <button type="button" class="home-nav-btn" data-mode="workspace"><strong>Dimension Workspace</strong><span>Measurement schedule</span></button>
-              <button type="button" class="home-nav-btn" data-mode="furniture"><strong>Furniture</strong><span>215 standards & clearances</span></button>
+            <div class="result-header">
+              <span class="result-label">STUDIO WORKFLOW</span>
+              <span class="unit-system-tag" style="font-size: 0.7rem;">GUIDANCE · JUMP ANYWHERE</span>
             </div>
-          </div>
-
-          <!-- PROJECT TOOLS -->
-          <div class="archi-card home-card">
-            <div class="corner-mark top-left"></div>
-            <div class="corner-mark top-right"></div>
-            <div class="corner-mark bottom-left"></div>
-            <div class="corner-mark bottom-right"></div>
-            <div class="result-header"><span class="result-label">PROJECT</span></div>
-            <div class="home-links-grid">
-              <button type="button" class="home-nav-btn" data-mode="plan"><strong>Plan Canvas</strong><span>Rooms, walls, furniture</span></button>
-              <button type="button" class="home-nav-btn" data-mode="survey"><strong>Survey</strong><span>Measurements & calibration</span></button>
-              <button type="button" class="home-nav-btn" data-mode="imports"><strong>Import</strong><span>CSV · DXF · SVG</span></button>
-              <button type="button" class="home-nav-btn" data-mode="export"><strong>Export Center</strong><span>DXF · SVG · JSON · CSV</span></button>
-              <button type="button" class="home-nav-btn" data-mode="projects"><strong>Projects</strong><span>Library & snapshots</span></button>
-              <button type="button" class="home-nav-btn" data-mode="reference"><strong>Reference</strong><span>Scale ruler & benchmarks</span></button>
-            </div>
+            <p class="home-workflow-hint">The workbench follows the architectural design process. You can work in any order — this is orientation, not a wizard.</p>
+            <ol class="home-workflow-list">
+              <li><button type="button" class="home-ws-btn" data-workspace="research"><strong>Research</strong><span>Know before designing</span></button></li>
+              <li><button type="button" class="home-ws-btn" data-workspace="site"><strong>Site Analysis</strong><span>Context & environment</span></button></li>
+              <li><button type="button" class="home-ws-btn" data-workspace="concept"><strong>Concept</strong><span>Ideas → directions</span></button></li>
+              <li><button type="button" class="home-ws-btn" data-workspace="dimensions"><strong>Dimensions</strong><span>Scale & measure</span></button></li>
+              <li><button type="button" class="home-ws-btn" data-workspace="cad"><strong>CAD</strong><span>Handoffs & formats</span></button></li>
+              <li><button type="button" class="home-ws-btn" data-workspace="architecture"><strong>Architecture</strong><span>Compliant geometry</span></button></li>
+              <li><button type="button" class="home-ws-btn" data-workspace="space"><strong>Space</strong><span>Plan & furniture</span></button></li>
+              <li><button type="button" class="home-ws-btn" data-workspace="project"><strong>Project</strong><span>Container & exports</span></button></li>
+              <li><button type="button" class="home-ws-btn" data-workspace="ai"><strong>AI Assistant</strong><span>Critique & tutor</span></button></li>
+            </ol>
           </div>
 
           <!-- AI TOOLS -->
@@ -426,8 +438,1110 @@
 
 
     <!-- ======================================================== -->
+    <!-- WORKSPACE LANDING PAGE (rendered by renderLanding())      -->
+    <!-- ======================================================== -->
+    <section id="mode-view-landing" class="tool-mode-view" aria-labelledby="landing-title" hidden>
+      <div class="landing-wrap">
+        <div id="landing-content" class="landing-content"><!-- populated by renderLanding(ws) --></div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- RESEARCH DASHBOARD (Workspace 01)                        -->
+    <!-- ======================================================== -->
+    <section id="mode-view-research_dashboard" class="tool-mode-view" aria-labelledby="heading-research-dashboard" hidden>
+      <div class="tool-layout research-tool-layout">
+        <div class="tool-main">
+          <div class="instrument-header-bar">
+            <div class="tool-heading-group">
+              <h2 id="heading-research-dashboard" class="tool-heading">Research</h2>
+              <p class="tool-description">Organize research, link findings to sources, and draft project sections.</p>
+            </div>
+          </div>
+          <div id="research-dashboard" class="research-dashboard"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- REFERENCES LIBRARY (Workspace 01)                        -->
+    <!-- ======================================================== -->
+    <section id="mode-view-research_library" class="tool-mode-view" aria-labelledby="heading-research-library" hidden>
+      <div class="tool-layout research-tool-layout">
+        <div class="tool-main">
+          <div class="instrument-header-bar">
+            <div class="tool-heading-group">
+              <h2 id="heading-research-library" class="tool-heading">References Library</h2>
+              <p class="tool-description">Precedents, case studies, materials, and standards saved to the project — categorized, tagged, citable, and searchable. Nothing is auto-added; you curate the library.</p>
+            </div>
+          </div>
+          <div id="research-library" class="research-library"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- STANDARDS EXPLORER (Workspace 01)                        -->
+    <!-- ======================================================== -->
+    <section id="mode-view-standards_explorer" class="tool-mode-view" aria-labelledby="heading-standards-explorer" hidden>
+      <div class="tool-layout research-tool-layout">
+        <div class="tool-main">
+          <div class="instrument-header-bar">
+            <div class="tool-heading-group">
+              <h2 id="heading-standards-explorer" class="tool-heading">Standards Explorer</h2>
+              <p class="tool-description">Browse the live building-code engine — the same numeric limits the Stairs, Ramps, and Slopes calculators enforce, with legal citations per jurisdiction.</p>
+            </div>
+          </div>
+          <div id="standards-explorer" class="standards-explorer"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- SITE DASHBOARD (Workspace 02)                            -->
+    <!-- ======================================================== -->
+    <section id="mode-view-site_dashboard" class="tool-mode-view" aria-labelledby="heading-site-dashboard" hidden>
+      <div class="tool-layout research-tool-layout">
+        <div class="tool-main">
+          <div class="instrument-header-bar">
+            <div class="tool-heading-group">
+              <h2 id="heading-site-dashboard" class="tool-heading">Site Analysis</h2>
+              <p class="tool-description">Turn observations into interpretations and design implications, with diagrams and sources.</p>
+            </div>
+          </div>
+          <div id="site-dashboard" class="site-dashboard"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- SUN PATH & SHADOW (Workspace 02)                        -->
+    <!-- ======================================================== -->
+    <section id="mode-view-sun_path" class="tool-mode-view" aria-labelledby="heading-sun-path" hidden>
+      <div class="tool-layout research-tool-layout">
+        <div class="tool-main">
+          <div class="instrument-header-bar">
+            <div class="tool-heading-group">
+              <h2 id="heading-sun-path" class="tool-heading">Sun Path &amp; Shadow</h2>
+              <p class="tool-description">Deterministic solar analysis (NOAA algorithm): sunrise, sunset, solar noon, live position, and the shadow your building casts. Set the site once in the Site Context Worksheet and it loads automatically.</p>
+            </div>
+          </div>
+          <div id="sun-path-tool" class="sun-path-tool"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- SITE CONTEXT WORKSHEET (Workspace 02)                    -->
+    <!-- ======================================================== -->
+    <section id="mode-view-site_context" class="tool-mode-view" aria-labelledby="heading-site-context" hidden>
+      <div class="tool-layout research-tool-layout">
+        <div class="tool-main">
+          <div class="instrument-header-bar">
+            <div class="tool-heading-group">
+              <h2 id="heading-site-context" class="tool-heading">Site Context Worksheet</h2>
+              <p class="tool-description">Structured site capture saved to the project: coordinates, climate, movement &amp; access, views with bearings, and opportunities &amp; constraints. External map services launch outside this app, clearly labeled.</p>
+            </div>
+          </div>
+          <div id="site-context" class="site-context"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
     <!-- MODE 1: SCALE CONVERTER (Drawing <-> Real World)         -->
     <!-- ======================================================== -->
+<section id="mode-view-dimensions" class="tool-mode-view" hidden aria-labelledby="heading-dimensions"><h1 id="heading-dimensions">Dimensions</h1><p class="companion-lead">Measure once. Use the same values in schedules, sequences and CAD.</p><div class="dimension-tabs" role="tablist" aria-label="Dimension workflow"><button type="button" role="tab" id="dimension-tab-expression" data-dimension-workflow="expression" aria-controls="dimension-panel-expression" aria-selected="false">Quick</button><button type="button" role="tab" id="dimension-tab-workspace" data-dimension-workflow="workspace" aria-controls="dimension-panel-workspace" aria-selected="false">Schedule</button><button type="button" role="tab" id="dimension-tab-chains" data-dimension-workflow="chains" aria-controls="dimension-panel-chains" aria-selected="false">Chain</button><button type="button" role="tab" id="dimension-tab-multiscale" data-dimension-workflow="multiscale" aria-controls="dimension-panel-multiscale" aria-selected="false">Compare Scales</button></div><section hidden id="dimension-panel-expression" role="tabpanel" aria-labelledby="dimension-tab-expression" class="dimension-panel">
+      <div class="tool-layout">
+        <!-- Left Column: Expression Input & Configuration -->
+        <div class="archi-card main-calc-card">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <!-- Instrument Title & Scale Header -->
+          <div class="calc-header-strip">
+            <div class="calc-title-badge">
+              <span class="calc-indicator-dot"></span>
+              <h2 id="heading-expression">DIMENSION EXPRESSION CALCULATOR</h2>
+            </div>
+            <div class="calc-status-badge">
+              <span id="expression-state-badge" class="state-badge state-ready">READY</span>
+            </div>
+          </div>
+
+          <p class="tool-description">
+            Evaluate mixed-unit architectural math expressions (e.g. <code>2400 + 900 + 1200</code>, <code>5.4m - 1200mm</code>, <code>(2.4m + 900mm) / 3</code>, <code>250mm * 8</code>, <code>7' 6" + 2' 6"</code>) with standard operator precedence and live scaled drawing output.
+          </p>
+
+          <!-- Input Expression Box & Live Preview -->
+          <div class="calc-form">
+            <div class="form-group">
+              <label for="expression-input" class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>EXPRESSION INPUT</span>
+                <span id="expression-live-preview" class="expr-live-preview" style="font-family: var(--font-family-mono); font-size: 0.75rem; color: var(--text-accent);">Live: Ready</span>
+              </label>
+              <div class="input-with-inline-action">
+                <input
+                  type="text"
+                  id="expression-input"
+                  class="form-input mono-input"
+                  placeholder="e.g. 2400mm + 900mm + 1200mm or (2.4m + 900mm) / 3"
+                  autocomplete="off"
+                  spellcheck="false"
+                  aria-label="Quick Measurement"
+                />
+                <button type="button" id="expression-clear-input-btn" class="input-clear-btn" title="Clear expression (Esc)" aria-label="Clear expression">✕</button>
+              </div>
+              <div id="expression-error-msg" class="expr-error-text" style="display: none; font-size: 0.75rem; color: var(--color-error); margin-top: 4px;"></div>
+            </div>
+
+            <!-- Workspace Default Unit & Scale Ratio Row -->
+            <div class="form-row" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
+              <div class="form-group">
+                <label for="expression-default-unit" class="form-label">DEFAULT UNIT (FOR BARE NUMBERS)</label>
+                <select id="expression-default-unit" class="form-select" aria-label="Default input unit">
+                  <option value="mm" selected>Millimeters (mm)</option>
+                  <option value="cm">Centimeters (cm)</option>
+                  <option value="m">Meters (m)</option>
+                  <option value="in">Inches (in)</option>
+                  <option value="ft">Feet (ft)</option>
+                  <option value="ft_in">Feet-Inches (ft-in)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="expression-scale-select" class="form-label">DRAWING SCALE RATIO</label>
+                <select id="expression-scale-select" class="form-select" aria-label="Scale ratio">
+                  <option value="1">1:1 (Full Size)</option>
+                  <option value="5">1:5 (Detail)</option>
+                  <option value="10">1:10 (Detail)</option>
+                  <option value="20">1:20 (Interior)</option>
+                  <option value="25">1:25 (Plan)</option>
+                  <option value="50" selected>1:50 (Architecture)</option>
+                  <option value="100">1:100 (Building Plan)</option>
+                  <option value="200">1:200 (Site Plan)</option>
+                  <option value="500">1:500 (Masterplan)</option>
+                  <option value="custom">Custom Scale...</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="expression-custom-scale-group" class="form-group" style="display: none; margin-bottom: 1rem;">
+              <label for="expression-custom-scale-input" class="form-label">CUSTOM SCALE (1:X)</label>
+              <input type="number" id="expression-custom-scale-input" class="form-input mono-input" value="50" min="0.001" step="any" placeholder="Enter scale ratio (e.g. 75 for 1:75)" />
+            </div>
+
+            <!-- Quick Example Syntax Chips -->
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <span class="form-label" style="display: block; margin-bottom: 0.35rem;">QUICK EXAMPLE TEMPLATES</span>
+              <div class="expr-sample-chips" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                <button type="button" class="sample-chip expr-template-chip" data-expr="2400 + 900 + 1200">2400 + 900 + 1200</button>
+                <button type="button" class="sample-chip expr-template-chip" data-expr="5.4m - 1200mm">5.4m - 1200mm</button>
+                <button type="button" class="sample-chip expr-template-chip" data-expr="(2.4m + 900mm) / 3">(2.4m + 900mm) / 3</button>
+                <button type="button" class="sample-chip expr-template-chip" data-expr="250mm * 8">250mm * 8</button>
+                <button type="button" class="sample-chip expr-template-chip" data-expr="7' 6&quot; + 2' 6&quot;">7' 6" + 2' 6"</button>
+                <button type="button" class="sample-chip expr-template-chip" data-expr="2400mm / 800mm">2400mm / 800mm (Scalar)</button>
+              </div>
+            </div>
+
+            <!-- Action Button: Evaluate Expression -->
+            <div class="form-actions" style="margin-top: 0.5rem;">
+              <button type="button" id="btn-run-expression" class="btn-calc-action primary">
+                <span class="btn-icon">🧮</span>
+                <span>EVALUATE EXPRESSION</span>
+                <span class="btn-kbd-hint"><kbd>↵</kbd></span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Result Hero, Scale Readout & Workspace Insertion -->
+        <div class="calc-results-column">
+          <!-- Primary Result Card -->
+          <div class="archi-card result-hero-card">
+            <div class="corner-mark top-left"></div>
+            <div class="corner-mark top-right"></div>
+            <div class="corner-mark bottom-left"></div>
+            <div class="corner-mark bottom-right"></div>
+
+            <div class="result-header">
+              <span class="result-category-label">EVALUATED DIMENSION RESULT</span>
+              <span id="expression-dim-badge" class="type-badge badge-seg" style="font-size: 0.65rem;">LENGTH</span>
+            </div>
+
+            <div class="result-value-display">
+              <div id="expression-result-val" class="result-number">0</div>
+              <div id="expression-result-unit" class="result-unit-label">mm</div>
+            </div>
+
+            <!-- Drawing Value at Active Scale -->
+            <div class="result-context-strip" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: var(--radius-sm); margin: 0.75rem 0; border: 1px solid var(--border-color-light);">
+              <div style="display: flex; flex-direction: column;">
+                <span style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">DRAWING AT ACTIVE SCALE</span>
+                <span id="expression-drawing-label" style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">Scale 1:50</span>
+              </div>
+              <div id="expression-drawing-val" style="font-family: var(--font-family-mono); font-size: 1.15rem; font-weight: 700; color: var(--accent-primary);">0 mm</div>
+            </div>
+
+            <!-- Secondary Equivalents Readout -->
+            <div class="secondary-conversions">
+              <span class="secondary-label">UNIT EQUIVALENTS</span>
+              <div id="expression-secondary-readout" class="secondary-readout-grid">
+                <div class="secondary-item"><span class="sec-unit">m</span><span class="sec-val">0 m</span></div>
+                <div class="secondary-item"><span class="sec-unit">cm</span><span class="sec-val">0 cm</span></div>
+                <div class="secondary-item"><span class="sec-unit">mm</span><span class="sec-val">0 mm</span></div>
+                <div class="secondary-item"><span class="sec-unit">ft-in</span><span class="sec-val">0"</span></div>
+              </div>
+            </div>
+
+            <!-- Result Actions -->
+            <div class="result-actions-strip" style="margin-top: 1rem;">
+              <button type="button" id="expression-copy-btn" class="result-action-btn" title="Copy formatted result">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                <span>Copy Result</span>
+              </button>
+              <button type="button" id="expression-copy-raw-btn" class="result-action-btn" title="Copy raw numeric value">
+                <span>Copy Raw</span>
+              </button>
+              <button type="button" id="expression-copy-drawing-btn" class="result-action-btn" title="Copy scaled drawing dimension">
+                <span>Copy Drawing</span>
+              </button>
+              <button type="button" id="expression-compare-btn" class="result-action-btn" title="Compare this calculated dimension across multiple scales">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line><line x1="2" y1="20" x2="22" y2="20"></line></svg>
+                <span>Compare Scales</span>
+              </button>
+              <button type="button" id="expression-cad-handoff-btn" class="result-action-btn" title="Open in CAD Clipboard (Mode 11)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>
+                <span>CAD Clipboard</span>
+              </button>
+              <button type="button" id="expression-send-cad-handoff-btn" class="result-action-btn" title="Send to CAD Handoff (Mode 13)">
+                <span>🚀 Send to CAD</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Dimension Workspace Insertion Panel -->
+          <div class="archi-card" style="margin-top: 1rem; padding: 1.25rem;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.75rem;">
+              <span style="font-size: 1.1rem;">📐</span>
+              <h3 style="font-size: 0.9rem; font-weight: 800; letter-spacing: 0.05em; color: var(--text-primary); text-transform: uppercase;">ADD TO DIMENSION WORKSPACE</h3>
+            </div>
+            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+              Directly insert this calculated expression result into your active Dimension Workspace schedule.
+            </p>
+            <div class="form-row" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-bottom: 0.75rem;">
+              <div>
+                <label for="expression-add-name" class="form-label">MEMBER / ROW NAME</label>
+                <input type="text" id="expression-add-name" class="form-input" placeholder="e.g. Total Wall Run" value="Expression Result" />
+              </div>
+              <div>
+                <label for="expression-add-role-select" class="form-label">SEMANTIC ROLE</label>
+                <select id="expression-add-role-select" class="form-select">
+                  <option value="reference" selected>Reference (REF, Default)</option>
+                  <option value="segment">Segment (SEG, Additive)</option>
+                  <option value="allowance">Allowance (ALW, Tolerance)</option>
+                </select>
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button type="button" id="expression-add-workspace-btn" class="btn-calc-action secondary" style="flex: 1;">
+                <span>+ Add to Workspace</span>
+                <span class="btn-kbd-hint"><kbd>⇧↵</kbd></span>
+              </button>
+              <button type="button" id="expression-save-journal-btn" class="hist-btn" title="Save expression to calculation journal">
+                <span>Save to Journal</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Recent Expressions Panel -->
+          <div class="archi-card" style="margin-top: 1rem; padding: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+              <span style="font-size: 0.75rem; font-weight: 800; letter-spacing: 0.05em; color: var(--text-secondary); text-transform: uppercase;">RECENT EXPRESSIONS</span>
+              <button type="button" id="expression-clear-recent-btn" class="row-action-btn danger" style="font-size: 0.65rem;">Clear</button>
+            </div>
+            <div id="expression-recent-list" class="recent-expressions-list" style="display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">No recent expressions evaluated yet.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+<section hidden id="dimension-panel-workspace" role="tabpanel" aria-labelledby="dimension-tab-workspace" class="dimension-panel">
+      <div class="calculator-card workspace-card">
+        
+        <!-- Workspace Header & State -->
+        <div class="workspace-header-bar">
+          <div class="workspace-title-group">
+            <h2 id="heading-workspace" class="card-title">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3h18v18H3z"></path>
+                <path d="M3 9h18"></path>
+                <path d="M9 21V9"></path>
+                <path d="M15 9v12"></path>
+              </svg>
+              Dimension Workspace
+            </h2>
+            <p class="card-subtitle">Architectural Scratchpad, Multi-Measurement Scaling Schedule & Batch Totals</p>
+          </div>
+          <div class="workspace-header-controls">
+            <!-- Density Toggle -->            <div class="ref-density-toggle" role="group" aria-label="Schedule density mode">
+              <button type="button" id="workspace-density-standard" class="density-btn active" title="Standard comfortable row spacing">Standard</button>
+              <button type="button" id="workspace-density-compact" class="density-btn" title="Compact high-density rows">Compact</button>
+            </div>
+            <span id="workspace-state-badge" class="state-badge state-ready">READY</span>
+          </div>
+        </div>
+
+        <!-- Global Workspace Configuration Bar -->
+        <div class="workspace-config-bar">
+          <div class="config-item">
+            <label for="workspace-scale-select" class="field-label">Drawing Scale</label>
+            <select id="workspace-scale-select" class="form-select" aria-label="Workspace drawing scale">
+              <option value="1">1:1 (Full Size)</option>
+              <option value="2">1:2 (Half Scale)</option>
+              <option value="5">1:5 (Detail Scale)</option>
+              <option value="10">1:10 (Detail Scale)</option>
+              <option value="20">1:20 (Interior/Joinery)</option>
+              <option value="25">1:25 (Interior Scale)</option>
+              <option value="50" selected>1:50 (Standard Floor Plan)</option>
+              <option value="100">1:100 (General Arrangement)</option>
+              <option value="200">1:200 (Site Layout Plan)</option>
+              <option value="500">1:500 (Master Plan / Urban)</option>
+              <option value="1000">1:1000 (Geographical / Context)</option>
+              <option value="custom">Custom Scale 1:X...</option>
+            </select>
+          </div>
+
+          <div id="workspace-custom-scale-group" class="config-item" style="display: none;">
+            <label for="workspace-custom-scale-input" class="field-label">Custom Denominator</label>
+            <input type="number" id="workspace-custom-scale-input" class="form-input" min="0.001" step="any" placeholder="e.g. 75 for 1:75" aria-label="Custom scale ratio">
+          </div>
+
+          <div class="config-item">
+            <label for="workspace-unit-select" class="field-label">Display Unit</label>
+            <select id="workspace-unit-select" class="form-select" aria-label="Workspace display unit">
+              <option value="mm" selected>Millimeters (mm)</option>
+              <option value="cm">Centimeters (cm)</option>
+              <option value="m">Meters (m)</option>
+              <option value="in">Inches (in)</option>
+              <option value="ft">Decimal Feet (ft)</option>
+              <option value="ft_in">Architectural (Ft-In)</option>
+            </select>
+          </div>
+
+          <div class="config-item chips-item">
+            <span class="field-label">Quick Scales</span>
+            <div id="workspace-quick-chips" class="workspace-chips-row">
+              <button type="button" class="scale-chip" data-scale="20">1:20</button>
+              <button type="button" class="scale-chip active" data-scale="50">1:50</button>
+              <button type="button" class="scale-chip" data-scale="100">1:100</button>
+              <button type="button" class="scale-chip" data-scale="200">1:200</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Add / Add Dimension Form -->
+        <div class="workspace-add-section">
+          <form id="workspace-add-form" class="workspace-add-form" autocomplete="off">
+            <div class="form-row-grid workspace-inputs-grid">
+              <div class="form-group col-type">
+                <label for="workspace-add-type" class="field-label">Role / Type</label>
+                <select id="workspace-add-type" class="form-select" aria-label="Dimension semantic type">
+                  <option value="reference" selected>REF (Reference)</option>
+                  <option value="segment">SEG (Additive Segment)</option>
+                  <option value="allowance">ALW (Tolerance Allowance)</option>
+                </select>
+              </div>
+              <div class="form-group col-name">
+                <label for="workspace-add-name" class="field-label">Item / Member Name</label>
+                <input type="text" id="workspace-add-name" class="form-input" placeholder="e.g. Wall A, Door Opening, Beam" aria-label="Dimension item name">
+              </div>
+              <div class="form-group col-input">
+                <label for="workspace-add-input" class="field-label">Measurement / Quick String</label>
+                <input type="text" id="workspace-add-input" class="form-input" placeholder="e.g. 2.4m, 900, 7' 10&quot; or 'Wall A 4800' (Press N to focus)" aria-label="Raw measurement input" required>
+              </div>
+              <div class="form-group col-unit">
+                <label for="workspace-add-unit" class="field-label">Fallback Unit</label>
+                <select id="workspace-add-unit" class="form-select" aria-label="Default unit if unstated">
+                  <option value="mm" selected>mm</option>
+                  <option value="cm">cm</option>
+                  <option value="m">m</option>
+                  <option value="in">in</option>
+                  <option value="ft">ft</option>
+                </select>
+              </div>
+              <div class="form-group col-notes">
+                <label for="workspace-add-notes" class="field-label">Notes (Optional)</label>
+                <input type="text" id="workspace-add-notes" class="form-input" placeholder="e.g. Verify on site, North" aria-label="Optional notes">
+              </div>
+              <div class="form-group col-btn">
+                <label class="field-label">&nbsp;</label>
+                <button type="submit" id="workspace-add-btn" class="calc-btn primary-action" title="Add dimension row (Enter)">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  <span>+ Add</span>
+                </button>
+              </div>
+            </div>
+          </form>
+          <div id="workspace-add-error" class="workspace-inline-error" style="display: none;"></div>
+        </div>
+
+        <!-- Schedule Sub-header Bar (Item breakdown counts & select actions) -->
+        <div class="workspace-sub-bar">
+          <div class="breakdown-pills">
+            <span id="workspace-breakdown-badge" class="breakdown-pill">0 items • 0 segments • 0 allowances • 0 references</span>
+          </div>
+          <div class="selection-status" id="workspace-selection-status" style="display: none;">
+            <span id="workspace-selection-count">0 selected</span>
+          </div>
+        </div>
+
+        <!-- Dimension Schedule Table (Desktop & Tablet) -->
+        <div class="workspace-schedule-container">
+          <div class="table-scroll-container">
+            <table class="workspace-table" id="workspace-table">
+              <thead>
+                <tr>
+                  <th style="width: 36px; text-align: center;">
+                    <input type="checkbox" id="workspace-select-all" title="Select all rows" aria-label="Select all rows">
+                  </th>
+                  <th style="width: 68px;">Type</th>
+                  <th>Item Name</th>
+                  <th>Raw Input</th>
+                  <th style="text-align: right;">Real Dimension</th>
+                  <th style="text-align: right;" id="workspace-th-drawing">Drawing @ 1:50</th>
+                  <th>Group</th>
+                  <th>Notes</th>
+                  <th style="text-align: center; width: 60px;">On</th>
+                  <th style="text-align: right; width: 140px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="workspace-table-body">
+                <!-- Dynamically populated by JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Mobile Cards Container -->
+          <div id="workspace-cards-list" class="workspace-cards-list">
+            <!-- Dynamically populated for mobile viewports -->
+          </div>
+
+          <!-- Empty Workspace State -->
+          <div id="workspace-empty-state" class="workspace-empty-state" style="display: none;">
+            <div class="empty-icon">📐</div>
+            <div class="empty-title">DIMENSION WORKSPACE</div>
+            <div class="empty-desc">Your architectural scratchpad is empty. Add a dimension above to begin.</div>
+            <div class="empty-examples">
+              <span class="ex-label">Syntax Examples:</span>
+              <code>Wall A 4800</code>
+              <code>Door Opening 900</code>
+              <code>Window 1800mm</code>
+              <code>Gap 50 allowance</code>
+            </div>
+            <button type="button" id="workspace-load-samples-btn" class="hist-btn" style="margin-top: 0.75rem;">
+              Load Sample Architectural Schedule
+            </button>
+          </div>
+        </div>
+
+        <!-- Live Totals Hero Panel with Semantic Breakdown -->
+        <div class="workspace-totals-card" id="workspace-totals-card">
+          <div class="totals-info">
+            <span class="totals-label">WORKSPACE SUMMARY TOTALS</span>
+            <span id="workspace-active-count" class="totals-count-badge">0 active measurements</span>
+          </div>
+
+          <!-- Multi-Metric Semantic Grid -->
+          <div class="totals-breakdown-grid">
+            <div class="totals-col-metric">
+              <span class="metric-title">TOTAL SEGMENTS <small>(Additive)</small></span>
+              <div class="metric-val-row">
+                <span id="workspace-total-segments-real" class="val-real">0 mm</span>
+                <span class="val-arrow">➔</span>
+                <span id="workspace-total-segments-drawing" class="val-drawing">0 mm</span>
+              </div>
+            </div>
+
+            <div class="totals-col-metric">
+              <span class="metric-title">TOTAL ALLOWANCES <small>(Tolerances)</small></span>
+              <div class="metric-val-row">
+                <span id="workspace-total-allowances-real" class="val-real">0 mm</span>
+                <span class="val-arrow">➔</span>
+                <span id="workspace-total-allowances-drawing" class="val-drawing">0 mm</span>
+              </div>
+            </div>
+
+            <div class="totals-col-metric highlight-metric">
+              <span class="metric-title">COMBINED TOTAL <small>(Segments + Allowances)</small></span>
+              <div class="metric-val-row">
+                <span id="workspace-total-combined-real" class="val-real val-hero">0 mm</span>
+                <span class="val-arrow">➔</span>
+                <span id="workspace-total-combined-drawing" class="val-drawing val-hero">0 mm</span>
+              </div>
+            </div>
+
+            <div class="totals-col-metric ref-metric">
+              <span class="metric-title">REFERENCES <small>(Excluded from Total)</small></span>
+              <div class="metric-val-row">
+                <span id="workspace-total-references-real" class="val-real">0 mm</span>
+                <span class="val-note" id="workspace-references-count-label">0 items</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Legacy contract bindings (hidden fallback) -->
+          <span id="workspace-total-real-val" style="display:none;">0</span>
+          <span id="workspace-total-drawing-val" style="display:none;">0</span>
+          <span id="workspace-total-drawing-label" style="display:none;">TOTAL DRAWING @ 1:50</span>
+        </div>
+
+        <!-- Workspace Actions Toolbar -->
+        <div class="workspace-actions-toolbar" id="workspace-actions-toolbar">
+          <div class="toolbar-left">
+            <button type="button" id="workspace-copy-selected-btn" class="hist-btn" title="Copy currently selected dimensions">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+              <span>Copy Selected</span>
+            </button>
+            <button type="button" id="workspace-copy-segments-btn" class="hist-btn" title="Copy additive segments only">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+              <span>Copy Segments</span>
+            </button>
+            <button type="button" id="workspace-copy-references-btn" class="hist-btn" title="Copy reference dimensions only">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              <span>Copy References</span>
+            </button>
+            <button type="button" id="workspace-copy-all-btn" class="hist-btn" title="Copy complete formatted dimension schedule">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+              <span>Copy Schedule</span>
+            </button>
+            <button type="button" id="workspace-copy-raw-btn" class="hist-btn" title="Copy raw numbers for CAD/Rhino/AutoCAD pasting">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+              <span>Copy Raw (CAD)</span>
+            </button>
+            <button type="button" id="workspace-copy-drawing-btn" class="hist-btn" title="Copy drawing scaled values only">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+              <span>Drawing Values</span>
+            </button>
+            <button type="button" id="workspace-export-tsv-btn" class="hist-btn" title="Export schedule as TSV spreadsheet format">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <span>Export TSV</span>
+            </button>
+            <button type="button" id="workspace-add-group-btn" class="hist-btn" title="Create or assign dimension group">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              <span>Group</span>
+            </button>
+            <button type="button" id="workspace-save-journal-btn" class="hist-btn" title="Save workspace summary to calculation journal">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+              <span>Save to Journal</span>
+            </button>
+            <button type="button" id="workspace-open-cad-btn" class="hist-btn" title="Open active dimensions in CAD Clipboard (Mode 11)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>
+              <span>📋 CAD Clipboard</span>
+            </button>
+            <button type="button" id="workspace-send-cad-handoff-btn" class="hist-btn" title="Send dimensions to CAD Handoff (Mode 13)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              <span>🚀 Send to CAD</span>
+            </button>
+          </div>
+          <div class="toolbar-right">
+            <button type="button" id="workspace-clear-btn" class="hist-btn danger" title="Clear all dimensions in workspace">
+              <span>Clear Workspace</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+<section hidden id="dimension-panel-chains" role="tabpanel" aria-labelledby="dimension-tab-chains" class="dimension-panel">
+      <div class="tool-layout">
+        <!-- Left Column / Primary Instrument Faceplate -->
+        <div class="archi-card main-calc-card">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <div class="card-header">
+            <div>
+              <span class="card-tag">MODE 10 • DIMENSION STRINGS</span>
+              <h2 id="heading-chains" class="card-title">Dimension Chain</h2>
+            </div>
+            <div class="status-indicator">
+              <span id="chains-state-badge" class="badge-status-ready">READY</span>
+            </div>
+          </div>
+
+          <p class="tool-description">
+            Build a sequence of wall or grid dimensions and see the running coordinates, cumulative totals, and a scale-accurate chain diagram. Quick Add takes expressions like <code>1200 + 1800 + 900</code> — each number becomes a segment you can name, reorder, or mark as an allowance or reference.
+          </p>
+
+          <!-- Chain Settings: Name, Scale, Unit -->
+          <div class="instrument-grid" style="grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-bottom: 0.85rem;">
+            <div class="input-group">
+              <label for="chains-name-input" class="input-label">Chain Name</label>
+              <input type="text" id="chains-name-input" class="text-input" value="North Wall Sequence" placeholder="e.g. North Wall Grid" />
+            </div>
+
+            <div class="input-group">
+              <label for="chains-scale-select" class="input-label">Drawing Scale</label>
+              <select id="chains-scale-select" class="unit-select">
+                <option value="10">1:10 (Detail)</option>
+                <option value="20">1:20 (Interior/Detail)</option>
+                <option value="25">1:25 (Joinery/Plan)</option>
+                <option value="50" selected>1:50 (Architecture Plan)</option>
+                <option value="75">1:75 (Intermediate)</option>
+                <option value="100">1:100 (General Arrangement)</option>
+                <option value="200">1:200 (Site / Massing)</option>
+              </select>
+            </div>
+
+            <div class="input-group">
+              <label for="chains-unit-select" class="input-label">Display Unit</label>
+              <select id="chains-unit-select" class="unit-select">
+                <option value="mm" selected>Millimeters (mm)</option>
+                <option value="cm">Centimeters (cm)</option>
+                <option value="m">Meters (m)</option>
+                <option value="in">Inches (in)</option>
+                <option value="ft">Feet (ft)</option>
+                <option value="ft_in">Ft-In (Architectural)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Offsets Row -->
+          <div class="instrument-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-bottom: 0.85rem;">
+            <div class="input-group">
+              <label for="chains-start-offset-input" class="input-label">Start Offset (e.g. Datum / Wall Thickness)</label>
+              <input type="text" id="chains-start-offset-input" class="text-input" placeholder="0 or 300mm" value="0" />
+            </div>
+            <div class="input-group">
+              <label for="chains-end-offset-input" class="input-label">End Offset (e.g. Return / Tolerance)</label>
+              <input type="text" id="chains-end-offset-input" class="text-input" placeholder="0 or 200mm" value="0" />
+            </div>
+          </div>
+
+          <!-- Quick Add Input Instrument -->
+          <div class="calc-instrument-panel" style="margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+              <label for="chains-quick-input" class="input-label" style="margin-bottom: 0;">Quick Add (e.g. 1200 + 1800 + 900 + 1500 or Bay 1 1200, Door 900 ref)</label>
+              <span id="chains-live-preview" class="expr-live-preview">Live: Ready</span>
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <input
+                type="text"
+                id="chains-quick-input"
+                class="text-input"
+                placeholder="1200 + 1800 + 900 + 1500"
+                autocomplete="off"
+                spellcheck="false"
+                style="font-family: var(--font-family-mono); font-size: 1rem; font-weight: 600;"
+              />
+              <button type="button" id="chains-add-btn" class="btn-calc-action primary" style="width: auto; white-space: nowrap; padding: 0 1.25rem;">
+                <span>+ Add to Chain</span>
+              </button>
+              <button type="button" id="chains-clear-input-btn" class="control-btn" title="Clear input field" style="flex-shrink: 0;">✕</button>
+            </div>
+            <div id="chains-error-msg" class="expr-error-banner" style="display: none; margin-top: 0.5rem;"></div>
+
+            <!-- Architectural Templates -->
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.65rem;">
+              <span style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Templates:</span>
+              <button type="button" class="chain-template-chip" data-template="wall_opening">🧱 Wall Openings</button>
+              <button type="button" class="chain-template-chip" data-template="grid_bays">📐 Grid Bays</button>
+              <button type="button" class="chain-template-chip" data-template="facade_rhythm">🏢 Facade Rhythm</button>
+              <button type="button" class="chain-template-chip" data-template="room_perimeter">🚪 Corridor Partitions</button>
+              <button type="button" id="chains-clear-all-btn" class="chain-template-chip danger" style="margin-left: auto;">🗑️ Clear Chain</button>
+            </div>
+          </div>
+
+          <!-- Centerpiece SVG Drafting Viewport -->
+          <div class="chain-svg-container">
+            <div class="chain-svg-header">
+              <span class="chain-svg-title">📐 SCALE-ACCURATE DRAFTING CHAIN</span>
+              <div class="chain-svg-controls">
+                <button type="button" id="chains-zoom-fit-btn" class="chain-svg-btn" title="Reset Viewport to Fit">Fit View</button>
+              </div>
+            </div>
+            <div id="chains-svg-viewport-wrapper" class="chain-svg-viewport-wrapper">
+              <!-- SVG generated dynamically by generateChainSVG -->
+            </div>
+          </div>
+
+          <!-- Selected Segment Inspector Strip -->
+          <div id="chains-selected-inspector" class="chain-selected-inspector" style="display: none;">
+            <div class="inspector-badge">SELECTED SEGMENT</div>
+            <div class="inspector-details">
+              <span id="chains-inspector-name" class="inspector-name">Bay 1</span>
+              <span id="chains-inspector-len" class="inspector-val">1,200 mm</span>
+              <span class="inspector-pos">Start: <strong id="chains-inspector-start">0 mm</strong> ➔ End: <strong id="chains-inspector-end">1,200 mm</strong></span>
+              <span class="inspector-scale">Drawing @ 1:50: <strong id="chains-inspector-draw">24 mm</strong></span>
+            </div>
+          </div>
+
+          <!-- Segment Schedule Table -->
+          <div class="workspace-table-container" style="margin-top: 1rem; max-height: 320px;">
+            <table class="workspace-table multiscale-table" id="chains-table">
+              <thead>
+                <tr>
+                  <th style="width: 45px; text-align: center;">#</th>
+                  <th style="width: 45px; text-align: center;">On</th>
+                  <th>Segment Name</th>
+                  <th style="width: 100px;">Start</th>
+                  <th style="width: 100px;">End</th>
+                  <th style="width: 110px;">Length</th>
+                  <th style="width: 80px; text-align: center;">Type</th>
+                  <th style="width: 100px;">Drawing</th>
+                  <th style="width: 90px; text-align: right;">Order</th>
+                  <th style="width: 45px; text-align: center;">Del</th>
+                </tr>
+              </thead>
+              <tbody id="chains-table-body">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Run Calculation / Recalculate Button -->
+          <div style="margin-top: 1rem;">
+            <button type="button" id="btn-run-chains" class="btn-run-calc" style="width: 100%;">
+              <span>RUN CHAIN CALCULATION</span>
+              <kbd>↵</kbd>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right Column / Results & Interoperability Card -->
+        <div class="archi-card result-panel-card">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <div class="card-header">
+            <div>
+              <span class="card-tag">CUMULATIVE METRICS</span>
+              <h3 class="card-title">Chain Summary</h3>
+            </div>
+            <span id="chains-count-badge" class="result-scale-badge">0 SEGMENTS</span>
+          </div>
+
+          <!-- Result Hero Box -->
+          <div class="result-hero-box" style="margin-bottom: 1rem;">
+            <div class="result-hero-label">Overall Chain Extent</div>
+            <div class="result-hero-value-wrap">
+              <span id="chains-overall-val" class="result-hero-value" style="font-size: 2.2rem;">0 mm</span>
+            </div>
+            <div class="result-flow-details" style="margin-top: 0.4rem;">
+              <span id="chains-drawing-overall" class="secondary-unit-readout" style="font-weight: 700; color: var(--accent-primary);">Drawing @ 1:50: 0 mm</span>
+            </div>
+          </div>
+
+          <!-- Breakdown Summary Cards -->
+          <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.6rem; margin-bottom: 1rem;">
+            <div class="metric-card" style="padding: 0.65rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: 4px;">
+              <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Segment Sum (SEG)</div>
+              <div id="chains-seg-total-val" style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); font-family: var(--font-family-mono);">0 mm</div>
+            </div>
+            <div class="metric-card" style="padding: 0.65rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: 4px;">
+              <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Allowances (ALW)</div>
+              <div id="chains-alw-total-val" style="font-size: 1.1rem; font-weight: 700; color: var(--color-warning, #f59e0b); font-family: var(--font-family-mono);">0 mm</div>
+            </div>
+            <div class="metric-card" style="padding: 0.65rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: 4px;">
+              <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Start Offset</div>
+              <div id="chains-start-offset-val" style="font-size: 1.1rem; font-weight: 700; color: var(--text-secondary); font-family: var(--font-family-mono);">0 mm</div>
+            </div>
+            <div class="metric-card" style="padding: 0.65rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: 4px;">
+              <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">End Offset</div>
+              <div id="chains-end-offset-val" style="font-size: 1.1rem; font-weight: 700; color: var(--text-secondary); font-family: var(--font-family-mono);">0 mm</div>
+            </div>
+          </div>
+
+          <!-- Actions & Interoperability Strip -->
+          <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">
+            <button type="button" id="chains-compare-multiscale-btn" class="btn-calc-action secondary" style="width: 100%; justify-content: center;">
+              <span>📊 Compare Chain Across Scales</span>
+            </button>
+            <button type="button" id="chains-send-workspace-btn" class="btn-calc-action secondary" style="width: 100%; justify-content: center;">
+              <span>📐 Send Chain to Dimension Workspace</span>
+            </button>
+            <button type="button" id="chains-save-journal-btn" class="btn-calc-action secondary" style="width: 100%; justify-content: center;">
+              <span>📜 Save to Calculation Journal</span>
+            </button>
+          </div>
+
+          <!-- Multi-Stream Copy Toolbar -->
+          <div class="result-actions-strip" style="margin-top: 1rem; flex-wrap: wrap;">
+            <button type="button" id="chains-copy-table-btn" class="result-action-btn" title="Copy Markdown table">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <span>Copy Table</span>
+            </button>
+            <button type="button" id="chains-copy-cum-btn" class="result-action-btn" title="Copy running cumulative coordinates (0 1200 3000 3900 5400)">
+              <span>Copy Cumulative</span>
+            </button>
+            <button type="button" id="chains-copy-segs-btn" class="result-action-btn" title="Copy segment measurements (1200 1800 900 1500)">
+              <span>Copy Segments</span>
+            </button>
+            <button type="button" id="chains-copy-draw-btn" class="result-action-btn" title="Copy scaled drawing dimensions">
+              <span>Copy Drawing</span>
+            </button>
+            <button type="button" id="chains-export-tsv-btn" class="result-action-btn" title="Download TSV file for CAD / Excel">
+              <span>Export TSV</span>
+            </button>
+            <button type="button" id="chains-cad-handoff-btn" class="result-action-btn" title="Open in CAD Clipboard (Mode 11)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>
+              <span>CAD Clipboard</span>
+            </button>
+            <button type="button" id="chains-send-cad-handoff-btn" class="result-action-btn" title="Send to CAD Handoff (Mode 13)">
+              <span>🚀 Send to CAD</span>
+            </button>
+            <button type="button" id="chains-send-scratchpad-btn" class="result-action-btn" title="Send chain total and segments to Universal Scratchpad">
+              <span>📋 Scratchpad</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+<section hidden id="dimension-panel-multiscale" role="tabpanel" aria-labelledby="dimension-tab-multiscale" class="dimension-panel">
+      <div class="tool-layout">
+        <!-- Left Column: Input Instrument & Scale Controls -->
+        <div class="archi-card main-calc-card">
+          <div class="corner-mark top-left"></div>
+          <div class="corner-mark top-right"></div>
+          <div class="corner-mark bottom-left"></div>
+          <div class="corner-mark bottom-right"></div>
+
+          <!-- Instrument Title & Scale Header -->
+          <div class="calc-header-strip">
+            <div class="calc-title-badge">
+              <span class="calc-indicator-dot"></span>
+              <h2 id="heading-multiscale">MULTI-SCALE COMPARISON</h2>
+            </div>
+            <div class="calc-status-badge">
+              <span id="multiscale-state-badge" class="state-badge state-ready">READY</span>
+            </div>
+          </div>
+
+          <p class="tool-description">
+            Evaluate a single real-world dimension or mathematical expression across multiple architectural drawing scales simultaneously to determine drawing readability, sheet fit, and drafting output.
+          </p>
+
+          <!-- Input Dimension & Live Preview -->
+          <div class="calc-form">
+            <div class="form-group">
+              <label for="multiscale-input" class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>REAL DIMENSION OR EXPRESSION</span>
+                <span id="multiscale-live-preview" class="expr-live-preview">Live: Ready</span>
+              </label>
+              <div class="input-with-inline-action">
+                <input
+                  type="text"
+                  id="multiscale-input"
+                  class="form-input mono-input"
+                  placeholder="e.g. 2400 mm, 2.4m, 7' 6&quot;, or 2400 + 900 + 1200"
+                  autocomplete="off"
+                  spellcheck="false"
+                  aria-label="Dimension to compare"
+                />
+                <button type="button" id="multiscale-clear-input-btn" class="input-clear-btn" title="Clear input (Esc)" aria-label="Clear input">✕</button>
+              </div>
+              <div id="multiscale-error-msg" class="expr-error-text" style="display: none; font-size: 0.75rem; color: var(--color-error); margin-top: 4px;"></div>
+            </div>
+
+            <!-- Units Configuration Row -->
+            <div class="form-row" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
+              <div class="form-group">
+                <label for="multiscale-default-unit" class="form-label">DEFAULT INPUT UNIT</label>
+                <select id="multiscale-default-unit" class="form-select" aria-label="Default input unit">
+                  <option value="mm" selected>Millimeters (mm)</option>
+                  <option value="cm">Centimeters (cm)</option>
+                  <option value="m">Meters (m)</option>
+                  <option value="in">Inches (in)</option>
+                  <option value="ft">Feet (ft)</option>
+                  <option value="ft_in">Feet-Inches (ft-in)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="multiscale-display-unit" class="form-label">DISPLAY REAL UNIT</label>
+                <select id="multiscale-display-unit" class="form-select" aria-label="Display unit">
+                  <option value="mm" selected>Millimeters (mm)</option>
+                  <option value="cm">Centimeters (cm)</option>
+                  <option value="m">Meters (m)</option>
+                  <option value="in">Inches (in)</option>
+                  <option value="ft">Feet (ft)</option>
+                  <option value="ft_in">Feet-Inches (ft-in)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Scale Filter Preset Tabs -->
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <span class="form-label" style="display: block; margin-bottom: 0.35rem;">SCALE PRESET GROUPS</span>
+              <div class="category-pills-row" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <button type="button" class="cat-pill multiscale-group-pill active" data-group="all">All Standard</button>
+                <button type="button" class="cat-pill multiscale-group-pill" data-group="architectural">Architecture</button>
+                <button type="button" class="cat-pill multiscale-group-pill" data-group="detail">Detail (1:1–1:20)</button>
+                <button type="button" class="cat-pill multiscale-group-pill" data-group="site">Site / Urban</button>
+                <button type="button" class="cat-pill multiscale-group-pill" data-group="imperial">Imperial</button>
+                <button type="button" class="cat-pill multiscale-group-pill" data-group="favorites">★ Favorites</button>
+              </div>
+            </div>
+
+            <!-- Custom Scale Adder & Sort Controls -->
+            <div class="form-row" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
+              <div class="form-group">
+                <label for="multiscale-custom-scale-input" class="form-label">ADD CUSTOM SCALE (1:X)</label>
+                <div style="display: flex; gap: 6px;">
+                  <input type="number" id="multiscale-custom-scale-input" class="form-input mono-input" placeholder="e.g. 33" min="0.001" step="any" />
+                  <button type="button" id="multiscale-add-scale-btn" class="hist-btn" style="white-space: nowrap;">+ Add</button>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="multiscale-sort-select" class="form-label">SORT ORDER</label>
+                <select id="multiscale-sort-select" class="form-select">
+                  <option value="ratio_asc" selected>Scale Ascending (1:10 → 1:500)</option>
+                  <option value="ratio_desc">Scale Descending (1:500 → 1:10)</option>
+                  <option value="drawing_desc">Drawing Size (Largest First)</option>
+                  <option value="drawing_asc">Drawing Size (Smallest First)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Context Helpers: Paper Size & Target Fit Range -->
+            <div class="form-row" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
+              <div class="form-group">
+                <label for="multiscale-paper-select" class="form-label">SHEET PAPER CONTEXT</label>
+                <select id="multiscale-paper-select" class="form-select">
+                  <option value="none" selected>None (No Sheet Limit)</option>
+                  <option value="A4">A4 Sheet (Usable 277 mm)</option>
+                  <option value="A3">A3 Sheet (Usable 387 mm)</option>
+                  <option value="A2">A2 Sheet (Usable 554 mm)</option>
+                  <option value="A1">A1 Sheet (Usable 801 mm)</option>
+                  <option value="A0">A0 Sheet (Usable 1139 mm)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">SUGGESTED FIT RANGE (MM)</label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <input type="number" id="multiscale-fit-min" class="form-input mono-input" placeholder="Min (mm)" style="width: 50%;" />
+                  <span style="color: var(--text-muted); font-size: 0.75rem;">to</span>
+                  <input type="number" id="multiscale-fit-max" class="form-input mono-input" placeholder="Max (mm)" style="width: 50%;" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Example Chips -->
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <span class="form-label" style="display: block; margin-bottom: 0.35rem;">QUICK EXAMPLE WORKFLOWS</span>
+              <div class="expr-sample-chips" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                <button type="button" class="sample-chip multiscale-example-chip" data-dim="4200mm">Room Width 4200mm</button>
+                <button type="button" class="sample-chip multiscale-example-chip" data-dim="900mm">Door Opening 900mm</button>
+                <button type="button" class="sample-chip multiscale-example-chip" data-dim="2400 + 1800 + 900">Wall Chain 2400 + 1800 + 900</button>
+                <button type="button" class="sample-chip multiscale-example-chip" data-dim="7' 6&quot;">Imperial 7' 6"</button>
+                <button type="button" class="sample-chip multiscale-example-chip" data-dim="12.5m">Building Span 12.5m</button>
+              </div>
+            </div>
+
+            <!-- Action Button -->
+            <div class="form-actions" style="margin-top: 0.5rem;">
+              <button type="button" id="btn-run-multiscale" class="btn-calc-action primary">
+                <span class="btn-icon">📊</span>
+                <span>COMPARE SCALES</span>
+                <span class="btn-kbd-hint"><kbd>↵</kbd></span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Scale Comparison Matrix & Visual Drafting Bars -->
+        <div class="calc-results-column">
+          <div class="archi-card result-hero-card">
+            <div class="corner-mark top-left"></div>
+            <div class="corner-mark top-right"></div>
+            <div class="corner-mark bottom-left"></div>
+            <div class="corner-mark bottom-right"></div>
+
+            <div class="result-header">
+              <span class="result-category-label">MULTI-SCALE COMPARISON MATRIX</span>
+              <span id="multiscale-count-badge" class="type-badge badge-seg" style="font-size: 0.65rem;">10 SCALES</span>
+            </div>
+
+            <!-- Active Real-World Dimension Summary -->
+            <div class="result-context-strip" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: var(--radius-sm); margin: 0.5rem 0 1rem 0; border: 1px solid var(--border-color-light);">
+              <div style="display: flex; flex-direction: column;">
+                <span style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">REAL-WORLD MEASUREMENT</span>
+                <span id="multiscale-real-label" style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">Input Dimension</span>
+              </div>
+              <div id="multiscale-real-val" style="font-family: var(--font-family-mono); font-size: 1.25rem; font-weight: 700; color: var(--accent-primary);">0 mm</div>
+            </div>
+
+            <!-- Comparison Table Container -->
+            <div id="multiscale-table-container" class="table-scroll-container" style="max-height: 380px; overflow-y: auto; margin-bottom: 1rem;">
+              <table id="multiscale-table" class="ref-data-table multiscale-table" style="width: 100%;">
+                <thead>
+                  <tr>
+                    <th style="width: 40px; text-align: center;">★</th>
+                    <th style="width: 90px;">SCALE</th>
+                    <th style="width: 110px;">DRAWING SIZE</th>
+                    <th>PROPORTIONAL DRAFTING LENGTH</th>
+                    <th style="width: 100px;">STATUS / FIT</th>
+                    <th style="width: 80px; text-align: right;">ACTION</th>
+                  </tr>
+                </thead>
+                <tbody id="multiscale-table-body">
+                  <!-- Dynamic rows generated by MultiScale UI controller -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Empty State -->
+            <div id="multiscale-empty-state" class="workspace-empty-state" style="display: none; padding: 2rem; text-align: center;">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+              <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem;">Compare Scales</h4>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                See how one real-world dimension changes across drawing scales.
+              </p>
+              <button type="button" id="multiscale-load-sample-btn" class="btn-calc-action secondary" style="display: inline-flex; width: auto; margin: 0 auto;">
+                <span>Load Sample (2400 mm)</span>
+              </button>
+            </div>
+
+            <!-- Copy Actions Toolbar -->
+            <div class="result-actions-strip" style="margin-top: 0.5rem; flex-wrap: wrap;">
+              <button type="button" id="multiscale-copy-table-btn" class="result-action-btn" title="Copy markdown comparison table">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                <span>Copy Table</span>
+              </button>
+              <button type="button" id="multiscale-copy-all-btn" class="result-action-btn" title="Copy formatted list of all scales">
+                <span>Copy All</span>
+              </button>
+              <button type="button" id="multiscale-copy-current-btn" class="result-action-btn" title="Copy current active scale drawing result">
+                <span>Copy Current Scale</span>
+              </button>
+              <button type="button" id="multiscale-copy-raw-btn" class="result-action-btn" title="Copy raw numeric values stream (for CAD)">
+                <span>Copy Raw CAD</span>
+              </button>
+              <button type="button" id="multiscale-cad-handoff-btn" class="result-action-btn" title="Open in CAD Clipboard (Mode 11)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>
+                <span>CAD Clipboard</span>
+              </button>
+              <button type="button" id="multiscale-send-cad-handoff-btn" class="result-action-btn" title="Send to CAD Handoff (Mode 13)">
+                <span>🚀 Send to CAD</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section></section>
     <section id="mode-view-converter" class="tool-mode-view" aria-labelledby="heading-converter">
       <div class="tool-layout">
         <!-- Left Column: Primary Instrument Faceplate -->
@@ -1062,7 +2176,7 @@
         </div>
 
         <p class="tool-description" style="margin: 0 0 1rem;">
-          Real-world furniture and fixture standards, each shown scaled at your chosen drawing scale with its plan footprint. Use it to pick pieces that fit a room and check standard clearances. Enter a scale above, then search or filter the catalog.
+          Typical planning furniture and fixture references, each shown scaled at your chosen drawing scale with its plan footprint. Use it to pick pieces that fit a room and check standard clearances. Enter a scale above, then search or filter the catalog.
         </p>
 
         <!-- Toolbar: Search Bar + Scale Presets + Category Nav -->
@@ -1188,7 +2302,6 @@
               Paper @ 1:50: <strong>4.80 × 2.00 cm</strong> (9.60 cm²) | Real Footprint: <strong>2.40 m²</strong> (25.8 sq ft)
             </div>
             <div class="custom-furn-actions">
-              <button id="btn-planner-custom-furn" class="action-tool-btn compact primary" title="Add custom piece to Room Planner">+ Use in Planner</button>
               <button id="btn-copy-custom-furn" class="action-tool-btn compact" title="Copy custom scaled dimensions">Copy Size</button>
               <button id="btn-send-custom-furn" class="action-tool-btn compact" title="Send width to main Converter">To Converter</button>
             </div>
@@ -1196,7 +2309,8 @@
         </div>
 
         <!-- Furniture Cards Grid Container -->
-        <div class="furniture-grid" id="furniture-cards-grid">
+        <label class="input-label" for="furniture-subcategory">Subcategory</label><select id="furniture-subcategory" class="calc-select"></select>
+<div class="furniture-grid" id="furniture-cards-grid">
           <!-- Populated dynamically by JS -->
         </div>
       </div>
@@ -1397,1009 +2511,22 @@
     <!-- ======================================================== -->
     <!-- MODE 7: DIMENSION WORKSPACE & SCHEDULE                   -->
     <!-- ======================================================== -->
-    <section id="mode-view-workspace" class="tool-mode-view" aria-labelledby="heading-workspace">
-      <div class="calculator-card workspace-card">
-        
-        <!-- Workspace Header & State -->
-        <div class="workspace-header-bar">
-          <div class="workspace-title-group">
-            <h2 id="heading-workspace" class="card-title">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 3h18v18H3z"></path>
-                <path d="M3 9h18"></path>
-                <path d="M9 21V9"></path>
-                <path d="M15 9v12"></path>
-              </svg>
-              Dimension Workspace
-            </h2>
-            <p class="card-subtitle">Architectural Scratchpad, Multi-Measurement Scaling Schedule & Batch Totals</p>
-          </div>
-          <div class="workspace-header-controls">
-            <!-- Density Toggle -->            <div class="ref-density-toggle" role="group" aria-label="Schedule density mode">
-              <button type="button" id="workspace-density-standard" class="density-btn active" title="Standard comfortable row spacing">Standard</button>
-              <button type="button" id="workspace-density-compact" class="density-btn" title="Compact high-density rows">Compact</button>
-            </div>
-            <span id="workspace-state-badge" class="state-badge state-ready">READY</span>
-          </div>
-        </div>
-
-        <!-- Global Workspace Configuration Bar -->
-        <div class="workspace-config-bar">
-          <div class="config-item">
-            <label for="workspace-scale-select" class="field-label">Drawing Scale</label>
-            <select id="workspace-scale-select" class="form-select" aria-label="Workspace drawing scale">
-              <option value="1">1:1 (Full Size)</option>
-              <option value="2">1:2 (Half Scale)</option>
-              <option value="5">1:5 (Detail Scale)</option>
-              <option value="10">1:10 (Detail Scale)</option>
-              <option value="20">1:20 (Interior/Joinery)</option>
-              <option value="25">1:25 (Interior Scale)</option>
-              <option value="50" selected>1:50 (Standard Floor Plan)</option>
-              <option value="100">1:100 (General Arrangement)</option>
-              <option value="200">1:200 (Site Layout Plan)</option>
-              <option value="500">1:500 (Master Plan / Urban)</option>
-              <option value="1000">1:1000 (Geographical / Context)</option>
-              <option value="custom">Custom Scale 1:X...</option>
-            </select>
-          </div>
-
-          <div id="workspace-custom-scale-group" class="config-item" style="display: none;">
-            <label for="workspace-custom-scale-input" class="field-label">Custom Denominator</label>
-            <input type="number" id="workspace-custom-scale-input" class="form-input" min="0.001" step="any" placeholder="e.g. 75 for 1:75" aria-label="Custom scale ratio">
-          </div>
-
-          <div class="config-item">
-            <label for="workspace-unit-select" class="field-label">Display Unit</label>
-            <select id="workspace-unit-select" class="form-select" aria-label="Workspace display unit">
-              <option value="mm" selected>Millimeters (mm)</option>
-              <option value="cm">Centimeters (cm)</option>
-              <option value="m">Meters (m)</option>
-              <option value="in">Inches (in)</option>
-              <option value="ft">Decimal Feet (ft)</option>
-              <option value="ft_in">Architectural (Ft-In)</option>
-            </select>
-          </div>
-
-          <div class="config-item chips-item">
-            <span class="field-label">Quick Scales</span>
-            <div id="workspace-quick-chips" class="workspace-chips-row">
-              <button type="button" class="scale-chip" data-scale="20">1:20</button>
-              <button type="button" class="scale-chip active" data-scale="50">1:50</button>
-              <button type="button" class="scale-chip" data-scale="100">1:100</button>
-              <button type="button" class="scale-chip" data-scale="200">1:200</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Quick Add / Add Dimension Form -->
-        <div class="workspace-add-section">
-          <form id="workspace-add-form" class="workspace-add-form" autocomplete="off">
-            <div class="form-row-grid workspace-inputs-grid">
-              <div class="form-group col-type">
-                <label for="workspace-add-type" class="field-label">Role / Type</label>
-                <select id="workspace-add-type" class="form-select" aria-label="Dimension semantic type">
-                  <option value="reference" selected>REF (Reference)</option>
-                  <option value="segment">SEG (Additive Segment)</option>
-                  <option value="allowance">ALW (Tolerance Allowance)</option>
-                </select>
-              </div>
-              <div class="form-group col-name">
-                <label for="workspace-add-name" class="field-label">Item / Member Name</label>
-                <input type="text" id="workspace-add-name" class="form-input" placeholder="e.g. Wall A, Door Opening, Beam" aria-label="Dimension item name">
-              </div>
-              <div class="form-group col-input">
-                <label for="workspace-add-input" class="field-label">Measurement / Quick String</label>
-                <input type="text" id="workspace-add-input" class="form-input" placeholder="e.g. 2.4m, 900, 7' 10&quot; or 'Wall A 4800' (Press N to focus)" aria-label="Raw measurement input" required>
-              </div>
-              <div class="form-group col-unit">
-                <label for="workspace-add-unit" class="field-label">Fallback Unit</label>
-                <select id="workspace-add-unit" class="form-select" aria-label="Default unit if unstated">
-                  <option value="mm" selected>mm</option>
-                  <option value="cm">cm</option>
-                  <option value="m">m</option>
-                  <option value="in">in</option>
-                  <option value="ft">ft</option>
-                </select>
-              </div>
-              <div class="form-group col-notes">
-                <label for="workspace-add-notes" class="field-label">Notes (Optional)</label>
-                <input type="text" id="workspace-add-notes" class="form-input" placeholder="e.g. Verify on site, North" aria-label="Optional notes">
-              </div>
-              <div class="form-group col-btn">
-                <label class="field-label">&nbsp;</label>
-                <button type="submit" id="workspace-add-btn" class="calc-btn primary-action" title="Add dimension row (Enter)">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                  </svg>
-                  <span>+ Add</span>
-                </button>
-              </div>
-            </div>
-          </form>
-          <div id="workspace-add-error" class="workspace-inline-error" style="display: none;"></div>
-        </div>
-
-        <!-- Schedule Sub-header Bar (Item breakdown counts & select actions) -->
-        <div class="workspace-sub-bar">
-          <div class="breakdown-pills">
-            <span id="workspace-breakdown-badge" class="breakdown-pill">0 items • 0 segments • 0 allowances • 0 references</span>
-          </div>
-          <div class="selection-status" id="workspace-selection-status" style="display: none;">
-            <span id="workspace-selection-count">0 selected</span>
-          </div>
-        </div>
-
-        <!-- Dimension Schedule Table (Desktop & Tablet) -->
-        <div class="workspace-schedule-container">
-          <div class="table-scroll-container">
-            <table class="workspace-table" id="workspace-table">
-              <thead>
-                <tr>
-                  <th style="width: 36px; text-align: center;">
-                    <input type="checkbox" id="workspace-select-all" title="Select all rows" aria-label="Select all rows">
-                  </th>
-                  <th style="width: 68px;">Type</th>
-                  <th>Item Name</th>
-                  <th>Raw Input</th>
-                  <th style="text-align: right;">Real Dimension</th>
-                  <th style="text-align: right;" id="workspace-th-drawing">Drawing @ 1:50</th>
-                  <th>Group</th>
-                  <th>Notes</th>
-                  <th style="text-align: center; width: 60px;">On</th>
-                  <th style="text-align: right; width: 140px;">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="workspace-table-body">
-                <!-- Dynamically populated by JS -->
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Mobile Cards Container -->
-          <div id="workspace-cards-list" class="workspace-cards-list">
-            <!-- Dynamically populated for mobile viewports -->
-          </div>
-
-          <!-- Empty Workspace State -->
-          <div id="workspace-empty-state" class="workspace-empty-state" style="display: none;">
-            <div class="empty-icon">📐</div>
-            <div class="empty-title">DIMENSION WORKSPACE</div>
-            <div class="empty-desc">Your architectural scratchpad is empty. Add a dimension above to begin.</div>
-            <div class="empty-examples">
-              <span class="ex-label">Syntax Examples:</span>
-              <code>Wall A 4800</code>
-              <code>Door Opening 900</code>
-              <code>Window 1800mm</code>
-              <code>Gap 50 allowance</code>
-            </div>
-            <button type="button" id="workspace-load-samples-btn" class="hist-btn" style="margin-top: 0.75rem;">
-              Load Sample Architectural Schedule
-            </button>
-          </div>
-        </div>
-
-        <!-- Live Totals Hero Panel with Semantic Breakdown -->
-        <div class="workspace-totals-card" id="workspace-totals-card">
-          <div class="totals-info">
-            <span class="totals-label">WORKSPACE SUMMARY TOTALS</span>
-            <span id="workspace-active-count" class="totals-count-badge">0 active measurements</span>
-          </div>
-
-          <!-- Multi-Metric Semantic Grid -->
-          <div class="totals-breakdown-grid">
-            <div class="totals-col-metric">
-              <span class="metric-title">TOTAL SEGMENTS <small>(Additive)</small></span>
-              <div class="metric-val-row">
-                <span id="workspace-total-segments-real" class="val-real">0 mm</span>
-                <span class="val-arrow">➔</span>
-                <span id="workspace-total-segments-drawing" class="val-drawing">0 mm</span>
-              </div>
-            </div>
-
-            <div class="totals-col-metric">
-              <span class="metric-title">TOTAL ALLOWANCES <small>(Tolerances)</small></span>
-              <div class="metric-val-row">
-                <span id="workspace-total-allowances-real" class="val-real">0 mm</span>
-                <span class="val-arrow">➔</span>
-                <span id="workspace-total-allowances-drawing" class="val-drawing">0 mm</span>
-              </div>
-            </div>
-
-            <div class="totals-col-metric highlight-metric">
-              <span class="metric-title">COMBINED TOTAL <small>(Segments + Allowances)</small></span>
-              <div class="metric-val-row">
-                <span id="workspace-total-combined-real" class="val-real val-hero">0 mm</span>
-                <span class="val-arrow">➔</span>
-                <span id="workspace-total-combined-drawing" class="val-drawing val-hero">0 mm</span>
-              </div>
-            </div>
-
-            <div class="totals-col-metric ref-metric">
-              <span class="metric-title">REFERENCES <small>(Excluded from Total)</small></span>
-              <div class="metric-val-row">
-                <span id="workspace-total-references-real" class="val-real">0 mm</span>
-                <span class="val-note" id="workspace-references-count-label">0 items</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Legacy contract bindings (hidden fallback) -->
-          <span id="workspace-total-real-val" style="display:none;">0</span>
-          <span id="workspace-total-drawing-val" style="display:none;">0</span>
-          <span id="workspace-total-drawing-label" style="display:none;">TOTAL DRAWING @ 1:50</span>
-        </div>
-
-        <!-- Workspace Actions Toolbar -->
-        <div class="workspace-actions-toolbar" id="workspace-actions-toolbar">
-          <div class="toolbar-left">
-            <button type="button" id="workspace-copy-selected-btn" class="hist-btn" title="Copy currently selected dimensions">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
-              <span>Copy Selected</span>
-            </button>
-            <button type="button" id="workspace-copy-segments-btn" class="hist-btn" title="Copy additive segments only">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-              <span>Copy Segments</span>
-            </button>
-            <button type="button" id="workspace-copy-references-btn" class="hist-btn" title="Copy reference dimensions only">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-              <span>Copy References</span>
-            </button>
-            <button type="button" id="workspace-copy-all-btn" class="hist-btn" title="Copy complete formatted dimension schedule">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
-              <span>Copy Schedule</span>
-            </button>
-            <button type="button" id="workspace-copy-raw-btn" class="hist-btn" title="Copy raw numbers for CAD/Rhino/AutoCAD pasting">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
-              <span>Copy Raw (CAD)</span>
-            </button>
-            <button type="button" id="workspace-copy-drawing-btn" class="hist-btn" title="Copy drawing scaled values only">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-              <span>Drawing Values</span>
-            </button>
-            <button type="button" id="workspace-export-tsv-btn" class="hist-btn" title="Export schedule as TSV spreadsheet format">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              <span>Export TSV</span>
-            </button>
-            <button type="button" id="workspace-add-group-btn" class="hist-btn" title="Create or assign dimension group">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-              <span>Group</span>
-            </button>
-            <button type="button" id="workspace-save-journal-btn" class="hist-btn" title="Save workspace summary to calculation journal">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-              <span>Save to Journal</span>
-            </button>
-            <button type="button" id="workspace-open-cad-btn" class="hist-btn" title="Open active dimensions in CAD Clipboard (Mode 11)">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>
-              <span>📋 CAD Clipboard</span>
-            </button>
-            <button type="button" id="workspace-send-cad-handoff-btn" class="hist-btn" title="Send dimensions to CAD Handoff (Mode 13)">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-              <span>🚀 Send to CAD</span>
-            </button>
-          </div>
-          <div class="toolbar-right">
-            <button type="button" id="workspace-clear-btn" class="hist-btn danger" title="Clear all dimensions in workspace">
-              <span>Clear Workspace</span>
-            </button>
-          </div>
-        </div>
-
-      </div>
-    </section>
+    
 
     <!-- ======================================================== -->
     <!-- MODE 8: DIMENSION EXPRESSION CALCULATOR                  -->
     <!-- ======================================================== -->
-    <section id="mode-view-expression" class="tool-mode-view" aria-labelledby="heading-expression">
-      <div class="tool-layout">
-        <!-- Left Column: Expression Input & Configuration -->
-        <div class="archi-card main-calc-card">
-          <div class="corner-mark top-left"></div>
-          <div class="corner-mark top-right"></div>
-          <div class="corner-mark bottom-left"></div>
-          <div class="corner-mark bottom-right"></div>
-
-          <!-- Instrument Title & Scale Header -->
-          <div class="calc-header-strip">
-            <div class="calc-title-badge">
-              <span class="calc-indicator-dot"></span>
-              <h2 id="heading-expression">DIMENSION EXPRESSION CALCULATOR</h2>
-            </div>
-            <div class="calc-status-badge">
-              <span id="expression-state-badge" class="state-badge state-ready">READY</span>
-            </div>
-          </div>
-
-          <p class="tool-description">
-            Evaluate mixed-unit architectural math expressions (e.g. <code>2400 + 900 + 1200</code>, <code>5.4m - 1200mm</code>, <code>(2.4m + 900mm) / 3</code>, <code>250mm * 8</code>, <code>7' 6" + 2' 6"</code>) with standard operator precedence and live scaled drawing output.
-          </p>
-
-          <!-- Input Expression Box & Live Preview -->
-          <div class="calc-form">
-            <div class="form-group">
-              <label for="expression-input" class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
-                <span>EXPRESSION INPUT</span>
-                <span id="expression-live-preview" class="expr-live-preview" style="font-family: var(--font-family-mono); font-size: 0.75rem; color: var(--text-accent);">Live: Ready</span>
-              </label>
-              <div class="input-with-inline-action">
-                <input
-                  type="text"
-                  id="expression-input"
-                  class="form-input mono-input"
-                  placeholder="e.g. 2400mm + 900mm + 1200mm or (2.4m + 900mm) / 3"
-                  autocomplete="off"
-                  spellcheck="false"
-                  aria-label="Dimension Expression"
-                />
-                <button type="button" id="expression-clear-input-btn" class="input-clear-btn" title="Clear expression (Esc)" aria-label="Clear expression">✕</button>
-              </div>
-              <div id="expression-error-msg" class="expr-error-text" style="display: none; font-size: 0.75rem; color: var(--color-error); margin-top: 4px;"></div>
-            </div>
-
-            <!-- Workspace Default Unit & Scale Ratio Row -->
-            <div class="form-row" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
-              <div class="form-group">
-                <label for="expression-default-unit" class="form-label">DEFAULT UNIT (FOR BARE NUMBERS)</label>
-                <select id="expression-default-unit" class="form-select" aria-label="Default input unit">
-                  <option value="mm" selected>Millimeters (mm)</option>
-                  <option value="cm">Centimeters (cm)</option>
-                  <option value="m">Meters (m)</option>
-                  <option value="in">Inches (in)</option>
-                  <option value="ft">Feet (ft)</option>
-                  <option value="ft_in">Feet-Inches (ft-in)</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="expression-scale-select" class="form-label">DRAWING SCALE RATIO</label>
-                <select id="expression-scale-select" class="form-select" aria-label="Scale ratio">
-                  <option value="1">1:1 (Full Size)</option>
-                  <option value="5">1:5 (Detail)</option>
-                  <option value="10">1:10 (Detail)</option>
-                  <option value="20">1:20 (Interior)</option>
-                  <option value="25">1:25 (Plan)</option>
-                  <option value="50" selected>1:50 (Architecture)</option>
-                  <option value="100">1:100 (Building Plan)</option>
-                  <option value="200">1:200 (Site Plan)</option>
-                  <option value="500">1:500 (Masterplan)</option>
-                  <option value="custom">Custom Scale...</option>
-                </select>
-              </div>
-            </div>
-
-            <div id="expression-custom-scale-group" class="form-group" style="display: none; margin-bottom: 1rem;">
-              <label for="expression-custom-scale-input" class="form-label">CUSTOM SCALE (1:X)</label>
-              <input type="number" id="expression-custom-scale-input" class="form-input mono-input" value="50" min="0.001" step="any" placeholder="Enter scale ratio (e.g. 75 for 1:75)" />
-            </div>
-
-            <!-- Quick Example Syntax Chips -->
-            <div class="form-group" style="margin-bottom: 1.25rem;">
-              <span class="form-label" style="display: block; margin-bottom: 0.35rem;">QUICK EXAMPLE TEMPLATES</span>
-              <div class="expr-sample-chips" style="display: flex; flex-wrap: wrap; gap: 6px;">
-                <button type="button" class="sample-chip expr-template-chip" data-expr="2400 + 900 + 1200">2400 + 900 + 1200</button>
-                <button type="button" class="sample-chip expr-template-chip" data-expr="5.4m - 1200mm">5.4m - 1200mm</button>
-                <button type="button" class="sample-chip expr-template-chip" data-expr="(2.4m + 900mm) / 3">(2.4m + 900mm) / 3</button>
-                <button type="button" class="sample-chip expr-template-chip" data-expr="250mm * 8">250mm * 8</button>
-                <button type="button" class="sample-chip expr-template-chip" data-expr="7' 6&quot; + 2' 6&quot;">7' 6" + 2' 6"</button>
-                <button type="button" class="sample-chip expr-template-chip" data-expr="2400mm / 800mm">2400mm / 800mm (Scalar)</button>
-              </div>
-            </div>
-
-            <!-- Action Button: Evaluate Expression -->
-            <div class="form-actions" style="margin-top: 0.5rem;">
-              <button type="button" id="btn-run-expression" class="btn-calc-action primary">
-                <span class="btn-icon">🧮</span>
-                <span>EVALUATE EXPRESSION</span>
-                <span class="btn-kbd-hint"><kbd>↵</kbd></span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right Column: Result Hero, Scale Readout & Workspace Insertion -->
-        <div class="calc-results-column">
-          <!-- Primary Result Card -->
-          <div class="archi-card result-hero-card">
-            <div class="corner-mark top-left"></div>
-            <div class="corner-mark top-right"></div>
-            <div class="corner-mark bottom-left"></div>
-            <div class="corner-mark bottom-right"></div>
-
-            <div class="result-header">
-              <span class="result-category-label">EVALUATED DIMENSION RESULT</span>
-              <span id="expression-dim-badge" class="type-badge badge-seg" style="font-size: 0.65rem;">LENGTH</span>
-            </div>
-
-            <div class="result-value-display">
-              <div id="expression-result-val" class="result-number">0</div>
-              <div id="expression-result-unit" class="result-unit-label">mm</div>
-            </div>
-
-            <!-- Drawing Value at Active Scale -->
-            <div class="result-context-strip" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: var(--radius-sm); margin: 0.75rem 0; border: 1px solid var(--border-color-light);">
-              <div style="display: flex; flex-direction: column;">
-                <span style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">DRAWING AT ACTIVE SCALE</span>
-                <span id="expression-drawing-label" style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">Scale 1:50</span>
-              </div>
-              <div id="expression-drawing-val" style="font-family: var(--font-family-mono); font-size: 1.15rem; font-weight: 700; color: var(--accent-primary);">0 mm</div>
-            </div>
-
-            <!-- Secondary Equivalents Readout -->
-            <div class="secondary-conversions">
-              <span class="secondary-label">UNIT EQUIVALENTS</span>
-              <div id="expression-secondary-readout" class="secondary-readout-grid">
-                <div class="secondary-item"><span class="sec-unit">m</span><span class="sec-val">0 m</span></div>
-                <div class="secondary-item"><span class="sec-unit">cm</span><span class="sec-val">0 cm</span></div>
-                <div class="secondary-item"><span class="sec-unit">mm</span><span class="sec-val">0 mm</span></div>
-                <div class="secondary-item"><span class="sec-unit">ft-in</span><span class="sec-val">0"</span></div>
-              </div>
-            </div>
-
-            <!-- Result Actions -->
-            <div class="result-actions-strip" style="margin-top: 1rem;">
-              <button type="button" id="expression-copy-btn" class="result-action-btn" title="Copy formatted result">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
-                <span>Copy Result</span>
-              </button>
-              <button type="button" id="expression-copy-raw-btn" class="result-action-btn" title="Copy raw numeric value">
-                <span>Copy Raw</span>
-              </button>
-              <button type="button" id="expression-copy-drawing-btn" class="result-action-btn" title="Copy scaled drawing dimension">
-                <span>Copy Drawing</span>
-              </button>
-              <button type="button" id="expression-compare-btn" class="result-action-btn" title="Compare this calculated dimension across multiple scales">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line><line x1="2" y1="20" x2="22" y2="20"></line></svg>
-                <span>Compare Scales</span>
-              </button>
-              <button type="button" id="expression-cad-handoff-btn" class="result-action-btn" title="Open in CAD Clipboard (Mode 11)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>
-                <span>CAD Clipboard</span>
-              </button>
-              <button type="button" id="expression-send-cad-handoff-btn" class="result-action-btn" title="Send to CAD Handoff (Mode 13)">
-                <span>🚀 Send to CAD</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Dimension Workspace Insertion Panel -->
-          <div class="archi-card" style="margin-top: 1rem; padding: 1.25rem;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.75rem;">
-              <span style="font-size: 1.1rem;">📐</span>
-              <h3 style="font-size: 0.9rem; font-weight: 800; letter-spacing: 0.05em; color: var(--text-primary); text-transform: uppercase;">ADD TO DIMENSION WORKSPACE</h3>
-            </div>
-            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-              Directly insert this calculated expression result into your active Dimension Workspace schedule.
-            </p>
-            <div class="form-row" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-bottom: 0.75rem;">
-              <div>
-                <label for="expression-add-name" class="form-label">MEMBER / ROW NAME</label>
-                <input type="text" id="expression-add-name" class="form-input" placeholder="e.g. Total Wall Run" value="Expression Result" />
-              </div>
-              <div>
-                <label for="expression-add-role-select" class="form-label">SEMANTIC ROLE</label>
-                <select id="expression-add-role-select" class="form-select">
-                  <option value="reference" selected>Reference (REF, Default)</option>
-                  <option value="segment">Segment (SEG, Additive)</option>
-                  <option value="allowance">Allowance (ALW, Tolerance)</option>
-                </select>
-              </div>
-            </div>
-            <div style="display: flex; gap: 0.5rem;">
-              <button type="button" id="expression-add-workspace-btn" class="btn-calc-action secondary" style="flex: 1;">
-                <span>+ Add to Workspace</span>
-                <span class="btn-kbd-hint"><kbd>⇧↵</kbd></span>
-              </button>
-              <button type="button" id="expression-save-journal-btn" class="hist-btn" title="Save expression to calculation journal">
-                <span>Save to Journal</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Recent Expressions Panel -->
-          <div class="archi-card" style="margin-top: 1rem; padding: 1.25rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-              <span style="font-size: 0.75rem; font-weight: 800; letter-spacing: 0.05em; color: var(--text-secondary); text-transform: uppercase;">RECENT EXPRESSIONS</span>
-              <button type="button" id="expression-clear-recent-btn" class="row-action-btn danger" style="font-size: 0.65rem;">Clear</button>
-            </div>
-            <div id="expression-recent-list" class="recent-expressions-list" style="display: flex; flex-direction: column; gap: 6px;">
-              <span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">No recent expressions evaluated yet.</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+    
 
     <!-- ======================================================== -->
     <!-- MODE 9: MULTI-SCALE COMPARISON WORKSPACE                 -->
     <!-- ======================================================== -->
-    <section id="mode-view-multiscale" class="tool-mode-view" aria-labelledby="heading-multiscale">
-      <div class="tool-layout">
-        <!-- Left Column: Input Instrument & Scale Controls -->
-        <div class="archi-card main-calc-card">
-          <div class="corner-mark top-left"></div>
-          <div class="corner-mark top-right"></div>
-          <div class="corner-mark bottom-left"></div>
-          <div class="corner-mark bottom-right"></div>
-
-          <!-- Instrument Title & Scale Header -->
-          <div class="calc-header-strip">
-            <div class="calc-title-badge">
-              <span class="calc-indicator-dot"></span>
-              <h2 id="heading-multiscale">MULTI-SCALE COMPARISON</h2>
-            </div>
-            <div class="calc-status-badge">
-              <span id="multiscale-state-badge" class="state-badge state-ready">READY</span>
-            </div>
-          </div>
-
-          <p class="tool-description">
-            Evaluate a single real-world dimension or mathematical expression across multiple architectural drawing scales simultaneously to determine drawing readability, sheet fit, and drafting output.
-          </p>
-
-          <!-- Input Dimension & Live Preview -->
-          <div class="calc-form">
-            <div class="form-group">
-              <label for="multiscale-input" class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
-                <span>REAL DIMENSION OR EXPRESSION</span>
-                <span id="multiscale-live-preview" class="expr-live-preview">Live: Ready</span>
-              </label>
-              <div class="input-with-inline-action">
-                <input
-                  type="text"
-                  id="multiscale-input"
-                  class="form-input mono-input"
-                  placeholder="e.g. 2400 mm, 2.4m, 7' 6&quot;, or 2400 + 900 + 1200"
-                  autocomplete="off"
-                  spellcheck="false"
-                  aria-label="Dimension to compare"
-                />
-                <button type="button" id="multiscale-clear-input-btn" class="input-clear-btn" title="Clear input (Esc)" aria-label="Clear input">✕</button>
-              </div>
-              <div id="multiscale-error-msg" class="expr-error-text" style="display: none; font-size: 0.75rem; color: var(--color-error); margin-top: 4px;"></div>
-            </div>
-
-            <!-- Units Configuration Row -->
-            <div class="form-row" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
-              <div class="form-group">
-                <label for="multiscale-default-unit" class="form-label">DEFAULT INPUT UNIT</label>
-                <select id="multiscale-default-unit" class="form-select" aria-label="Default input unit">
-                  <option value="mm" selected>Millimeters (mm)</option>
-                  <option value="cm">Centimeters (cm)</option>
-                  <option value="m">Meters (m)</option>
-                  <option value="in">Inches (in)</option>
-                  <option value="ft">Feet (ft)</option>
-                  <option value="ft_in">Feet-Inches (ft-in)</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="multiscale-display-unit" class="form-label">DISPLAY REAL UNIT</label>
-                <select id="multiscale-display-unit" class="form-select" aria-label="Display unit">
-                  <option value="mm" selected>Millimeters (mm)</option>
-                  <option value="cm">Centimeters (cm)</option>
-                  <option value="m">Meters (m)</option>
-                  <option value="in">Inches (in)</option>
-                  <option value="ft">Feet (ft)</option>
-                  <option value="ft_in">Feet-Inches (ft-in)</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- Scale Filter Preset Tabs -->
-            <div class="form-group" style="margin-bottom: 1rem;">
-              <span class="form-label" style="display: block; margin-bottom: 0.35rem;">SCALE PRESET GROUPS</span>
-              <div class="category-pills-row" style="display: flex; gap: 6px; flex-wrap: wrap;">
-                <button type="button" class="cat-pill multiscale-group-pill active" data-group="all">All Standard</button>
-                <button type="button" class="cat-pill multiscale-group-pill" data-group="architectural">Architecture</button>
-                <button type="button" class="cat-pill multiscale-group-pill" data-group="detail">Detail (1:1–1:20)</button>
-                <button type="button" class="cat-pill multiscale-group-pill" data-group="site">Site / Urban</button>
-                <button type="button" class="cat-pill multiscale-group-pill" data-group="imperial">Imperial</button>
-                <button type="button" class="cat-pill multiscale-group-pill" data-group="favorites">★ Favorites</button>
-              </div>
-            </div>
-
-            <!-- Custom Scale Adder & Sort Controls -->
-            <div class="form-row" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
-              <div class="form-group">
-                <label for="multiscale-custom-scale-input" class="form-label">ADD CUSTOM SCALE (1:X)</label>
-                <div style="display: flex; gap: 6px;">
-                  <input type="number" id="multiscale-custom-scale-input" class="form-input mono-input" placeholder="e.g. 33" min="0.001" step="any" />
-                  <button type="button" id="multiscale-add-scale-btn" class="hist-btn" style="white-space: nowrap;">+ Add</button>
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label for="multiscale-sort-select" class="form-label">SORT ORDER</label>
-                <select id="multiscale-sort-select" class="form-select">
-                  <option value="ratio_asc" selected>Scale Ascending (1:10 → 1:500)</option>
-                  <option value="ratio_desc">Scale Descending (1:500 → 1:10)</option>
-                  <option value="drawing_desc">Drawing Size (Largest First)</option>
-                  <option value="drawing_asc">Drawing Size (Smallest First)</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- Context Helpers: Paper Size & Target Fit Range -->
-            <div class="form-row" style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
-              <div class="form-group">
-                <label for="multiscale-paper-select" class="form-label">SHEET PAPER CONTEXT</label>
-                <select id="multiscale-paper-select" class="form-select">
-                  <option value="none" selected>None (No Sheet Limit)</option>
-                  <option value="A4">A4 Sheet (Usable 277 mm)</option>
-                  <option value="A3">A3 Sheet (Usable 387 mm)</option>
-                  <option value="A2">A2 Sheet (Usable 554 mm)</option>
-                  <option value="A1">A1 Sheet (Usable 801 mm)</option>
-                  <option value="A0">A0 Sheet (Usable 1139 mm)</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label class="form-label">SUGGESTED FIT RANGE (MM)</label>
-                <div style="display: flex; gap: 6px; align-items: center;">
-                  <input type="number" id="multiscale-fit-min" class="form-input mono-input" placeholder="Min (mm)" style="width: 50%;" />
-                  <span style="color: var(--text-muted); font-size: 0.75rem;">to</span>
-                  <input type="number" id="multiscale-fit-max" class="form-input mono-input" placeholder="Max (mm)" style="width: 50%;" />
-                </div>
-              </div>
-            </div>
-
-            <!-- Quick Example Chips -->
-            <div class="form-group" style="margin-bottom: 1.25rem;">
-              <span class="form-label" style="display: block; margin-bottom: 0.35rem;">QUICK EXAMPLE WORKFLOWS</span>
-              <div class="expr-sample-chips" style="display: flex; flex-wrap: wrap; gap: 6px;">
-                <button type="button" class="sample-chip multiscale-example-chip" data-dim="4200mm">Room Width 4200mm</button>
-                <button type="button" class="sample-chip multiscale-example-chip" data-dim="900mm">Door Opening 900mm</button>
-                <button type="button" class="sample-chip multiscale-example-chip" data-dim="2400 + 1800 + 900">Wall Chain 2400 + 1800 + 900</button>
-                <button type="button" class="sample-chip multiscale-example-chip" data-dim="7' 6&quot;">Imperial 7' 6"</button>
-                <button type="button" class="sample-chip multiscale-example-chip" data-dim="12.5m">Building Span 12.5m</button>
-              </div>
-            </div>
-
-            <!-- Action Button -->
-            <div class="form-actions" style="margin-top: 0.5rem;">
-              <button type="button" id="btn-run-multiscale" class="btn-calc-action primary">
-                <span class="btn-icon">📊</span>
-                <span>COMPARE SCALES</span>
-                <span class="btn-kbd-hint"><kbd>↵</kbd></span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right Column: Scale Comparison Matrix & Visual Drafting Bars -->
-        <div class="calc-results-column">
-          <div class="archi-card result-hero-card">
-            <div class="corner-mark top-left"></div>
-            <div class="corner-mark top-right"></div>
-            <div class="corner-mark bottom-left"></div>
-            <div class="corner-mark bottom-right"></div>
-
-            <div class="result-header">
-              <span class="result-category-label">MULTI-SCALE COMPARISON MATRIX</span>
-              <span id="multiscale-count-badge" class="type-badge badge-seg" style="font-size: 0.65rem;">10 SCALES</span>
-            </div>
-
-            <!-- Active Real-World Dimension Summary -->
-            <div class="result-context-strip" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: var(--radius-sm); margin: 0.5rem 0 1rem 0; border: 1px solid var(--border-color-light);">
-              <div style="display: flex; flex-direction: column;">
-                <span style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">REAL-WORLD MEASUREMENT</span>
-                <span id="multiscale-real-label" style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">Input Dimension</span>
-              </div>
-              <div id="multiscale-real-val" style="font-family: var(--font-family-mono); font-size: 1.25rem; font-weight: 700; color: var(--accent-primary);">0 mm</div>
-            </div>
-
-            <!-- Comparison Table Container -->
-            <div id="multiscale-table-container" class="table-scroll-container" style="max-height: 380px; overflow-y: auto; margin-bottom: 1rem;">
-              <table id="multiscale-table" class="ref-data-table multiscale-table" style="width: 100%;">
-                <thead>
-                  <tr>
-                    <th style="width: 40px; text-align: center;">★</th>
-                    <th style="width: 90px;">SCALE</th>
-                    <th style="width: 110px;">DRAWING SIZE</th>
-                    <th>PROPORTIONAL DRAFTING LENGTH</th>
-                    <th style="width: 100px;">STATUS / FIT</th>
-                    <th style="width: 80px; text-align: right;">ACTION</th>
-                  </tr>
-                </thead>
-                <tbody id="multiscale-table-body">
-                  <!-- Dynamic rows generated by MultiScale UI controller -->
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Empty State -->
-            <div id="multiscale-empty-state" class="workspace-empty-state" style="display: none; padding: 2rem; text-align: center;">
-              <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
-              <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem;">Multi-Scale Comparison</h4>
-              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
-                See how one real-world dimension changes across drawing scales.
-              </p>
-              <button type="button" id="multiscale-load-sample-btn" class="btn-calc-action secondary" style="display: inline-flex; width: auto; margin: 0 auto;">
-                <span>Load Sample (2400 mm)</span>
-              </button>
-            </div>
-
-            <!-- Copy Actions Toolbar -->
-            <div class="result-actions-strip" style="margin-top: 0.5rem; flex-wrap: wrap;">
-              <button type="button" id="multiscale-copy-table-btn" class="result-action-btn" title="Copy markdown comparison table">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                <span>Copy Table</span>
-              </button>
-              <button type="button" id="multiscale-copy-all-btn" class="result-action-btn" title="Copy formatted list of all scales">
-                <span>Copy All</span>
-              </button>
-              <button type="button" id="multiscale-copy-current-btn" class="result-action-btn" title="Copy current active scale drawing result">
-                <span>Copy Current Scale</span>
-              </button>
-              <button type="button" id="multiscale-copy-raw-btn" class="result-action-btn" title="Copy raw numeric values stream (for CAD)">
-                <span>Copy Raw CAD</span>
-              </button>
-              <button type="button" id="multiscale-cad-handoff-btn" class="result-action-btn" title="Open in CAD Clipboard (Mode 11)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>
-                <span>CAD Clipboard</span>
-              </button>
-              <button type="button" id="multiscale-send-cad-handoff-btn" class="result-action-btn" title="Send to CAD Handoff (Mode 13)">
-                <span>🚀 Send to CAD</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+    
 
     <!-- ======================================================== -->
     <!-- MODE 10: DIMENSION CHAINS (Continuous Dimension Strings)  -->
     <!-- ======================================================== -->
-    <section id="mode-view-chains" class="tool-mode-view" aria-labelledby="heading-chains" hidden>
-      <div class="tool-layout">
-        <!-- Left Column / Primary Instrument Faceplate -->
-        <div class="archi-card main-calc-card">
-          <div class="corner-mark top-left"></div>
-          <div class="corner-mark top-right"></div>
-          <div class="corner-mark bottom-left"></div>
-          <div class="corner-mark bottom-right"></div>
-
-          <div class="card-header">
-            <div>
-              <span class="card-tag">MODE 10 • DIMENSION STRINGS</span>
-              <h2 id="heading-chains" class="card-title">Dimension Chains</h2>
-            </div>
-            <div class="status-indicator">
-              <span id="chains-state-badge" class="badge-status-ready">READY</span>
-            </div>
-          </div>
-
-          <p class="tool-description">
-            Build a sequence of wall or grid dimensions and see the running coordinates, cumulative totals, and a scale-accurate chain diagram. Quick Add takes expressions like <code>1200 + 1800 + 900</code> — each number becomes a segment you can name, reorder, or mark as an allowance or reference.
-          </p>
-
-          <!-- Chain Settings: Name, Scale, Unit -->
-          <div class="instrument-grid" style="grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-bottom: 0.85rem;">
-            <div class="input-group">
-              <label for="chains-name-input" class="input-label">Chain Name</label>
-              <input type="text" id="chains-name-input" class="text-input" value="North Wall Sequence" placeholder="e.g. North Wall Grid" />
-            </div>
-
-            <div class="input-group">
-              <label for="chains-scale-select" class="input-label">Drawing Scale</label>
-              <select id="chains-scale-select" class="unit-select">
-                <option value="10">1:10 (Detail)</option>
-                <option value="20">1:20 (Interior/Detail)</option>
-                <option value="25">1:25 (Joinery/Plan)</option>
-                <option value="50" selected>1:50 (Architecture Plan)</option>
-                <option value="75">1:75 (Intermediate)</option>
-                <option value="100">1:100 (General Arrangement)</option>
-                <option value="200">1:200 (Site / Massing)</option>
-              </select>
-            </div>
-
-            <div class="input-group">
-              <label for="chains-unit-select" class="input-label">Display Unit</label>
-              <select id="chains-unit-select" class="unit-select">
-                <option value="mm" selected>Millimeters (mm)</option>
-                <option value="cm">Centimeters (cm)</option>
-                <option value="m">Meters (m)</option>
-                <option value="in">Inches (in)</option>
-                <option value="ft">Feet (ft)</option>
-                <option value="ft_in">Ft-In (Architectural)</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Offsets Row -->
-          <div class="instrument-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-bottom: 0.85rem;">
-            <div class="input-group">
-              <label for="chains-start-offset-input" class="input-label">Start Offset (e.g. Datum / Wall Thickness)</label>
-              <input type="text" id="chains-start-offset-input" class="text-input" placeholder="0 or 300mm" value="0" />
-            </div>
-            <div class="input-group">
-              <label for="chains-end-offset-input" class="input-label">End Offset (e.g. Return / Tolerance)</label>
-              <input type="text" id="chains-end-offset-input" class="text-input" placeholder="0 or 200mm" value="0" />
-            </div>
-          </div>
-
-          <!-- Quick Add Input Instrument -->
-          <div class="calc-instrument-panel" style="margin-bottom: 1rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
-              <label for="chains-quick-input" class="input-label" style="margin-bottom: 0;">Quick Add (e.g. 1200 + 1800 + 900 + 1500 or Bay 1 1200, Door 900 ref)</label>
-              <span id="chains-live-preview" class="expr-live-preview">Live: Ready</span>
-            </div>
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-              <input
-                type="text"
-                id="chains-quick-input"
-                class="text-input"
-                placeholder="1200 + 1800 + 900 + 1500"
-                autocomplete="off"
-                spellcheck="false"
-                style="font-family: var(--font-family-mono); font-size: 1rem; font-weight: 600;"
-              />
-              <button type="button" id="chains-add-btn" class="btn-calc-action primary" style="width: auto; white-space: nowrap; padding: 0 1.25rem;">
-                <span>+ Add to Chain</span>
-              </button>
-              <button type="button" id="chains-clear-input-btn" class="control-btn" title="Clear input field" style="flex-shrink: 0;">✕</button>
-            </div>
-            <div id="chains-error-msg" class="expr-error-banner" style="display: none; margin-top: 0.5rem;"></div>
-
-            <!-- Architectural Templates -->
-            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.65rem;">
-              <span style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Templates:</span>
-              <button type="button" class="chain-template-chip" data-template="wall_opening">🧱 Wall Openings</button>
-              <button type="button" class="chain-template-chip" data-template="grid_bays">📐 Grid Bays</button>
-              <button type="button" class="chain-template-chip" data-template="facade_rhythm">🏢 Facade Rhythm</button>
-              <button type="button" class="chain-template-chip" data-template="room_perimeter">🚪 Corridor Partitions</button>
-              <button type="button" id="chains-clear-all-btn" class="chain-template-chip danger" style="margin-left: auto;">🗑️ Clear Chain</button>
-            </div>
-          </div>
-
-          <!-- Centerpiece SVG Drafting Viewport -->
-          <div class="chain-svg-container">
-            <div class="chain-svg-header">
-              <span class="chain-svg-title">📐 SCALE-ACCURATE DRAFTING CHAIN</span>
-              <div class="chain-svg-controls">
-                <button type="button" id="chains-zoom-fit-btn" class="chain-svg-btn" title="Reset Viewport to Fit">Fit View</button>
-              </div>
-            </div>
-            <div id="chains-svg-viewport-wrapper" class="chain-svg-viewport-wrapper">
-              <!-- SVG generated dynamically by generateChainSVG -->
-            </div>
-          </div>
-
-          <!-- Selected Segment Inspector Strip -->
-          <div id="chains-selected-inspector" class="chain-selected-inspector" style="display: none;">
-            <div class="inspector-badge">SELECTED SEGMENT</div>
-            <div class="inspector-details">
-              <span id="chains-inspector-name" class="inspector-name">Bay 1</span>
-              <span id="chains-inspector-len" class="inspector-val">1,200 mm</span>
-              <span class="inspector-pos">Start: <strong id="chains-inspector-start">0 mm</strong> ➔ End: <strong id="chains-inspector-end">1,200 mm</strong></span>
-              <span class="inspector-scale">Drawing @ 1:50: <strong id="chains-inspector-draw">24 mm</strong></span>
-            </div>
-          </div>
-
-          <!-- Segment Schedule Table -->
-          <div class="workspace-table-container" style="margin-top: 1rem; max-height: 320px;">
-            <table class="workspace-table multiscale-table" id="chains-table">
-              <thead>
-                <tr>
-                  <th style="width: 45px; text-align: center;">#</th>
-                  <th style="width: 45px; text-align: center;">On</th>
-                  <th>Segment Name</th>
-                  <th style="width: 100px;">Start</th>
-                  <th style="width: 100px;">End</th>
-                  <th style="width: 110px;">Length</th>
-                  <th style="width: 80px; text-align: center;">Type</th>
-                  <th style="width: 100px;">Drawing</th>
-                  <th style="width: 90px; text-align: right;">Order</th>
-                  <th style="width: 45px; text-align: center;">Del</th>
-                </tr>
-              </thead>
-              <tbody id="chains-table-body">
-                <!-- Populated dynamically -->
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Run Calculation / Recalculate Button -->
-          <div style="margin-top: 1rem;">
-            <button type="button" id="btn-run-chains" class="btn-run-calc" style="width: 100%;">
-              <span>RUN CHAIN CALCULATION</span>
-              <kbd>↵</kbd>
-            </button>
-          </div>
-        </div>
-
-        <!-- Right Column / Results & Interoperability Card -->
-        <div class="archi-card result-panel-card">
-          <div class="corner-mark top-left"></div>
-          <div class="corner-mark top-right"></div>
-          <div class="corner-mark bottom-left"></div>
-          <div class="corner-mark bottom-right"></div>
-
-          <div class="card-header">
-            <div>
-              <span class="card-tag">CUMULATIVE METRICS</span>
-              <h3 class="card-title">Chain Summary</h3>
-            </div>
-            <span id="chains-count-badge" class="result-scale-badge">0 SEGMENTS</span>
-          </div>
-
-          <!-- Result Hero Box -->
-          <div class="result-hero-box" style="margin-bottom: 1rem;">
-            <div class="result-hero-label">Overall Chain Extent</div>
-            <div class="result-hero-value-wrap">
-              <span id="chains-overall-val" class="result-hero-value" style="font-size: 2.2rem;">0 mm</span>
-            </div>
-            <div class="result-flow-details" style="margin-top: 0.4rem;">
-              <span id="chains-drawing-overall" class="secondary-unit-readout" style="font-weight: 700; color: var(--accent-primary);">Drawing @ 1:50: 0 mm</span>
-            </div>
-          </div>
-
-          <!-- Breakdown Summary Cards -->
-          <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.6rem; margin-bottom: 1rem;">
-            <div class="metric-card" style="padding: 0.65rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: 4px;">
-              <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Segment Sum (SEG)</div>
-              <div id="chains-seg-total-val" style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); font-family: var(--font-family-mono);">0 mm</div>
-            </div>
-            <div class="metric-card" style="padding: 0.65rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: 4px;">
-              <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Allowances (ALW)</div>
-              <div id="chains-alw-total-val" style="font-size: 1.1rem; font-weight: 700; color: var(--color-warning, #f59e0b); font-family: var(--font-family-mono);">0 mm</div>
-            </div>
-            <div class="metric-card" style="padding: 0.65rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: 4px;">
-              <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Start Offset</div>
-              <div id="chains-start-offset-val" style="font-size: 1.1rem; font-weight: 700; color: var(--text-secondary); font-family: var(--font-family-mono);">0 mm</div>
-            </div>
-            <div class="metric-card" style="padding: 0.65rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: 4px;">
-              <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">End Offset</div>
-              <div id="chains-end-offset-val" style="font-size: 1.1rem; font-weight: 700; color: var(--text-secondary); font-family: var(--font-family-mono);">0 mm</div>
-            </div>
-          </div>
-
-          <!-- Actions & Interoperability Strip -->
-          <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">
-            <button type="button" id="chains-compare-multiscale-btn" class="btn-calc-action secondary" style="width: 100%; justify-content: center;">
-              <span>📊 Compare Chain Across Scales</span>
-            </button>
-            <button type="button" id="chains-send-workspace-btn" class="btn-calc-action secondary" style="width: 100%; justify-content: center;">
-              <span>📐 Send Chain to Dimension Workspace</span>
-            </button>
-            <button type="button" id="chains-save-journal-btn" class="btn-calc-action secondary" style="width: 100%; justify-content: center;">
-              <span>📜 Save to Calculation Journal</span>
-            </button>
-          </div>
-
-          <!-- Multi-Stream Copy Toolbar -->
-          <div class="result-actions-strip" style="margin-top: 1rem; flex-wrap: wrap;">
-            <button type="button" id="chains-copy-table-btn" class="result-action-btn" title="Copy Markdown table">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-              <span>Copy Table</span>
-            </button>
-            <button type="button" id="chains-copy-cum-btn" class="result-action-btn" title="Copy running cumulative coordinates (0 1200 3000 3900 5400)">
-              <span>Copy Cumulative</span>
-            </button>
-            <button type="button" id="chains-copy-segs-btn" class="result-action-btn" title="Copy segment measurements (1200 1800 900 1500)">
-              <span>Copy Segments</span>
-            </button>
-            <button type="button" id="chains-copy-draw-btn" class="result-action-btn" title="Copy scaled drawing dimensions">
-              <span>Copy Drawing</span>
-            </button>
-            <button type="button" id="chains-export-tsv-btn" class="result-action-btn" title="Download TSV file for CAD / Excel">
-              <span>Export TSV</span>
-            </button>
-            <button type="button" id="chains-cad-handoff-btn" class="result-action-btn" title="Open in CAD Clipboard (Mode 11)">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>
-              <span>CAD Clipboard</span>
-            </button>
-            <button type="button" id="chains-send-cad-handoff-btn" class="result-action-btn" title="Send to CAD Handoff (Mode 13)">
-              <span>🚀 Send to CAD</span>
-            </button>
-            <button type="button" id="chains-send-scratchpad-btn" class="result-action-btn" title="Send chain total and segments to Universal Scratchpad">
-              <span>📋 Scratchpad</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
+    
 
     <!-- ======================================================== -->
     <!-- MODE 11: CAD CLIPBOARD & DRAFTING HANDOFF               -->
@@ -3223,9 +3350,6 @@
             <button type="button" id="stairs-send-scratchpad-btn" class="result-action-btn" title="Send stair geometry to Universal Scratchpad">
               <span>📋 Send to Scratchpad</span>
             </button>
-            <button type="button" id="stairs-apply-plan-btn" class="result-action-btn" title="Apply this stair flight directly to the Plan Canvas">
-              <span>📐 Apply to Plan Canvas</span>
-            </button>
           </div>
         </div>
       </div>
@@ -3409,9 +3533,6 @@
             </button>
             <button type="button" id="ramps-send-scratchpad-btn" class="result-action-btn" title="Send ramp geometry to Universal Scratchpad">
               <span>📋 Send to Scratchpad</span>
-            </button>
-            <button type="button" id="ramps-apply-plan-btn" class="result-action-btn" title="Apply this ramp flight directly to the Plan Canvas">
-              <span>📐 Apply to Plan Canvas</span>
             </button>
           </div>
         </div>
@@ -3644,7 +3765,6 @@
               <option value="stair">Stair Diagram</option>
               <option value="ramp">Ramp Diagram</option>
               <option value="slope">Slope Diagram</option>
-              <option value="plan">Plan Canvas</option>
             </select>
           </div>
 
@@ -3813,394 +3933,6 @@
     <!-- ======================================================== -->
     <!-- MODE 19: PLAN CANVAS                                     -->
     <!-- ======================================================== -->
-    <section id="mode-view-plan" class="tool-mode-view" aria-labelledby="heading-plan" hidden style="display: none;">
-      <!-- Top Studio Ribbon Bar Container -->
-      <div id="studio-ribbon-container"></div>
-
-      <div class="tool-layout tool-layout-plan-3col">
-        <!-- Column 1: Tools & Navigation / History (Left) -->
-        <div class="archi-card main-calc-card plan-tools-card">
-          <div class="corner-mark top-left"></div>
-          <div class="corner-mark top-right"></div>
-          <div class="corner-mark bottom-left"></div>
-          <div class="corner-mark bottom-right"></div>
-
-          <!-- Studio Left Vertical Toolstrip Container -->
-          <div id="studio-palette-container"></div>
-
-          <div class="card-header">
-            <div>
-              <span class="card-tag">MODE 19 • DRAFTING WORKSTATION</span>
-              <h2 id="heading-plan" class="card-title">Plan Canvas</h2>
-            </div>
-            <div class="status-indicator">
-              <span id="plan-state-badge" class="badge-status-ready">READY</span>
-            </div>
-          </div>
-
-          <p class="tool-description">
-            Architectural 2D plan workstation. Coordinates are real-world meters with snapping, properties inspection, and space planning validation.
-          </p>
-
-          <div class="input-row-group" style="margin-bottom: 0.5rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
-              <span class="input-label" style="margin: 0;">Tool Palette</span>
-              <span style="font-size: 0.65rem; color: var(--text-muted); font-family: var(--font-mono);">Hotkeys active</span>
-            </div>
-            <div class="plan-tool-palette" id="plan-tool-palette" role="toolbar" aria-label="Drawing tool palette">
-              <button type="button" class="tool-palette-btn active" data-tool="select" title="Select & Transform (V)">
-                <span class="tool-icon">➤</span>
-                <span class="tool-name">Select</span>
-                <kbd class="tool-kbd">V</kbd>
-              </button>
-              <button type="button" class="tool-palette-btn" data-tool="room" title="Room Rectangle (R)">
-                <span class="tool-icon">▭</span>
-                <span class="tool-name">Room</span>
-                <kbd class="tool-kbd">R</kbd>
-              </button>
-              <button type="button" class="tool-palette-btn" data-tool="polyroom" title="Polygonal Room (Click corners to form any shape)">
-                <span class="tool-icon">⬡</span>
-                <span class="tool-name">Poly Room</span>
-              </button>
-              <button type="button" class="tool-palette-btn" data-tool="wall" title="Wall Segment (W)">
-                <span class="tool-icon">─</span>
-                <span class="tool-name">Wall</span>
-                <kbd class="tool-kbd">W</kbd>
-              </button>
-              <button type="button" class="tool-palette-btn" data-tool="furniture" title="Furniture Footprint (F)">
-                <span class="tool-icon">🛋️</span>
-                <span class="tool-name">Furniture</span>
-                <kbd class="tool-kbd">F</kbd>
-              </button>
-              <button type="button" class="tool-palette-btn" data-tool="stair" title="Straight Stair Flight">
-                <span class="tool-icon">🪜</span>
-                <span class="tool-name">Stair</span>
-              </button>
-              <button type="button" class="tool-palette-btn" data-tool="ramp" title="Accessible Ramp">
-                <span class="tool-icon">♿</span>
-                <span class="tool-name">Ramp</span>
-              </button>
-              <button type="button" class="tool-palette-btn" data-tool="dimension" title="Dimension String (D)">
-                <span class="tool-icon">📏</span>
-                <span class="tool-name">Dimension</span>
-                <kbd class="tool-kbd">D</kbd>
-              </button>
-              <button type="button" class="tool-palette-btn" data-tool="leader" title="Leader Callout Note (Click to place pointer and landing)">
-                <span class="tool-icon">🏷️</span>
-                <span class="tool-name">Leader</span>
-              </button>
-              <button type="button" class="tool-palette-btn" data-tool="north" title="North Arrow Compass (Click to place)">
-                <span class="tool-icon">🧭</span>
-                <span class="tool-name">North</span>
-              </button>
-              <button type="button" class="tool-palette-btn" data-tool="column" title="Structural Column (C)">
-                <span class="tool-icon">🏛️</span>
-                <span class="tool-name">Column</span>
-                <kbd class="tool-kbd">C</kbd>
-              </button>
-              <button type="button" class="tool-palette-btn" data-tool="grid" title="Structural Grid Line (G)">
-                <span class="tool-icon">⌗</span>
-                <span class="tool-name">Grid</span>
-              </button>
-              <button type="button" class="tool-palette-btn" data-tool="section_cut" title="Section Cut Line (X)">
-                <span class="tool-icon">✂️</span>
-                <span class="tool-name">Section</span>
-                <kbd class="tool-kbd">X</kbd>
-              </button>
-              <button type="button" class="tool-palette-btn" data-tool="detail_callout" title="Construction Detail Callout (J)">
-                <span class="tool-icon">🔍</span>
-                <span class="tool-name">Detail</span>
-                <kbd class="tool-kbd">J</kbd>
-              </button>
-              <button type="button" class="tool-palette-btn" data-tool="measure" title="Tape Measure Tool (M)">
-                <span class="tool-icon">📐</span>
-                <span class="tool-name">Measure</span>
-                <kbd class="tool-kbd">M</kbd>
-              </button>
-            </div>
-            <!-- Maintained for contract compatibility -->
-            <select id="plan-tool-select" class="calc-select" style="display: none;">
-              <option value="select" selected>➤ Select / Move</option>
-              <option value="wall">─ Wall (drag segment)</option>
-              <option value="room">▭ Room (drag rectangle)</option>
-              <option value="polyroom">⬡ Poly Room (custom polygon)</option>
-              <option value="column">🏛️ Column (structural)</option>
-              <option value="grid">⌗ Grid Line (axis)</option>
-              <option value="section_cut">✂️ Section Cut (cross-section)</option>
-              <option value="detail_callout">🔍 Detail Callout (construction detail)</option>
-              <option value="door">🚪 Door (place on wall)</option>
-              <option value="window">🪟 Window (place on wall)</option>
-              <option value="furniture">🛋️ Furniture (catalog footprint)</option>
-              <option value="stair">🪜 Stair (drag flight)</option>
-              <option value="ramp">♿ Ramp (drag run)</option>
-              <option value="dimension">📏 Dimension (2-point string)</option>
-              <option value="leader">🏷️ Leader (callout note)</option>
-              <option value="north">🧭 North Arrow (compass)</option>
-              <option value="text">🔤 Text (annotation label)</option>
-              <option value="measure">📐 Measure (distance glance)</option>
-            </select>
-          </div>
-
-          <div class="input-row-group" id="plan-furniture-group" style="display: none; margin-bottom: 0.75rem;">
-            <label for="plan-furniture-select" class="input-label">Furniture Catalog Piece</label>
-            <div style="display: flex; gap: 6px; align-items: center;">
-              <select id="plan-furniture-select" class="calc-select" style="flex: 1;"></select>
-              <button type="button" id="btn-browse-objects" class="result-action-btn" style="font-size: 0.7rem; padding: 0.3rem 0.55rem; white-space: nowrap;" title="Open the full object library browser (search + categories)">🔍 Browse</button>
-            </div>
-          </div>
-
-          <div class="input-row-group" style="margin-bottom: 0.75rem;">
-            <label for="plan-grid-select" class="input-label">Grid Snap Increment</label>
-            <select id="plan-grid-select" class="calc-select">
-              <option value="0.05">0.05 m (50 mm detail)</option>
-              <option value="0.1">0.10 m (100 mm module)</option>
-              <option value="0.25">0.25 m</option>
-              <option value="0.5" selected>0.50 m (planning grid)</option>
-              <option value="1">1.00 m (structural grid)</option>
-            </select>
-          </div>
-
-          <div class="calc-actions-row" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem; margin-bottom: 0.75rem;">
-            <button type="button" id="btn-plan-undo" class="result-action-btn" title="Undo (Ctrl+Z)">
-              <span>↶ Undo</span>
-            </button>
-            <button type="button" id="btn-plan-redo" class="result-action-btn" title="Redo (Ctrl+Y)">
-              <span>↷ Redo</span>
-            </button>
-            <button type="button" id="btn-plan-delete" class="result-action-btn" title="Delete selected entities (Del)">
-              <span>🗑 Delete</span>
-            </button>
-            <button type="button" id="btn-plan-clear" class="result-action-btn" title="Remove all entities (asks first)">
-              <span>Clear All</span>
-            </button>
-          </div>
-
-          <div id="plan-error-msg" class="input-error-banner" style="display: none; margin-top: 0.5rem;" role="alert"></div>
-
-          <div style="margin-top: 0.75rem;">
-            <div class="plan-sidebar-tabs" style="display: flex; border-bottom: 1px solid var(--border-color-light, #333); margin-bottom: 0.5rem; gap: 0.25rem;">
-              <button type="button" id="tab-plan-entities" class="plan-tab-btn active" style="flex: 1; padding: 0.35rem 0.4rem; font-size: 0.70rem; font-weight: 700; border: none; background: transparent; cursor: pointer; border-bottom: 2px solid var(--accent-primary, #4989D9); color: var(--accent-primary, #4989D9);" title="List of entities in drawing">
-                Entities (<span id="plan-entities-count">0</span>)
-              </button>
-              <button type="button" id="tab-plan-layers" class="plan-tab-btn" style="flex: 1; padding: 0.35rem 0.4rem; font-size: 0.70rem; font-weight: 700; border: none; background: transparent; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-muted, #888);" title="CAD Layers and visibility">
-                Layers (<span id="plan-layers-count">10</span>)
-              </button>
-              <button type="button" id="tab-plan-schedule" class="plan-tab-btn" style="flex: 1; padding: 0.35rem 0.4rem; font-size: 0.70rem; font-weight: 700; border: none; background: transparent; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-muted, #888);" title="Room & Area Zoning Schedule Matrix">
-                Schedule (<span id="plan-schedule-count">0</span>)
-              </button>
-            </div>
-            <div id="plan-entities-view">
-              <div id="plan-entity-list" style="display: flex; flex-direction: column; gap: 0.25rem; max-height: 220px; overflow-y: auto;"></div>
-            </div>
-            <div id="plan-layers-view" style="display: none;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
-                <button type="button" id="btn-auto-tag-all" class="result-action-btn" style="font-size: 0.68rem; padding: 0.2rem 0.4rem;" title="Auto-tag all un-tagged rooms, doors, and windows">🏷️ Auto-Tag All</button>
-                <button type="button" id="btn-add-layer" class="result-action-btn" style="font-size: 0.68rem; padding: 0.2rem 0.4rem;" title="Add a custom CAD layer">+ Layer</button>
-              </div>
-              <div id="plan-layer-list" style="display: flex; flex-direction: column; gap: 0.25rem; max-height: 220px; overflow-y: auto;"></div>
-            </div>
-            <div id="plan-schedule-view" style="display: none;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
-                <span style="font-size: 0.68rem; font-weight: 700; color: var(--text-muted, #888); text-transform: uppercase;">Area &amp; Zoning Matrix</span>
-                <button type="button" id="btn-copy-schedule-csv" class="result-action-btn" style="font-size: 0.68rem; padding: 0.2rem 0.4rem;" title="Copy schedule as CSV">📋 Copy CSV</button>
-              </div>
-              <div id="plan-schedule-totals" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem; margin-bottom: 0.5rem;"></div>
-              <div id="plan-schedule-list" style="display: flex; flex-direction: column; gap: 0.25rem; max-height: 220px; overflow-y: auto;"></div>
-
-              <!-- Level system (schema v3) -->
-              <div style="display: flex; justify-content: space-between; align-items: center; margin: 0.6rem 0 0.35rem;">
-                <span style="font-size: 0.68rem; font-weight: 700; color: var(--text-muted, #888); text-transform: uppercase;">Building Levels</span>
-                <button type="button" id="btn-add-level" class="result-action-btn" style="font-size: 0.68rem; padding: 0.2rem 0.4rem;" title="Add a level above the highest">+ Add Level</button>
-              </div>
-              <div id="plan-levels-list" style="display: flex; flex-direction: column; gap: 0.25rem; max-height: 200px; overflow-y: auto;"></div>
-            </div>
-          </div>
-
-          <div style="margin-top: 0.8rem; font-size: 0.70rem; color: var(--text-muted); line-height: 1.45;">
-            <strong>Save to project:</strong> the plan persists into your project store. Rooms and walls are axis-aligned architectural primitives.
-          </div>
-        </div>
-
-        <!-- Column 2: SVG Canvas Workstation (Center) -->
-        <div class="archi-card result-panel plan-canvas-panel" id="plan-result-panel" data-state="ready">
-          <div class="corner-mark top-left"></div>
-          <div class="corner-mark top-right"></div>
-          <div class="corner-mark bottom-left"></div>
-          <div class="corner-mark bottom-right"></div>
-
-          <div class="result-header">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <span class="result-label">DRAWING VIEWPORT</span>
-              <span id="plan-mode-label" class="plan-mode-badge" style="font-size: 0.68rem; font-family: var(--font-mono); color: var(--accent-primary);">SELECT</span>
-            </div>
-            <span id="plan-status-badge" class="unit-system-tag" style="font-size: 0.7rem;">zoom 40 px/m</span>
-          </div>
-
-          <!-- Multi-Document Drawing Tabs (Studio Tabs) -->
-          <div id="plan-doc-tab-bar" class="plan-doc-tab-bar" role="tablist" aria-label="Drawing Tabs">
-            <div id="plan-doc-tabs-list" class="plan-doc-tabs-list">
-              <!-- Dynamically populated tab items -->
-            </div>
-            <div style="position: relative; display: inline-block;">
-              <button type="button" id="btn-plan-new-doc" class="plan-doc-new-btn" title="Create new drawing tab / sheet (+)">+ New Tab ▾</button>
-              <div id="plan-new-tab-menu" class="plan-tab-dropdown-menu" style="display: none; position: absolute; top: 100%; right: 0; z-index: 100; background: var(--bg-surface-2, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); min-width: 175px; padding: 4px; margin-top: 4px;">
-                <button type="button" class="plan-dropdown-item" data-tab-type="2d_plan" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: none; background: transparent; color: var(--text-normal, #f8fafc); font-size: 0.74rem; cursor: pointer; text-align: left; border-radius: 4px;">
-                  <span data-doc-icon="2d_plan"></span> 2D Floor Plan
-                </button>
-                <button type="button" class="plan-dropdown-item" data-tab-type="3d_massing" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: none; background: transparent; color: var(--text-normal, #f8fafc); font-size: 0.74rem; cursor: pointer; text-align: left; border-radius: 4px;">
-                  <span data-doc-icon="3d_massing"></span> 3D Massing Preview
-                </button>
-                <button type="button" class="plan-dropdown-item" data-tab-type="elevation" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: none; background: transparent; color: var(--text-normal, #f8fafc); font-size: 0.74rem; cursor: pointer; text-align: left; border-radius: 4px;">
-                  <span data-doc-icon="elevation"></span> Building Elevation
-                </button>
-                <button type="button" class="plan-dropdown-item" data-tab-type="section" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: none; background: transparent; color: var(--text-normal, #f8fafc); font-size: 0.74rem; cursor: pointer; text-align: left; border-radius: 4px;">
-                  <span data-doc-icon="section"></span> Building Section
-                </button>
-                <button type="button" class="plan-dropdown-item" data-tab-type="detail" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: none; background: transparent; color: var(--text-normal, #f8fafc); font-size: 0.74rem; cursor: pointer; text-align: left; border-radius: 4px;">
-                  <span data-doc-icon="detail"></span> Construction Detail
-                </button>
-                <button type="button" class="plan-dropdown-item" data-tab-type="sheet" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: none; background: transparent; color: var(--text-normal, #f8fafc); font-size: 0.74rem; cursor: pointer; text-align: left; border-radius: 4px;">
-                  <span data-doc-icon="sheet"></span> Presentation Sheet
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Zoom / view controls -->
-          <div class="plan-canvas-toolbar" role="toolbar" aria-label="Canvas zoom controls">
-            <button type="button" id="btn-plan-zoom-out" class="result-action-btn plan-zoom-btn" title="Zoom out">−</button>
-            <button type="button" id="btn-plan-zoom-in" class="result-action-btn plan-zoom-btn" title="Zoom in">+</button>
-            <button type="button" id="btn-plan-fit" class="result-action-btn plan-zoom-btn wide" title="Fit plan to view">Fit</button>
-            <button type="button" id="btn-plan-zoom-100" class="result-action-btn plan-zoom-btn wide" title="Zoom to 1:1 (100 px per meter)">100%</button>
-            <button type="button" id="btn-plan-zoom-50" class="result-action-btn plan-zoom-btn wide" title="Zoom to 50 px/m">50%</button>
-            <button type="button" id="btn-plan-zoom-200" class="result-action-btn plan-zoom-btn wide" title="Zoom to 200 px/m">200%</button>
-            <span class="plan-toolbar-hint">scroll = zoom · space+drag = pan · del = delete</span>
-          </div>
-
-          <!-- Dynamic Contextual Action Toolbar -->
-          <div id="plan-contextual-toolbar" class="plan-contextual-toolbar" role="toolbar" aria-label="Contextual editing actions">
-            <span class="context-tag-badge">READY</span>
-            <span style="font-size: 0.72rem; color: var(--text-muted);">Select an entity to reveal contextual actions, or press R (Room), W (Wall), F (Furniture), M (Measure).</span>
-          </div>
-
-          <div id="plan-svg-wrap" class="plan-svg-wrap" style="cursor: crosshair;">
-            <!-- Floating CAD Numeric Typing HUD -->
-            <div id="plan-numeric-hud" class="plan-numeric-hud" style="display: none;" aria-label="CAD Numeric Input HUD">
-              <div class="hud-field">
-                <label for="hud-input-length" class="hud-label">LEN:</label>
-                <input type="text" id="hud-input-length" class="hud-input" placeholder="4.2m" autocomplete="off" spellcheck="false" />
-              </div>
-              <div class="hud-divider"></div>
-              <div class="hud-field">
-                <label for="hud-input-angle" class="hud-label">ANG:</label>
-                <input type="text" id="hud-input-angle" class="hud-input" placeholder="0°" autocomplete="off" spellcheck="false" />
-              </div>
-              <div class="hud-tip"><span><kbd>Tab</kbd> toggle</span> · <span><kbd>Enter</kbd> apply</span> · <span><kbd>Esc</kbd> cancel</span></div>
-            </div>
-
-            <svg id="plan-svg" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" role="application" aria-label="Architectural plan canvas — scroll zooms, space+drag pans, arrow keys pan, plus/minus zoom"></svg>
-
-            <!-- View orientation compass (original widget; click a cardinal to switch view) -->
-            <div id="plan-nav-compass" class="plan-nav-compass" role="navigation" aria-label="View orientation — click a cardinal to switch view">
-              <button type="button" class="navc-btn navc-n" data-view="view_top" title="Top (plan) view">N</button>
-              <button type="button" class="navc-btn navc-s" data-view="view_front" title="Bottom / South view">S</button>
-              <button type="button" class="navc-btn navc-w" data-view="view_front" title="Front / West elevation">W</button>
-              <button type="button" class="navc-btn navc-e" data-view="view_right" title="Right / East elevation">E</button>
-              <button type="button" class="navc-btn navc-c" data-view="view_perspective" title="Perspective 3D view" aria-label="Perspective 3D view">P</button>
-              <div class="navc-axes" aria-hidden="true">
-                <span class="navc-axis navc-x">X</span>
-                <span class="navc-axis navc-y">Y</span>
-                <span class="navc-axis navc-z">Z</span>
-              </div>
-            </div>
-
-            <!-- Marquee box-select overlay: a plain absolutely-positioned div
-                 updated directly on pointermove — never coalesced, never
-                 dropped, always visible while dragging. -->
-            <div id="plan-marquee-overlay" hidden
-              style="position: absolute; z-index: 45; pointer-events: none; border: 1.5px dashed var(--accent-primary, #4989D9); background: rgba(73, 137, 217, 0.14); box-shadow: 0 0 0 1.5px rgba(73, 137, 217, 0.25);">
-              <span id="plan-marquee-overlay-label"
-                style="position: absolute; left: 0; top: 0; transform: translateY(-130%); font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700; color: #ffffff; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--accent-primary, #4989D9); border-radius: 3px; padding: 1px 5px; white-space: nowrap;"></span>
-            </div>
-          </div>
-
-          <!-- Bottom CAD Drafting Status Bar -->
-          <footer id="plan-status-bar" class="plan-status-bar" role="status" aria-label="Drafting canvas status">
-            <div class="status-left">
-              <button type="button" id="status-grid-btn" class="status-chip" title="Click to cycle grid snap increment (G)">
-                <span class="status-chip-label">GRID</span>
-                <strong id="status-grid-val">0.50m</strong>
-              </button>
-              <button type="button" id="status-snap-btn" class="status-chip active" title="Click to toggle object and grid snap (S)">
-                <span class="status-chip-label">SNAP</span>
-                <strong id="status-snap-val">ON</strong>
-              </button>
-              <div class="status-divider"></div>
-              <div class="status-chip static" id="status-scale-chip">
-                <span class="status-chip-label">ZOOM</span>
-                <strong id="status-zoom-val">40 px/m</strong>
-              </div>
-              <div class="status-chip static coords-chip" id="status-coords-chip">
-                <span class="status-chip-label">CURSOR</span>
-                <strong id="status-coords-val">X: 0.00m  Y: 0.00m</strong>
-              </div>
-            </div>
-            <div class="status-right">
-              <div class="status-chip static selection-chip" id="status-sel-chip">
-                <span class="status-chip-label">SEL</span>
-                <strong id="status-sel-val">None</strong>
-              </div>
-              <div class="status-divider"></div>
-              <span class="status-tag">METERS</span>
-              <span class="status-ai-badge" id="status-ai-badge">AI: READY</span>
-            </div>
-          </footer>
-
-          <!-- Bottom CAD Command Bar & Drafting Aids Container -->
-          <div id="studio-commandbar-container"></div>
-
-          <div class="result-actions-strip" style="flex-wrap: wrap; gap: 0.5rem;">
-            <button type="button" id="btn-plan-save" class="result-action-btn" title="Persist the plan into the project document">
-              <span>💾 Save to Project</span>
-            </button>
-            <button type="button" id="btn-plan-export-svg" class="result-action-btn" title="Open Export Center with this plan as SVG">
-              <span>📤 Export SVG</span>
-            </button>
-            <button type="button" id="btn-plan-export-dxf" class="result-action-btn" title="Open Export Center with this plan as DXF">
-              <span>📤 Export DXF</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Column 3: Properties & Verification Inspector (Right) -->
-        <div class="archi-card plan-properties-panel" id="plan-properties-panel">
-          <div class="corner-mark top-left"></div>
-          <div class="corner-mark top-right"></div>
-          <div class="corner-mark bottom-left"></div>
-          <div class="corner-mark bottom-right"></div>
-
-          <!-- Studio C-Panels Dockable Container -->
-          <div id="studio-cpanels-container"></div>
-
-          <div class="card-header">
-            <div>
-              <span class="card-tag">INSPECTOR</span>
-              <h3 class="card-title" style="font-size: 0.95rem;">Properties &amp; Verification</h3>
-            </div>
-            <span id="plan-prop-type-badge" class="badge-status-ready" style="font-size: 0.68rem;">PLAN</span>
-          </div>
-
-          <!-- Dynamic container updated whenever selection changes -->
-          <div id="plan-prop-content" class="plan-prop-content" style="display: flex; flex-direction: column; gap: 0.65rem; font-size: 0.82rem;">
-            <!-- Populated dynamically by plan.js -->
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ======================================================== -->
-    <!-- MODE 22: IMPORTER (CSV · DXF · SVG ingestion)            -->
-    <!-- ======================================================== -->
     <section id="mode-view-imports" class="tool-mode-view" aria-labelledby="heading-imports" hidden>
       <div class="tool-layout">
         <div class="archi-card main-calc-card">
@@ -4247,8 +3979,8 @@
             <button type="button" id="btn-run-imports" class="btn-calc-primary" style="width: 100%;">
               <span class="btn-text">RUN IMPORT</span>
             </button>
-            <button type="button" id="btn-imports-send-plan" class="result-action-btn" title="Send imported entities to the Plan Canvas and measurements to the project">
-              <span>➜ Send to Plan</span>
+            <button type="button" id="btn-imports-save-project" class="result-action-btn" title="Send imported entities to the CAD reference and measurements to the project">
+              <span>➜ Save to project</span>
             </button>
           </div>
 
@@ -4300,7 +4032,7 @@
           </div>
 
           <p class="tool-description">
-            Measurement notebook with provenance. Records keep their source (Measured, Estimated, Imported, AI Interpreted, User Entered) and verification status — uncertain records stay records until you verify them. A room proposal is created only from verified W/D measurements, and nothing touches the plan without your click.
+            Measurement notebook with provenance. Records keep their source (Measured, Estimated, Imported, AI Interpreted, User Entered) and verification status — uncertain records stay records until you verify them. A room proposal is created only from verified W/D measurements, and copy verified dimensions to your CAD application.
           </p>
 
           <div class="input-row-group" style="margin-bottom: 1rem;">
@@ -4501,7 +4233,7 @@
           <div class="card-header">
             <div>
               <span class="card-tag">MODE 20 • AI STUDIO</span>
-              <h2 id="heading-ai" class="card-title">AI Studio</h2>
+              <h2 id="heading-ai" class="card-title">Assistant</h2>
             </div>
             <div class="status-indicator">
               <span id="ai-state-badge" class="badge-status-ready">READY</span>
@@ -4509,7 +4241,7 @@
           </div>
 
           <p class="tool-description">
-            Task-focused architectural AI. Every request consumes the deterministic facts pack built from your real project — the AI never invents numbers. One request = one answer; no automatic retries, no silent fallbacks.
+            Ask naturally for concept ideas, critique, jury preparation or research help. AI suggestions need review; deterministic calculations remain the source of numeric results.
           </p>
 
           <div class="input-row-group" style="margin-bottom: 1rem;">
@@ -4551,7 +4283,7 @@
               </label>
               <select id="ai-context-scope-select" class="calc-select" style="width: auto; padding: 0.25rem 0.6rem; font-size: 0.75rem;" aria-label="Context scope selector">
                 <option value="all" selected>Scope: Entire Project</option>
-                <option value="plan_only">Scope: Active Plan Only</option>
+                
                 <option value="room_current">Scope: Selected Room Only</option>
                 <option value="none">Scope: No Background Facts</option>
               </select>
@@ -4599,7 +4331,7 @@
           <div id="ai-consistency-strip" style="display: none; margin-top: 0.8rem; padding: 0.5rem 0.65rem; border-radius: 5px; font-family: var(--font-family-mono); font-size: 0.7rem;"></div>
 
           <div id="ai-context-summary" style="margin-top: 0.9rem; padding: 0.5rem 0.65rem; border: 1px solid var(--border-color-light); border-radius: 5px; background: var(--bg-card-header); font-family: var(--font-family-mono); font-size: 0.68rem; color: var(--text-muted);">
-            Context: project data will be summarized from the live plan + store.
+            Context: project research, site observations, requirements and measurements.
           </div>
         </div>
       </div>
@@ -4609,7 +4341,7 @@
     <!-- MODE 21: AI CONTROL CENTER (providers · jobs · models)   -->
     <!-- ======================================================== -->
     <section id="mode-view-ai_settings" class="tool-mode-view" aria-labelledby="heading-ai-settings" hidden>
-      <div class="tool-layout">
+      <div id="ai-simple-settings" class="archi-card companion-card"></div><details id="ai-advanced-settings" class="companion-advanced"><summary>Advanced: providers, routing, model capabilities &amp; activity</summary><div class="tool-layout">
         <!-- Left Column: Providers -->
         <div class="archi-card main-calc-card">
           <div class="corner-mark top-left"></div>
@@ -4620,7 +4352,7 @@
           <div class="card-header">
             <div>
               <span class="card-tag">MODE 21 • AI CONTROL CENTER</span>
-              <h2 id="heading-ai-settings" class="card-title">AI Control Center</h2>
+              <h2 id="heading-ai-settings" class="card-title">AI Providers</h2>
             </div>
             <div class="status-indicator">
               <span id="ai-settings-state-badge" class="badge-status-ready">READY</span>
@@ -4718,7 +4450,7 @@
           </div>
         </div>
       </div>
-    </section>
+    </details></section>
         </main>
       </div>
     </div>
@@ -4853,7 +4585,7 @@
           Click any key badge to record a new hotkey. Press <kbd class="kbd-badge" style="padding: 0.1rem 0.3rem;">Esc</kbd> to cancel. Shortcuts persist automatically.
         </p>
         <div id="shortcuts-list-container" class="shortcuts-list">
-          <div style="font-size: 0.72rem; font-weight: 700; color: var(--note-number, #4989D9); text-transform: uppercase; margin: 0.5rem 0 0.35rem; font-family: var(--font-mono);">Plan Canvas &amp; Drafting</div>
+          <div style="font-size: 0.72rem; font-weight: 700; color: var(--note-number, #4989D9); text-transform: uppercase; margin: 0.5rem 0 0.35rem; font-family: var(--font-mono);">CAD reference &amp; Drafting</div>
           <div class="shortcut-row"><span>Select &amp; Transform</span><span class="kbd-badge">V</span></div>
           <div class="shortcut-row"><span>Draw Room Rectangle</span><span class="kbd-badge">R</span></div>
           <div class="shortcut-row"><span>Draw Wall Segment</span><span class="kbd-badge">W</span></div>
@@ -4986,6 +4718,6 @@
   </footer>
 
   <!-- Application Script (Standalone, works via file:// and http://) -->
-  <script src="js/app.js?v=2.6.1"></script>
+  <script src="js/app.js?v=2.7.1"></script>
 </body>
 </html>

@@ -173,34 +173,17 @@ console.log('\n--- A8. normalizeKeyCombo keeps Shift for uppercase letters ---')
   assertEqual(normalizeKeyCombo(punctuation), '?', 'Shifted punctuation keeps its existing shape');
 }
 
-// --- A10. Plan canvas hot paths use coalesced scene renders ---
-console.log('\n--- A10. Plan canvas render decoupling (static contract) ---');
-{
-  const planSrc = fs.readFileSync(fileURLToPath(new URL('../src/ui/views/plan.js', import.meta.url)), 'utf-8');
-  const moveStart = planSrc.indexOf('function onPointerMove(event) {');
-  const moveEnd = planSrc.indexOf('function onPointerUp(event) {');
-  const pointerMoveBody = planSrc.slice(moveStart, moveEnd);
-  assert(!/[^a-zA-Z]render\(\);/.test(pointerMoveBody.replace(/scheduleSceneRender\(\);/g, '')),
-    'onPointerMove no longer calls full render() (uses scheduleSceneRender)');
-  assert(planSrc.includes('function scheduleSceneRender()'), 'scheduleSceneRender coalescing helper exists');
-  assert(planSrc.includes('function renderScene()') && planSrc.includes('function renderPanels()'),
-    'render is split into scene and panel phases');
-  const scrubChanges = planSrc.match(/onChange: \(val\) => \{ [^}]*\}/g) || [];
-  assert(scrubChanges.length > 0 && scrubChanges.every(c => !/render\(\)/.test(c)),
-    'scrubber onChange handlers never trigger a full inspector rebuild');
-  console.log(`  ℹ (checked ${scrubChanges.length} scrubber onChange handlers)`);
-}
-
+// Canvas render assertions were retired with the view; geometry tests remain.
 // --- A9. Cross-category shortcut conflicts rejected ---
 console.log('\n--- A9. bindShortcut rejects duplicates across categories ---');
 {
   const sm = new ShortcutsManagerClass();
-  const res1 = sm.bindShortcut('tool_wall', 'k');
-  assert(res1.success, 'Binds tool_wall to K');
-  const res2 = sm.bindShortcut('tool_measure', 'k');
+  const res1 = sm.bindShortcut('cad_clipboard', 'k');
+  assert(res1.success, 'Binds cad_clipboard to K');
+  const res2 = sm.bindShortcut('quick_dim', 'k');
   assert(!res2.success, 'Reusing K for another action is rejected (previously allowed cross-category)');
   sm.resetAllShortcuts();
-  assertEqual(sm.getKeyForAction('tool_wall'), 'w', 'resetAllShortcuts restores defaults after A9 probing');
+  assertEqual(sm.getKeyForAction('cad_clipboard'), 'c', 'resetAllShortcuts restores defaults after A9 probing');
 }
 
 // --- A11b. view-registry mode hooks are wired into switchMode ---

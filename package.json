@@ -1,6 +1,6 @@
 {
   "name": "architecture-helping-hand",
-  "version": "2.6.1",
+  "version": "2.7.1",
   "description": "Architecture Helping Hand - Professional Architectural Scale, Furniture Sizing & Unit Conversion Studio",
   "type": "module",
   "main": "index.html",
@@ -8,7 +8,11 @@
     "build": "node scripts/build.js",
     "test": "node tests/run-all.js",
     "lint": "node scripts/lint.js",
-    "start": "npx serve -l 3500 ."
+    "start": "npx serve -l 3500 .",
+    "reports": "node scripts/report-server.js",
+    "test:redesign": "node tests/redesign.test.js",
+    "test:browser": "node tests/redesign.browser.test.js",
+    "test:reports": "node tests/report-pagination.browser.test.js"
   },
   "keywords": [
     "architecture",

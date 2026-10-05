@@ -1,6 +1,8 @@
+import { OBJECT_LIBRARY_PACKS } from './object-library.js';
+import { classifyFurniture } from './furniture-taxonomy.js';
 /**
  * Architecture Helping Hand - Comprehensive Furniture, Fixtures & Standards Library
- * 215 verified architectural standard dimensions across 9 categories spanning residential, commercial,
+ * Reference planning dimensions across 9 categories spanning residential, commercial,
  * sanitary, circulation, clearances, outdoor, fitness, and accessibility domains.
  */
 
@@ -8,7 +10,7 @@ import { scaleDimension } from './calculator.js';
 import { UNITS, requireUnit } from './units.js';
 import { formatNumber, formatFeetInches } from './formatter.js';
 
-export const FURNITURE_DATABASE = Object.freeze([
+export const LEGACY_FURNITURE_DATABASE = Object.freeze([
   // =========================================================================
   // 1. LIVING ROOM & ENTERTAINMENT (23 Items)
   // =========================================================================
@@ -270,6 +272,9 @@ export const FURNITURE_DATABASE = Object.freeze([
   { id: 'ev-charger-wall', name: 'Wall-Mounted EV Charger (40×20)', category: 'commercial', wCm: 40, dCm: 20, hCm: 60, desc: 'Parking bay wall-pedestal charging unit', type: 'appliance' }
 ]);
 
+export const FURNITURE_DATABASE = Object.freeze([...LEGACY_FURNITURE_DATABASE, ...OBJECT_LIBRARY_PACKS.filter(item => !LEGACY_FURNITURE_DATABASE.some(old => old.id === item.id))].map(classifyFurniture));
+
+
 /**
  * Calculate scaled dimensions for a furniture piece using the central calculator engine
  */
@@ -303,26 +308,8 @@ export function getScaledFurnitureDimensions(item, ratio = 50, paperUnitKey = 'c
   // Paper Footprint Area
   const paperArea = wRes.value * dRes.value;
 
-  // Classification Tag
-  let standardTag = 'Architectural Standard (Neufert)';
-  let dimensionType = 'Typical Architectural Standard';
-  
-  if (item.id.includes('ada') || (item.desc && item.desc.toLowerCase().includes('ada')) || item.name.toLowerCase().includes('ada')) {
-    standardTag = 'ADA / Universal Accessible Standard';
-    dimensionType = 'Code Mandated Clearance';
-  } else if (item.id.includes('bed-') || item.category === 'bedroom') {
-    standardTag = 'Standard Mattress Specification';
-    dimensionType = 'Exact Standard Size';
-  } else if (item.category === 'kitchen' && (item.wCm === 60 || item.wCm === 90 || item.dCm === 60)) {
-    standardTag = 'Modular Millwork Standard (600mm)';
-    dimensionType = 'Modular System Standard';
-  } else if (item.category === 'doors') {
-    standardTag = 'Building Code Opening Standard';
-    dimensionType = 'Clearance & Egress Standard';
-  } else if (item.category === 'living' || item.category === 'dining') {
-    standardTag = 'Typical Residential Furniture Range';
-    dimensionType = 'Typical Dimension (Allow ±5cm)';
-  }
+  const standardTag = item.dimensionSourceType === 'accessibility-guideline' ? 'Accessibility reference (verify local code)' : 'Typical planning reference';
+  const dimensionType = 'Reference dimensions — verify selected product and local requirements';
 
   return {
     item: item,
@@ -350,7 +337,7 @@ export function filterFurnitureCatalog(catalog, searchQuery = '', category = 'al
   const tokens = query.split(/\s+/).filter(t => t.length > 0);
 
   let filtered = catalog.filter(item => {
-    const matchesCategory = category === 'all' || item.category === category;
+    const matchesCategory = category === 'all' || item.category === category || item.legacyCategory === category || `${item.category}/${item.subcategory}` === category;
     if (!matchesCategory) return false;
 
     if (tokens.length === 0) return true;
@@ -365,7 +352,7 @@ export function filterFurnitureCatalog(catalog, searchQuery = '', category = 'al
     const dimH = `${item.hCm || ''}`;
     const dimCombo = `${item.wCm}x${item.dCm} ${item.wCm}*${item.dCm} ${item.wCm}×${item.dCm} ${item.wCm}cm ${item.dCm}cm`;
 
-    const haystack = `${name} ${desc} ${cat} ${type} ${dimW} ${dimD} ${dimH} ${dimCombo}`;
+    const haystack = `${name} ${desc} ${cat} ${item.subcategory || ''} ${(item.tags || []).join(' ')} ${type} ${dimW} ${dimD} ${dimH} ${dimCombo}`;
 
     // Every token must match somewhere in the haystack (multi-word tokenized search)
     return tokens.every(token => {

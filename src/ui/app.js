@@ -1,3 +1,10 @@
+import { createReportsView } from './views/reports.js';
+import { createConceptView } from './views/concept.js';
+import { FURNITURE_CATEGORIES } from '../core/furniture-taxonomy.js';
+import { createFurnitureAsset, furnitureAssetDXF, furnitureAssetSVG } from '../core/furniture-assets.js';
+import { downloadExport } from '../services/export.js';
+import { createDimensionsView } from './views/dimensions.js';
+import { mountWorkflowHelp } from './components/tool-help.js';
 /**
  * Architecture Helping Hand - Main Application UI Controller
  * High-precision, zero-dependency, tactile architectural scaling studio.
@@ -93,6 +100,17 @@ import {
 } from '../core/quick-dimension.js';
 import { createViewRegistry, validateViewContext } from './view-registry.js';
 import { navIcon, commandIcon } from '../core/icons.js';
+// Workspace & tool registry — the single source of truth for navigation
+// (sidebar, landing pages, breadcrumbs, palette nav commands, digit keys).
+import {
+  WORKSPACES,
+  WORKSPACE_ORDER,
+  WORKSPACE_ACTIONS,
+  NAV_TOOLS,
+  NAV_TOOL_LIST,
+  workflowNeighbors,
+  getWorkspace
+} from '../core/workspaces.js';
 import { createConverterView } from './views/converter.js';
 import { createRescalerView } from './views/rescaler.js';
 import { createDetectorView } from './views/detector.js';
@@ -108,16 +126,22 @@ import { createStairsView } from './views/stairs.js';
 import { createRampsView } from './views/ramps.js';
 import { calculateStair, STAIR_REFERENCE_DEFAULTS } from '../core/stairs.js';
 import { calculateRamp, RAMP_REFERENCE_DEFAULTS } from '../core/ramps.js';
-import { createFurnitureEntity } from '../core/entities.js';
 import { createSlopesView } from './views/slopes.js';
 import { createExportCenterView } from './views/export-center.js';
 import { createProjectsView } from './views/projects.js';
-import { createPlanView } from './views/plan.js';
 import { createAiStudioView } from './views/ai-studio.js';
 import { createAiControlCenterView } from './views/ai-control-center.js';
 import { createImportsView } from './views/imports.js';
 import { createSurveyView } from './views/survey.js';
 import { createRequirementsView } from './views/requirements.js';
+// Research workspace (Phase F)
+import { createResearchDashboardView } from './views/research-dashboard.js';
+import { createReferencesLibraryView } from './views/research-library.js';
+import { createStandardsExplorerView } from './views/standards-explorer.js';
+// Site workspace (Phase G)
+import { createSunPathView } from './views/sun-path.js';
+import { createSiteContextView } from './views/site-context.js';
+import { createSiteDashboardView } from './views/site-dashboard.js';
 import { buildScopedFactsPack } from '../ai/context/project-context.js';
 import { createAiHttp } from '../services/ai/http.js';
 import { createTransports } from '../services/ai/transports/index.js';
@@ -399,22 +423,13 @@ export function initializeApp() {
 
     // Application shell (UI state, never project data)
     sidebarCollapsedSections: new Set(),
-
-    // Mode 19: Plan Canvas
-    plan: (() => {
-      const initialDoc = { id: 'doc-1', name: 'Ground Floor', type: '2d', entities: [], viewport: { zoom: 40, offsetX: 60, offsetY: 420 } };
-      return {
-        tool: 'select',
-        grid: 0.5,
-        snap: true,
-        ortho: false,
-        selectedIds: new Set(),
-        furnitureIndex: 0,
-        furnitureRotated: false,
-        activeDocId: 'doc-1',
-        documents: [initialDoc],
-        entities: initialDoc.entities
-      };
+    // Active primary workspace (registry id); drives sidebar expansion,
+    // breadcrumbs, and landing-page context.
+    activeWorkspace: (() => {
+      try {
+        const last = StorageService.getItem('archi_last_workspace');
+        return getWorkspace(last) ? last : 'tools';
+      } catch { return 'tools'; }
     })(),
 
     // Modes 20-21: AI Studio + AI Control Center (services attached at boot)
@@ -472,9 +487,7 @@ export function initializeApp() {
     scratchpadQuickAddBtn: document.getElementById('scratchpad-quick-add-btn'),
     btnScratchConverter: document.getElementById('btn-scratch-converter'),
     stairsSendScratchpadBtn: document.getElementById('stairs-send-scratchpad-btn'),
-    stairsApplyPlanBtn: document.getElementById('stairs-apply-plan-btn'),
     rampsSendScratchpadBtn: document.getElementById('ramps-send-scratchpad-btn'),
-    rampsApplyPlanBtn: document.getElementById('ramps-apply-plan-btn'),
     slopesSendScratchpadBtn: document.getElementById('slopes-send-scratchpad-btn'),
     chainsSendScratchpadBtn: document.getElementById('chains-send-scratchpad-btn'),
     toastContainer: document.getElementById('toast-container'),
@@ -572,7 +585,6 @@ export function initializeApp() {
     customFurnUnit: document.getElementById('custom-furn-unit'),
     btnRunCustomFurn: document.getElementById('btn-run-custom-furn'),
     customFurnResult: document.getElementById('custom-furn-result'),
-    btnPlannerCustomFurn: document.getElementById('btn-planner-custom-furn'),
     btnCopyCustomFurn: document.getElementById('btn-copy-custom-furn'),
     btnSendCustomFurn: document.getElementById('btn-send-custom-furn'),
 
@@ -1054,69 +1066,6 @@ export function initializeApp() {
     btnProjectSnapshot: document.getElementById('btn-project-snapshot'),
     projectsSnapshotsList: document.getElementById('projects-snapshots-list'),
 
-    // Mode 19: Plan Canvas Elements
-    planToolSelect: document.getElementById('plan-tool-select'),
-    planFurnitureGroup: document.getElementById('plan-furniture-group'),
-    planFurnitureSelect: document.getElementById('plan-furniture-select'),
-    planGridSelect: document.getElementById('plan-grid-select'),
-    btnPlanUndo: document.getElementById('btn-plan-undo'),
-    btnPlanRedo: document.getElementById('btn-plan-redo'),
-    btnPlanDelete: document.getElementById('btn-plan-delete'),
-    btnPlanClear: document.getElementById('btn-plan-clear'),
-    planErrorMsg: document.getElementById('plan-error-msg'),
-    planEntityList: document.getElementById('plan-entity-list'),
-    tabPlanEntities: document.getElementById('tab-plan-entities'),
-    tabPlanLayers: document.getElementById('tab-plan-layers'),
-    tabPlanSchedule: document.getElementById('tab-plan-schedule'),
-    planEntitiesView: document.getElementById('plan-entities-view'),
-    planLayersView: document.getElementById('plan-layers-view'),
-    planScheduleView: document.getElementById('plan-schedule-view'),
-    planLayerList: document.getElementById('plan-layer-list'),
-    planLayersCount: document.getElementById('plan-layers-count'),
-    planScheduleList: document.getElementById('plan-schedule-list'),
-    planScheduleCount: document.getElementById('plan-schedule-count'),
-    planScheduleTotals: document.getElementById('plan-schedule-totals'),
-    btnAutoTagAll: document.getElementById('btn-auto-tag-all'),
-    btnAddLayer: document.getElementById('btn-add-layer'),
-    btnCopyScheduleCsv: document.getElementById('btn-copy-schedule-csv'),
-    planResultPanel: document.getElementById('plan-result-panel'),
-    planStateBadge: document.getElementById('plan-state-badge'),
-    planStatusBadge: document.getElementById('plan-status-badge'),
-    planSvg: document.getElementById('plan-svg'),
-    planSvgWrap: document.getElementById('plan-svg-wrap'),
-    planDocTabBar: document.getElementById('plan-doc-tab-bar'),
-    planDocTabsList: document.getElementById('plan-doc-tabs-list'),
-    btnPlanNewDoc: document.getElementById('btn-plan-new-doc'),
-    planNumericHud: document.getElementById('plan-numeric-hud'),
-    hudInputLength: document.getElementById('hud-input-length'),
-    hudInputAngle: document.getElementById('hud-input-angle'),
-    btnPlanZoomIn: document.getElementById('btn-plan-zoom-in'),
-    btnPlanZoomOut: document.getElementById('btn-plan-zoom-out'),
-    btnPlanFit: document.getElementById('btn-plan-fit'),
-    btnPlanZoom100: document.getElementById('btn-plan-zoom-100'),
-    btnPlanZoom50: document.getElementById('btn-plan-zoom-50'),
-    btnPlanZoom200: document.getElementById('btn-plan-zoom-200'),
-    btnPlanSave: document.getElementById('btn-plan-save'),
-    btnPlanExportSvg: document.getElementById('btn-plan-export-svg'),
-    btnPlanExportDxf: document.getElementById('btn-plan-export-dxf'),
-    planPropertiesPanel: document.getElementById('plan-properties-panel'),
-    planPropContent: document.getElementById('plan-prop-content'),
-    planPropTypeBadge: document.getElementById('plan-prop-type-badge'),
-    planEntitiesCount: document.getElementById('plan-entities-count'),
-    planModeLabel: document.getElementById('plan-mode-label'),
-    planToolPalette: document.getElementById('plan-tool-palette'),
-    planContextualToolbar: document.getElementById('plan-contextual-toolbar'),
-    planStatusBar: document.getElementById('plan-status-bar'),
-    statusGridBtn: document.getElementById('status-grid-btn'),
-    statusGridVal: document.getElementById('status-grid-val'),
-    statusSnapBtn: document.getElementById('status-snap-btn'),
-    statusSnapVal: document.getElementById('status-snap-val'),
-    statusZoomVal: document.getElementById('status-zoom-val'),
-    statusCoordsVal: document.getElementById('status-coords-val'),
-    statusSelVal: document.getElementById('status-sel-val'),
-    statusAiBadge: document.getElementById('status-ai-badge'),
-    shortcutsSearchInput: document.getElementById('shortcuts-search-input'),
-
     // Mode 20: AI Studio Elements
     aiJobSelect: document.getElementById('ai-job-select'),
     aiImageGroup: document.getElementById('ai-image-group'),
@@ -1168,7 +1117,6 @@ export function initializeApp() {
     importsFileInput: document.getElementById('imports-file-input'),
     importsTextBox: document.getElementById('imports-text-box'),
     importsRunBtn: document.getElementById('btn-run-imports'),
-    importsSendPlanBtn: document.getElementById('btn-imports-send-plan'),
     importsErrorMsg: document.getElementById('imports-error-msg'),
     importsReportBox: document.getElementById('imports-report-box'),
     importsEntityList: document.getElementById('imports-entity-list'),
@@ -1202,7 +1150,17 @@ export function initializeApp() {
     surveyMeasP4y: document.getElementById('survey-meas-p4y'),
     surveyMeasureDistanceBtn: document.getElementById('btn-survey-measure-distance'),
     surveyMeasureChainBtn: document.getElementById('btn-survey-measure-chain'),
-    surveyMeasureAreaBtn: document.getElementById('btn-survey-measure-area')
+    surveyMeasureAreaBtn: document.getElementById('btn-survey-measure-area'),
+
+    // Research workspace (Phase F) view hosts
+    researchDashboard: document.getElementById('research-dashboard'),
+    researchLibrary: document.getElementById('research-library'),
+    standardsExplorer: document.getElementById('standards-explorer'),
+
+    // Site workspace (Phase G) view hosts
+    siteDashboard: document.getElementById('site-dashboard'),
+    sunPathTool: document.getElementById('sun-path-tool'),
+    siteContext: document.getElementById('site-context')
   };
 
   // ---------------------------------------------------------------------------
@@ -1332,94 +1290,160 @@ export function initializeApp() {
   }
 
   // ---------------------------------------------------------------------------
-  // 2b. Navigation Catalog & Sidebar (single source of truth for the shell)
+  // 2b. Navigation (registry-driven, single source of truth: core/workspaces.js)
   // ---------------------------------------------------------------------------
-  // Every implemented screen appears exactly once here. The sidebar renders
-  // from this catalog, the sidebar search filters it, and the command
-  // palette derives its Navigation commands from it — no duplicate lists.
-  const NAV_CATALOG = [
-    { id: 'home', section: 'Home', label: 'Home', desc: 'Project snapshot, quick tools, orientation', icon: '⌂', keywords: ['home', 'start', 'dashboard', 'overview'] },
-    { id: 'converter', section: 'Scale', label: 'Scale Converter', desc: 'Paper ⇄ real world at any scale', icon: '📐', shortcut: '1', keywords: ['scale', 'convert', 'drawing', 'real', 'paper', 'ratio'] },
-    { id: 'rescale', section: 'Scale', label: 'Rescaler', desc: 'Move a measurement from one scale to another', icon: '🔄', shortcut: '2', keywords: ['rescale', 'sheet', 'transfer', 'a to b'] },
-    { id: 'detector', section: 'Scale', label: 'Scale Finder', desc: 'Detect an unknown scale from paper + real sizes', icon: '🔍', shortcut: '3', keywords: ['detect', 'find', 'unknown', 'ratio'] },
-    { id: 'area_volume', section: 'Scale', label: 'Area & Volume', desc: 'Scale areas (S²) and volumes (S³)', icon: '📦', shortcut: '4', keywords: ['area', 'volume', 'square', 'cubic', 'm2', 'm3'] },
-    { id: 'workspace', section: 'Dimensions', label: 'Dimension Workspace', desc: 'Measurement schedule with live totals', icon: '📋', shortcut: '7', keywords: ['schedule', 'scratchpad', 'totals', 'segments', 'batch'] },
-    { id: 'expression', section: 'Dimensions', label: 'Dimension Expression', desc: 'Mixed-unit architectural math', icon: '🧮', shortcut: '8', keywords: ['expression', 'math', 'arithmetic', 'sum', 'evaluate'] },
-    { id: 'multiscale', section: 'Dimensions', label: 'Multi-Scale', desc: 'One dimension compared across many scales', icon: '📊', shortcut: '9', keywords: ['multi', 'compare', 'scales', 'paper fit'] },
-    { id: 'chains', section: 'Dimensions', label: 'Dimension Chains', desc: 'Running sequences with cumulative coordinates', icon: '🔗', shortcut: '0', keywords: ['chain', 'sequence', 'cumulative', 'offsets', 'string'] },
-    { id: 'cad_clipboard', section: 'CAD', label: 'CAD Clipboard', desc: 'CAD-ready copy formats for major tools', icon: '📌', shortcut: 'C', keywords: ['cad', 'clipboard', 'autocad', 'rhino', 'revit', 'sketchup'] },
-    { id: 'batch_cad', section: 'CAD', label: 'Batch CAD', desc: 'Bulk conversion for schedules and lists', icon: '⚡', shortcut: 'B', keywords: ['batch', 'bulk', 'table', 'schedule'] },
-    { id: 'cad_handoff', section: 'CAD', label: 'CAD Handoff', desc: 'Target-specific payloads for Rhino / AutoCAD / SketchUp', icon: '🚀', keywords: ['handoff', 'send', 'rhino', 'autocad', 'sketchup', 'paste'] },
-    { id: 'stairs', section: 'Architecture', label: 'Stair Calculator', desc: 'Risers, goings, Blondel proportion, angle', icon: '🪜', keywords: ['stair', 'riser', 'tread', 'going', 'blondel', 'flight'] },
-    { id: 'ramps', section: 'Architecture', label: 'Ramp Calculator', desc: 'Accessible ramp geometry and targets', icon: '♿', keywords: ['ramp', 'accessibility', '1:12', 'slope'] },
-    { id: 'slopes', section: 'Architecture', label: 'Slope Analyzer', desc: 'General rise/run grading analysis', icon: '📉', keywords: ['slope', 'grade', 'gradient', 'drainage', 'terrain'] },
-    { id: 'furniture', section: 'Space', label: 'Furniture & Clearances', desc: '215 scaled standards with footprints', icon: '🛋️', shortcut: '5', keywords: ['furniture', 'clearance', 'ada', 'sofa', 'bed', 'desk', 'door'] },
-    { id: 'reference', section: 'Space', label: 'Reference Chart', desc: 'Printable scale ruler, benchmarks, tables', icon: '📚', shortcut: '6', keywords: ['reference', 'ruler', 'benchmark', 'print', 'neufert'] },
-    { id: 'projects', section: 'Project', label: 'Projects', desc: 'Library, save, duplicates, snapshots', icon: '🗂', keywords: ['project', 'library', 'snapshot', 'save', 'open', 'duplicate'] },
-    { id: 'requirements', section: 'Project', label: 'Brief & Requirements', desc: 'Project brief, room requirements, adjacency, design intent', keywords: ['brief', 'requirements', 'adjacency', 'rooms', 'program', 'intent'] },
-    { id: 'plan', section: 'Project', label: 'Plan Canvas', desc: '2D plan editor: rooms, walls, furniture', icon: '▭', keywords: ['plan', 'canvas', 'room', 'wall', 'draw', 'layout'] },
-    { id: 'survey', section: 'Project', label: 'Survey Notebook', desc: 'Field measurements, provenance, calibration', icon: '📏', keywords: ['survey', 'measurement', 'calibration', 'provenance', 'site'] },
-    { id: 'imports', section: 'Project', label: 'Importer', desc: 'CSV/TSV, DXF, SVG ingestion with review', icon: '📥', keywords: ['import', 'csv', 'tsv', 'dxf', 'svg', 'ingest'] },
-    { id: 'export', section: 'Project', label: 'Export Center', desc: 'JSON, DXF, SVG, CSV, TSV, TXT with preview', icon: '📤', keywords: ['export', 'download', 'json', 'dxf', 'svg', 'csv', 'backup'] },
-    { id: 'ai', section: 'AI', label: 'AI Studio', desc: 'One job, one question, one validated answer', icon: '🤖', keywords: ['ai', 'studio', 'critique', 'tutor', 'jury', 'vision', 'brutal'] },
-    { id: 'ai_settings', section: 'AI', label: 'AI Control Center', desc: 'Providers, keys, model catalog, assignments', icon: '⚙️', keywords: ['ai', 'provider', 'api key', 'gemini', 'glm', 'deepseek', 'model', 'catalog', 'job'] }
-  ];
+  // The sidebar, breadcrumbs, landing pages, palette nav commands, and the
+  // rebindable workspace digit keys all derive from WORKSPACES / NAV_TOOLS.
+  // Adding a tool = one entry in the registry (+ view + icon). Nothing else.
+  const FAVORITE_TOOLS_KEY = 'archi_favorite_tools';
+  const RECENT_TOOLS_KEY = 'archi_recent_tools';
+  const MAX_RECENT_TOOLS = 6;
 
-  const NAV_SECTIONS = ['Home', 'Scale', 'Dimensions', 'CAD', 'Architecture', 'Space', 'Project', 'AI'];
+  function getFavoriteToolIds() {
+    try {
+      const raw = StorageService.getItem(FAVORITE_TOOLS_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr.filter(id => NAV_TOOLS.has(id)) : [];
+    } catch { return []; }
+  }
 
-  const SECTION_ICONS = {
-    Home: '⌂',
-    Scale: '📐',
-    Dimensions: '📋',
-    CAD: '📌',
-    Architecture: '🪜',
-    Space: '🛋️',
-    Project: '🗂',
-    AI: '🤖'
-  };
+  function isFavoriteTool(toolId) {
+    return getFavoriteToolIds().includes(toolId);
+  }
 
-  /** Renders the sidebar nav from NAV_CATALOG, optionally filtered by query. */
+  function toggleFavoriteTool(toolId) {
+    const favs = getFavoriteToolIds();
+    const idx = favs.indexOf(toolId);
+    if (idx === -1) favs.unshift(toolId);
+    else favs.splice(idx, 1);
+    try { StorageService.setItem(FAVORITE_TOOLS_KEY, JSON.stringify(favs)); } catch {}
+    // Keep the command-palette favorites in sync (same concept, one list).
+    try { CommandRegistry.toggleFavorite(`nav-${toolId}`); } catch {}
+  }
+
+  function getRecentToolIds() {
+    try {
+      const raw = StorageService.getItem(RECENT_TOOLS_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr.filter(id => NAV_TOOLS.has(id)).slice(0, MAX_RECENT_TOOLS) : [];
+    } catch { return []; }
+  }
+
+  function recordRecentTool(toolId) {
+    if (!NAV_TOOLS.has(toolId)) return;
+    let recents = getRecentToolIds().filter(id => id !== toolId);
+    recents.unshift(toolId);
+    recents = recents.slice(0, MAX_RECENT_TOOLS);
+    try { StorageService.setItem(RECENT_TOOLS_KEY, JSON.stringify(recents)); } catch {}
+  }
+
+  /** Renders the sidebar: Home + the 9 primary workspaces, then the active
+   *  workspace's tools (secondary nav appears only when relevant), then
+   *  Favorites/Recent. Collapsed rail mode shows icons with tooltips. */
   function renderSidebar(query = '') {
     const nav = document.getElementById('sidebar-nav');
     if (!nav) return;
     const q = (query || '').trim().toLowerCase();
     const tokens = q.split(/\s+/).filter(Boolean);
+    const searching = tokens.length > 0;
 
-    const matches = item => {
-      if (!q) return true;
-      const hay = [
-        item.label, item.desc, item.section, (item.keywords || []).join(' '),
-        (item.shortcut ? String(item.shortcut) : '')
-      ].join(' ').toLowerCase();
+    const matchTool = tool => {
+      if (!searching) return true;
+      const hay = [tool.label, tool.desc || '', tool.workspaceLabel,
+        ...(tool.keywords || []), ...(tool.aliases || [])].join(' ').toLowerCase();
+      return tokens.every(t => hay.includes(t));
+    };
+    const matchWorkspace = ws => {
+      if (!searching) return true;
+      const hay = [ws.label, ws.mission, ...(ws.planned || []).map(p => p.label),
+        ...ws.tools.flatMap(t => [t.label, t.desc || '', ...(t.keywords || []), ...(t.aliases || [])])]
+        .join(' ').toLowerCase();
       return tokens.every(t => hay.includes(t));
     };
 
+    const activeTool = (state.currentMode !== 'home' && state.currentMode !== 'landing')
+      ? NAV_TOOLS.get(state.currentMode) : null;
+    const activeWorkspaceId = activeTool
+      ? activeTool.workspace
+      : (state.currentMode === 'landing' ? state.activeWorkspace : (state.currentMode === 'home' ? null : state.currentMode));
+
     let html = '';
-    for (const section of NAV_SECTIONS) {
-      const items = NAV_CATALOG.filter(i => i.section === section && matches(i));
-      if (items.length === 0) continue;
-      const collapsed = state.sidebarCollapsedSections.has(section) && !q;
+
+    // --- Home ---
+    if (!searching || 'home overview dashboard start'.includes(q)) {
       html += `
-        <div class="sidebar-section ${collapsed ? 'collapsed' : ''}" data-section="${section}">
-          <button type="button" class="sidebar-section-header" data-section="${section}" aria-expanded="${collapsed ? 'false' : 'true'}">
-            <span class="sidebar-section-title">${section}</span>
-            <span class="sidebar-section-caret" aria-hidden="true">${collapsed ? '▸' : '▾'}</span>
-          </button>
-          <div class="sidebar-section-body">
-            ${items.map(item => `
-              <button type="button" class="sidebar-item ${state.currentMode === item.id ? 'active' : ''}" data-mode="${item.id}"
-                title="${item.desc}" aria-label="${item.label} — ${item.desc}">
-                <span class="sidebar-item-icon" aria-hidden="true">${navIcon(item.id, { size: 18 })}</span>
-                <span class="sidebar-item-text">
-                  <span class="sidebar-item-label">${item.label}</span>
-                  <span class="sidebar-item-desc">${item.desc}</span>
-                </span>
-                ${item.shortcut ? `<span class="sidebar-item-key" aria-hidden="true">${item.shortcut}</span>` : ''}
-              </button>
-            `).join('')}
-          </div>
-        </div>
+        <button type="button" class="sidebar-workspace ${state.currentMode === 'home' ? 'active' : ''}" data-workspace="home" title="Studio overview, project snapshot, workflow">
+          <span class="sidebar-ws-icon" aria-hidden="true">${navIcon('home', { size: 18 })}</span>
+          <span class="sidebar-ws-text">Home</span>
+          <span class="sidebar-ws-key" aria-hidden="true">0</span>
+        </button>
       `;
+    }
+
+    // --- The 9 primary workspaces ---
+    for (const ws of WORKSPACES) {
+      if (!matchWorkspace(ws)) continue;
+      const wsActive = activeWorkspaceId === ws.id;
+      const hasActiveTool = wsActive && activeTool;
+      html += `
+        <button type="button" class="sidebar-workspace ${wsActive ? 'active' : ''}" data-workspace="${ws.id}"
+          title="${ws.mission}" aria-label="${ws.label} workspace">
+          <span class="sidebar-ws-icon" aria-hidden="true">${navIcon('ws_' + ws.id, { size: 18 })}</span>
+          <span class="sidebar-ws-text">${ws.label}</span>
+          <span class="sidebar-ws-key" aria-hidden="true">${ws.number}</span>
+        </button>
+      `;
+
+      // Secondary tools of the ACTIVE workspace only (plus search hits).
+      if (searching) {
+        const hits = ws.tools.filter(matchTool);
+        if (hits.length > 0) {
+          html += `<div class="sidebar-tool-group" role="group" aria-label="${ws.label} tools">` +
+            hits.map(tool => `
+              <button type="button" class="sidebar-tool ${state.currentMode === tool.toolId ? 'active' : ''}" data-mode="${tool.toolId}"
+                title="${tool.desc}" aria-label="${tool.label}">
+                <span class="sidebar-tool-icon" aria-hidden="true">${navIcon(tool.toolId, { size: 15 })}</span>
+                <span class="sidebar-tool-text">${tool.label}</span>
+              </button>
+            `).join('') + '</div>';
+        }
+      } else if (wsActive) {
+        html += `<div class="sidebar-tool-group" role="group" aria-label="${ws.label} tools">` +
+          ws.tools.map(tool => `
+            <button type="button" class="sidebar-tool ${state.currentMode === tool.toolId ? 'active' : ''}" data-mode="${tool.toolId}"
+              title="${tool.desc}" aria-label="${tool.label}">
+              <span class="sidebar-tool-icon" aria-hidden="true">${navIcon(tool.toolId, { size: 15 })}</span>
+              <span class="sidebar-tool-text">${tool.label}</span>
+            </button>
+          `).join('') + '</div>';
+      }
+    }
+
+    if (!searching) {
+      // --- Favorites (tool-level, shared with the palette) ---
+      const favs = getFavoriteToolIds().map(id => NAV_TOOLS.get(id)).filter(Boolean);
+      if (favs.length > 0) {
+        html += `<div class="sidebar-sub-header" aria-hidden="true">Favorites</div>` +
+          favs.map(tool => `
+            <button type="button" class="sidebar-tool ${state.currentMode === tool.toolId ? 'active' : ''}" data-mode="${tool.toolId}"
+              title="${tool.workspaceLabel} — ${tool.desc}" aria-label="${tool.label}">
+              <span class="sidebar-tool-icon" aria-hidden="true">${navIcon(tool.toolId, { size: 15 })}</span>
+              <span class="sidebar-tool-text">${tool.label}</span>
+            </button>
+          `).join('');
+      }
+      // --- Recently used ---
+      const recents = getRecentToolIds().map(id => NAV_TOOLS.get(id)).filter(Boolean);
+      if (recents.length > 0) {
+        html += `<div class="sidebar-sub-header" aria-hidden="true">Recent</div>` +
+          recents.map(tool => `
+            <button type="button" class="sidebar-tool ${state.currentMode === tool.toolId ? 'active' : ''}" data-mode="${tool.toolId}"
+              title="${tool.workspaceLabel} — ${tool.desc}" aria-label="${tool.label}">
+              <span class="sidebar-tool-icon" aria-hidden="true">${navIcon(tool.toolId, { size: 15 })}</span>
+              <span class="sidebar-tool-text">${tool.label}</span>
+            </button>
+          `).join('');
+      }
     }
 
     if (!html) {
@@ -1427,16 +1451,16 @@ export function initializeApp() {
     }
     nav.innerHTML = html;
 
-    // Wire section collapse + item activation
-    nav.querySelectorAll('.sidebar-section-header').forEach(btn => {
+    // Wire activation
+    nav.querySelectorAll('.sidebar-workspace').forEach(btn => {
       btn.addEventListener('click', () => {
-        const sec = btn.dataset.section;
-        if (state.sidebarCollapsedSections.has(sec)) state.sidebarCollapsedSections.delete(sec);
-        else state.sidebarCollapsedSections.add(sec);
-        renderSidebar(query);
+        const ws = btn.dataset.workspace;
+        if (ws === 'home') switchMode('home');
+        else openWorkspace(ws);
+        closeSidebarDrawer();
       });
     });
-    nav.querySelectorAll('.sidebar-item').forEach(btn => {
+    nav.querySelectorAll('.sidebar-tool').forEach(btn => {
       btn.addEventListener('click', () => {
         switchMode(btn.dataset.mode);
         closeSidebarDrawer();
@@ -1444,237 +1468,273 @@ export function initializeApp() {
     });
   }
 
-  /** Closes all open architectural menu bar dropdowns. */
-  function closeAllMenuBarDropdowns() {
-    if (!dom.appMenubar) return;
-    dom.appMenubar.querySelectorAll('.menubar-dropdown-wrap.open').forEach(wrap => {
-      wrap.classList.remove('open');
-      const trigger = wrap.querySelector('.menubar-trigger-btn');
-      if (trigger) trigger.setAttribute('aria-expanded', 'false');
-    });
+  // ---------------------------------------------------------------------------
+  // Workspace landing pages + workspace-level navigation entry points
+  // ---------------------------------------------------------------------------
+  /** Opens a primary workspace: remembers it, renders its landing page. */
+  function openWorkspace(workspaceId) {
+    workspaceId = ({ research: 'project', site: 'project', concept: 'project', dimensions: 'tools', architecture: 'tools', space: 'tools' })[workspaceId] || workspaceId;
+    const ws = getWorkspace(workspaceId);
+    if (!ws) {
+      showToast(`Unknown workspace "${workspaceId}"`, 'warning');
+      return;
+    }
+    state.activeWorkspace = ws.id;
+    try { StorageService.setItem('archi_last_workspace', ws.id); } catch {}
+    closeTopFileMenu();
+    switchMode('landing');
+    renderLanding(ws);
   }
 
-  /** Renders the horizontal Architectural Menu Bar ribbon across all sections. */
-  function renderMenuBar() {
-    const container = dom.appMenubar;
-    if (!container) return;
+  /** Renders the active workspace's landing page into #landing-content. */
+  function renderLanding(ws) {
+    const host = document.getElementById('landing-content');
+    if (!host || !ws) return;
+    const neighbors = workflowNeighbors(ws.id);
+    const actions = WORKSPACE_ACTIONS[ws.id] || [];
+    const favs = new Set(getFavoriteToolIds());
+    const recents = getRecentToolIds().map(id => NAV_TOOLS.get(id)).filter(Boolean);
 
-    let html = '';
-    // Home button (direct link)
-    const isHomeActive = state.currentMode === 'home';
-    html += `
-      <button type="button" class="menubar-item ${isHomeActive ? 'active' : ''}" data-mode="home" title="Studio overview and snapshot">
-        <span class="menubar-icon" aria-hidden="true">${SECTION_ICONS.Home || '⌂'}</span>
-        <span class="menubar-label">Home</span>
-      </button>
+    let html = `
+      <header class="landing-hero">
+        <span class="landing-kicker">Workspace ${ws.number}</span>
+        <h2 class="landing-title" id="landing-title">${ws.label}</h2>
+        <p class="landing-mission">${ws.mission}</p>
+      </header>
+      <div class="landing-grid">
     `;
 
-    // FILE menu — classic app commands (New/Save/Export/Shortcuts), always available
-    html += `
-      <div class="menubar-dropdown-wrap" data-section="File">
-        <button type="button" class="menubar-trigger-btn" aria-haspopup="true" aria-expanded="false" data-section="File" title="File">File ▾</button>
-        <div class="menubar-dropdown" role="menu">
-          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="new_tab" title="New drawing tab in the Plan Canvas">🆕 New Drawing Tab</button>
-          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="save" title="Save the plan into the project store (Ctrl+S)">💾 Save to Project</button>
-          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="open_projects" title="Open the Projects library">🗂 Open Project…</button>
-          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="export" title="Export Center: JSON · DXF · SVG · CSV">📤 Export…</button>
-          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="export_svg" title="Download the current plan as SVG">🖼 Export Plan SVG</button>
-          <button type="button" class="menubar-dropdown-item" role="menuitem" data-file-cmd="shortcuts" title="Keyboard shortcuts (F1)">⌨ Shortcuts…</button>
-        </div>
-      </div>
-    `;
-
-    // Dropdown groups for each architectural section
-    for (const section of NAV_SECTIONS) {
-      if (section === 'Home') continue;
-      const items = NAV_CATALOG.filter(i => i.section === section);
-      if (items.length === 0) continue;
-
-      const isActiveSection = items.some(i => i.id === state.currentMode);
-      const isRightAlign = section === 'Project' || section === 'AI';
-
-      if (section === 'AI') {
-        html += `
-          <div class="menubar-dropdown-wrap menubar-ai-dropdown-wrap ${isActiveSection ? 'is-active-section' : ''}" data-section="AI">
-            <button type="button" class="menubar-trigger-btn ai-tab-btn ${isActiveSection ? 'active' : ''}" id="top-menubar-ai-btn" aria-haspopup="true" aria-expanded="false" data-section="AI" title="Omnipresent AI Co-Pilot (Ctrl+Space)">
-              <span class="menubar-icon" aria-hidden="true">✨</span>
-              <span class="menubar-label">AI Assistant</span>
-              <span class="menubar-chevron" aria-hidden="true">▾</span>
-            </button>
-            <div class="menubar-dropdown-menu align-right" role="menu" aria-label="AI Tools">
-              <div class="menubar-menu-header">AI Co-Pilot &amp; Hub</div>
-              <button type="button" class="menubar-dropdown-item" id="menu-open-ai-drawer" role="menuitem" title="Slide-down AI drawer over active viewport">
-                <span class="menubar-item-icon" aria-hidden="true">✨</span>
-                <span class="menubar-item-text">
-                  <span class="menubar-item-title-row">
-                    <span class="menubar-item-label">AI Dropdown Drawer</span>
-                    <span class="menubar-item-kbd">Ctrl+Space</span>
-                  </span>
-                  <span class="menubar-item-desc">Ask queries &amp; generate layouts over active viewport</span>
-                </span>
-              </button>
-              ${items.map(item => `
-                <button type="button" class="menubar-dropdown-item ${state.currentMode === item.id ? 'active' : ''}" data-mode="${item.id}" role="menuitem" title="${item.desc}">
-                  <span class="menubar-item-icon" aria-hidden="true">${navIcon(item.id, { size: 15 })}</span>
-                  <span class="menubar-item-text">
-                    <span class="menubar-item-title-row">
-                      <span class="menubar-item-label">${item.label}</span>
-                      ${item.shortcut ? `<span class="menubar-item-kbd">${item.shortcut}</span>` : ''}
-                    </span>
-                    <span class="menubar-item-desc">${item.desc}</span>
-                  </span>
-                </button>
-              `).join('')}
-            </div>
-          </div>
-        `;
-        continue;
-      }
-
+    // Tools (live views only)
+    if (ws.tools.length > 0) {
       html += `
-        <div class="menubar-dropdown-wrap ${isActiveSection ? 'is-active-section' : ''}" data-section="${section}">
-          <button type="button" class="menubar-trigger-btn ${isActiveSection ? 'active' : ''}" aria-haspopup="true" aria-expanded="false" data-section="${section}" title="${section} Studio Tools">
-            <span class="menubar-icon" aria-hidden="true">${SECTION_ICONS[section] || '📐'}</span>
-            <span class="menubar-label">${section}</span>
-            <span class="menubar-chevron" aria-hidden="true">▾</span>
-          </button>
-          <div class="menubar-dropdown-menu ${isRightAlign ? 'align-right' : ''}" role="menu" aria-label="${section} Tools">
-            <div class="menubar-menu-header">${section} Tools</div>
-            ${items.map(item => `
-              <button type="button" class="menubar-dropdown-item ${state.currentMode === item.id ? 'active' : ''}" data-mode="${item.id}" role="menuitem" title="${item.desc}">
-                <span class="menubar-item-icon" aria-hidden="true">${navIcon(item.id, { size: 15 })}</span>
-                <span class="menubar-item-text">
-                  <span class="menubar-item-title-row">
-                    <span class="menubar-item-label">${item.label}</span>
-                    ${item.shortcut ? `<span class="menubar-item-kbd">${item.shortcut}</span>` : ''}
-                  </span>
-                  <span class="menubar-item-desc">${item.desc}</span>
+        <section class="landing-card landing-tools" aria-label="${ws.label} tools">
+          <div class="result-header"><span class="result-label">TOOLS</span></div>
+          <div class="landing-tool-grid">
+            ${ws.tools.map(tool => `
+              <button type="button" class="landing-tool-tile" data-mode="${tool.toolId}">
+                <span class="landing-tool-icon" aria-hidden="true">${navIcon(tool.toolId, { size: 22 })}</span>
+                <span class="landing-tool-body">
+                  <strong class="landing-tool-label">${tool.label}</strong>
+                  <span class="landing-tool-desc">${tool.desc}</span>
                 </span>
+                <span class="landing-tool-star ${favs.has(tool.toolId) ? 'is-fav' : ''}" data-fav="${tool.toolId}"
+                  role="button" title="${favs.has(tool.toolId) ? 'Remove from favorites' : 'Add to favorites'}"
+                  aria-label="Toggle favorite">${favs.has(tool.toolId) ? '★' : '☆'}</span>
               </button>
             `).join('')}
           </div>
-        </div>
+        </section>
+      `;
+    } else {
+      html += `
+        <section class="landing-card landing-tools" aria-label="Foundation ready">
+          <div class="result-header"><span class="result-label">FOUNDATION READY</span></div>
+          <p class="landing-foundation-note">This workspace is part of the navigation foundation (Phase A). Its dedicated tools arrive in a later phase — listed honestly below; nothing is faked.</p>
+        </section>
       `;
     }
 
-    container.innerHTML = html;
-
-    // Direct mode buttons
-    container.querySelectorAll('.menubar-item[data-mode]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        closeAllMenuBarDropdowns();
-        switchMode(btn.dataset.mode);
-      });
-    });
-
-    // Top AI Tab Button direct drawer toggle
-    const topAiBtn = container.querySelector('#top-menubar-ai-btn');
-    if (topAiBtn) {
-      topAiBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        closeAllMenuBarDropdowns();
-        if (window.__ahhAiDrawer && typeof window.__ahhAiDrawer.toggle === 'function') {
-          window.__ahhAiDrawer.toggle();
-        }
-      });
+    // Quick actions
+    if (actions.length > 0) {
+      html += `
+        <section class="landing-card landing-actions" aria-label="Quick actions">
+          <div class="result-header"><span class="result-label">QUICK ACTIONS</span></div>
+          <div class="landing-action-row">
+            ${actions.map(a => `<button type="button" class="result-action-btn" data-mode="${a.handler}">${a.label}</button>`).join('')}
+          </div>
+        </section>
+      `;
     }
 
-    container.querySelector('#menu-open-ai-drawer')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      closeAllMenuBarDropdowns();
-      if (window.__ahhAiDrawer && typeof window.__ahhAiDrawer.toggle === 'function') {
-        window.__ahhAiDrawer.toggle(true);
-      }
+    // Recent tools within this workspace
+    const wsRecent = recents.filter(t => t.workspace === ws.id);
+    if (wsRecent.length > 0) {
+      html += `
+        <section class="landing-card landing-recent" aria-label="Recent in this workspace">
+          <div class="result-header"><span class="result-label">RECENT HERE</span></div>
+          <div class="landing-action-row">
+            ${wsRecent.map(t => `<button type="button" class="result-action-btn" data-mode="${t.toolId}">${t.label}</button>`).join('')}
+          </div>
+        </section>
+      `;
+    }
+
+    // Planned tools — honest, clearly phased, not clickable features
+    if (ws.planned && ws.planned.length > 0) {
+      html += `
+        <section class="landing-card landing-planned" aria-label="Planned tools">
+          <div class="result-header"><span class="result-label">COMING IN LATER PHASES</span></div>
+          <ul class="landing-planned-list">
+            ${ws.planned.map(p => `<li><span class="landing-planned-label">${p.label}</span><span class="landing-phase-badge">Phase ${p.phase}</span></li>`).join('')}
+          </ul>
+        </section>
+      `;
+    }
+
+    // Workflow position guidance (optional, not a wizard)
+    html += `
+      <section class="landing-card landing-flow" aria-label="Workflow position">
+        <div class="result-header"><span class="result-label">STUDIO WORKFLOW</span></div>
+        <div class="landing-flow-row">
+          ${neighbors.prev ? `<button type="button" class="landing-flow-btn" data-workspace="${neighbors.prev.id}" title="${neighbors.prev.mission}">← ${neighbors.prev.label}</button>` : '<span class="landing-flow-end">Workflow start</span>'}
+          <span class="landing-flow-here">${ws.label}</span>
+          ${neighbors.next ? `<button type="button" class="landing-flow-btn" data-workspace="${neighbors.next.id}" title="${neighbors.next.mission}">${neighbors.next.label} →</button>` : '<span class="landing-flow-end">Workflow end</span>'}
+        </div>
+      </section>
+    </div>
+    `;
+
+    host.innerHTML = html;
+
+    // Wiring
+    host.querySelectorAll('.landing-tool-tile').forEach(tile => {
+      tile.addEventListener('click', (e) => {
+        if (e.target.closest('.landing-tool-star')) return;
+        switchMode(tile.dataset.mode);
+      });
+    });
+    host.querySelectorAll('.landing-tool-star').forEach(star => {
+      star.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleFavoriteTool(star.dataset.fav);
+        renderLanding(ws);
+        renderSidebar(sidebarSearchBoxValue());
+      });
+    });
+    host.querySelectorAll('.result-action-btn[data-mode]').forEach(btn => {
+      btn.addEventListener('click', () => switchMode(btn.dataset.mode));
+    });
+    host.querySelectorAll('[data-workspace]').forEach(btn => {
+      btn.addEventListener('click', () => openWorkspace(btn.dataset.workspace));
+    });
+  }
+
+  /** Current value of the sidebar search box ('' when absent). */
+  function sidebarSearchBoxValue() {
+    const el = document.getElementById('sidebar-search');
+    return el ? el.value : '';
+  }
+
+  /** Highlights the active workspace/tool in the sidebar and syncs breadcrumbs. */
+  function syncNavigationActive() {
+    const activeTool = state.currentMode !== 'home' && state.currentMode !== 'landing'
+      ? NAV_TOOLS.get(state.currentMode) : null;
+    const activeWsId = activeTool ? activeTool.workspace : state.activeWorkspace;
+
+    document.querySelectorAll('.sidebar-workspace').forEach(btn => {
+      const isWsActive = activeTool
+        ? btn.dataset.workspace === activeWsId
+        : (btn.dataset.workspace === (state.currentMode === 'home' ? 'home' : activeWsId));
+      btn.classList.toggle('active', isWsActive);
+    });
+    document.querySelectorAll('.sidebar-tool').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === state.currentMode);
     });
 
-    // Dropdown toggles
-    container.querySelectorAll('.menubar-dropdown-wrap').forEach(wrap => {
-      const trigger = wrap.querySelector('.menubar-trigger-btn');
-      if (!trigger) return;
+    // Breadcrumb: Helping Hand / Workspace / Tool
+    const rootEl = document.getElementById('topbar-crumb-workspace');
+    const toolEl = document.getElementById('topbar-crumb-tool');
+    if (toolEl) {
+      if (state.currentMode === 'home') {
+        if (rootEl) rootEl.hidden = true;
+        toolEl.textContent = 'Home';
+      } else if (state.currentMode === 'landing') {
+        const ws = getWorkspace(state.activeWorkspace);
+        if (rootEl) { rootEl.textContent = ws ? ws.label : ''; rootEl.hidden = !ws; }
+        toolEl.textContent = 'Overview';
+      } else {
+        const tool = activeTool || NAV_TOOLS.get(state.currentMode);
+        const ws = tool ? getWorkspace(tool.workspace) : null;
+        if (rootEl) { rootEl.textContent = ws ? ws.label : ''; rootEl.hidden = !ws; }
+        toolEl.textContent = tool ? tool.label : (ws ? ws.label : '');
+      }
+    }
 
-      trigger.addEventListener('click', (e) => {
+    // Project chip
+    const chipEl = document.getElementById('topbar-project-chip');
+    if (chipEl) {
+      try {
+        const p = projectStore.getProject();
+        const name = p && p.metadata ? (p.metadata.name || 'Untitled Project') : null;
+        chipEl.textContent = name ? `Project: ${name}` : 'No project';
+        chipEl.title = name ? 'Current project — click to open the Project workspace' : 'No active project — click to create one';
+        chipEl.classList.toggle('is-empty', !name);
+      } catch {
+        chipEl.textContent = 'No project';
+        chipEl.classList.add('is-empty');
+      }
+    }
+  }
+
+  const syncSidebarActive = syncNavigationActive;
+
+  // ---------------------------------------------------------------------------
+  // Top-bar File menu (the only classic-app menu left; the old duplicate
+  // menubar ribbon is gone — ONE navigation hierarchy: the sidebar)
+  // ---------------------------------------------------------------------------
+  function closeTopFileMenu() {
+    const wrap = document.getElementById('topbar-file-menu');
+    if (!wrap) return;
+    wrap.classList.remove('open');
+    const t = wrap.querySelector('.topbar-file-trigger');
+    if (t) t.setAttribute('aria-expanded', 'false');
+  }
+
+  function handleTopFileCommand(cmd) {
+    closeTopFileMenu();
+    if (cmd === 'save') {
+      const saved = projectStore.saveProject();
+      showToast(saved.ok ? 'Project saved' : saved.errors?.join('; ') || 'Save failed', saved.ok ? 'success' : 'error');
+    } else if (cmd === 'open_projects') {
+      switchMode('projects');
+    } else if (cmd === 'export') {
+      switchMode('export');
+    } else if (cmd === 'shortcuts') {
+      dom.shortcutsModal?.classList.add('open');
+      dom.modalBackdrop?.classList.add('open');
+      if (dom.shortcutsSearchInput) dom.shortcutsSearchInput.focus();
+    }
+  }
+
+  function wireTopBar() {
+    const wrap = document.getElementById('topbar-file-menu');
+    if (wrap) {
+      const trigger = wrap.querySelector('.topbar-file-trigger');
+      trigger?.addEventListener('click', (e) => {
         e.stopPropagation();
         const wasOpen = wrap.classList.contains('open');
-        closeAllMenuBarDropdowns();
+        closeTopFileMenu();
         if (!wasOpen) {
           wrap.classList.add('open');
           trigger.setAttribute('aria-expanded', 'true');
         }
       });
-    });
-
-    // Dropdown items
-    container.querySelectorAll('.menubar-dropdown-item[data-mode]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        closeAllMenuBarDropdowns();
-        switchMode(btn.dataset.mode);
+      wrap.querySelectorAll('.topbar-file-item[data-file-cmd]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          handleTopFileCommand(btn.dataset.fileCmd);
+        });
       });
+    }
+    document.addEventListener('click', (e) => {
+      if (wrap && !wrap.contains(e.target)) closeTopFileMenu();
     });
-
-    // File menu commands (classic app menu)
-    container.querySelectorAll('.menubar-dropdown-item[data-file-cmd]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+    const aiBtn = document.getElementById('topbar-ai-btn');
+    if (aiBtn) {
+      aiBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        closeAllMenuBarDropdowns();
-        const cmd = btn.dataset.fileCmd;
-        if (cmd === 'new_tab') {
-          switchMode('plan');
-          setTimeout(() => views.callController('plan', 'createDocument', 'Level ' + (Date.now() % 1000), '2d_plan'), 300);
-          showToast('New drawing tab created in the Plan Canvas');
-        } else if (cmd === 'save') {
-          if (state.currentMode === 'plan') views.callController('plan', 'saveToProject');
-          else { switchMode('plan'); setTimeout(() => views.callController('plan', 'saveToProject'), 350); }
-        } else if (cmd === 'open_projects') {
-          switchMode('projects');
-        } else if (cmd === 'export') {
-          switchMode('export');
-        } else if (cmd === 'export_svg') {
-          switchMode('plan');
-          setTimeout(() => views.callController('plan', 'exportPlan', 'svg'), 350);
-        } else if (cmd === 'shortcuts') {
-          dom.shortcutsModal?.classList.add('open');
-          dom.modalBackdrop?.classList.add('open');
-          if (dom.shortcutsSearchInput) dom.shortcutsSearchInput.focus();
+        closeTopFileMenu();
+        if (window.__ahhAiDrawer && typeof window.__ahhAiDrawer.toggle === 'function') {
+          window.__ahhAiDrawer.toggle();
         }
       });
-    });
-  }
-
-  /** Highlights active entry in sidebar, menu bar, and top bar breadcrumb. */
-  function syncNavigationActive() {
-    // 1. Sidebar entries
-    document.querySelectorAll('.sidebar-item').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.mode === state.currentMode);
-    });
-
-    // 2. Menu bar ribbon entries & section active states
-    if (dom.appMenubar) {
-      dom.appMenubar.querySelectorAll('.menubar-item[data-mode]').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.mode === state.currentMode);
-      });
-      dom.appMenubar.querySelectorAll('.menubar-dropdown-wrap').forEach(wrap => {
-        const sec = wrap.dataset.section;
-        const items = NAV_CATALOG.filter(i => i.section === sec);
-        const isActive = items.some(i => i.id === state.currentMode);
-        wrap.classList.toggle('is-active-section', isActive);
-        const trigger = wrap.querySelector('.menubar-trigger-btn');
-        if (trigger) trigger.classList.toggle('active', isActive);
-      });
-      dom.appMenubar.querySelectorAll('.menubar-dropdown-item[data-mode]').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.mode === state.currentMode);
-      });
     }
-
-    // 3. Top bar breadcrumb
-    const labelEl = document.getElementById('topbar-current-tool');
-    if (labelEl) {
-      const item = NAV_CATALOG.find(i => i.id === state.currentMode);
-      labelEl.textContent = item ? item.label : 'Home';
+    const chip = document.getElementById('topbar-project-chip');
+    if (chip) {
+      chip.addEventListener('click', () => openWorkspace('project'));
     }
   }
 
-  const syncSidebarActive = syncNavigationActive;
 
   /** Sidebar drawer state for tablet/mobile; desktop uses body class. */
   function openSidebarDrawer() {
@@ -1687,6 +1747,7 @@ export function initializeApp() {
 
   function closeSidebarDrawer() {
     document.body.classList.remove('sidebar-open');
+    document.getElementById('sidebar-toggle-btn')?.setAttribute('aria-expanded','false');
     const backdrop = document.getElementById('sidebar-backdrop');
     if (backdrop) backdrop.classList.remove('visible');
   }
@@ -1696,9 +1757,21 @@ export function initializeApp() {
       if (document.body.classList.contains('sidebar-open')) closeSidebarDrawer();
       else openSidebarDrawer();
     } else {
-      document.body.classList.toggle('sidebar-hidden');
+      // Three-state desktop cycle: expanded → icon rail (labels hidden,
+      // tooltips carry them) → hidden. Ctrl+B cycles forward.
+      const isRail = document.body.classList.contains('sidebar-rail');
+      const isHidden = document.body.classList.contains('sidebar-hidden');
+      document.body.classList.remove('sidebar-rail', 'sidebar-hidden');
+      let stateLabel = 'expanded';
+      if (!isRail && !isHidden) {
+        document.body.classList.add('sidebar-rail');
+        stateLabel = 'rail';
+      } else if (isRail) {
+        document.body.classList.add('sidebar-hidden');
+        stateLabel = 'hidden';
+      }
       const toggle = document.getElementById('sidebar-toggle-btn');
-      if (toggle) toggle.setAttribute('aria-expanded', document.body.classList.contains('sidebar-hidden') ? 'false' : 'true');
+      if (toggle) toggle.setAttribute('aria-expanded', stateLabel === 'hidden' ? 'false' : 'true');
     }
   }
 
@@ -1721,14 +1794,14 @@ export function initializeApp() {
         descEl.textContent = d || 'Add a description in Projects to describe the site and concept.';
       }
       if (statsEl) {
-        const rooms = (state.plan.entities || []).filter(e => e.kind === 'room').length;
-        const entities = (state.plan.entities || []).length;
+        const references = (p.research?.references || []).length;
+        const findings = (p.research?.claims || []).length;
         const snapshots = (p.snapshots || []).length;
         const measurements = (p.measurements || []).length;
         const notes = (p.notes || []).length;
         statsEl.innerHTML = [
-          { label: 'Rooms', value: rooms },
-          { label: 'Plan entities', value: entities },
+          { label: 'Sources', value: references },
+          { label: 'Research findings', value: findings },
           { label: 'Measurements', value: measurements },
           { label: 'Decisions', value: (p.decisions || []).length },
           { label: 'Snapshots', value: snapshots },
@@ -1757,18 +1830,34 @@ export function initializeApp() {
   }
 
   function switchMode(targetMode) {
-    const previousMode = state.currentMode;
-    if (targetMode === 'home' || !NAV_CATALOG.some(i => i.id === targetMode) && targetMode !== 'furniture') {
-      // unknown ids fall back to home so a stale link never dead-ends
-      if (!NAV_CATALOG.some(i => i.id === targetMode)) targetMode = 'home';
+    if (['workspace','expression','chains','multiscale'].includes(targetMode)) {
+      state.dimensionWorkflow = targetMode;
+      targetMode = 'dimensions';
     }
+    const previousMode = state.currentMode;
+    // Registry-driven validity: a tool id must exist in NAV_TOOLS; the shell
+    // keeps 'home' + 'landing' as reserved screen ids. Unknown ids fall back
+    // to home so a stale link never dead-ends.
+    const isKnown = targetMode === 'home' || targetMode === 'landing' || NAV_TOOLS.has(targetMode);
+    if (!isKnown) targetMode = 'home';
     state.currentMode = targetMode;
 
-    // Sidebar + MenuBar + breadcrumb sync
+    // Track workspace context + recent tools (landing/home are not tools)
+    if (targetMode !== 'home' && targetMode !== 'landing') {
+      const tool = NAV_TOOLS.get(targetMode);
+      if (tool) {
+        state.activeWorkspace = tool.workspace;
+        recordRecentTool(targetMode);
+      }
+    }
+
+    // Sidebar + breadcrumb sync. The sidebar re-renders on tool switches so
+    // the active workspace's secondary tools and the Recent list follow the
+    // user (skipped while the user is mid-search in the sidebar filter).
+    if (!sidebarSearchBoxValue()) renderSidebar('');
     syncNavigationActive();
-    closeAllMenuBarDropdowns();
+    closeTopFileMenu();
     document.getElementById('app-shell')?.classList.toggle('mode-home', targetMode === 'home');
-    document.body.classList.toggle('mode-active-plan', targetMode === 'plan');
 
     // Update Tool Views with strict display none inline enforcement
     dom.modeViews.forEach(view => {
@@ -1789,16 +1878,6 @@ export function initializeApp() {
         }
       }
     });
-
-    const planView = document.getElementById('mode-view-plan');
-    if (planView && targetMode !== 'plan') {
-      planView.setAttribute('hidden', '');
-      planView.classList.remove('active');
-      if (planView.style) {
-        if (typeof planView.style.setProperty === 'function') planView.style.setProperty('display', 'none', 'important');
-        else planView.style.display = 'none';
-      }
-    }
 
     if (targetMode === 'home') {
       renderHome();
@@ -1848,9 +1927,7 @@ export function initializeApp() {
     else if (targetMode === 'projects') {
       views.callController('projects', 'renderAll');
     }
-    else if (targetMode === 'plan') {
-      views.callController('plan', 'render');
-    }
+
     else if (targetMode === 'ai') {
       views.callController('ai', 'populateJobs');
     }
@@ -1863,10 +1940,32 @@ export function initializeApp() {
     else if (targetMode === 'survey') {
       views.callController('survey', 'renderMeasurements');
     }
+    else if (targetMode === 'requirements') {
+      views.callController('requirements', 'renderAll');
+    }
+    else if (targetMode === 'research_dashboard') {
+      views.callController('research_dashboard', 'render');
+    }
+    else if (targetMode === 'research_library') {
+      views.callController('research_library', 'render');
+    }
+    else if (targetMode === 'standards_explorer') {
+      views.callController('standards_explorer', 'render');
+    }
+    else if (targetMode === 'sun_path') {
+      views.callController('sun_path', 'render');
+    }
+    else if (targetMode === 'site_context') {
+      views.callController('site_context', 'render');
+    }
+    else if (targetMode === 'site_dashboard') {
+      views.callController('site_dashboard', 'render');
+    }
 
     // Documented view lifecycle contract: hooks are optional and skipped
     // silently by the registry when a view does not define them.
     views.notifyModeChange(previousMode, targetMode);
+    mountWorkflowHelp(targetMode);
   }
 
   // ---------------------------------------------------------------------------
@@ -2069,7 +2168,8 @@ export function initializeApp() {
       return;
     }
 
-    dom.furnitureCardsGrid.innerHTML = filtered.map(item => {
+    const limit = state.furnitureLimit || 48;
+    dom.furnitureCardsGrid.innerHTML = filtered.slice(0,limit).map(item => {
       const scaled = getScaledFurnitureDimensions(item, state.furnitureScaleRatio, state.furniturePaperUnit);
       const isAda = item.id.includes('ada') || (item.desc && item.desc.toLowerCase().includes('ada')) || item.name.toLowerCase().includes('ada');
       const isCompact = state.furnitureDensity === 'compact';
@@ -2078,9 +2178,9 @@ export function initializeApp() {
         <div class="furniture-card ${isCompact ? 'compact-card' : ''}" data-id="${item.id}">
           <div class="furn-card-header">
             <div class="furn-title-area">
-              <div class="furn-name">${item.name}</div>
+              <div class="furn-name">${escapeHtml(item.name)}</div>
               <div class="furn-header-meta">
-                <span class="furn-category-tag">${item.category.toUpperCase()}</span>
+                <span class="furn-category-tag">${escapeHtml(item.category)} / ${escapeHtml(item.subcategory)}</span>
                 <span class="furn-std-badge ${isAda ? 'ada-badge' : ''}">${scaled.standardTag}</span>
               </div>
             </div>
@@ -2089,7 +2189,7 @@ export function initializeApp() {
 
           <div class="furn-card-body">
             <div class="furn-plan-preview-box" title="Architectural Blueprint Top-Down Plan">
-              ${getFurniturePlanSVG(item)}
+              ${furnitureAssetSVG(createFurnitureAsset(item))}
             </div>
 
             <div class="furn-footprint-row">
@@ -2097,7 +2197,7 @@ export function initializeApp() {
               <span class="footprint-val"><strong>${scaled.footprintM2} m²</strong><span class="footprint-imperial">(${scaled.footprintSqFt} sq ft)</span></span>
             </div>
 
-            <div class="furn-item-desc">${item.desc}</div>
+            <div class="furn-item-desc">${escapeHtml(item.desc)}</div>
 
             <div class="furn-specs-grid">
               <div class="furn-spec-row">
@@ -2120,10 +2220,9 @@ export function initializeApp() {
           </div>
 
           <div class="furn-card-footer">
-            <button class="btn-furn-planner action-tool-btn compact" data-name="${item.name}" data-dims="${scaled.realFormattedMetric}" title="Add piece to active room plan">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 3h18v18H3z"/><path d="M9 3v18M3 9h18"/></svg>
-              + Use in Planner
-            </button>
+            <button type="button" class="action-tool-btn compact" data-furniture-download="dxf" data-id="${item.id}" title="Full-size DXF in millimeters">Download DXF</button>
+            <button type="button" class="action-tool-btn compact" data-furniture-download="svg" data-id="${item.id}" title="Full-size SVG in millimeters">SVG</button>
+            <details class="furn-tags"><summary>Tags &amp; provenance</summary><p>${escapeHtml(item.tags.join(' · '))}<br>${escapeHtml(item.dimensionSource.note)}</p><label><input type="checkbox" data-include-clearance> Include reference clearance when available</label></details>
             <button class="btn-furn-copy action-tool-btn compact" data-text="${scaled.paperFormatted}" title="Copy scaled drawing dimensions">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               Copy Size
@@ -2138,12 +2237,17 @@ export function initializeApp() {
     }).join('');
 
     // Attach click listeners to dynamically rendered card buttons
-    dom.furnitureCardsGrid.querySelectorAll('.btn-furn-planner').forEach(btn => {
-      btn.addEventListener('click', () => {
-        showToast(`📐 Added ${btn.dataset.name} (${btn.dataset.dims}) to Room Planner layout`);
-        AudioService.playTick();
-      });
-    });
+    if (filtered.length > limit) {
+      const more = document.createElement('button'); more.type='button'; more.className='action-tool-btn'; more.textContent='Show 48 more';
+      more.addEventListener('click', () => { state.furnitureLimit=limit+48; renderFurnitureGrid(); }); dom.furnitureCardsGrid.appendChild(more);
+    }
+    dom.furnitureCardsGrid.querySelectorAll('[data-furniture-download]').forEach(btn => btn.addEventListener('click', () => {
+      const item=FURNITURE_DATABASE.find(item=>item.id===btn.dataset.id);
+      const includeClearance=!!btn.closest('.furniture-card').querySelector('[data-include-clearance]')?.checked;
+      const asset=createFurnitureAsset(item,{includeClearance});const format=btn.dataset.furnitureDownload;
+      const ok=downloadExport(format==='dxf'?furnitureAssetDXF(asset):furnitureAssetSVG(asset), item.id+'.'+format, format);
+      showToast(ok?'Downloaded at real size (1:1), millimeters':'Download failed',ok?'success':'error');
+    }));
 
     dom.furnitureCardsGrid.querySelectorAll('.btn-furn-copy').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -2996,25 +3100,40 @@ export function initializeApp() {
 
   // ---------------------------------------------------------------------------
   // 3b. Command Palette — the single global search surface (Ctrl+K / top bar).
-  // Navigation commands are derived from NAV_CATALOG so the palette can never
-  // drift from the sidebar; utility/AI actions stay registered separately.
+  // Navigation commands are derived from the workspace registry so the
+  // palette can never drift from the sidebar; workspace-level entries are
+  // registered too, so "site analysis" as a whole is findable.
   // ---------------------------------------------------------------------------
   function registerCatalogCommands() {
-    for (const item of NAV_CATALOG) {
-      if (item.id === 'home') continue;
+    // Workspace-level commands (open the landing page)
+    for (const ws of WORKSPACES) {
       CommandRegistry.register({
-        id: `nav-${item.id}`,
-        title: item.label,
-        description: item.desc,
+        id: `nav-ws-${ws.id}`,
+        title: `${ws.label} — Workspace`,
+        description: ws.mission,
         category: 'Navigation',
-        icon: item.icon,
-        keywords: [...(item.keywords || []), item.section.toLowerCase(), item.label.toLowerCase()],
-        shortcut: item.shortcut || null,
+        icon: '🏢',
+        keywords: ['workspace', ws.label.toLowerCase(), ...(ws.planned || []).map(p => p.label.toLowerCase())],
+        shortcut: String(WORKSPACE_ORDER.indexOf(ws.id) + 1),
+        actionType: 'workspace',
+        available: true
+      });
+    }
+    // Tool-level commands
+    for (const tool of NAV_TOOL_LIST) {
+      CommandRegistry.register({
+        id: `nav-${tool.toolId}`,
+        title: tool.label,
+        description: tool.desc,
+        category: 'Navigation',
+        icon: '📐',
+        keywords: [...(tool.keywords || []), tool.workspaceLabel.toLowerCase(), tool.label.toLowerCase()],
+        shortcut: null,
         actionType: 'navigation',
         available: true
       });
     }
-    CommandRegistry.unregister('future-space-planner'); // the space planner shipped as Plan Canvas
+    for (const id of ['nav-plan','nav-workspace','nav-expression','nav-multiscale','nav-chains','future-space-planner']) CommandRegistry.unregister(id);
   }
 
   function openCommandPalette() {
@@ -3087,6 +3206,12 @@ export function initializeApp() {
           html += `<div class="command-section-header">📊 MULTI-SCALE COMPARISON PREVIEW</div>`;
           html += renderCommandItemHTML(compItem, paletteItems.length - 1);
         }
+      }
+
+      const furnitureRequest=parseNaturalLanguageCommand(query);
+      if(furnitureRequest?.type==='furniture_lookup') {
+        const item={id:'furniture-lookup',title:furnitureRequest.title,description:furnitureRequest.description,available:true,icon:'🛋️',action:()=>{switchMode('furniture');state.furnitureSearchQuery=furnitureRequest.furniture.name;state.furnitureActiveCategory='all';state.furnitureSubcategory='';if(dom.furnitureSearchInput)dom.furnitureSearchInput.value=state.furnitureSearchQuery;renderFurnitureGrid();}};
+        paletteItems.push(item);html+=renderCommandItemHTML(item,paletteItems.length-1);
       }
 
       // 0b. Live Expression Detection Preview in Command Palette
@@ -3209,48 +3334,6 @@ export function initializeApp() {
           };
           paletteItems.push(nlItem);
           html += `<div class="command-section-header">📐 LIVE RAMP GEOMETRY</div>`;
-          html += renderCommandItemHTML(nlItem, paletteItems.length - 1);
-        } else if (nlCommand.type === 'place') {
-          const piece = nlCommand.furniture;
-          nlItem = {
-            id: `nl-place-${piece.id}`,
-            title: nlCommand.title,
-            description: `${nlCommand.description} • Press Enter to place on Plan Canvas`,
-            icon: '🛋️',
-            shortcut: '↵ Place',
-            available: true,
-            action: () => {
-              const entity = createFurnitureEntity({
-                catalogId: piece.id,
-                name: piece.name,
-                x: 2.0,
-                y: 2.0,
-                width: piece.width,
-                depth: piece.depth,
-                clearance: piece.clearance || 0,
-                category: piece.category
-              });
-              switchMode('plan');
-              // Insert into the live plan canvas (identity + undo + render)
-              // rather than a persisted container nothing reads back.
-              const placed = views && typeof views.hasController === 'function'
-                && views.hasController('plan', 'addEntity')
-                ? views.callController('plan', 'addEntity', entity, `place ${piece.name}`)
-                : null;
-              if (!placed || placed.ok !== true) {
-                AudioService.playError && AudioService.playError();
-                showToast(`Could not place ${piece.name} on the Plan Canvas`);
-                return;
-              }
-              if (views && typeof views.callController === 'function') {
-                views.callController('plan', 'render');
-              }
-              AudioService.playSuccess();
-              showToast(`Placed ${piece.name} on Plan Canvas`);
-            }
-          };
-          paletteItems.push(nlItem);
-          html += `<div class="command-section-header">🛋️ SPATIAL PLACEMENT</div>`;
           html += renderCommandItemHTML(nlItem, paletteItems.length - 1);
         } else if (nlCommand.type === 'convert') {
           nlItem = {
@@ -3436,104 +3519,23 @@ export function initializeApp() {
     CommandRegistry.addRecentCommand(cmd.id);
     closeCommandPalette();
 
-    // Catalog-derived navigation commands resolve through NAV_CATALOG first,
-    // so a palette entry can never point at a screen the sidebar lacks.
-    const catalogMatch = cmd.id.startsWith('nav-')
-      ? NAV_CATALOG.find(i => i.id === cmd.id.slice(4))
-      : null;
-    if (catalogMatch) {
-      switchMode(catalogMatch.id);
+    // Registry-derived navigation: tool commands (nav-<toolId>) open the
+    // tool; workspace commands (nav-ws-<workspaceId>) open its landing page.
+    if (cmd.id.startsWith('nav-') && cmd.actionType === 'workspace') {
+      const wsId = cmd.id.slice('nav-ws-'.length);
+      if (getWorkspace(wsId)) {
+        openWorkspace(wsId);
+        AudioService.playTick();
+        return;
+      }
+    }
+    if (cmd.id.startsWith('nav-') && NAV_TOOLS.has(cmd.id.slice(4))) {
+      switchMode(cmd.id.slice(4));
       AudioService.playTick();
       return;
     }
 
     switch (cmd.id) {
-      case 'nav-converter':
-        switchMode('converter');
-        break;
-      case 'nav-rescale':
-        switchMode('rescale');
-        break;
-      case 'nav-detector':
-        switchMode('detector');
-        break;
-      case 'nav-areavol':
-        switchMode('area_volume');
-        break;
-      case 'nav-furniture':
-        switchMode('furniture');
-        break;
-      case 'nav-reference':
-        switchMode('reference');
-        break;
-      case 'nav-workspace':
-        switchMode('workspace');
-        break;
-      case 'nav-expression':
-        switchMode('expression');
-        break;
-      case 'nav-multiscale':
-        switchMode('multiscale');
-        break;
-      case 'nav-chains':
-        switchMode('chains');
-        break;
-      case 'nav-cad-handoff':
-        switchMode('cad_handoff');
-        break;
-      case 'nav-stairs':
-        switchMode('stairs');
-        break;
-      case 'nav-ramps':
-        switchMode('ramps');
-        break;
-      case 'nav-slopes':
-        switchMode('slopes');
-        break;
-      case 'nav-export':
-        switchMode('export');
-        break;
-      case 'nav-projects':
-        switchMode('projects');
-        break;
-      case 'nav-plan':
-        switchMode('plan');
-        break;
-      case 'nav-ai-studio':
-        switchMode('ai');
-        break;
-      case 'nav-ai-control-center':
-        switchMode('ai_settings');
-        break;
-      case 'nav-imports':
-        switchMode('imports');
-        break;
-      case 'nav-survey':
-        switchMode('survey');
-        break;
-      case 'ai-analyze-project':
-        switchMode('ai');
-        setTimeout(() => {
-          if (dom.aiJobSelect) dom.aiJobSelect.value = 'projectAnalysis';
-          views.callController('ai', 'refreshImageGroup');
-        }, 0);
-        break;
-      case 'ai-critique-design':
-        switchMode('ai');
-        setTimeout(() => {
-          if (dom.aiJobSelect) dom.aiJobSelect.value = 'studioCritic';
-          views.callController('ai', 'refreshImageGroup');
-        }, 0);
-        break;
-      case 'ai-test-provider':
-        switchMode('ai_settings');
-        break;
-      case 'nav-cad-clipboard':
-        switchMode('cad_clipboard');
-        break;
-      case 'nav-batch-cad':
-        switchMode('batch_cad');
-        break;
       case 'nav-history':
         views.callController('history', 'toggleHistoryDrawer');
         break;
@@ -3557,7 +3559,7 @@ export function initializeApp() {
           unit = dom.areavolResultUnit?.textContent || '';
         } else if (state.currentMode === 'furniture') {
           val = dom.customFurnResult?.textContent;
-        } else if (state.currentMode === 'workspace') {
+        } else if ((state.currentMode === 'dimensions' && state.dimensionWorkflow === 'workspace')) {
           val = dom.workspaceTotalRealVal?.textContent;
           unit = '';
         } else if (state.currentMode === 'expression') {
@@ -3651,12 +3653,8 @@ export function initializeApp() {
     const topbarHome = document.getElementById('topbar-home-btn');
     if (topbarHome) topbarHome.addEventListener('click', () => switchMode('home'));
 
-    // Close architectural menu bar dropdowns when clicking outside the ribbon
-    document.addEventListener('click', (e) => {
-      if (dom.appMenubar && !dom.appMenubar.contains(e.target)) {
-        closeAllMenuBarDropdowns();
-      }
-    });
+    // Top-bar File menu + AI button + project chip wiring (single nav hierarchy)
+    wireTopBar();
 
     const sidebarSearch = document.getElementById('sidebar-search');
     const sidebarSearchClear = document.getElementById('sidebar-search-clear');
@@ -3684,9 +3682,12 @@ export function initializeApp() {
       });
     }
 
-    // Home screen quick links
+    // Home screen quick links (tools) + workflow buttons (workspaces)
     document.querySelectorAll('.home-nav-btn').forEach(btn => {
       btn.addEventListener('click', () => switchMode(btn.dataset.mode));
+    });
+    document.querySelectorAll('.home-ws-btn').forEach(btn => {
+      btn.addEventListener('click', () => openWorkspace(btn.dataset.workspace));
     });
 
     // Theme Selector
@@ -3788,7 +3789,6 @@ export function initializeApp() {
       const shortcuts = ShortcutsManager.getAllShortcuts();
       const q = (filterText || '').toLowerCase().trim();
 
-      const canvasShortcuts = shortcuts.filter(s => s.category === 'canvas');
       const studioShortcuts = shortcuts.filter(s => s.category === 'studio');
 
       const matchesQuery = s => !q || s.label.toLowerCase().includes(q) || s.description.toLowerCase().includes(q) || s.displayKey.toLowerCase().includes(q);
@@ -3817,8 +3817,8 @@ export function initializeApp() {
         `;
       };
 
-      const html = renderSection('Plan Canvas & Drafting (Architectural CAD Standard)', canvasShortcuts) +
-                   renderSection('Studio Navigation & Productivity', studioShortcuts);
+      const html = 
+                   renderSection('Tools', studioShortcuts)+renderSection('Navigation',shortcuts.filter(s=>s.category==='workspaces'));
 
       dom.shortcutsListContainer.innerHTML = html || '<div class="empty-state-text" style="padding: 1.5rem; text-align: center; color: var(--text-muted);">No shortcuts found matching your search.</div>';
     }
@@ -4193,16 +4193,7 @@ export function initializeApp() {
         views.callController('history', 'logCurrentCalculationToHistory', 'furniture');
       });
     }
-    if (dom.btnPlannerCustomFurn) {
-      dom.btnPlannerCustomFurn.addEventListener('click', () => {
-        const name = dom.customFurnName?.value || 'Custom Piece';
-        const w = dom.customFurnW?.value || '0';
-        const d = dom.customFurnD?.value || '0';
-        const u = dom.customFurnUnit?.value || 'cm';
-        showToast(`📐 Added ${name} (${w}×${d} ${u}) to Room Planner layout`);
-        AudioService.playTick();
-      });
-    }
+
     if (dom.btnCopyCustomFurn) {
       dom.btnCopyCustomFurn.addEventListener('click', () => {
         const text = dom.customFurnResult?.textContent;
@@ -5733,9 +5724,7 @@ export function initializeApp() {
     if (dom.stairsSendScratchpadBtn) {
       dom.stairsSendScratchpadBtn.addEventListener('click', () => views.callController('stairs', 'sendToScratchpad'));
     }
-    if (dom.stairsApplyPlanBtn) {
-      dom.stairsApplyPlanBtn.addEventListener('click', () => views.callController('stairs', 'applyToPlan'));
-    }
+
 
     // Mode 15: Ramp Calculator Listeners
     if (dom.rampsToggleFigureBtn) {
@@ -5790,9 +5779,7 @@ export function initializeApp() {
     if (dom.rampsSendScratchpadBtn) {
       dom.rampsSendScratchpadBtn.addEventListener('click', () => views.callController('ramps', 'sendToScratchpad'));
     }
-    if (dom.rampsApplyPlanBtn) {
-      dom.rampsApplyPlanBtn.addEventListener('click', () => views.callController('ramps', 'applyToPlan'));
-    }
+
 
     // Mode 16: Slope Analyzer Listeners
     if (dom.slopesModeSelect) {
@@ -5911,57 +5898,6 @@ export function initializeApp() {
       dom.btnProjectSnapshot.addEventListener('click', () => views.callController('projects', 'captureSnapshot'));
     }
 
-    // Mode 19: Plan Canvas Listeners
-    if (dom.planToolSelect) {
-      dom.planToolSelect.addEventListener('change', () => {
-        views.callController('plan', 'setTool', dom.planToolSelect.value);
-      });
-    }
-    if (dom.planGridSelect) {
-      dom.planGridSelect.addEventListener('change', () => {
-        state.plan.grid = parseFloat(dom.planGridSelect.value) || 0.5;
-      });
-    }
-    if (dom.btnPlanUndo) {
-      dom.btnPlanUndo.addEventListener('click', () => views.callController('plan', 'undo'));
-    }
-    if (dom.btnPlanRedo) {
-      dom.btnPlanRedo.addEventListener('click', () => views.callController('plan', 'redo'));
-    }
-    if (dom.btnPlanDelete) {
-      dom.btnPlanDelete.addEventListener('click', () => views.callController('plan', 'deleteSelected'));
-    }
-    if (dom.btnPlanClear) {
-      dom.btnPlanClear.addEventListener('click', () => views.callController('plan', 'clearPlan'));
-    }
-    if (dom.btnPlanSave) {
-      dom.btnPlanSave.addEventListener('click', () => views.callController('plan', 'saveToProject'));
-    }
-    if (dom.btnPlanExportSvg) {
-      dom.btnPlanExportSvg.addEventListener('click', () => views.callController('plan', 'exportPlan', 'svg'));
-    }
-    if (dom.btnPlanExportDxf) {
-      dom.btnPlanExportDxf.addEventListener('click', () => views.callController('plan', 'exportPlan', 'dxf'));
-    }
-    if (dom.btnPlanZoomIn) {
-      dom.btnPlanZoomIn.addEventListener('click', () => views.callController('plan', 'zoomStep', 1.3));
-    }
-    if (dom.btnPlanZoomOut) {
-      dom.btnPlanZoomOut.addEventListener('click', () => views.callController('plan', 'zoomStep', 1 / 1.3));
-    }
-    if (dom.btnPlanFit) {
-      dom.btnPlanFit.addEventListener('click', () => views.callController('plan', 'fitToContent'));
-    }
-    if (dom.btnPlanZoom100) {
-      dom.btnPlanZoom100.addEventListener('click', () => views.callController('plan', 'setZoomPercent', 100));
-    }
-    if (dom.btnPlanZoom50) {
-      dom.btnPlanZoom50.addEventListener('click', () => views.callController('plan', 'setZoomPercent', 50));
-    }
-    if (dom.btnPlanZoom200) {
-      dom.btnPlanZoom200.addEventListener('click', () => views.callController('plan', 'setZoomPercent', 200));
-    }
-
     // Mode 20: AI Studio listeners
     if (dom.aiRunBtn) {
       dom.aiRunBtn.addEventListener('click', () => views.callController('ai', 'runJob'));
@@ -6020,9 +5956,7 @@ export function initializeApp() {
     if (dom.importsRunBtn) {
       dom.importsRunBtn.addEventListener('click', () => views.callController('imports', 'runImport'));
     }
-    if (dom.importsSendPlanBtn) {
-      dom.importsSendPlanBtn.addEventListener('click', () => views.callController('imports', 'sendToPlan'));
-    }
+    document.getElementById('btn-imports-save-project')?.addEventListener('click', () => views.callController('imports', 'saveToProject'));
     if (dom.importsFileInput) {
       dom.importsFileInput.addEventListener('change', () => {
         const file = dom.importsFileInput.files && dom.importsFileInput.files[0];
@@ -6148,7 +6082,7 @@ export function initializeApp() {
 
       // Esc closes Command Palette first, then drawers/modals/selection/quick-strip
       if (e.key === 'Escape') {
-        closeAllMenuBarDropdowns();
+        closeTopFileMenu();
         if (dom.commandPaletteModal?.classList.contains('open')) {
           e.preventDefault();
           e.stopPropagation();
@@ -6168,7 +6102,7 @@ export function initializeApp() {
           dom.shortcutsModal.classList.remove('open');
           dom.modalBackdrop?.classList.remove('open');
         }
-        if (state.currentMode === 'workspace' && state.workspaceSelectedIds.size > 0) {
+        if ((state.currentMode === 'dimensions' && state.dimensionWorkflow === 'workspace') && state.workspaceSelectedIds.size > 0) {
           state.workspaceSelectedIds.clear();
           renderWorkspace();
           return;
@@ -6182,7 +6116,7 @@ export function initializeApp() {
       }
 
       // Quick Add form shortcut: Ctrl+Enter or Cmd+Enter inside form
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && state.currentMode === 'workspace') {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && (state.currentMode === 'dimensions' && state.dimensionWorkflow === 'workspace')) {
         if (dom.workspaceAddForm) {
           e.preventDefault();
           dom.workspaceAddForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
@@ -6195,7 +6129,7 @@ export function initializeApp() {
 
       // Workspace-specific Ctrl+C: copy selected rows to clipboard
       if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')
-          && state.currentMode === 'workspace' && state.workspaceSelectedIds.size > 0) {
+          && (state.currentMode === 'dimensions' && state.dimensionWorkflow === 'workspace') && state.workspaceSelectedIds.size > 0) {
         e.preventDefault();
         const text = formatWorkspaceForClipboard(state.workspace.entries, state.workspace.scaleRatio, state.workspace.displayUnit, {
           mode: 'selected',
@@ -6209,30 +6143,8 @@ export function initializeApp() {
       // Keyboard safety gate: Every shortcut below is a PLAIN key press
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-      // MODE-SCOPED KEY OWNERSHIP (user-reported collision fix):
-      // when the plan canvas is active, single-letter and number keys belong
-      // to ITS tools (W=wall, R=room, F=furniture, 5=stair palette etc.) —
-      // the global mode-switch hijack list must NOT fire, or pressing a tool
-      // key mid-drawing yanks the user into another workspace.
-      // claimant: true = the active mode consumes this key itself.
-      const modeClaimsKey = (mode, key) => {
-        if (mode === 'plan') {
-          // every rebindable canvas tool key + digits used by the palette
-          const canvasKeys = new Set(['v','w','r','f','m','d','s','t','l','e','q','1','2','3','4','5','6','7','8','9','0','n','g','c','b','h','x','p','a','o','i','u','y','j','k','z']);
-          return canvasKeys.has(key.toLowerCase());
-        }
-        if (mode === 'workspace') {
-          return ['n','d','arrowdown','arrowup','delete','backspace'].includes(key.toLowerCase());
-        }
-        return false;
-      };
-      if (modeClaimsKey(state.currentMode, e.key)) {
-        // The active mode owns this key — stop; its own handler processed it.
-        return;
-      }
-
       // Mode 7 Workspace-specific shortcuts
-      if (state.currentMode === 'workspace') {
+      if ((state.currentMode === 'dimensions' && state.dimensionWorkflow === 'workspace')) {
         if (e.key === 'n' || e.key === 'N') {
           e.preventDefault();
           dom.workspaceAddInput?.focus();
@@ -6288,26 +6200,29 @@ export function initializeApp() {
         }
       }
 
-      // Standalone Tool Number Keys (1-9, 0)
-      if (e.key === '1') { e.preventDefault(); switchMode('converter'); }
-      else if (e.key === '2') { e.preventDefault(); switchMode('rescale'); }
-      else if (e.key === '3') { e.preventDefault(); switchMode('detector'); }
-      else if (e.key === '4') { e.preventDefault(); switchMode('area_volume'); }
-      else if (e.key === '5') { e.preventDefault(); switchMode('furniture'); }
-      else if (e.key === '6') { e.preventDefault(); switchMode('reference'); }
-      else if (e.key === '7') { e.preventDefault(); switchMode('workspace'); }
-      else if (e.key === '8') { e.preventDefault(); switchMode('expression'); }
-      else if (e.key === '9') { e.preventDefault(); switchMode('multiscale'); }
-      else if (e.key === '0') { e.preventDefault(); switchMode('chains'); }
-      else if (e.key === 'c' || e.key === 'C') { e.preventDefault(); switchMode('cad_clipboard'); }
-      else if (e.key === 'b' || e.key === 'B') { e.preventDefault(); switchMode('batch_cad'); }
-      else if (e.key === 'q' || e.key === 'Q') { e.preventDefault(); views.callController('quick_dimension', 'toggleQuickDimension'); }
-      else if (e.key === 's' || e.key === 'S') {
-        if (state.currentMode === 'plan') return;
+      // Primary workspace shortcuts follow the six sections in the sidebar.
+      {
+        const WS_KEYS = {
+          ws_project: 'project', ws_tools: 'tools', ws_cad: 'cad',
+          ws_documents: 'documents', ws_ai: 'ai', ws_settings: 'settings', ws_home: null
+        };
+        for (const [actionId, wsId] of Object.entries(WS_KEYS)) {
+          if (ShortcutsManager.matchesEvent(actionId, e)) {
+            e.preventDefault();
+            if (wsId === null) switchMode('home');
+            else openWorkspace(wsId);
+            return;
+          }
+        }
+      }
+
+      // Letter tool keys (C CAD Clipboard, B Batch CAD, Q Quick Dim, H Journal)
+      // are owned by the rebindable ShortcutsManager block earlier in this
+      // handler — the stale hardcoded duplicates were removed.
+      if (e.key === 's' || e.key === 'S') {
         e.preventDefault();
         views.callController('converter', 'swapDirection');
       }
-      else if (e.key === 'h' || e.key === 'H') { e.preventDefault(); views.callController('history', 'toggleHistoryDrawer'); }
       else if (e.key === '?') {
         e.preventDefault();
         dom.shortcutsModal?.classList.add('open');
@@ -6350,13 +6265,11 @@ export function initializeApp() {
     const transports = createTransports({ http });
     const providerManager = createProviderManager({ storage: StorageService });
     const modelCatalog = createModelCatalog({ storage: StorageService });
-    // Deterministic tool registry — read/propose tier only. The model may
-    // call these; APPLY_* is impossible by construction (never registered),
-    // and proposals return to the UI for preview/accept, never auto-applied.
-    const aiTools = createToolRegistry(createArchitectureTools(
+    // The current Assistant exposes read/calculation tools; it cannot modify drawings.
+    const aiTools = createToolRegistry(Object.fromEntries(Object.entries(createArchitectureTools(
       () => projectStore.getProject(),
-      () => state.plan.entities
-    ));
+      () => []
+    )).filter(([,tool])=>String(tool.permission).startsWith('READ_'))));
     const router = createJobRouter({
       providerManager,
       modelCatalog,
@@ -6364,9 +6277,9 @@ export function initializeApp() {
       storage: StorageService,
       buildFactsPack: (args = {}) => buildScopedFactsPack({
         project: projectStore.getProject(),
-        planEntities: state.plan.entities,
+        planEntities: [],
         request: { scopeHint: args.request?.scopeHint || args.options?.scopeHint || '' },
-        selectionPackets: args.request?.selectionPackets || state.aiSelectionContext || null
+        selectionPackets: args.request?.selectionPackets || null
       }),
       getToolDefinitions: () => aiTools.list()
     });
@@ -6377,11 +6290,7 @@ export function initializeApp() {
     aiServices = null;
   }
   state.ai = aiServices;
-  // Selection evidence packets set by the Plan workspace AI Query tool;
-  // consumed by the facts-pack builder so AI answers the exact selection.
-  state.aiSelectionContext = null;
-
-  const viewContext = Object.freeze({
+const viewContext = Object.freeze({
     state,
     dom,
     showToast,
@@ -6405,6 +6314,7 @@ export function initializeApp() {
   views.register(createDetectorView(viewContext));
   views.register(createAreaVolumeView(viewContext));
   views.register(workspaceView);
+  views.register(createDimensionsView(viewContext));
   views.register(createExpressionView(viewContext));
   views.register(createMultiScaleView(viewContext));
   views.register(createChainsView(viewContext));
@@ -6424,32 +6334,40 @@ export function initializeApp() {
   views.register(createSlopesView(viewContext));
   views.register(createExportCenterView(viewContext));
   views.register(createProjectsView(viewContext));
-  views.register(createPlanView(viewContext));
   views.register(createAiStudioView(viewContext));
   views.register(createAiControlCenterView(viewContext));
   views.register(createImportsView(viewContext));
   views.register(createSurveyView(viewContext));
   views.register(createRequirementsView(viewContext));
+  views.register(createResearchDashboardView(viewContext));
+  views.register(createReferencesLibraryView(viewContext));
+  views.register(createStandardsExplorerView(viewContext));
+  views.register(createSunPathView(viewContext));
+  views.register(createSiteContextView(viewContext));
+  views.register(createSiteDashboardView(viewContext));
+  views.register(createConceptView(viewContext));
+  views.register(createReportsView(viewContext));
 
   applyTheme(state.activeTheme);
   updateSoundUI();
   populateUnitSelects();
+  if (dom.furnCategoryNav) {
+    dom.furnCategoryNav.innerHTML = '<button type="button" class="furn-cat-pill active" data-cat="all">All <span class="furn-cat-count"></span></button>' + Object.keys(FURNITURE_CATEGORIES).map(id => '<button type="button" class="furn-cat-pill" data-cat="'+id+'">'+id.replaceAll('-',' ')+' <span class="furn-cat-count"></span></button>').join('');
+    const select=document.getElementById('furniture-subcategory');
+    if(select) {
+      select.innerHTML='<option value="all">All subcategories</option>'+Object.entries(FURNITURE_CATEGORIES).map(([cat,subs])=>'<optgroup label="'+cat+'">'+subs.map(sub=>'<option value="'+cat+'/'+sub+'">'+sub+'</option>').join('')+'</optgroup>').join('');
+      select.addEventListener('change',()=>{state.furnitureActiveCategory=select.value;state.furnitureLimit=48;renderFurnitureGrid();});
+    }
+  }
   renderPresetChips(state.selectedCategory);
   attachEventListeners();
   views.mountAll();
   renderSidebar('');
-  renderMenuBar();
 
   // Initialize omnipresent slide-down AI assistant drawer
   const aiHost = document.getElementById('omnipresent-ai-drawer-host') || document.body;
   if (typeof initAiDropdownDrawer === 'function') {
-    const aiDrawer = initAiDropdownDrawer(aiHost, state, {
-      onActionApplied: (count) => {
-        showToast(`AI Applied ${count} item(s) to canvas!`, 'success');
-        if (typeof AudioService !== 'undefined' && AudioService.playSuccess) AudioService.playSuccess();
-        if (state.currentMode === 'plan') views.callController('plan', 'render');
-      }
-    });
+    const aiDrawer = initAiDropdownDrawer(aiHost, state, { getProject: () => projectStore.getProject() });
     if (typeof window !== 'undefined') {
       window.__ahhAiDrawer = aiDrawer;
     }
@@ -6470,9 +6388,10 @@ export function initializeApp() {
   initPwa();
 
   // QA/test hook (idempotent): lets browser automation drive mode switching
-  // through the same entry point as the UI without touching internals.
+  // and workspace opening through the same entry points as the UI.
   if (typeof window !== 'undefined') {
     window.__ahhSwitchMode = switchMode;
+    window.__ahhOpenWorkspace = openWorkspace;
     window.__ahhState = state;
     window.__ahhViews = views;
   }
