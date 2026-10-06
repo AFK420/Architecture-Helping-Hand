@@ -191,6 +191,7 @@ export function createStairsView(context) {
   }
 
   function renderInvalid(isExplicitRun, message) {
+    state.stairs.lastResult = null;
     clearResultPanels();
     showError(message);
     if (isExplicitRun) AudioService.playTick();
@@ -253,7 +254,7 @@ export function createStairsView(context) {
       const statusClass = inspection.overallStatus === 'pass' ? 'status-pass' : (inspection.overallStatus === 'warn' ? 'status-warn' : 'status-fail');
       const badgeClass = inspection.overallStatus === 'pass' ? 'badge-pass' : (inspection.overallStatus === 'warn' ? 'badge-warn' : 'badge-fail');
       const badgeIcon = inspection.overallStatus === 'pass' ? '✓' : (inspection.overallStatus === 'warn' ? '⚠️' : '✗');
-      const badgeText = inspection.overallStatus === 'pass' ? 'PASS · مطابق' : (inspection.overallStatus === 'warn' ? 'ADVISORY · تنبيه' : 'VIOLATION · مخالف');
+      const badgeText = inspection.overallStatus === 'pass' ? 'Within recorded limits' : (inspection.overallStatus === 'warn' ? 'Review reference limits' : 'Outside recorded limits');
 
       dom.stairsCodeInspectorWrap.innerHTML = `
         <div class="code-inspector-card ${statusClass}">
@@ -268,8 +269,8 @@ export function createStairsView(context) {
             </span>
           </div>
           <div class="code-inspector-summary">
-            <span>${inspection.summaryText}</span>
-            <span class="code-inspector-arabic">${inspection.summaryArabic}</span>
+            <span>Reference comparison only. Verify the source and project requirements.</span>
+            <span class="code-inspector-arabic"></span>
           </div>
           <div class="code-checks-list">
             ${inspection.checks.map(c => `

@@ -27,6 +27,7 @@ export function createExpressionView(context) {
     if (!dom.expressionInput) return;
 
     const rawExpr = dom.expressionInput.value.trim();
+    state.lastValidExpression = null;
     const defaultUnit = dom.expressionDefaultUnit?.value || 'mm';
     let scaleRatio = 50;
     if (dom.expressionScaleSelect) {
@@ -107,6 +108,7 @@ export function createExpressionView(context) {
       }
     } else {
       // Invalid or incomplete syntax
+      if (dom.expressionDrawingVal) dom.expressionDrawingVal.textContent = '—';
       if (dom.expressionLivePreview) {
         dom.expressionLivePreview.textContent = `Live: Incomplete`;
         dom.expressionLivePreview.style.color = 'var(--color-error)';
@@ -185,6 +187,7 @@ export function createMultiScaleView(context) {
     if (!dom.multiscaleInput) return;
 
     const rawInput = dom.multiscaleInput.value.trim();
+    state.lastValidMultiScale = null;
     const defaultUnit = dom.multiscaleDefaultUnit?.value || 'mm';
     const displayUnit = dom.multiscaleDisplayUnit?.value || 'mm';
     const sortOrder = dom.multiscaleSortSelect?.value || 'ratio_asc';
@@ -264,6 +267,8 @@ export function createMultiScaleView(context) {
         AudioService.playTick();
       }
     } else {
+      if (dom.multiscaleRealVal) dom.multiscaleRealVal.textContent = '—';
+      if (dom.multiscaleTableBody) dom.multiscaleTableBody.innerHTML = '';
       if (dom.multiscaleLivePreview) {
         dom.multiscaleLivePreview.textContent = 'Live: Incomplete';
         dom.multiscaleLivePreview.style.color = 'var(--color-error)';

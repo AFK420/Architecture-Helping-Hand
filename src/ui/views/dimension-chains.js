@@ -43,7 +43,7 @@ export function createChainsView(context) {
       precision: state.precision
     });
 
-    state.lastValidChain = calc;
+    state.lastValidChain = calc.isValid && calc.segmentCount > 0 ? calc : null;
 
     // Update Result Hero and Breakdown Metrics
     if (dom.chainsOverallVal) dom.chainsOverallVal.textContent = calc.overallExtentFormatted;
@@ -80,7 +80,7 @@ export function createChainsView(context) {
 
     setUnifiedResultState({
       toolPrefix: 'chains',
-      status: calc.isValid ? 'success' : (calc.invalidCount > 0 ? 'error' : 'ready'),
+      status: calc.isValid && calc.segmentCount > 0 ? 'success' : (calc.invalidCount > 0 ? 'error' : 'ready'),
       errorText: calc.invalidCount > 0 ? `⚠️ ${calc.invalidCount} segment(s) have invalid measurement inputs` : ''
     });
 
@@ -170,12 +170,12 @@ export function createChainsView(context) {
             <input type="checkbox" class="chain-toggle-chk" data-index="${idx}" ${seg.enabled !== false ? 'checked' : ''} title="Toggle segment enable/disable" />
           </td>
           <td>
-            <input type="text" class="chain-inline-name" data-index="${idx}" value="${escapeHtml(seg.name)}" placeholder="Name" style="background: transparent; border: 1px solid transparent; width: 100%; font-weight: 600; color: var(--text-primary);" />
+            <input type="text" class="chain-inline-name" data-index="${idx}" value="${escapeHtml(seg.name)}" placeholder="Name" aria-label="Segment ${idx + 1} name" style="background: transparent; border: 1px solid transparent; width: 100%; font-weight: 600; color: var(--text-primary);" />
           </td>
           <td style="font-family: var(--font-family-mono); font-size: 0.8rem; color: var(--text-secondary);">${seg.startFormatted}</td>
           <td style="font-family: var(--font-family-mono); font-size: 0.8rem; color: var(--text-secondary);">${seg.endFormatted}</td>
           <td>
-            <input type="text" class="chain-inline-input" data-index="${idx}" value="${escapeHtml(seg.rawInput)}" style="background: transparent; border: 1px solid var(--border-color-light); border-radius: 3px; padding: 2px 4px; width: 90px; font-family: var(--font-family-mono); font-weight: 700; color: var(--accent-primary);" />
+            <input type="text" class="chain-inline-input" data-index="${idx}" value="${escapeHtml(seg.rawInput)}" aria-label="Segment ${idx + 1} measurement" style="background: transparent; border: 1px solid var(--border-color-light); border-radius: 3px; padding: 2px 4px; width: 90px; font-family: var(--font-family-mono); font-weight: 700; color: var(--accent-primary);" />
           </td>
           <td style="text-align: center;">
             <button type="button" class="dim-type-badge ${typeBadgeClass} chain-type-cycle-btn" data-index="${idx}" title="Click to cycle type (SEG ➔ REF ➔ ALW)">

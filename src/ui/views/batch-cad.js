@@ -121,7 +121,8 @@ export function createBatchCadView(context) {
 
     setUnifiedResultState({
       toolPrefix: 'batch',
-      status: converted.summary.invalidRows > 0 ? (converted.summary.validRows > 0 ? 'success' : 'error') : 'success'
+      status: converted.summary.invalidRows > 0 ? (converted.summary.validRows > 0 ? 'success' : 'error') : 'success',
+      errorText: converted.summary.invalidRows > 0 ? 'Review the invalid rows below. Enter dimensions such as 2400mm or 2.4m.' : ''
     });
 
     saveBatchCadSettings();
@@ -214,7 +215,7 @@ export function createBatchCadView(context) {
           <td style="font-family: var(--font-family-mono); font-size: 0.85rem; font-weight: 700; color: ${row.valid ? 'var(--accent-primary)' : 'var(--color-error, #ef4444)'};">${escapeBatchCell(row.targetFormatted)}</td>
           <td style="text-align: center;">
             <span class="batch-status-pill ${row.valid ? (row.status === 'UNCHANGED' ? 'unchanged' : 'valid') : 'invalid'}">
-              ${row.valid ? (row.status === 'UNCHANGED' ? 'UNCHANGED' : '✓ VALID') : '⚠ INVALID'}
+              ${row.valid ? (row.status === 'UNCHANGED' ? 'Unchanged' : 'Valid') : 'Invalid'}
             </span>
           </td>
           <td style="text-align: right;">

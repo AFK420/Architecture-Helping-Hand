@@ -63,6 +63,11 @@ export function createCadClipboardView(context) {
 
   function renderCadClipboard(isExplicitRun = false) {
     const cad = state.cadClipboard;
+    const targetSelect = typeof document === 'undefined' ? null : document.getElementById('cad-application-select');
+    const sourceSelect = typeof document === 'undefined' ? null : document.getElementById('cad-source-select');
+    if (targetSelect) targetSelect.value = cad.preset;
+    if (sourceSelect) sourceSelect.value = cad.source;
+    if (dom.btnCadCopyMain) dom.btnCadCopyMain.textContent = `Copy for ${CAD_FORMAT_PRESETS[cad.preset]?.name || 'CAD'}`;
 
     // Sync form values into state
     if (dom.cadTargetSelect) cad.targetValue = dom.cadTargetSelect.value || 'real';
@@ -163,9 +168,11 @@ export function createCadClipboardView(context) {
       dom.cadSourceCountBadge.textContent = `${outputResult.count} ${outputResult.count === 1 ? 'ITEM' : 'ITEMS'}`;
     }
 
+    const invalidManual = cad.source === 'manual' && (dom.cadManualInput?.value || '').trim() && outputResult.count === 0;
     setUnifiedResultState({
       toolPrefix: 'cad',
-      status: outputResult.count > 0 ? 'success' : 'ready'
+      status: outputResult.count > 0 ? 'success' : invalidManual ? 'error' : 'ready',
+      errorText: invalidManual ? 'Enter valid dimensions, such as 2400mm or 2.4m.' : ''
     });
 
     saveCadClipboardSettings();
@@ -294,7 +301,7 @@ export function createCadHandoffView(context) {
       dom.handoffTargetDescription.textContent = profile.description;
     }
     if (dom.handoffCopyTargetLabel && profile) {
-      dom.handoffCopyTargetLabel.textContent = profile.label.toUpperCase();
+      dom.handoffCopyTargetLabel.textContent = profile.label;
     }
 
     // Build payload via the single core entry point
@@ -326,10 +333,11 @@ export function createCadHandoffView(context) {
       dom.handoffPreviewBox.value = payload.text;
     }
 
+    const invalidManual = h.source === 'manual' && (dom.handoffManualInput?.value || '').trim() && payload.empty;
     setUnifiedResultState({
       toolPrefix: 'handoff',
-      status: payload.empty ? (validation.ok ? 'ready' : 'error') : 'success',
-      errorText: validation.ok ? '' : validation.error
+      status: payload.empty ? (validation.ok && !invalidManual ? 'ready' : 'error') : 'success',
+      errorText: validation.ok ? invalidManual ? 'Enter valid dimensions, such as 2400mm or 2.4m.' : '' : validation.error
     });
 
     saveCadHandoffSettings();
@@ -342,10 +350,10 @@ export function createCadHandoffView(context) {
   function copyCadHandoffPayload() {
     const payload = state.cadHandoff.lastPayload;
     const profile = CAD_TARGET_PROFILES[state.cadHandoff.target];
-    const label = profile ? `Payload for ${profile.label}` : 'CAD payload';
+    const label = profile ? `Dimensions for ${profile.label}` : 'CAD dimensions';
 
     if (!payload || payload.empty || !payload.text || !payload.text.trim()) {
-      showToast('No CAD payload to copy — run the source tool first', 'warning');
+      showToast('No dimensions to copy. Enter values or choose a source with results.', 'warning');
       return;
     }
 

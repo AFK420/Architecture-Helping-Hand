@@ -144,3 +144,87 @@ body{background-image:none}.grid-overlay{display:none}
 .furniture-search-container{flex:1 1 340px;min-width:0}
 .furniture-count-badge{font-family:var(--font-sans);white-space:normal;overflow-wrap:anywhere;font-weight:400;flex:1 1 220px;line-height:1.5}
 [data-theme=dark]{--accent-action:#5b8def;--btn-run-accent:#5b8def;--btn-run-hover:#70a0f2;--btn-run-text:#141619}
+
+/* Shared input → result → optional detail pattern for existing tools. */
+.simple-tool{max-width:960px;margin:0 auto}
+.simple-tool-header{margin:.5rem 0 1.5rem}
+.simple-tool-header h1,.simple-tool-header h2{font:700 1.6rem/1.3 var(--font-sans);margin:0 0 .6rem;color:var(--text-primary);text-transform:none;letter-spacing:0}
+.simple-tool .workflow-intro,.simple-tool .workflow-help{margin:.5rem 0}
+.simple-tool-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin:1.5rem 0}
+.simple-tool-fields>*,.simple-tool .input-group,.simple-tool .form-group{min-width:0}
+.simple-tool-fields label,.simple-tool .input-label,.simple-tool .field-label{display:block;font:500 .86rem/1.5 var(--font-sans);text-transform:none;letter-spacing:0;margin-bottom:.4rem}
+.simple-tool-fields input,.simple-tool-fields select,.simple-tool-fields textarea{width:100%;max-width:100%;min-width:0;min-height:44px;font-family:var(--font-sans)!important;font-size:14px!important}
+.simple-tool-fields textarea{height:150px}
+.simple-tool-fields .input-with-unit-row{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+.simple-tool-fields .scale-ratio-input-wrapper{min-width:0}
+.simple-tool-fields .subtabs-bar,.simple-tool-fields .form-group:has(textarea),.simple-tool-fields [id$="error-msg"],.simple-tool-fields .cad-source-strip-wrapper,.simple-tool-fields .cad-quick-chips-wrapper{grid-column:1/-1}
+.simple-tool-fields .subtabs-bar{border:0;background:none;padding:0;display:flex;gap:1rem;flex-wrap:wrap}
+.simple-tool .subtab-label{font-family:var(--font-sans);text-transform:none;letter-spacing:0}
+.simple-result{border:0;border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle);background:var(--bg-surface);padding:1.2rem 0;margin:1.5rem 0}
+.simple-result-label{font:600 .9rem var(--font-sans);color:var(--text-secondary);margin:0 0 .6rem;text-transform:none}
+.simple-result .result-main-value{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;font:700 clamp(1.8rem,4vw,2.4rem)/1.35 var(--font-sans);color:var(--color-success);min-width:0;margin:.4rem 0;overflow-wrap:anywhere}
+.simple-result .result-main-value span,.simple-result .result-hero-value{font-family:var(--font-sans)!important;max-width:100%;overflow-wrap:anywhere}
+.simple-result-explanation{font:400 .86rem/1.65 var(--font-sans);color:var(--text-secondary);margin:.7rem 0}
+.simple-result-actions,.simple-extra-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.8rem}
+.simple-tool button:not(.scale-fav-btn){min-height:36px;max-width:100%;height:auto;font-family:var(--font-sans);text-transform:none;letter-spacing:0;white-space:normal}
+.simple-tool :is(.primary,.primary-action){background:var(--accent-action);color:var(--btn-run-text);border:1px solid var(--accent-action);padding:.65rem 1rem;border-radius:6px}
+.simple-tool table th { font-family: var(--font-sans); text-transform: none; letter-spacing: 0; font-size: 13px; }
+.simple-tool button:disabled{opacity:.45;cursor:not-allowed}
+.simple-advanced{margin:1.2rem 0;border:0;border-bottom:1px solid var(--border-subtle);padding:.8rem 0}
+.simple-advanced>summary{cursor:pointer;font:500 .9rem var(--font-sans);color:var(--text-secondary)}
+.simple-advanced-content{padding:1rem 0;display:grid;gap:1rem;min-width:0}
+.simple-advanced .tool-layout{display:grid;grid-template-columns:minmax(0,1fr)!important;gap:1rem}
+.simple-advanced .archi-card,.simple-advanced .pipeline-step,.simple-advanced .calc-instrument-panel,.simple-advanced .calc-result-panel{padding:.5rem 0;border:0;background:none;box-shadow:none}
+.simple-advanced .instrument-pipeline{gap:.5rem}
+.simple-advanced .instrument-grid,.simple-advanced .grid-two-cols{grid-template-columns:repeat(2,minmax(0,1fr))}
+.simple-tool [hidden]{display:none!important}
+.simple-tool .unit-chip{display:flex;flex-direction:column;align-items:start;gap:.25rem;padding:.6rem 0;background:none;border:0}
+.simple-tool .unit-label{font:.83rem var(--font-sans);color:var(--text-secondary);text-transform:none;letter-spacing:0}
+.simple-tool .unit-val{font:600 1.05rem var(--font-sans);color:var(--text-primary)}
+.simple-tool .slopes-metrics-grid .unit-val{font-size:1.5rem;color:var(--color-success)}
+.simple-tool .cad-preview-container textarea{width:100%;min-height:120px;font:500 1rem/1.65 var(--font-sans);padding:.8rem;resize:vertical}
+.simple-reference-note{font:.86rem/1.6 var(--font-sans);color:var(--text-secondary)}
+.simple-input-error { color: var(--color-error); font: 400 14px/1.6 var(--font-sans); grid-column: 1/-1; }
+.simple-tool .table-scroll-container,.simple-tool .multiscale-table-container{overflow:auto;max-width:100%}
+.simple-tool .result-context-strip,.simple-tool .highlight-badge,.simple-tool .unit-system-tag{border:0;background:none;text-transform:none;letter-spacing:0}
+.simple-tool .result-state-pill:not(.state-error){display:none}
+.simple-tool .code-inspector-card{box-shadow:none}
+.simple-tool .code-citation-footer{overflow-wrap:anywhere}
+.simple-tool .code-checks-list{overflow:auto}
+.simple-tool .simple-advanced-content>button{justify-self:start}
+@media(max-width:700px){.simple-tool-fields{grid-template-columns:minmax(0,1fr)}.simple-tool .simple-tool-header h2{font-size:1.45rem}.simple-advanced .instrument-grid,.simple-advanced .grid-two-cols{grid-template-columns:minmax(0,1fr)!important}.simple-tool .stairs-metrics-grid,.simple-tool .slopes-metrics-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.simple-tool .stairs-candidate-row{grid-template-columns:repeat(2,minmax(0,1fr))!important}.simple-tool .ramps-target-row,.simple-tool .slopes-target-row{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+.dimension-panel.simple-tool { padding: 0; }
+.simple-tool-fields>.calc-instrument-panel { grid-column: 1/-1; }
+.simple-tool-fields .workspace-inputs-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.simple-tool .workspace-add-form .form-group { min-width: 0; }
+.simple-tool .workspace-totals-card { background: transparent; padding: 0; border: 0; box-shadow: none; }
+.simple-tool .totals-breakdown-grid { display: block; }
+.simple-tool .result-value-display { justify-content: flex-start; gap: .5rem; }
+.simple-tool [hidden] { display: none !important; }
+.tool-mode-view .card-tag[hidden] { display: none !important; }
+.simple-options-group>h3 { font: 600 15px var(--font-sans); margin-bottom: .6rem; }
+#dimension-panel-multiscale:not(:has(.simple-advanced[open])) #multiscale-table :is(th,td):nth-child(n+4) { display: none; }
+#dimension-panel-workspace:not(:has(.simple-advanced[open])) #workspace-table :is(th,td):is(:nth-child(2),:nth-child(4),:nth-child(7),:nth-child(9)) { display: none; }
+#mode-view-batch_cad:not(:has(.simple-advanced[open])) #batch-table :is(th,td):nth-child(4) { display: none; }
+.reference-search { max-width: 960px; margin: 1rem 0; }
+.reference-search label { display: block; margin-bottom: .4rem; }
+.reference-search p { font-size: 14px; color: var(--text-secondary); }
+.simple-tool .simple-result-actions { flex-wrap: wrap; }
+.simple-tool-fields .workspace-add-section { grid-column: 1/-1; padding: 0; background: none; border: 0; }
+.simple-tool-fields .form-row-grid.workspace-inputs-grid { display: grid !important; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .8rem; }
+.simple-tool-fields .workspace-inputs-grid>.form-group { width: auto; max-width: none; margin: 0; }
+.simple-tool-fields .workspace-inputs-grid .col-btn { align-self: end; }
+.simple-tool-fields .input-group,.simple-tool-fields .form-group { margin-bottom: 0; }
+.simple-tool .simple-result .stairs-result-hero,.simple-tool .simple-result .ramps-result-hero { background: none; border: 0; padding: .6rem 0; text-align: left; }
+.simple-tool .simple-result .result-hero-value,.simple-tool .simple-result .result-number,.simple-tool .simple-result .val-hero { color: var(--color-success); font-family: var(--font-sans); }
+.simple-tool .simple-result :is(.totals-label,.metric-title,.result-hero-label) { font: 500 14px/1.5 var(--font-sans); text-transform: none; letter-spacing: 0; }
+.simple-tool .highlight-metric { background: none; border: 0; padding: .8rem 0; }
+.simple-tool .result-hero-unit { text-transform: none; font: 500 14px var(--font-sans); }
+.simple-tool .simple-result { padding-inline: 1rem; border-radius: 8px; }
+@media(max-width:700px) {
+ .simple-tool-fields .workspace-inputs-grid { grid-template-columns: minmax(0,1fr); }
+ .simple-tool-fields .form-row-grid.workspace-inputs-grid { grid-template-columns: minmax(0,1fr); }
+ .simple-tool .calc-instrument-panel>div { flex-wrap: wrap; }
+ .simple-tool #chains-quick-input { flex: 1 1 100%; min-width: 0; }
+ .simple-tool .simple-advanced-content .form-row { grid-template-columns: minmax(0,1fr) !important; }
+}

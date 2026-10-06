@@ -12,6 +12,9 @@ export function createRescalerView(context) {
   const { state, dom, setUnifiedResultState } = context;
 
   function calculateRescaler() {
+    state.lastValidRescale = null;
+    if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = '—';
+    if (dom.rescaleExplanation) dom.rescaleExplanation.textContent = '';
     const origRatio = parseFloat(dom.rescaleOrigRatio?.value);
     const targetRatio = parseFloat(dom.rescaleTargetRatio?.value);
     const rawVal = dom.rescaleOrigVal?.value || '';
@@ -21,7 +24,7 @@ export function createRescalerView(context) {
       setUnifiedResultState({
         toolPrefix: 'rescale',
         status: 'error',
-        errorText: '⚠️ Original Scale (Scale A): Enter a scale denominator greater than 0 (e.g. 50 for 1:50).',
+        errorText: 'Original drawing scale: Enter a scale denominator greater than 0 (e.g. 50 for 1:50).',
         btn: dom.btnRunRescale
       });
       return;
@@ -31,7 +34,7 @@ export function createRescalerView(context) {
       setUnifiedResultState({
         toolPrefix: 'rescale',
         status: 'error',
-        errorText: '⚠️ Target Scale (Scale B): Enter a scale denominator greater than 0 (e.g. 200 for 1:200).',
+        errorText: 'New drawing scale: Enter a scale denominator greater than 0 (e.g. 200 for 1:200).',
         btn: dom.btnRunRescale
       });
       return;
@@ -47,14 +50,11 @@ export function createRescalerView(context) {
       setUnifiedResultState({
         toolPrefix: 'rescale',
         status: 'error',
-        errorText: '⚠️ Measured Length: Enter a positive drawing length measured on Sheet A (e.g. 12, 15.5, 3 1/2).',
+        errorText: 'Measured Length: Enter a positive drawing length measured on the original drawing (e.g. 12, 15.5, 3 1/2).',
         btn: dom.btnRunRescale
       });
       if (dom.rescaleOrigVal) dom.rescaleOrigVal.classList.add('input-error');
-      if (state.lastValidRescale) {
-        if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = state.lastValidRescale.val;
-        if (dom.rescaleResultUnit) dom.rescaleResultUnit.textContent = state.lastValidRescale.unit;
-      }
+
       return;
     }
 
@@ -64,18 +64,11 @@ export function createRescalerView(context) {
       setUnifiedResultState({
         toolPrefix: 'rescale',
         status: 'error',
-        errorText: `⚠️ Measured Length: Enter a positive drawing measurement greater than zero (${parsed.error || 'e.g. 12, 15.5'}).`,
+        errorText: `Measured Length: Enter a positive drawing measurement greater than zero (${parsed.error || 'e.g. 12, 15.5'}).`,
         btn: dom.btnRunRescale
       });
       if (dom.rescaleOrigVal) dom.rescaleOrigVal.classList.add('input-error');
 
-      // Preserve previous valid result
-      if (state.lastValidRescale) {
-        if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = state.lastValidRescale.val;
-        if (dom.rescaleResultUnit) dom.rescaleResultUnit.textContent = state.lastValidRescale.unit;
-      } else {
-        if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = '---';
-      }
       return;
     }
 
@@ -107,6 +100,8 @@ export function createRescalerView(context) {
         dom.rescaleRealSpan.textContent = `${formatNumber(res.realMeters, 3)} m`;
       }
 
+      if (dom.rescaleExplanation) dom.rescaleExplanation.textContent = 'A '+formatNumber(parsed.value,state.precision)+' '+state.rescaleOrigUnit+' line at 1:'+origRatio+' should be '+formatted+' '+state.rescaleTargetUnit+' at 1:'+targetRatio+'.';
+
       // Update Math Formula Microcopy
       if (dom.rescaleMathFormula) {
         const pct = (res.factor * 100).toFixed(1);
@@ -119,7 +114,7 @@ export function createRescalerView(context) {
         status: 'success',
         context: {
           'Rescale': `1:${state.rescaleOrigRatio} ➔ 1:${state.rescaleTargetRatio}`,
-          'Source Sheet A': `${formatNumber(parsed.value, 2)} ${state.rescaleOrigUnit}`,
+          'Source the original drawing': `${formatNumber(parsed.value, 2)} ${state.rescaleOrigUnit}`,
           'Real Physical Distance': `${formatNumber(res.realMeters, 3)} m`
         },
         btn: dom.btnRunRescale
@@ -128,7 +123,7 @@ export function createRescalerView(context) {
       setUnifiedResultState({
         toolPrefix: 'rescale',
         status: 'error',
-        errorText: `⚠️ Rescale error: ${err.message}`,
+        errorText: `Rescale error: ${err.message}`,
         btn: dom.btnRunRescale
       });
     }

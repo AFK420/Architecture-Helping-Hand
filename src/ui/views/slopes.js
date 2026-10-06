@@ -158,6 +158,7 @@ export function createSlopesView(context) {
   }
 
   function renderInvalid(isExplicitRun, message) {
+    state.slopes.lastResult = null;
     clearResultPanels();
     showError(message);
     if (isExplicitRun) AudioService.playTick();
@@ -200,7 +201,7 @@ export function createSlopesView(context) {
       const statusClass = inspection.overallStatus === 'pass' ? 'status-pass' : (inspection.overallStatus === 'warn' ? 'status-warn' : 'status-fail');
       const badgeClass = inspection.overallStatus === 'pass' ? 'badge-pass' : (inspection.overallStatus === 'warn' ? 'badge-warn' : 'badge-fail');
       const badgeIcon = inspection.overallStatus === 'pass' ? '✓' : (inspection.overallStatus === 'warn' ? '⚠️' : '✗');
-      const badgeText = inspection.overallStatus === 'pass' ? 'PEDESTRIAN WALKWAY · مسار مشاة' : (inspection.overallStatus === 'warn' ? 'TREATED AS RAMP · يصنف كمنحدر' : 'VIOLATION · مخالف');
+      const badgeText = inspection.overallStatus === 'pass' ? 'Within recorded limits' : (inspection.overallStatus === 'warn' ? 'Review reference limits' : 'Outside recorded limits');
 
       dom.slopesCodeInspectorWrap.innerHTML = `
         <div class="code-inspector-card ${statusClass}">
@@ -215,8 +216,8 @@ export function createSlopesView(context) {
             </span>
           </div>
           <div class="code-inspector-summary">
-            <span>${inspection.summaryText}</span>
-            <span class="code-inspector-arabic">${inspection.summaryArabic}</span>
+            <span>Reference comparison only. Verify the source and project requirements.</span>
+            <span class="code-inspector-arabic"></span>
           </div>
           <div class="code-checks-list">
             ${inspection.checks.map(c => `

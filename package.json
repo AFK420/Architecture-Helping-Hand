@@ -12,6 +12,7 @@
     "reports": "node scripts/report-server.js",
     "test:redesign": "node tests/redesign.test.js",
     "test:browser": "node tests/redesign.browser.test.js",
+    "test:simple-tools": "node tests/simple-tools.browser.test.js",
     "test:reports": "node tests/report-pagination.browser.test.js",
     "qa:responsive": "node scripts/qa-responsive.mjs"
   },

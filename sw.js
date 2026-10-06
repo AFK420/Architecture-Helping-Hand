@@ -3,7 +3,7 @@
  * Enables 100% offline operation, instant caching, and standalone desktop installation.
  */
 
-const CACHE_NAME = 'ahh-object-library-2026-10-06';
+const CACHE_NAME = 'ahh-simple-tools-2026-10-06';
 
 const PRECACHE_ASSETS = [
   './',

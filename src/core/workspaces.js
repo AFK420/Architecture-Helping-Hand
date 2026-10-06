@@ -327,7 +327,7 @@ export const WORKSPACES = [
       },
       {
         "toolId": "rescale",
-        "label": "Rescaler",
+        "label": "Change Drawing Scale",
         "desc": "Move a measurement from one scale to another",
         "keywords": [
           "rescale",
@@ -341,7 +341,7 @@ export const WORKSPACES = [
       },
       {
         "toolId": "detector",
-        "label": "Scale Finder",
+        "label": "Find Drawing Scale",
         "desc": "Detect an unknown scale from paper + real sizes",
         "keywords": [
           "detect",
@@ -400,8 +400,8 @@ export const WORKSPACES = [
       },
       {
         "toolId": "cad_handoff",
-        "label": "CAD Handoff",
-        "desc": "Target-specific payloads for Rhino / AutoCAD / SketchUp",
+        "label": "Send to CAD",
+        "desc": "Copy dimensions for Rhino, AutoCAD or SketchUp",
         "keywords": [
           "handoff",
           "send",

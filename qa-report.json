@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-06T00:34:04.316Z",
+  "generatedAt": "2026-10-06T02:01:24.141Z",
   "architecture": "six workspaces; registry-driven live tools",
   "viewports": [
     [
@@ -120,11 +120,23 @@
         "overflowX": 0,
         "problems": []
       },
+      "stairs:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "ramps": {
         "overflowX": 0,
         "problems": []
       },
+      "ramps:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "slopes": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "slopes:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -140,7 +152,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "rescale:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "detector": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "detector:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -148,7 +168,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "area_volume:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "cad_clipboard": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "cad_clipboard:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -156,7 +184,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "cad_handoff:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "batch_cad": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "batch_cad:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -184,7 +220,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "dimensions:expression:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "dimensions:workspace": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "dimensions:workspace:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -192,7 +236,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "dimensions:chains:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "dimensions:multiscale": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "dimensions:multiscale:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -262,11 +314,23 @@
         "overflowX": 0,
         "problems": []
       },
+      "stairs:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "ramps": {
         "overflowX": 0,
         "problems": []
       },
+      "ramps:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "slopes": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "slopes:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -282,7 +346,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "rescale:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "detector": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "detector:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -290,7 +362,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "area_volume:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "cad_clipboard": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "cad_clipboard:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -298,7 +378,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "cad_handoff:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "batch_cad": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "batch_cad:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -326,7 +414,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "dimensions:expression:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "dimensions:workspace": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "dimensions:workspace:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -334,7 +430,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "dimensions:chains:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "dimensions:multiscale": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "dimensions:multiscale:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -404,11 +508,23 @@
         "overflowX": 0,
         "problems": []
       },
+      "stairs:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "ramps": {
         "overflowX": 0,
         "problems": []
       },
+      "ramps:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "slopes": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "slopes:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -424,7 +540,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "rescale:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "detector": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "detector:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -432,7 +556,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "area_volume:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "cad_clipboard": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "cad_clipboard:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -440,7 +572,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "cad_handoff:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "batch_cad": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "batch_cad:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -468,7 +608,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "dimensions:expression:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "dimensions:workspace": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "dimensions:workspace:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -476,7 +624,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "dimensions:chains:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "dimensions:multiscale": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "dimensions:multiscale:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -546,11 +702,23 @@
         "overflowX": 0,
         "problems": []
       },
+      "stairs:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "ramps": {
         "overflowX": 0,
         "problems": []
       },
+      "ramps:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "slopes": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "slopes:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -566,7 +734,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "rescale:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "detector": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "detector:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -574,7 +750,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "area_volume:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "cad_clipboard": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "cad_clipboard:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -582,7 +766,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "cad_handoff:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "batch_cad": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "batch_cad:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -610,7 +802,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "dimensions:expression:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "dimensions:workspace": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "dimensions:workspace:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -618,7 +818,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "dimensions:chains:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "dimensions:multiscale": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "dimensions:multiscale:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -688,11 +896,23 @@
         "overflowX": 0,
         "problems": []
       },
+      "stairs:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "ramps": {
         "overflowX": 0,
         "problems": []
       },
+      "ramps:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "slopes": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "slopes:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -708,7 +928,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "rescale:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "detector": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "detector:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -716,7 +944,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "area_volume:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "cad_clipboard": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "cad_clipboard:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -724,7 +960,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "cad_handoff:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "batch_cad": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "batch_cad:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -752,7 +996,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "dimensions:expression:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "dimensions:workspace": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "dimensions:workspace:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -760,7 +1012,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "dimensions:chains:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "dimensions:multiscale": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "dimensions:multiscale:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -830,11 +1090,23 @@
         "overflowX": 0,
         "problems": []
       },
+      "stairs:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "ramps": {
         "overflowX": 0,
         "problems": []
       },
+      "ramps:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "slopes": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "slopes:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -850,7 +1122,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "rescale:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "detector": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "detector:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -858,7 +1138,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "area_volume:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "cad_clipboard": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "cad_clipboard:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -866,7 +1154,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "cad_handoff:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "batch_cad": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "batch_cad:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -894,7 +1190,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "dimensions:expression:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "dimensions:workspace": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "dimensions:workspace:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -902,7 +1206,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "dimensions:chains:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "dimensions:multiscale": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "dimensions:multiscale:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -972,11 +1284,23 @@
         "overflowX": 0,
         "problems": []
       },
+      "stairs:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "ramps": {
         "overflowX": 0,
         "problems": []
       },
+      "ramps:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "slopes": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "slopes:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -992,7 +1316,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "rescale:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "detector": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "detector:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -1000,7 +1332,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "area_volume:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "cad_clipboard": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "cad_clipboard:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -1008,7 +1348,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "cad_handoff:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "batch_cad": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "batch_cad:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -1036,7 +1384,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "dimensions:expression:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "dimensions:workspace": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "dimensions:workspace:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -1044,7 +1400,15 @@
         "overflowX": 0,
         "problems": []
       },
+      "dimensions:chains:advanced": {
+        "overflowX": 0,
+        "problems": []
+      },
       "dimensions:multiscale": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "dimensions:multiscale:advanced": {
         "overflowX": 0,
         "problems": []
       },
@@ -1068,6 +1432,8 @@
   "errors": [],
   "summary": {
     "modeViewportChecks": 203,
+    "totalLayoutChecks": 336,
+    "advancedLayoutChecks": 91,
     "failures": [],
     "consoleErrors": 0
   }

@@ -542,6 +542,7 @@ export function initializeApp() {
     rescaleRealSpan: document.getElementById('rescale-real-span'),
     btnCopyRescale: document.getElementById('btn-copy-rescale'),
     rescaleMathFormula: document.getElementById('rescale-math-formula'),
+    rescaleExplanation: document.getElementById('rescale-explanation'),
     rescaleResultStaleTag: document.getElementById('rescale-result-stale-tag'),
 
     // Mode 3: Detector Elements
@@ -552,6 +553,8 @@ export function initializeApp() {
     btnRunDetector: document.getElementById('btn-run-detector'),
     detectorErrorMsg: document.getElementById('detector-error-msg'),
     detectorRatioVal: document.getElementById('detector-ratio-val'),
+    detectorExplanation: document.getElementById('detector-explanation'),
+    btnCopyDetected: document.getElementById('btn-copy-detected'),
     detectorPresetBadge: document.getElementById('detector-preset-badge'),
     btnApplyDetected: document.getElementById('btn-apply-detected'),
     detectorMathFormula: document.getElementById('detector-math-formula'),
@@ -565,6 +568,7 @@ export function initializeApp() {
     areavolInputUnit: document.getElementById('areavol-input-unit'),
     areavolOutputUnit: document.getElementById('areavol-output-unit'),
     areavolInputBadge: document.getElementById('areavol-input-badge'),
+    areavolExplanation: document.getElementById('areavol-explanation'),
     areavolOutputBadge: document.getElementById('areavol-output-badge'),
     btnRunAreavol: document.getElementById('btn-run-areavol'),
     areavolErrorMsg: document.getElementById('areavol-error-msg'),
@@ -1187,6 +1191,14 @@ export function initializeApp() {
     const contextStrip = document.getElementById(`${toolPrefix}-context-strip`);
 
     if (panel) panel.dataset.state = status;
+    const simpleRoot = panel?.closest('.simple-tool');
+    if (simpleRoot) {
+      simpleRoot.querySelectorAll('[data-result-action]').forEach(action => { action.disabled = status !== 'success'; });
+      if (status !== 'success') {
+        if (staleTag) staleTag.hidden = true;
+        if (status === 'error') panel.querySelectorAll('[data-main-answer]').forEach(answer => { answer.textContent = '—'; });
+      }
+    }
 
     if (badge) {
       badge.className = `result-state-pill state-${status}`;
@@ -1208,7 +1220,7 @@ export function initializeApp() {
     } else if (status === 'success') {
       if (errorBanner) errorBanner.style.display = 'none';
       if (staleTag) staleTag.style.display = 'none';
-      if (panel) {
+      if (panel && !simpleRoot) {
         panel.classList.remove('result-pulse');
         void panel.offsetWidth;
         panel.classList.add('result-pulse');
@@ -1980,6 +1992,13 @@ export function initializeApp() {
   // ---------------------------------------------------------------------------
   function setRunButtonState(btn, status, errorMsg = '') {
     if (!btn) return;
+    if (btn.dataset?.recalculate !== undefined) {
+      btn.dataset.state = status;
+      btn.disabled = status === 'running';
+      const label = btn.querySelector('.btn-text');
+      if (label) label.textContent = status === 'running' ? 'Calculating…' : btn.dataset.recalculate || 'Recalculate';
+      return;
+    }
     btn.dataset.state = status;
     const btnText = btn.querySelector('.btn-text');
 
@@ -2049,7 +2068,7 @@ export function initializeApp() {
     // Area & Volume unit selects (the else-branch that filled volume units
     // dereferenced the null element that selected that branch — dead code removed)
     if (dom.areavolInputUnit) {
-      const opts = Object.entries(AREA_UNITS).map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
+      const opts = Object.entries(AREA_UNITS).map(([k, u]) => `<option value="${k}" title="${u.name}">${u.symbol}</option>`).join('');
       dom.areavolInputUnit.innerHTML = opts;
       if (dom.areavolOutputUnit) {
         dom.areavolOutputUnit.innerHTML = opts;
@@ -2298,6 +2317,12 @@ export function initializeApp() {
   // ---------------------------------------------------------------------------
   // 12. Mode 6: Architectural Drafting Reference Sheet
   // ---------------------------------------------------------------------------
+  function filterReferenceRows() {
+    const query = document.getElementById('reference-search-input')?.value.trim().toLowerCase() || '';
+    dom.refTableBody?.querySelectorAll('tr').forEach(row => { row.hidden = !row.querySelector('td[colspan]') && !row.textContent.toLowerCase().includes(query); });
+    dom.refBenchmarksGrid?.querySelectorAll('.benchmark-card').forEach(card => { card.hidden = !card.textContent.toLowerCase().includes(query); });
+  }
+
   function renderReferenceChart() {
     if (!dom.refTableBody) return;
     state.refScaleRatio = parseFloat(dom.refScaleSelect?.value) || 50;
@@ -2420,13 +2445,13 @@ export function initializeApp() {
     if (dom.refBenchmarksGrid) {
       const benchmarks = [
         { name: 'Standard Interior Door', wM: 0.90, hM: 2.10 },
-        { name: 'Ceiling Clearance (Min)', wM: 2.70, hM: null },
+        { name: 'Typical Ceiling Height', wM: 2.70, hM: null },
         { name: 'Adult Human Stature', wM: 1.75, hM: null },
         { name: 'Kitchen Counter Height', wM: 0.90, hM: null },
         { name: 'Standard Parking Stall', wM: 2.50, hM: 5.00 },
         { name: 'Stair Step Riser', wM: 0.17, hM: null },
         { name: 'Office Desk Surface', wM: 1.60, hM: 0.80 },
-        { name: 'Corridor Width (Code)', wM: 1.20, hM: null }
+        { name: 'Example Corridor Width', wM: 1.20, hM: null }
       ];
 
       dom.refBenchmarksGrid.innerHTML = benchmarks.map(b => {
@@ -2522,6 +2547,7 @@ export function initializeApp() {
       <tr class="table-section-divider"><td colspan="6" style="background: var(--bg-surface-elevated); color: var(--text-tertiary); font-weight: 800; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.4rem 0.75rem;">— IMPERIAL DRAWING MEASUREMENTS —</td></tr>
       ${imperialRows.join('')}
     `;
+    filterReferenceRows();
   }
 
   // ---------------------------------------------------------------------------
@@ -2551,6 +2577,8 @@ export function initializeApp() {
 
     const ws = state.workspace;
     const totals = calculateWorkspaceTotals(ws.entries, ws.scaleRatio, ws.displayUnit, state.precision);
+    if (dom.workspaceCopyAllBtn) dom.workspaceCopyAllBtn.disabled = totals.validCount === 0;
+    if (dom.workspaceExportTsvBtn) dom.workspaceExportTsvBtn.disabled = totals.validCount === 0;
 
     // 1. Sync Scale Select
     if (dom.workspaceScaleSelect) {
@@ -3985,6 +4013,10 @@ export function initializeApp() {
       });
     }
 
+    if (dom.btnCopyDetected) dom.btnCopyDetected.addEventListener('click', () => {
+      if (state.lastValidDetector) copyToClipboard(dom.detectorRatioVal.textContent, 'Drawing scale');
+    });
+
     // Area & Volume Listeners
     dom.areavolTypeBtns.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -5035,7 +5067,16 @@ export function initializeApp() {
       });
     }
 
+    document.getElementById('reference-search-input')?.addEventListener('input', filterReferenceRows);
+
     // Mode 11: CAD Clipboard Listeners
+    document.getElementById('cad-application-select')?.addEventListener('change', event => {
+      views.callController('cad_clipboard', 'applyCadPreset', event.target.value);
+    });
+    document.getElementById('cad-source-select')?.addEventListener('change', event => {
+      state.cadClipboard.source = event.target.value;
+      views.callController('cad_clipboard', 'renderCadClipboard', true);
+    });
     if (dom.cadQuickChips) {
       dom.cadQuickChips.querySelectorAll('.cad-preset-chip').forEach(chip => {
         chip.addEventListener('click', () => {
@@ -5149,7 +5190,7 @@ export function initializeApp() {
 
     // Mode 13: CAD Handoff Listeners
     if (dom.handoffSourceSelect) {
-      dom.handoffSourceSelect.addEventListener('change', () => renderCadHandoff(true));
+      dom.handoffSourceSelect.addEventListener('change', () => views.callController('cad_handoff', 'renderCadHandoff', true));
     }
     if (dom.handoffManualInput) {
       dom.handoffManualInput.addEventListener('input', () => {
@@ -5172,28 +5213,28 @@ export function initializeApp() {
       });
     }
     if (dom.handoffFormatSelect) {
-      dom.handoffFormatSelect.addEventListener('change', () => renderCadHandoff(true));
+      dom.handoffFormatSelect.addEventListener('change', () => views.callController('cad_handoff', 'renderCadHandoff', true));
     }
     if (dom.handoffChainLayoutSelect) {
-      dom.handoffChainLayoutSelect.addEventListener('change', () => renderCadHandoff(true));
+      dom.handoffChainLayoutSelect.addEventListener('change', () => views.callController('cad_handoff', 'renderCadHandoff', true));
     }
     if (dom.handoffWorkspaceScopeSelect) {
-      dom.handoffWorkspaceScopeSelect.addEventListener('change', () => renderCadHandoff(true));
+      dom.handoffWorkspaceScopeSelect.addEventListener('change', () => views.callController('cad_handoff', 'renderCadHandoff', true));
     }
     if (dom.handoffBatchScopeSelect) {
-      dom.handoffBatchScopeSelect.addEventListener('change', () => renderCadHandoff(true));
+      dom.handoffBatchScopeSelect.addEventListener('change', () => views.callController('cad_handoff', 'renderCadHandoff', true));
     }
     if (dom.handoffUnitSelect) {
-      dom.handoffUnitSelect.addEventListener('change', () => renderCadHandoff(true));
+      dom.handoffUnitSelect.addEventListener('change', () => views.callController('cad_handoff', 'renderCadHandoff', true));
     }
     if (dom.handoffPrecisionSelect) {
-      dom.handoffPrecisionSelect.addEventListener('change', () => renderCadHandoff(true));
+      dom.handoffPrecisionSelect.addEventListener('change', () => views.callController('cad_handoff', 'renderCadHandoff', true));
     }
     if (dom.handoffSuffixSelect) {
-      dom.handoffSuffixSelect.addEventListener('change', () => renderCadHandoff(true));
+      dom.handoffSuffixSelect.addEventListener('change', () => views.callController('cad_handoff', 'renderCadHandoff', true));
     }
     if (dom.btnRunCadHandoff) {
-      dom.btnRunCadHandoff.addEventListener('click', () => renderCadHandoff(true));
+      dom.btnRunCadHandoff.addEventListener('click', () => views.callController('cad_handoff', 'renderCadHandoff', true));
       dom.btnRunCadHandoff.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -5208,11 +5249,11 @@ export function initializeApp() {
       dom.btnHandoffExportTxt.addEventListener('click', () => {
         const payload = state.cadHandoff.lastPayload;
         if (!payload || payload.empty || !payload.text.trim()) {
-          showToast('No CAD payload to export', 'warning');
+          showToast('No dimensions to export', 'warning');
           return;
         }
         downloadFile(payload.text, `cad-handoff-${state.cadHandoff.target}-${Date.now()}.txt`, 'text/plain');
-        showToast('CAD payload exported as .txt');
+        showToast('Dimensions exported as .txt');
       });
     }
     if (dom.btnHandoffOpenCadClipboard) {
@@ -5234,6 +5275,12 @@ export function initializeApp() {
     if (dom.batchPasteInput) {
       dom.batchPasteInput.addEventListener('input', () => {
         const val = dom.batchPasteInput.value;
+        state.batchCad.rawInput = val;
+        state.batchCad.lastResult = null;
+        views.callController('batch_cad', 'renderBatchResults');
+        setUnifiedResultState({ toolPrefix: 'batch', status: 'ready' });
+        const error = document.getElementById('batch-error-msg');
+        if (error) error.style.display = 'none';
         const detected = detectBatchDelimiter(val);
         if (dom.batchDelimiterBadge) {
           dom.batchDelimiterBadge.textContent = `FORMAT: ${detected.toUpperCase()}`;

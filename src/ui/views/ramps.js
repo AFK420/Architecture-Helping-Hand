@@ -157,6 +157,7 @@ export function createRampsView(context) {
   }
 
   function renderInvalid(isExplicitRun, message) {
+    state.ramps.lastResult = null;
     clearResultPanels();
     showError(message);
     if (isExplicitRun) AudioService.playTick();
@@ -180,12 +181,12 @@ export function createRampsView(context) {
 
   function renderResult(result) {
     const f = result.formatted;
-    const isRunMode = result.mode === RAMP_INPUT_MODES.RISE_DESIRED_SLOPE || result.mode === RAMP_INPUT_MODES.RUN_DESIRED_SLOPE;
+    const isRunMode = result.mode === RAMP_INPUT_MODES.RISE_DESIRED_SLOPE;
 
     // Hero: the value the mode solved for
     if (dom.rampsHeroVal) dom.rampsHeroVal.textContent = isRunMode ? f.run : (result.mode === RAMP_INPUT_MODES.RUN_DESIRED_SLOPE ? f.rise : f.slopePercent);
     if (dom.rampsHeroLabel) {
-      dom.rampsHeroLabel.textContent = isRunMode ? 'REQUIRED RUN' : (result.mode === RAMP_INPUT_MODES.RUN_DESIRED_SLOPE ? 'REQUIRED RISE' : 'ACHIEVED SLOPE');
+      dom.rampsHeroLabel.textContent = isRunMode ? 'Required horizontal run' : (result.mode === RAMP_INPUT_MODES.RUN_DESIRED_SLOPE ? 'Calculated rise' : 'Calculated slope');
     }
     if (dom.rampsSummaryBadge) {
       dom.rampsSummaryBadge.textContent = `${f.slopePercent} · ${f.ratio} · ${f.angle}`;
@@ -218,7 +219,7 @@ export function createRampsView(context) {
       const statusClass = inspection.overallStatus === 'pass' ? 'status-pass' : (inspection.overallStatus === 'warn' ? 'status-warn' : 'status-fail');
       const badgeClass = inspection.overallStatus === 'pass' ? 'badge-pass' : (inspection.overallStatus === 'warn' ? 'badge-warn' : 'badge-fail');
       const badgeIcon = inspection.overallStatus === 'pass' ? '✓' : (inspection.overallStatus === 'warn' ? '⚠️' : '✗');
-      const badgeText = inspection.overallStatus === 'pass' ? 'PASS · مطابق' : (inspection.overallStatus === 'warn' ? 'ADVISORY · تنبيه' : 'VIOLATION · مخالف');
+      const badgeText = inspection.overallStatus === 'pass' ? 'Within recorded limits' : (inspection.overallStatus === 'warn' ? 'Review reference limits' : 'Outside recorded limits');
 
       dom.rampsCodeInspectorWrap.innerHTML = `
         <div class="code-inspector-card ${statusClass}">
@@ -233,8 +234,8 @@ export function createRampsView(context) {
             </span>
           </div>
           <div class="code-inspector-summary">
-            <span>${inspection.summaryText}</span>
-            <span class="code-inspector-arabic">${inspection.summaryArabic}</span>
+            <span>Reference comparison only. Verify the source and project requirements.</span>
+            <span class="code-inspector-arabic"></span>
           </div>
           <div class="code-checks-list">
             ${inspection.checks.map(c => `

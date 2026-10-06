@@ -15,13 +15,13 @@ export function createAreaVolumeView(context) {
   function updateAreaVolumeUnitSelects() {
     if (!dom.areavolInputUnit || !dom.areavolOutputUnit) return;
     if (state.calcType === 'area') {
-      const opts = Object.entries(AREA_UNITS).map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
+      const opts = Object.entries(AREA_UNITS).map(([k, u]) => `<option value="${k}" title="${u.name}">${u.symbol}</option>`).join('');
       dom.areavolInputUnit.innerHTML = opts;
       dom.areavolOutputUnit.innerHTML = opts;
       dom.areavolInputUnit.value = 'cm2';
       dom.areavolOutputUnit.value = 'm2';
     } else {
-      const opts = Object.entries(VOLUME_UNITS).map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
+      const opts = Object.entries(VOLUME_UNITS).map(([k, u]) => `<option value="${k}" title="${u.name}">${u.symbol}</option>`).join('');
       dom.areavolInputUnit.innerHTML = opts;
       dom.areavolOutputUnit.innerHTML = opts;
       dom.areavolInputUnit.value = 'cm3';
@@ -30,12 +30,24 @@ export function createAreaVolumeView(context) {
   }
 
   function calculateAreaVolume() {
+    state.lastValidAreavol = null;
+    if (dom.areavolResultVal) dom.areavolResultVal.textContent = '—';
+    if (dom.areavolExplanation) dom.areavolExplanation.textContent = '';
+    const realToDrawing = state.calcDirection === 'real_to_drawing';
+    dom.areavolTypeBtns?.forEach(btn => btn.setAttribute('aria-pressed', String(btn.dataset.type === state.calcType)));
+    dom.areavolDirBtns?.forEach(btn => btn.setAttribute('aria-pressed', String(btn.dataset.dir === state.calcDirection)));
+    if (dom.areavolInputBadge) dom.areavolInputBadge.textContent = realToDrawing ? 'Real '+state.calcType : 'Drawing '+state.calcType;
+    if (dom.areavolOutputBadge) dom.areavolOutputBadge.textContent = realToDrawing ? 'Drawing '+state.calcType : 'Real '+state.calcType;
+    const inputLabel = dom.areavolInputVal?.labels?.[0];
+    if (inputLabel) inputLabel.textContent = `${realToDrawing ? 'Real' : 'Drawing'} ${state.calcType}`;
+    const resultLabel = dom.areavolResultVal?.closest('.simple-result')?.querySelector('.simple-result-label');
+    if (resultLabel) resultLabel.textContent = `${realToDrawing ? 'Drawing' : 'Real'} ${state.calcType}`;
     const rawRatio = parseFloat(dom.areavolRatioInput?.value);
     if (isNaN(rawRatio) || rawRatio <= 0) {
       setUnifiedResultState({
         toolPrefix: 'areavol',
         status: 'error',
-        errorText: '⚠️ Scale Ratio: Enter a scale denominator ratio greater than 0 (e.g. 100 for 1:100).',
+        errorText: 'Scale Ratio: Enter a scale denominator ratio greater than 0 (e.g. 100 for 1:100).',
         btn: dom.btnRunAreavol
       });
       return;
@@ -50,14 +62,11 @@ export function createAreaVolumeView(context) {
       setUnifiedResultState({
         toolPrefix: 'areavol',
         status: 'error',
-        errorText: '⚠️ Measurement Input: Enter a positive area or volume dimension (e.g. 4 m² or 25 sq ft).',
+        errorText: 'Measurement Input: Enter a positive area or volume dimension (e.g. 4 m² or 25 sq ft).',
         btn: dom.btnRunAreavol
       });
       if (dom.areavolInputVal) dom.areavolInputVal.classList.add('input-error');
-      if (state.lastValidAreavol) {
-        if (dom.areavolResultVal) dom.areavolResultVal.textContent = state.lastValidAreavol.val;
-        if (dom.areavolResultUnit) dom.areavolResultUnit.textContent = state.lastValidAreavol.unit;
-      }
+
       return;
     }
 
@@ -67,18 +76,11 @@ export function createAreaVolumeView(context) {
       setUnifiedResultState({
         toolPrefix: 'areavol',
         status: 'error',
-        errorText: `⚠️ Measurement Input: Enter a positive value greater than zero (${parsed.error || 'e.g. 4 m²'}).`,
+        errorText: `Measurement Input: Enter a positive value greater than zero (${parsed.error || 'e.g. 4 m²'}).`,
         btn: dom.btnRunAreavol
       });
       if (dom.areavolInputVal) dom.areavolInputVal.classList.add('input-error');
 
-      // Preserve previous valid result
-      if (state.lastValidAreavol) {
-        if (dom.areavolResultVal) dom.areavolResultVal.textContent = state.lastValidAreavol.val;
-        if (dom.areavolResultUnit) dom.areavolResultUnit.textContent = state.lastValidAreavol.unit;
-      } else {
-        if (dom.areavolResultVal) dom.areavolResultVal.textContent = '---';
-      }
       return;
     }
 
@@ -97,7 +99,7 @@ export function createAreaVolumeView(context) {
           isDrawingToReal: isDrawingToReal
         });
         if (dom.areavolFactorBadge) {
-          dom.areavolFactorBadge.textContent = `× ${formatNumber(res.factor, 0)} (${state.areavolRatio}²)`;
+          dom.areavolFactorBadge.textContent = `${isDrawingToReal ? '×' : '÷'} ${formatNumber(res.factor, 0)} (${state.areavolRatio}²)`;
         }
       } else {
         res = scaleVolume({
@@ -108,18 +110,20 @@ export function createAreaVolumeView(context) {
           isDrawingToReal: isDrawingToReal
         });
         if (dom.areavolFactorBadge) {
-          dom.areavolFactorBadge.textContent = `× ${formatNumber(res.factor, 0)} (${state.areavolRatio}³)`;
+          dom.areavolFactorBadge.textContent = `${isDrawingToReal ? '×' : '÷'} ${formatNumber(res.factor, 0)} (${state.areavolRatio}³)`;
         }
       }
 
-      const formatted = formatNumber(res.resultValue, state.precision);
+      let formatted = formatNumber(res.resultValue, state.precision);
+      if (formatted === '0' && res.resultValue !== 0) formatted = res.resultValue.toExponential(4);
       state.lastValidAreavol = {
         val: formatted,
         unit: state.areavolOutputUnit
       };
 
       if (dom.areavolResultVal) dom.areavolResultVal.textContent = formatted;
-      if (dom.areavolResultUnit) dom.areavolResultUnit.textContent = state.areavolOutputUnit;
+      if (dom.areavolResultUnit) dom.areavolResultUnit.textContent = (state.calcType === 'area' ? AREA_UNITS : VOLUME_UNITS)[state.areavolOutputUnit]?.symbol || state.areavolOutputUnit;
+      if (dom.areavolExplanation) dom.areavolExplanation.textContent = (state.calcType === 'area' ? 'Area uses scale².' : 'Volume uses scale³.')+' At 1:'+state.areavolRatio+', this becomes '+formatted+' '+dom.areavolResultUnit.textContent+(isDrawingToReal?' in real size.':' on the drawing.');
 
       // Update Math Formula Microcopy
       if (dom.areavolMathFormula) {
@@ -136,7 +140,7 @@ export function createAreaVolumeView(context) {
         context: {
           'Scale Ratio': `1:${state.areavolRatio}`,
           'Source Value': `${formatNumber(parsed.value, 2)} ${state.areavolInputUnit}`,
-          'Multiplier': `× ${formatNumber(res.factor, 0)}`
+          'Scale operation': `${isDrawingToReal ? '×' : '÷'} ${formatNumber(res.factor, 0)}`
         },
         btn: dom.btnRunAreavol
       });
@@ -144,7 +148,7 @@ export function createAreaVolumeView(context) {
       setUnifiedResultState({
         toolPrefix: 'areavol',
         status: 'error',
-        errorText: `⚠️ Scaling error: ${err.message}`,
+        errorText: `Scaling error: ${err.message}`,
         btn: dom.btnRunAreavol
       });
     }

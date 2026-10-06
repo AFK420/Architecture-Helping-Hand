@@ -4248,7 +4248,7 @@ const WORKSPACES = [
       },
       {
         "toolId": "rescale",
-        "label": "Rescaler",
+        "label": "Change Drawing Scale",
         "desc": "Move a measurement from one scale to another",
         "keywords": [
           "rescale",
@@ -4262,7 +4262,7 @@ const WORKSPACES = [
       },
       {
         "toolId": "detector",
-        "label": "Scale Finder",
+        "label": "Find Drawing Scale",
         "desc": "Detect an unknown scale from paper + real sizes",
         "keywords": [
           "detect",
@@ -4321,8 +4321,8 @@ const WORKSPACES = [
       },
       {
         "toolId": "cad_handoff",
-        "label": "CAD Handoff",
-        "desc": "Target-specific payloads for Rhino / AutoCAD / SketchUp",
+        "label": "Send to CAD",
+        "desc": "Copy dimensions for Rhino, AutoCAD or SketchUp",
         "keywords": [
           "handoff",
           "send",
@@ -36134,6 +36134,9 @@ function createRescalerView(context) {
   const { state, dom, setUnifiedResultState } = context;
 
   function calculateRescaler() {
+    state.lastValidRescale = null;
+    if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = '—';
+    if (dom.rescaleExplanation) dom.rescaleExplanation.textContent = '';
     const origRatio = parseFloat(dom.rescaleOrigRatio?.value);
     const targetRatio = parseFloat(dom.rescaleTargetRatio?.value);
     const rawVal = dom.rescaleOrigVal?.value || '';
@@ -36143,7 +36146,7 @@ function createRescalerView(context) {
       setUnifiedResultState({
         toolPrefix: 'rescale',
         status: 'error',
-        errorText: '⚠️ Original Scale (Scale A): Enter a scale denominator greater than 0 (e.g. 50 for 1:50).',
+        errorText: 'Original drawing scale: Enter a scale denominator greater than 0 (e.g. 50 for 1:50).',
         btn: dom.btnRunRescale
       });
       return;
@@ -36153,7 +36156,7 @@ function createRescalerView(context) {
       setUnifiedResultState({
         toolPrefix: 'rescale',
         status: 'error',
-        errorText: '⚠️ Target Scale (Scale B): Enter a scale denominator greater than 0 (e.g. 200 for 1:200).',
+        errorText: 'New drawing scale: Enter a scale denominator greater than 0 (e.g. 200 for 1:200).',
         btn: dom.btnRunRescale
       });
       return;
@@ -36169,14 +36172,11 @@ function createRescalerView(context) {
       setUnifiedResultState({
         toolPrefix: 'rescale',
         status: 'error',
-        errorText: '⚠️ Measured Length: Enter a positive drawing length measured on Sheet A (e.g. 12, 15.5, 3 1/2).',
+        errorText: 'Measured Length: Enter a positive drawing length measured on the original drawing (e.g. 12, 15.5, 3 1/2).',
         btn: dom.btnRunRescale
       });
       if (dom.rescaleOrigVal) dom.rescaleOrigVal.classList.add('input-error');
-      if (state.lastValidRescale) {
-        if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = state.lastValidRescale.val;
-        if (dom.rescaleResultUnit) dom.rescaleResultUnit.textContent = state.lastValidRescale.unit;
-      }
+
       return;
     }
 
@@ -36186,18 +36186,11 @@ function createRescalerView(context) {
       setUnifiedResultState({
         toolPrefix: 'rescale',
         status: 'error',
-        errorText: `⚠️ Measured Length: Enter a positive drawing measurement greater than zero (${parsed.error || 'e.g. 12, 15.5'}).`,
+        errorText: `Measured Length: Enter a positive drawing measurement greater than zero (${parsed.error || 'e.g. 12, 15.5'}).`,
         btn: dom.btnRunRescale
       });
       if (dom.rescaleOrigVal) dom.rescaleOrigVal.classList.add('input-error');
 
-      // Preserve previous valid result
-      if (state.lastValidRescale) {
-        if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = state.lastValidRescale.val;
-        if (dom.rescaleResultUnit) dom.rescaleResultUnit.textContent = state.lastValidRescale.unit;
-      } else {
-        if (dom.rescaleResultVal) dom.rescaleResultVal.textContent = '---';
-      }
       return;
     }
 
@@ -36229,6 +36222,8 @@ function createRescalerView(context) {
         dom.rescaleRealSpan.textContent = `${formatNumber(res.realMeters, 3)} m`;
       }
 
+      if (dom.rescaleExplanation) dom.rescaleExplanation.textContent = 'A '+formatNumber(parsed.value,state.precision)+' '+state.rescaleOrigUnit+' line at 1:'+origRatio+' should be '+formatted+' '+state.rescaleTargetUnit+' at 1:'+targetRatio+'.';
+
       // Update Math Formula Microcopy
       if (dom.rescaleMathFormula) {
         const pct = (res.factor * 100).toFixed(1);
@@ -36241,7 +36236,7 @@ function createRescalerView(context) {
         status: 'success',
         context: {
           'Rescale': `1:${state.rescaleOrigRatio} ➔ 1:${state.rescaleTargetRatio}`,
-          'Source Sheet A': `${formatNumber(parsed.value, 2)} ${state.rescaleOrigUnit}`,
+          'Source the original drawing': `${formatNumber(parsed.value, 2)} ${state.rescaleOrigUnit}`,
           'Real Physical Distance': `${formatNumber(res.realMeters, 3)} m`
         },
         btn: dom.btnRunRescale
@@ -36250,7 +36245,7 @@ function createRescalerView(context) {
       setUnifiedResultState({
         toolPrefix: 'rescale',
         status: 'error',
-        errorText: `⚠️ Rescale error: ${err.message}`,
+        errorText: `Rescale error: ${err.message}`,
         btn: dom.btnRunRescale
       });
     }
@@ -36284,6 +36279,10 @@ function createDetectorView(context) {
   const { state, dom, setUnifiedResultState } = context;
 
   function calculateDetector() {
+    state.lastValidDetector = null;
+    state.lastDetectedRatio = null;
+    if (dom.detectorRatioVal) dom.detectorRatioVal.textContent = '—';
+    if (dom.detectorExplanation) dom.detectorExplanation.textContent = '';
     const rawPaper = dom.detectorPaperVal?.value || '';
     const rawReal = dom.detectorRealVal?.value || '';
 
@@ -36295,13 +36294,11 @@ function createDetectorView(context) {
       setUnifiedResultState({
         toolPrefix: 'detector',
         status: 'error',
-        errorText: '⚠️ Paper Dimension: Enter a measured drawing length (e.g. 4.5, 10, 2 1/4).',
+        errorText: 'Measured drawing length: Enter a measured drawing length (e.g. 4.5, 10, 2 1/4).',
         btn: dom.btnRunDetector
       });
       if (dom.detectorPaperVal) dom.detectorPaperVal.classList.add('input-error');
-      if (state.lastValidDetector && dom.detectorRatioVal) {
-        dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
-      }
+
       return;
     }
 
@@ -36310,13 +36307,11 @@ function createDetectorView(context) {
       setUnifiedResultState({
         toolPrefix: 'detector',
         status: 'error',
-        errorText: `⚠️ Paper Dimension: Enter a positive drawing length greater than zero (${paperP.error || 'e.g. 4.5 cm'}).`,
+        errorText: `Measured drawing length: Enter a positive drawing length greater than zero (${paperP.error || 'e.g. 4.5 cm'}).`,
         btn: dom.btnRunDetector
       });
       if (dom.detectorPaperVal) dom.detectorPaperVal.classList.add('input-error');
-      if (state.lastValidDetector && dom.detectorRatioVal) {
-        dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
-      }
+
       return;
     }
 
@@ -36326,13 +36321,11 @@ function createDetectorView(context) {
       setUnifiedResultState({
         toolPrefix: 'detector',
         status: 'error',
-        errorText: '⚠️ Real-World Dimension: Enter the known physical site distance (e.g. 9, 15, 30).',
+        errorText: 'Known real size: Enter the known physical site distance (e.g. 9, 15, 30).',
         btn: dom.btnRunDetector
       });
       if (dom.detectorRealVal) dom.detectorRealVal.classList.add('input-error');
-      if (state.lastValidDetector && dom.detectorRatioVal) {
-        dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
-      }
+
       return;
     }
 
@@ -36341,13 +36334,11 @@ function createDetectorView(context) {
       setUnifiedResultState({
         toolPrefix: 'detector',
         status: 'error',
-        errorText: `⚠️ Real-World Dimension: Enter a positive site dimension greater than zero (${realP.error || 'e.g. 9 m'}).`,
+        errorText: `Known real size: Enter a positive real measurement greater than zero (${realP.error || 'e.g. 9 m'}).`,
         btn: dom.btnRunDetector
       });
       if (dom.detectorRealVal) dom.detectorRealVal.classList.add('input-error');
-      if (state.lastValidDetector && dom.detectorRatioVal) {
-        dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
-      }
+
       return;
     }
 
@@ -36365,7 +36356,7 @@ function createDetectorView(context) {
         setUnifiedResultState({
           toolPrefix: 'detector',
           status: 'error',
-          errorText: '⚠️ Scale Detection: Dimensions must be greater than zero to determine scale.',
+          errorText: 'Scale Detection: Dimensions must be greater than zero to determine scale.',
           btn: dom.btnRunDetector
         });
         return;
@@ -36387,6 +36378,8 @@ function createDetectorView(context) {
         }
       }
 
+      if (dom.detectorExplanation) dom.detectorExplanation.textContent = 'The drawing is approximately '+res.ratioString+'.';
+
       // Update Math Formula Microcopy
       if (dom.detectorMathFormula) {
         dom.detectorMathFormula.innerHTML = `<strong>Formula:</strong> Scale 1:X = Real (${formatNumber(realP.value, 2)} ${state.detectRealUnit}) ÷ Paper (${formatNumber(paperP.value, 2)} ${state.detectPaperUnit}) = <strong>${res.ratioString}</strong>`;
@@ -36406,7 +36399,7 @@ function createDetectorView(context) {
       setUnifiedResultState({
         toolPrefix: 'detector',
         status: 'error',
-        errorText: `⚠️ Detection error: ${err.message}`,
+        errorText: `Detection error: ${err.message}`,
         btn: dom.btnRunDetector
       });
     }
@@ -36443,13 +36436,13 @@ function createAreaVolumeView(context) {
   function updateAreaVolumeUnitSelects() {
     if (!dom.areavolInputUnit || !dom.areavolOutputUnit) return;
     if (state.calcType === 'area') {
-      const opts = Object.entries(AREA_UNITS).map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
+      const opts = Object.entries(AREA_UNITS).map(([k, u]) => `<option value="${k}" title="${u.name}">${u.symbol}</option>`).join('');
       dom.areavolInputUnit.innerHTML = opts;
       dom.areavolOutputUnit.innerHTML = opts;
       dom.areavolInputUnit.value = 'cm2';
       dom.areavolOutputUnit.value = 'm2';
     } else {
-      const opts = Object.entries(VOLUME_UNITS).map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
+      const opts = Object.entries(VOLUME_UNITS).map(([k, u]) => `<option value="${k}" title="${u.name}">${u.symbol}</option>`).join('');
       dom.areavolInputUnit.innerHTML = opts;
       dom.areavolOutputUnit.innerHTML = opts;
       dom.areavolInputUnit.value = 'cm3';
@@ -36458,12 +36451,24 @@ function createAreaVolumeView(context) {
   }
 
   function calculateAreaVolume() {
+    state.lastValidAreavol = null;
+    if (dom.areavolResultVal) dom.areavolResultVal.textContent = '—';
+    if (dom.areavolExplanation) dom.areavolExplanation.textContent = '';
+    const realToDrawing = state.calcDirection === 'real_to_drawing';
+    dom.areavolTypeBtns?.forEach(btn => btn.setAttribute('aria-pressed', String(btn.dataset.type === state.calcType)));
+    dom.areavolDirBtns?.forEach(btn => btn.setAttribute('aria-pressed', String(btn.dataset.dir === state.calcDirection)));
+    if (dom.areavolInputBadge) dom.areavolInputBadge.textContent = realToDrawing ? 'Real '+state.calcType : 'Drawing '+state.calcType;
+    if (dom.areavolOutputBadge) dom.areavolOutputBadge.textContent = realToDrawing ? 'Drawing '+state.calcType : 'Real '+state.calcType;
+    const inputLabel = dom.areavolInputVal?.labels?.[0];
+    if (inputLabel) inputLabel.textContent = `${realToDrawing ? 'Real' : 'Drawing'} ${state.calcType}`;
+    const resultLabel = dom.areavolResultVal?.closest('.simple-result')?.querySelector('.simple-result-label');
+    if (resultLabel) resultLabel.textContent = `${realToDrawing ? 'Drawing' : 'Real'} ${state.calcType}`;
     const rawRatio = parseFloat(dom.areavolRatioInput?.value);
     if (isNaN(rawRatio) || rawRatio <= 0) {
       setUnifiedResultState({
         toolPrefix: 'areavol',
         status: 'error',
-        errorText: '⚠️ Scale Ratio: Enter a scale denominator ratio greater than 0 (e.g. 100 for 1:100).',
+        errorText: 'Scale Ratio: Enter a scale denominator ratio greater than 0 (e.g. 100 for 1:100).',
         btn: dom.btnRunAreavol
       });
       return;
@@ -36478,14 +36483,11 @@ function createAreaVolumeView(context) {
       setUnifiedResultState({
         toolPrefix: 'areavol',
         status: 'error',
-        errorText: '⚠️ Measurement Input: Enter a positive area or volume dimension (e.g. 4 m² or 25 sq ft).',
+        errorText: 'Measurement Input: Enter a positive area or volume dimension (e.g. 4 m² or 25 sq ft).',
         btn: dom.btnRunAreavol
       });
       if (dom.areavolInputVal) dom.areavolInputVal.classList.add('input-error');
-      if (state.lastValidAreavol) {
-        if (dom.areavolResultVal) dom.areavolResultVal.textContent = state.lastValidAreavol.val;
-        if (dom.areavolResultUnit) dom.areavolResultUnit.textContent = state.lastValidAreavol.unit;
-      }
+
       return;
     }
 
@@ -36495,18 +36497,11 @@ function createAreaVolumeView(context) {
       setUnifiedResultState({
         toolPrefix: 'areavol',
         status: 'error',
-        errorText: `⚠️ Measurement Input: Enter a positive value greater than zero (${parsed.error || 'e.g. 4 m²'}).`,
+        errorText: `Measurement Input: Enter a positive value greater than zero (${parsed.error || 'e.g. 4 m²'}).`,
         btn: dom.btnRunAreavol
       });
       if (dom.areavolInputVal) dom.areavolInputVal.classList.add('input-error');
 
-      // Preserve previous valid result
-      if (state.lastValidAreavol) {
-        if (dom.areavolResultVal) dom.areavolResultVal.textContent = state.lastValidAreavol.val;
-        if (dom.areavolResultUnit) dom.areavolResultUnit.textContent = state.lastValidAreavol.unit;
-      } else {
-        if (dom.areavolResultVal) dom.areavolResultVal.textContent = '---';
-      }
       return;
     }
 
@@ -36525,7 +36520,7 @@ function createAreaVolumeView(context) {
           isDrawingToReal: isDrawingToReal
         });
         if (dom.areavolFactorBadge) {
-          dom.areavolFactorBadge.textContent = `× ${formatNumber(res.factor, 0)} (${state.areavolRatio}²)`;
+          dom.areavolFactorBadge.textContent = `${isDrawingToReal ? '×' : '÷'} ${formatNumber(res.factor, 0)} (${state.areavolRatio}²)`;
         }
       } else {
         res = scaleVolume({
@@ -36536,18 +36531,20 @@ function createAreaVolumeView(context) {
           isDrawingToReal: isDrawingToReal
         });
         if (dom.areavolFactorBadge) {
-          dom.areavolFactorBadge.textContent = `× ${formatNumber(res.factor, 0)} (${state.areavolRatio}³)`;
+          dom.areavolFactorBadge.textContent = `${isDrawingToReal ? '×' : '÷'} ${formatNumber(res.factor, 0)} (${state.areavolRatio}³)`;
         }
       }
 
-      const formatted = formatNumber(res.resultValue, state.precision);
+      let formatted = formatNumber(res.resultValue, state.precision);
+      if (formatted === '0' && res.resultValue !== 0) formatted = res.resultValue.toExponential(4);
       state.lastValidAreavol = {
         val: formatted,
         unit: state.areavolOutputUnit
       };
 
       if (dom.areavolResultVal) dom.areavolResultVal.textContent = formatted;
-      if (dom.areavolResultUnit) dom.areavolResultUnit.textContent = state.areavolOutputUnit;
+      if (dom.areavolResultUnit) dom.areavolResultUnit.textContent = (state.calcType === 'area' ? AREA_UNITS : VOLUME_UNITS)[state.areavolOutputUnit]?.symbol || state.areavolOutputUnit;
+      if (dom.areavolExplanation) dom.areavolExplanation.textContent = (state.calcType === 'area' ? 'Area uses scale².' : 'Volume uses scale³.')+' At 1:'+state.areavolRatio+', this becomes '+formatted+' '+dom.areavolResultUnit.textContent+(isDrawingToReal?' in real size.':' on the drawing.');
 
       // Update Math Formula Microcopy
       if (dom.areavolMathFormula) {
@@ -36564,7 +36561,7 @@ function createAreaVolumeView(context) {
         context: {
           'Scale Ratio': `1:${state.areavolRatio}`,
           'Source Value': `${formatNumber(parsed.value, 2)} ${state.areavolInputUnit}`,
-          'Multiplier': `× ${formatNumber(res.factor, 0)}`
+          'Scale operation': `${isDrawingToReal ? '×' : '÷'} ${formatNumber(res.factor, 0)}`
         },
         btn: dom.btnRunAreavol
       });
@@ -36572,7 +36569,7 @@ function createAreaVolumeView(context) {
       setUnifiedResultState({
         toolPrefix: 'areavol',
         status: 'error',
-        errorText: `⚠️ Scaling error: ${err.message}`,
+        errorText: `Scaling error: ${err.message}`,
         btn: dom.btnRunAreavol
       });
     }
@@ -36621,6 +36618,7 @@ function createExpressionView(context) {
     if (!dom.expressionInput) return;
 
     const rawExpr = dom.expressionInput.value.trim();
+    state.lastValidExpression = null;
     const defaultUnit = dom.expressionDefaultUnit?.value || 'mm';
     let scaleRatio = 50;
     if (dom.expressionScaleSelect) {
@@ -36701,6 +36699,7 @@ function createExpressionView(context) {
       }
     } else {
       // Invalid or incomplete syntax
+      if (dom.expressionDrawingVal) dom.expressionDrawingVal.textContent = '—';
       if (dom.expressionLivePreview) {
         dom.expressionLivePreview.textContent = `Live: Incomplete`;
         dom.expressionLivePreview.style.color = 'var(--color-error)';
@@ -36779,6 +36778,7 @@ function createMultiScaleView(context) {
     if (!dom.multiscaleInput) return;
 
     const rawInput = dom.multiscaleInput.value.trim();
+    state.lastValidMultiScale = null;
     const defaultUnit = dom.multiscaleDefaultUnit?.value || 'mm';
     const displayUnit = dom.multiscaleDisplayUnit?.value || 'mm';
     const sortOrder = dom.multiscaleSortSelect?.value || 'ratio_asc';
@@ -36858,6 +36858,8 @@ function createMultiScaleView(context) {
         AudioService.playTick();
       }
     } else {
+      if (dom.multiscaleRealVal) dom.multiscaleRealVal.textContent = '—';
+      if (dom.multiscaleTableBody) dom.multiscaleTableBody.innerHTML = '';
       if (dom.multiscaleLivePreview) {
         dom.multiscaleLivePreview.textContent = 'Live: Incomplete';
         dom.multiscaleLivePreview.style.color = 'var(--color-error)';
@@ -37051,7 +37053,7 @@ function createChainsView(context) {
       precision: state.precision
     });
 
-    state.lastValidChain = calc;
+    state.lastValidChain = calc.isValid && calc.segmentCount > 0 ? calc : null;
 
     // Update Result Hero and Breakdown Metrics
     if (dom.chainsOverallVal) dom.chainsOverallVal.textContent = calc.overallExtentFormatted;
@@ -37088,7 +37090,7 @@ function createChainsView(context) {
 
     setUnifiedResultState({
       toolPrefix: 'chains',
-      status: calc.isValid ? 'success' : (calc.invalidCount > 0 ? 'error' : 'ready'),
+      status: calc.isValid && calc.segmentCount > 0 ? 'success' : (calc.invalidCount > 0 ? 'error' : 'ready'),
       errorText: calc.invalidCount > 0 ? `⚠️ ${calc.invalidCount} segment(s) have invalid measurement inputs` : ''
     });
 
@@ -37178,12 +37180,12 @@ function createChainsView(context) {
             <input type="checkbox" class="chain-toggle-chk" data-index="${idx}" ${seg.enabled !== false ? 'checked' : ''} title="Toggle segment enable/disable" />
           </td>
           <td>
-            <input type="text" class="chain-inline-name" data-index="${idx}" value="${escapeHtml(seg.name)}" placeholder="Name" style="background: transparent; border: 1px solid transparent; width: 100%; font-weight: 600; color: var(--text-primary);" />
+            <input type="text" class="chain-inline-name" data-index="${idx}" value="${escapeHtml(seg.name)}" placeholder="Name" aria-label="Segment ${idx + 1} name" style="background: transparent; border: 1px solid transparent; width: 100%; font-weight: 600; color: var(--text-primary);" />
           </td>
           <td style="font-family: var(--font-family-mono); font-size: 0.8rem; color: var(--text-secondary);">${seg.startFormatted}</td>
           <td style="font-family: var(--font-family-mono); font-size: 0.8rem; color: var(--text-secondary);">${seg.endFormatted}</td>
           <td>
-            <input type="text" class="chain-inline-input" data-index="${idx}" value="${escapeHtml(seg.rawInput)}" style="background: transparent; border: 1px solid var(--border-color-light); border-radius: 3px; padding: 2px 4px; width: 90px; font-family: var(--font-family-mono); font-weight: 700; color: var(--accent-primary);" />
+            <input type="text" class="chain-inline-input" data-index="${idx}" value="${escapeHtml(seg.rawInput)}" aria-label="Segment ${idx + 1} measurement" style="background: transparent; border: 1px solid var(--border-color-light); border-radius: 3px; padding: 2px 4px; width: 90px; font-family: var(--font-family-mono); font-weight: 700; color: var(--accent-primary);" />
           </td>
           <td style="text-align: center;">
             <button type="button" class="dim-type-badge ${typeBadgeClass} chain-type-cycle-btn" data-index="${idx}" title="Click to cycle type (SEG ➔ REF ➔ ALW)">
@@ -37418,6 +37420,11 @@ function createCadClipboardView(context) {
 
   function renderCadClipboard(isExplicitRun = false) {
     const cad = state.cadClipboard;
+    const targetSelect = typeof document === 'undefined' ? null : document.getElementById('cad-application-select');
+    const sourceSelect = typeof document === 'undefined' ? null : document.getElementById('cad-source-select');
+    if (targetSelect) targetSelect.value = cad.preset;
+    if (sourceSelect) sourceSelect.value = cad.source;
+    if (dom.btnCadCopyMain) dom.btnCadCopyMain.textContent = `Copy for ${CAD_FORMAT_PRESETS[cad.preset]?.name || 'CAD'}`;
 
     // Sync form values into state
     if (dom.cadTargetSelect) cad.targetValue = dom.cadTargetSelect.value || 'real';
@@ -37518,9 +37525,11 @@ function createCadClipboardView(context) {
       dom.cadSourceCountBadge.textContent = `${outputResult.count} ${outputResult.count === 1 ? 'ITEM' : 'ITEMS'}`;
     }
 
+    const invalidManual = cad.source === 'manual' && (dom.cadManualInput?.value || '').trim() && outputResult.count === 0;
     setUnifiedResultState({
       toolPrefix: 'cad',
-      status: outputResult.count > 0 ? 'success' : 'ready'
+      status: outputResult.count > 0 ? 'success' : invalidManual ? 'error' : 'ready',
+      errorText: invalidManual ? 'Enter valid dimensions, such as 2400mm or 2.4m.' : ''
     });
 
     saveCadClipboardSettings();
@@ -37649,7 +37658,7 @@ function createCadHandoffView(context) {
       dom.handoffTargetDescription.textContent = profile.description;
     }
     if (dom.handoffCopyTargetLabel && profile) {
-      dom.handoffCopyTargetLabel.textContent = profile.label.toUpperCase();
+      dom.handoffCopyTargetLabel.textContent = profile.label;
     }
 
     // Build payload via the single core entry point
@@ -37681,10 +37690,11 @@ function createCadHandoffView(context) {
       dom.handoffPreviewBox.value = payload.text;
     }
 
+    const invalidManual = h.source === 'manual' && (dom.handoffManualInput?.value || '').trim() && payload.empty;
     setUnifiedResultState({
       toolPrefix: 'handoff',
-      status: payload.empty ? (validation.ok ? 'ready' : 'error') : 'success',
-      errorText: validation.ok ? '' : validation.error
+      status: payload.empty ? (validation.ok && !invalidManual ? 'ready' : 'error') : 'success',
+      errorText: validation.ok ? invalidManual ? 'Enter valid dimensions, such as 2400mm or 2.4m.' : '' : validation.error
     });
 
     saveCadHandoffSettings();
@@ -37697,10 +37707,10 @@ function createCadHandoffView(context) {
   function copyCadHandoffPayload() {
     const payload = state.cadHandoff.lastPayload;
     const profile = CAD_TARGET_PROFILES[state.cadHandoff.target];
-    const label = profile ? `Payload for ${profile.label}` : 'CAD payload';
+    const label = profile ? `Dimensions for ${profile.label}` : 'CAD dimensions';
 
     if (!payload || payload.empty || !payload.text || !payload.text.trim()) {
-      showToast('No CAD payload to copy — run the source tool first', 'warning');
+      showToast('No dimensions to copy. Enter values or choose a source with results.', 'warning');
       return;
     }
 
@@ -37845,7 +37855,8 @@ function createBatchCadView(context) {
 
     setUnifiedResultState({
       toolPrefix: 'batch',
-      status: converted.summary.invalidRows > 0 ? (converted.summary.validRows > 0 ? 'success' : 'error') : 'success'
+      status: converted.summary.invalidRows > 0 ? (converted.summary.validRows > 0 ? 'success' : 'error') : 'success',
+      errorText: converted.summary.invalidRows > 0 ? 'Review the invalid rows below. Enter dimensions such as 2400mm or 2.4m.' : ''
     });
 
     saveBatchCadSettings();
@@ -37938,7 +37949,7 @@ function createBatchCadView(context) {
           <td style="font-family: var(--font-family-mono); font-size: 0.85rem; font-weight: 700; color: ${row.valid ? 'var(--accent-primary)' : 'var(--color-error, #ef4444)'};">${escapeBatchCell(row.targetFormatted)}</td>
           <td style="text-align: center;">
             <span class="batch-status-pill ${row.valid ? (row.status === 'UNCHANGED' ? 'unchanged' : 'valid') : 'invalid'}">
-              ${row.valid ? (row.status === 'UNCHANGED' ? 'UNCHANGED' : '✓ VALID') : '⚠ INVALID'}
+              ${row.valid ? (row.status === 'UNCHANGED' ? 'Unchanged' : 'Valid') : 'Invalid'}
             </span>
           </td>
           <td style="text-align: right;">
@@ -39364,6 +39375,7 @@ function createStairsView(context) {
   }
 
   function renderInvalid(isExplicitRun, message) {
+    state.stairs.lastResult = null;
     clearResultPanels();
     showError(message);
     if (isExplicitRun) AudioService.playTick();
@@ -39426,7 +39438,7 @@ function createStairsView(context) {
       const statusClass = inspection.overallStatus === 'pass' ? 'status-pass' : (inspection.overallStatus === 'warn' ? 'status-warn' : 'status-fail');
       const badgeClass = inspection.overallStatus === 'pass' ? 'badge-pass' : (inspection.overallStatus === 'warn' ? 'badge-warn' : 'badge-fail');
       const badgeIcon = inspection.overallStatus === 'pass' ? '✓' : (inspection.overallStatus === 'warn' ? '⚠️' : '✗');
-      const badgeText = inspection.overallStatus === 'pass' ? 'PASS · مطابق' : (inspection.overallStatus === 'warn' ? 'ADVISORY · تنبيه' : 'VIOLATION · مخالف');
+      const badgeText = inspection.overallStatus === 'pass' ? 'Within recorded limits' : (inspection.overallStatus === 'warn' ? 'Review reference limits' : 'Outside recorded limits');
 
       dom.stairsCodeInspectorWrap.innerHTML = `
         <div class="code-inspector-card ${statusClass}">
@@ -39441,8 +39453,8 @@ function createStairsView(context) {
             </span>
           </div>
           <div class="code-inspector-summary">
-            <span>${inspection.summaryText}</span>
-            <span class="code-inspector-arabic">${inspection.summaryArabic}</span>
+            <span>Reference comparison only. Verify the source and project requirements.</span>
+            <span class="code-inspector-arabic"></span>
           </div>
           <div class="code-checks-list">
             ${inspection.checks.map(c => `
@@ -39873,6 +39885,7 @@ function createRampsView(context) {
   }
 
   function renderInvalid(isExplicitRun, message) {
+    state.ramps.lastResult = null;
     clearResultPanels();
     showError(message);
     if (isExplicitRun) AudioService.playTick();
@@ -39896,12 +39909,12 @@ function createRampsView(context) {
 
   function renderResult(result) {
     const f = result.formatted;
-    const isRunMode = result.mode === RAMP_INPUT_MODES.RISE_DESIRED_SLOPE || result.mode === RAMP_INPUT_MODES.RUN_DESIRED_SLOPE;
+    const isRunMode = result.mode === RAMP_INPUT_MODES.RISE_DESIRED_SLOPE;
 
     // Hero: the value the mode solved for
     if (dom.rampsHeroVal) dom.rampsHeroVal.textContent = isRunMode ? f.run : (result.mode === RAMP_INPUT_MODES.RUN_DESIRED_SLOPE ? f.rise : f.slopePercent);
     if (dom.rampsHeroLabel) {
-      dom.rampsHeroLabel.textContent = isRunMode ? 'REQUIRED RUN' : (result.mode === RAMP_INPUT_MODES.RUN_DESIRED_SLOPE ? 'REQUIRED RISE' : 'ACHIEVED SLOPE');
+      dom.rampsHeroLabel.textContent = isRunMode ? 'Required horizontal run' : (result.mode === RAMP_INPUT_MODES.RUN_DESIRED_SLOPE ? 'Calculated rise' : 'Calculated slope');
     }
     if (dom.rampsSummaryBadge) {
       dom.rampsSummaryBadge.textContent = `${f.slopePercent} · ${f.ratio} · ${f.angle}`;
@@ -39934,7 +39947,7 @@ function createRampsView(context) {
       const statusClass = inspection.overallStatus === 'pass' ? 'status-pass' : (inspection.overallStatus === 'warn' ? 'status-warn' : 'status-fail');
       const badgeClass = inspection.overallStatus === 'pass' ? 'badge-pass' : (inspection.overallStatus === 'warn' ? 'badge-warn' : 'badge-fail');
       const badgeIcon = inspection.overallStatus === 'pass' ? '✓' : (inspection.overallStatus === 'warn' ? '⚠️' : '✗');
-      const badgeText = inspection.overallStatus === 'pass' ? 'PASS · مطابق' : (inspection.overallStatus === 'warn' ? 'ADVISORY · تنبيه' : 'VIOLATION · مخالف');
+      const badgeText = inspection.overallStatus === 'pass' ? 'Within recorded limits' : (inspection.overallStatus === 'warn' ? 'Review reference limits' : 'Outside recorded limits');
 
       dom.rampsCodeInspectorWrap.innerHTML = `
         <div class="code-inspector-card ${statusClass}">
@@ -39949,8 +39962,8 @@ function createRampsView(context) {
             </span>
           </div>
           <div class="code-inspector-summary">
-            <span>${inspection.summaryText}</span>
-            <span class="code-inspector-arabic">${inspection.summaryArabic}</span>
+            <span>Reference comparison only. Verify the source and project requirements.</span>
+            <span class="code-inspector-arabic"></span>
           </div>
           <div class="code-checks-list">
             ${inspection.checks.map(c => `
@@ -40484,6 +40497,7 @@ function createSlopesView(context) {
   }
 
   function renderInvalid(isExplicitRun, message) {
+    state.slopes.lastResult = null;
     clearResultPanels();
     showError(message);
     if (isExplicitRun) AudioService.playTick();
@@ -40526,7 +40540,7 @@ function createSlopesView(context) {
       const statusClass = inspection.overallStatus === 'pass' ? 'status-pass' : (inspection.overallStatus === 'warn' ? 'status-warn' : 'status-fail');
       const badgeClass = inspection.overallStatus === 'pass' ? 'badge-pass' : (inspection.overallStatus === 'warn' ? 'badge-warn' : 'badge-fail');
       const badgeIcon = inspection.overallStatus === 'pass' ? '✓' : (inspection.overallStatus === 'warn' ? '⚠️' : '✗');
-      const badgeText = inspection.overallStatus === 'pass' ? 'PEDESTRIAN WALKWAY · مسار مشاة' : (inspection.overallStatus === 'warn' ? 'TREATED AS RAMP · يصنف كمنحدر' : 'VIOLATION · مخالف');
+      const badgeText = inspection.overallStatus === 'pass' ? 'Within recorded limits' : (inspection.overallStatus === 'warn' ? 'Review reference limits' : 'Outside recorded limits');
 
       dom.slopesCodeInspectorWrap.innerHTML = `
         <div class="code-inspector-card ${statusClass}">
@@ -40541,8 +40555,8 @@ function createSlopesView(context) {
             </span>
           </div>
           <div class="code-inspector-summary">
-            <span>${inspection.summaryText}</span>
-            <span class="code-inspector-arabic">${inspection.summaryArabic}</span>
+            <span>Reference comparison only. Verify the source and project requirements.</span>
+            <span class="code-inspector-arabic"></span>
           </div>
           <div class="code-checks-list">
             ${inspection.checks.map(c => `
@@ -42083,10 +42097,10 @@ function getToolGuide(toolId) {
 
 /** Workflow help extends the existing catalog, with external CAD handoff guidance. */
 const WORKFLOW_GUIDES = Object.freeze({
-  rescale: ['Rescale', 'Translate drawing dimensions between two scales.', 'Reconcile detail and general arrangement measurements.', 'When comparing drawings with different print scales.', 'Enter the drawing length and source and destination scales; review the converted paper length.', 'A 100 mm line at 1:50 becomes 50 mm at 1:100.'],
-  detector: ['Detect Scale', 'Infer a drawing scale from a known real length.', 'Calibrate scanned or printed references.', 'When a scale label is missing or a scan has changed size.', 'Measure a reliable reference on the drawing, enter its known real size, and inspect the inferred ratio.', 'A verified 5 m wall measuring 100 mm indicates 1:50.'],
-  area_volume: ['Area & Volume', 'Convert areas and volumes with scale powers and explicit units.', 'Avoid treating square and cubic quantities as linear lengths.', 'During quantity studies and model-to-paper comparisons.', 'Choose area or volume, units, direction and scale; enter the quantity and review the result.', 'An area reduced at 1:50 uses a factor of 2500, while volume uses 125000.'],
-  reference: ['Architectural References', 'Compare common architectural lengths at the current scale.', 'Build intuition for drawing readability.', 'Before selecting a presentation scale.', 'Choose a reference and scale; compare paper sizes and copy the verified value.', 'Compare a typical door width at 1:50 and 1:100.'],
+  rescale: ['Change Drawing Scale', 'Translate drawing dimensions between two scales.', 'Reconcile detail and general arrangement measurements.', 'When comparing drawings with different print scales.', 'Enter the drawing length and source and destination scales; review the converted paper length.', 'A 100 mm line at 1:50 becomes 50 mm at 1:100.'],
+  detector: ['Find Drawing Scale', 'Infer a drawing scale from a known real length.', 'Calibrate scanned or printed references.', 'When a scale label is missing or a scan has changed size.', 'Measure a reliable reference on the drawing, enter its known real size, and inspect the inferred ratio.', 'A verified 5 m wall measuring 100 mm indicates 1:50.'],
+  area_volume: ['Area & Volume Scale Converter', 'Convert between an area or volume on a drawing and its real size.', 'Avoid treating square and cubic quantities as linear lengths.', 'During quantity studies and model-to-paper comparisons.', 'Choose area or volume, units, direction and scale; enter the quantity and review the result.', 'An area reduced at 1:50 uses a factor of 2500, while volume uses 125000.'],
+  reference: ['Architectural References', 'Compare common architectural lengths at the current scale.', 'Build intuition for drawing readability.', 'Before selecting a presentation scale.', 'Choose a scale and search for a reference; compare paper sizes and print the sheet if needed.', 'Compare a typical door width at 1:50 and 1:100.'],
   standards_explorer: ['Standards Explorer', 'Browse recorded reference constraints and planning guidance.', 'Identify which assumptions need jurisdictional checking.', 'During programming and design review.', 'Find a topic, review source and applicability, then verify the original publication for your location.', 'Use an accessibility reference as a question to verify, rather than proof of compliance.'],
   projects: ['Projects', 'Save, open, duplicate and back up project data.', 'Keep research, site findings and design decisions together.', 'At the start of work and before moving devices.', 'Create a named project, save it, take snapshots before major changes, and export JSON backups.', 'Duplicate a library project to explore a new concept while keeping the original evidence.'],
   dimensions: ['Dimensions', 'Quick measurements, named schedules, dimension chains and scale comparisons.', 'Keep related measurements together and avoid repeated conversion.', 'During surveying, setting out and preparation of CAD schedules.', 'Choose Quick, Schedule, Chain or Compare Scales. Enter units or expressions. Review totals, then copy or export.', 'Chain: 1200 + 1800 + 900 + 1500 mm gives setting-out coordinates 0, 1200, 3000, 3900, 5400 mm.'],
@@ -42099,11 +42113,11 @@ const WORKFLOW_GUIDES = Object.freeze({
   sun_path: ['Sun Path', 'Deterministic solar-position and shadow calculations.', 'Study orientation and approximate solar exposure.', 'When comparing shading and orientation strategies.', 'Set coordinates, timezone, date, time and object height; review the diagram.', 'Compare morning and afternoon shadows for the same height.'],
   concept: ['Concept', 'Design drivers, goals, constraints, relationships and narrative.', 'Connect research and site implications to design thinking.', 'After recording the project brief and initial evidence.', 'Link finding IDs to drivers; write the concept statement; add spatial relationships; explore ideas with AI.', 'A social finding and access constraint support a courtyard with separate public and service routes.'],
   reports: ['Reports & Boards', 'A controlled document composer built from project evidence.', 'Present the same research as a report or architecture board.', 'For reviews, submissions and precedent comparisons.', 'Select sections and template, reorder content, choose physical paper size, preview, then export.', 'Use A4 portrait for a research report and A3 landscape for an analysis board.'],
-  stairs: ['Stairs', 'Deterministic stair geometry, proportion and schedule.', 'Compare feasible flights before drafting.', 'During circulation planning.', 'Set total rise, target riser and going; review count and geometry; copy the schedule to CAD.', 'Check a 3.2 m floor rise with the project jurisdiction; verify headroom separately.'],
-  ramps: ['Ramps', 'Rise/run, slope and landing calculations.', 'Study accessible routes and level changes.', 'During access and site circulation planning.', 'Enter rise and target gradient, inspect run and landings, then copy the values.', 'A 0.6 m rise at 1:12 needs 7.2 m sloping run before landing allowances.'],
-  slopes: ['Slopes', 'Deterministic conversion of rise/run, percent, ratio and angle.', 'Coordinate terrain, drainage and grading discussions.', 'When working with survey levels or contour information.', 'Enter two known quantities; review the slope and unit conventions.', 'A 0.5 m rise over 10 m is a 5% slope.'],
+  stairs: ['Stair Calculator', 'Find the riser count, going and run for a straight stair.', 'Compare feasible flights before drafting.', 'During circulation planning.', 'Set total rise, target riser and going; review count and geometry; copy the schedule to CAD.', 'Check a 3.2 m floor rise with the project jurisdiction; verify headroom separately.'],
+  ramps: ['Ramp Calculator', 'Find the run needed for a rise and slope.', 'Study accessible routes and level changes.', 'During access and site circulation planning.', 'Enter rise and target gradient, inspect run and landings, then copy the values.', 'A 0.6 m rise at 1:12 needs 7.2 m horizontal run before landing allowances.'],
+  slopes: ['Slope Analyzer', 'Compare slope as a percentage, ratio and angle.', 'Coordinate terrain, drainage and grading discussions.', 'When working with survey levels or contour information.', 'Enter two known quantities; review the slope and unit conventions.', 'A 0.5 m rise over 10 m is a 5% slope.'],
   cad_clipboard: ['CAD Clipboard', 'Format measurements for external CAD applications.', 'Reduce transcription errors and unit mismatches.', 'Before moving numbers into CAD.', 'Choose a target application and output format, check units, copy, then paste.', 'Copy a millimeter schedule into an AutoCAD workflow using full-size values.'],
-  cad_handoff: ['CAD Handoff', 'Target-specific dimension payloads.', 'Make the receiving application and units explicit.', 'When handing measurements to a design model.', 'Select target, review the payload, copy and check one known length after pasting.', 'Send 2400 mm as a real dimension and choose print scale in the viewport.'],
+  cad_handoff: ['Send to CAD', 'Copy or export dimensions for a selected CAD application.', 'Make the receiving application and units explicit.', 'When handing measurements to a design model.', 'Select target, review the preview, copy and check one known length after pasting.', 'Send 2400 mm as a real dimension and choose print scale in the viewport.'],
   batch_cad: ['Batch CAD', 'Convert a list or table of measurements.', 'Prepare consistent schedules efficiently.', 'When multiple dimensions use the same conversion rules.', 'Paste the list, select units and scale rules, review invalid rows, then export.', 'Convert a surveyed facade opening list to a CAD-ready TSV schedule.'],
   requirements: ['Brief & Requirements', 'Editable project requirements and adjacency relationships.', 'Track what the project must provide.', 'During programming and review.', 'Record building type, area targets, room counts and relationships. Check requirements against verified external drawings.', 'Record classroom counts and net area targets before evaluating a CAD plan.'],
   survey: ['Survey', 'Measurements with origin and verification status.', 'Keep estimates separate from verified dimensions.', 'During fieldwork or calibration of a scanned drawing.', 'Record source and units, verify measurements, calibrate a known distance, then copy room dimensions.', 'Verify measured width and depth before copying a room footprint to CAD.'],
@@ -45334,6 +45348,7 @@ function createStandardsExplorerView(context) {
   };
 
   let selected = null; // code id
+  let query = '';
 
   function escapeHtml(str) {
     if (str === null || str === undefined) return '';
@@ -45378,7 +45393,7 @@ function createStandardsExplorerView(context) {
       return `
       <section class="archi-card standards-discipline-card" aria-label="${d.label} standards for ${code.shortName}">
         <div class="result-header">
-          <span class="result-label">${d.label.toUpperCase()}</span>
+          <span class="result-label">${d.label} · Reference</span>
           <span class="standards-citation">${escapeHtml(citation || '')}</span>
         </div>
         <table class="standards-table">
@@ -45392,27 +45407,37 @@ function createStandardsExplorerView(context) {
           </tbody>
         </table>
         <div class="standards-actions">
-          <button type="button" class="result-action-btn" data-apply="${d.id}">Enforce in ${d.label === 'Pedestrian Slopes' ? 'Slopes' : d.label} calculator →</button>
+          <button type="button" class="result-action-btn" data-apply="${d.id}">Use reference in ${d.label === 'Pedestrian Slopes' ? 'Slopes' : d.label} calculator →</button>
         </div>
       </section>`;
     }).join('');
 
     host.innerHTML = `
+      <div class="reference-search"><label for="standards-search-input">Find a guideline</label><input type="search" id="standards-search-input" class="form-input" value="${escapeHtml(query)}" placeholder="Search riser, landing, headroom…"><p>Recorded jurisdiction sources. Verify the current publication and project requirements; these comparisons do not certify compliance.</p></div>
       <section class="research-filter-bar" aria-label="Jurisdiction">
         <div class="research-pill-row">${codePills}</div>
         <div class="research-filter-meta">
-          <span class="standards-count">${codes.length} jurisdictions · values identical to the compliance engine</span>
+          <span class="standards-count">${codes.length} recorded jurisdiction references · verify for your project</span>
           <button type="button" class="result-action-btn" id="standards-export">Export as Markdown</button>
         </div>
       </section>
       <div class="standards-head archi-card">
-        <div class="result-header"><span class="result-label">SELECTED CODE</span></div>
+        <div class="result-header"><span class="result-label">Jurisdiction source</span></div>
         <h3 class="standards-code-name">${escapeHtml(code.name)}</h3>
         <div class="standards-code-jurisdiction">${escapeHtml(code.jurisdiction)}</div>
-        <div class="standards-code-citation"><strong>Legal citation:</strong> ${escapeHtml(code.citation)}</div>
+        <div class="standards-code-citation"><strong>Source citation:</strong> ${escapeHtml(code.citation)}</div>
       </div>
       <div class="standards-grid">${tablesHtml}</div>
     `;
+    const filter = () => {
+      host.querySelectorAll('.standards-discipline-card').forEach(card => {
+        const rows = [...card.querySelectorAll('tbody tr')];
+        for (const row of rows) row.hidden = !(`${card.getAttribute('aria-label')} ${row.textContent}`.toLowerCase().includes(query.toLowerCase()));
+        card.hidden = !rows.some(row => !row.hidden);
+      });
+    };
+    host.querySelector('#standards-search-input').addEventListener('input', event => { query = event.target.value.trim(); filter(); });
+    filter();
 
     host.querySelectorAll('[data-code]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -45426,8 +45451,10 @@ function createStandardsExplorerView(context) {
       btn.addEventListener('click', () => {
         const target = btn.dataset.apply === 'stair' ? 'stairs'
           : btn.dataset.apply === 'ramp' ? 'ramps' : 'slopes';
-        showToast(`Opening the ${target} calculator — it enforces ${code.shortName} live`, 'info');
         switchMode(target);
+        const select = document.getElementById(`${target}-code-select`);
+        if (select) { select.value = selected; select.dispatchEvent(new Event('change', { bubbles: true })); }
+        showToast(`Using ${code.shortName} as a reference. Verify it for your project.`, 'info');
       });
     });
   }
@@ -46198,16 +46225,17 @@ function mountWorkflowHelp(toolId) {
   if (!host || host.querySelector('.workflow-help')) return;
   const guide = getWorkflowGuide(toolId);
   if (!guide) return;
+  host.querySelectorAll('.card-tag').forEach(tag => { if (/MODE \d/i.test(tag.textContent)) tag.hidden = true; });
   const safe = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const details = document.createElement('details');
   details.className = 'workflow-help';
   details.innerHTML = `<summary>How to use</summary><div class="workflow-help-grid"><section><h3>Overview</h3><p>${safe(guide.what)}</p><p>${safe(guide.why)}</p><p>${safe(guide.how)}</p></section><section><h3>Example</h3><p>${safe(guide.example)}</p></section><section><h3>CAD workflow</h3>${['autocad','rhino','sketchup'].map(key=>`<h4>${safe({autocad:'AutoCAD',rhino:'Rhino',sketchup:'SketchUp'}[key])}</h4><p>${safe(guide[key])}</p>`).join('')}</section><section><h3>Other tools and technical notes</h3><p>${safe(guide.other)}</p></section></div>`;
   const intro = document.createElement('div');
   intro.className = 'workflow-intro';
-  intro.innerHTML = `<p>${safe(guide.what)}</p><p><strong>Use this when</strong> ${safe(guide.when)}</p>`;
-  const heading=host.querySelector('h2');
+  intro.innerHTML = `<p>${safe(guide.what)}</p>`;
+  const heading=host.querySelector('h1')||host.querySelector('h2');
   if(heading && toolId!=='converter')heading.textContent=guide.name;
-  const anchor=toolId==='converter'?host.querySelector('.tool-intro'):host.querySelector('.instrument-header-bar,.card-title-row')||heading;
+  const anchor=toolId==='converter'?host.querySelector('.tool-intro'):toolId==='dimensions'?heading:host.querySelector('.simple-tool-header,.instrument-header-bar,.card-title-row')||heading;
   if(anchor){if(toolId==='converter')anchor.after(details);else anchor.after(intro,details);}
   else host.prepend(intro,details);
 }
@@ -46737,6 +46765,7 @@ function initializeApp() {
     rescaleRealSpan: document.getElementById('rescale-real-span'),
     btnCopyRescale: document.getElementById('btn-copy-rescale'),
     rescaleMathFormula: document.getElementById('rescale-math-formula'),
+    rescaleExplanation: document.getElementById('rescale-explanation'),
     rescaleResultStaleTag: document.getElementById('rescale-result-stale-tag'),
 
     // Mode 3: Detector Elements
@@ -46747,6 +46776,8 @@ function initializeApp() {
     btnRunDetector: document.getElementById('btn-run-detector'),
     detectorErrorMsg: document.getElementById('detector-error-msg'),
     detectorRatioVal: document.getElementById('detector-ratio-val'),
+    detectorExplanation: document.getElementById('detector-explanation'),
+    btnCopyDetected: document.getElementById('btn-copy-detected'),
     detectorPresetBadge: document.getElementById('detector-preset-badge'),
     btnApplyDetected: document.getElementById('btn-apply-detected'),
     detectorMathFormula: document.getElementById('detector-math-formula'),
@@ -46760,6 +46791,7 @@ function initializeApp() {
     areavolInputUnit: document.getElementById('areavol-input-unit'),
     areavolOutputUnit: document.getElementById('areavol-output-unit'),
     areavolInputBadge: document.getElementById('areavol-input-badge'),
+    areavolExplanation: document.getElementById('areavol-explanation'),
     areavolOutputBadge: document.getElementById('areavol-output-badge'),
     btnRunAreavol: document.getElementById('btn-run-areavol'),
     areavolErrorMsg: document.getElementById('areavol-error-msg'),
@@ -47382,6 +47414,14 @@ function initializeApp() {
     const contextStrip = document.getElementById(`${toolPrefix}-context-strip`);
 
     if (panel) panel.dataset.state = status;
+    const simpleRoot = panel?.closest('.simple-tool');
+    if (simpleRoot) {
+      simpleRoot.querySelectorAll('[data-result-action]').forEach(action => { action.disabled = status !== 'success'; });
+      if (status !== 'success') {
+        if (staleTag) staleTag.hidden = true;
+        if (status === 'error') panel.querySelectorAll('[data-main-answer]').forEach(answer => { answer.textContent = '—'; });
+      }
+    }
 
     if (badge) {
       badge.className = `result-state-pill state-${status}`;
@@ -47403,7 +47443,7 @@ function initializeApp() {
     } else if (status === 'success') {
       if (errorBanner) errorBanner.style.display = 'none';
       if (staleTag) staleTag.style.display = 'none';
-      if (panel) {
+      if (panel && !simpleRoot) {
         panel.classList.remove('result-pulse');
         void panel.offsetWidth;
         panel.classList.add('result-pulse');
@@ -48175,6 +48215,13 @@ function initializeApp() {
   // ---------------------------------------------------------------------------
   function setRunButtonState(btn, status, errorMsg = '') {
     if (!btn) return;
+    if (btn.dataset?.recalculate !== undefined) {
+      btn.dataset.state = status;
+      btn.disabled = status === 'running';
+      const label = btn.querySelector('.btn-text');
+      if (label) label.textContent = status === 'running' ? 'Calculating…' : btn.dataset.recalculate || 'Recalculate';
+      return;
+    }
     btn.dataset.state = status;
     const btnText = btn.querySelector('.btn-text');
 
@@ -48244,7 +48291,7 @@ function initializeApp() {
     // Area & Volume unit selects (the else-branch that filled volume units
     // dereferenced the null element that selected that branch — dead code removed)
     if (dom.areavolInputUnit) {
-      const opts = Object.entries(AREA_UNITS).map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
+      const opts = Object.entries(AREA_UNITS).map(([k, u]) => `<option value="${k}" title="${u.name}">${u.symbol}</option>`).join('');
       dom.areavolInputUnit.innerHTML = opts;
       if (dom.areavolOutputUnit) {
         dom.areavolOutputUnit.innerHTML = opts;
@@ -48493,6 +48540,12 @@ function initializeApp() {
   // ---------------------------------------------------------------------------
   // 12. Mode 6: Architectural Drafting Reference Sheet
   // ---------------------------------------------------------------------------
+  function filterReferenceRows() {
+    const query = document.getElementById('reference-search-input')?.value.trim().toLowerCase() || '';
+    dom.refTableBody?.querySelectorAll('tr').forEach(row => { row.hidden = !row.querySelector('td[colspan]') && !row.textContent.toLowerCase().includes(query); });
+    dom.refBenchmarksGrid?.querySelectorAll('.benchmark-card').forEach(card => { card.hidden = !card.textContent.toLowerCase().includes(query); });
+  }
+
   function renderReferenceChart() {
     if (!dom.refTableBody) return;
     state.refScaleRatio = parseFloat(dom.refScaleSelect?.value) || 50;
@@ -48615,13 +48668,13 @@ function initializeApp() {
     if (dom.refBenchmarksGrid) {
       const benchmarks = [
         { name: 'Standard Interior Door', wM: 0.90, hM: 2.10 },
-        { name: 'Ceiling Clearance (Min)', wM: 2.70, hM: null },
+        { name: 'Typical Ceiling Height', wM: 2.70, hM: null },
         { name: 'Adult Human Stature', wM: 1.75, hM: null },
         { name: 'Kitchen Counter Height', wM: 0.90, hM: null },
         { name: 'Standard Parking Stall', wM: 2.50, hM: 5.00 },
         { name: 'Stair Step Riser', wM: 0.17, hM: null },
         { name: 'Office Desk Surface', wM: 1.60, hM: 0.80 },
-        { name: 'Corridor Width (Code)', wM: 1.20, hM: null }
+        { name: 'Example Corridor Width', wM: 1.20, hM: null }
       ];
 
       dom.refBenchmarksGrid.innerHTML = benchmarks.map(b => {
@@ -48717,6 +48770,7 @@ function initializeApp() {
       <tr class="table-section-divider"><td colspan="6" style="background: var(--bg-surface-elevated); color: var(--text-tertiary); font-weight: 800; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.4rem 0.75rem;">— IMPERIAL DRAWING MEASUREMENTS —</td></tr>
       ${imperialRows.join('')}
     `;
+    filterReferenceRows();
   }
 
   // ---------------------------------------------------------------------------
@@ -48746,6 +48800,8 @@ function initializeApp() {
 
     const ws = state.workspace;
     const totals = calculateWorkspaceTotals(ws.entries, ws.scaleRatio, ws.displayUnit, state.precision);
+    if (dom.workspaceCopyAllBtn) dom.workspaceCopyAllBtn.disabled = totals.validCount === 0;
+    if (dom.workspaceExportTsvBtn) dom.workspaceExportTsvBtn.disabled = totals.validCount === 0;
 
     // 1. Sync Scale Select
     if (dom.workspaceScaleSelect) {
@@ -50180,6 +50236,10 @@ function initializeApp() {
       });
     }
 
+    if (dom.btnCopyDetected) dom.btnCopyDetected.addEventListener('click', () => {
+      if (state.lastValidDetector) copyToClipboard(dom.detectorRatioVal.textContent, 'Drawing scale');
+    });
+
     // Area & Volume Listeners
     dom.areavolTypeBtns.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -51230,7 +51290,16 @@ function initializeApp() {
       });
     }
 
+    document.getElementById('reference-search-input')?.addEventListener('input', filterReferenceRows);
+
     // Mode 11: CAD Clipboard Listeners
+    document.getElementById('cad-application-select')?.addEventListener('change', event => {
+      views.callController('cad_clipboard', 'applyCadPreset', event.target.value);
+    });
+    document.getElementById('cad-source-select')?.addEventListener('change', event => {
+      state.cadClipboard.source = event.target.value;
+      views.callController('cad_clipboard', 'renderCadClipboard', true);
+    });
     if (dom.cadQuickChips) {
       dom.cadQuickChips.querySelectorAll('.cad-preset-chip').forEach(chip => {
         chip.addEventListener('click', () => {
@@ -51344,7 +51413,7 @@ function initializeApp() {
 
     // Mode 13: CAD Handoff Listeners
     if (dom.handoffSourceSelect) {
-      dom.handoffSourceSelect.addEventListener('change', () => renderCadHandoff(true));
+      dom.handoffSourceSelect.addEventListener('change', () => views.callController('cad_handoff', 'renderCadHandoff', true));
     }
     if (dom.handoffManualInput) {
       dom.handoffManualInput.addEventListener('input', () => {
@@ -51367,28 +51436,28 @@ function initializeApp() {
       });
     }
     if (dom.handoffFormatSelect) {
-      dom.handoffFormatSelect.addEventListener('change', () => renderCadHandoff(true));
+      dom.handoffFormatSelect.addEventListener('change', () => views.callController('cad_handoff', 'renderCadHandoff', true));
     }
     if (dom.handoffChainLayoutSelect) {
-      dom.handoffChainLayoutSelect.addEventListener('change', () => renderCadHandoff(true));
+      dom.handoffChainLayoutSelect.addEventListener('change', () => views.callController('cad_handoff', 'renderCadHandoff', true));
     }
     if (dom.handoffWorkspaceScopeSelect) {
-      dom.handoffWorkspaceScopeSelect.addEventListener('change', () => renderCadHandoff(true));
+      dom.handoffWorkspaceScopeSelect.addEventListener('change', () => views.callController('cad_handoff', 'renderCadHandoff', true));
     }
     if (dom.handoffBatchScopeSelect) {
-      dom.handoffBatchScopeSelect.addEventListener('change', () => renderCadHandoff(true));
+      dom.handoffBatchScopeSelect.addEventListener('change', () => views.callController('cad_handoff', 'renderCadHandoff', true));
     }
     if (dom.handoffUnitSelect) {
-      dom.handoffUnitSelect.addEventListener('change', () => renderCadHandoff(true));
+      dom.handoffUnitSelect.addEventListener('change', () => views.callController('cad_handoff', 'renderCadHandoff', true));
     }
     if (dom.handoffPrecisionSelect) {
-      dom.handoffPrecisionSelect.addEventListener('change', () => renderCadHandoff(true));
+      dom.handoffPrecisionSelect.addEventListener('change', () => views.callController('cad_handoff', 'renderCadHandoff', true));
     }
     if (dom.handoffSuffixSelect) {
-      dom.handoffSuffixSelect.addEventListener('change', () => renderCadHandoff(true));
+      dom.handoffSuffixSelect.addEventListener('change', () => views.callController('cad_handoff', 'renderCadHandoff', true));
     }
     if (dom.btnRunCadHandoff) {
-      dom.btnRunCadHandoff.addEventListener('click', () => renderCadHandoff(true));
+      dom.btnRunCadHandoff.addEventListener('click', () => views.callController('cad_handoff', 'renderCadHandoff', true));
       dom.btnRunCadHandoff.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -51403,11 +51472,11 @@ function initializeApp() {
       dom.btnHandoffExportTxt.addEventListener('click', () => {
         const payload = state.cadHandoff.lastPayload;
         if (!payload || payload.empty || !payload.text.trim()) {
-          showToast('No CAD payload to export', 'warning');
+          showToast('No dimensions to export', 'warning');
           return;
         }
         downloadFile(payload.text, `cad-handoff-${state.cadHandoff.target}-${Date.now()}.txt`, 'text/plain');
-        showToast('CAD payload exported as .txt');
+        showToast('Dimensions exported as .txt');
       });
     }
     if (dom.btnHandoffOpenCadClipboard) {
@@ -51429,6 +51498,12 @@ function initializeApp() {
     if (dom.batchPasteInput) {
       dom.batchPasteInput.addEventListener('input', () => {
         const val = dom.batchPasteInput.value;
+        state.batchCad.rawInput = val;
+        state.batchCad.lastResult = null;
+        views.callController('batch_cad', 'renderBatchResults');
+        setUnifiedResultState({ toolPrefix: 'batch', status: 'ready' });
+        const error = document.getElementById('batch-error-msg');
+        if (error) error.style.display = 'none';
         const detected = detectBatchDelimiter(val);
         if (dom.batchDelimiterBadge) {
           dom.batchDelimiterBadge.textContent = `FORMAT: ${detected.toUpperCase()}`;

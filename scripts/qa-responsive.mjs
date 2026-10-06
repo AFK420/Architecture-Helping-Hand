@@ -15,7 +15,7 @@ try {
   page.on('pageerror',e=>qaReport.errors.push(e.message));page.on('console',m=>{if(m.type()==='error')qaReport.errors.push(m.text());});
   await page.goto('http://127.0.0.1:'+process.env.AHH_REPORT_PORT,{waitUntil:'networkidle'});
   await page.waitForFunction(()=>typeof window.__ahhSwitchMode==='function');
-  const open=async mode=>{await page.evaluate(mode=>window.__ahhSwitchMode(mode),mode);await page.evaluate(()=>{scrollTo(0,0);return new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));});};
+  const open=async mode=>{await page.evaluate(mode=>window.__ahhSwitchMode(mode),mode);await page.evaluate(()=>{scrollTo(0,0);return new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));});await page.evaluate(()=>Promise.race([Promise.all(document.getAnimations().filter(animation=>animation.effect?.getTiming().iterations!==Infinity).map(animation=>animation.finished.catch(()=>{}))),new Promise(resolve=>setTimeout(resolve,500))]));};
   await open('projects');await page.fill('#projects-name-input','Current responsive QA project');await page.click('#btn-project-new');
   await open('research_dashboard');await page.fill('#research-project-type','Community library');await page.fill('#research-section-body','A shaded courtyard connects public arrival with quiet study. Recorded design notes for layout QA.');await page.click('#research-section-save');
   await open('site_dashboard');await page.click('[data-analysis-id="noise"]');await page.fill('#site-analysis-data','Road noise along the western boundary.');await page.fill('#site-analysis-interpretation','A quieter internal court may be useful.');await page.fill('#site-analysis-response','Consider separating arrival and reading spaces.');await page.click('#site-analysis-save');
@@ -51,14 +51,16 @@ try {
     await page.setViewportSize({width,height});const key=`${width}x${height}`;qaReport.checks[key]={};
     for(const mode of QA_MODES){await open(mode);if(mode==='reports')await page.frameLocator('#report-page-preview').locator('.report-sheet').first().waitFor();
       qaReport.checks[key][mode]=await page.evaluate(inspect);
-      if(['converter','furniture','research_dashboard','site_dashboard','dimensions','reports','ai_settings'].includes(mode))await page.screenshot({path:`.report-test-artifacts/responsive/${key}-${mode}.png`});
+      if(['converter','furniture','research_dashboard','site_dashboard','dimensions','reports','ai_settings','rescale','detector','area_volume','stairs','ramps','slopes','cad_clipboard','cad_handoff','batch_cad','reference','standards_explorer'].includes(mode))await page.screenshot({path:`.report-test-artifacts/responsive/${key}-${mode}.png`});
+      const advanced=page.locator(`#mode-view-${mode}>.simple-advanced`);
+      if(await advanced.count()){await advanced.evaluate(e=>{e.open=true;e.querySelectorAll('details').forEach(nested=>nested.open=true);});qaReport.checks[key][mode+':advanced']=await page.evaluate(inspect);await advanced.evaluate(e=>e.open=false);}
     }
-    await open('dimensions');for(const tab of ['expression','workspace','chains','multiscale']){await page.click(`[data-dimension-workflow=${tab}]`);qaReport.checks[key]['dimensions:'+tab]=await page.evaluate(inspect);}
+    await open('dimensions');for(const tab of ['expression','workspace','chains','multiscale']){await page.click(`[data-dimension-workflow=${tab}]`);qaReport.checks[key]['dimensions:'+tab]=await page.evaluate(inspect);await page.screenshot({path:`.report-test-artifacts/responsive/${key}-dimensions-${tab}.png`});const details=page.locator(`#dimension-panel-${tab}>.simple-advanced`);await details.evaluate(e=>e.open=true);qaReport.checks[key]['dimensions:'+tab+':advanced']=await page.evaluate(inspect);await details.evaluate(e=>e.open=false);}
     await open('furniture');await card.locator('.object-size-editor').evaluate(e=>e.open=true);await card.locator('.object-information').evaluate(e=>e.open=true);qaReport.checks[key]['furniture:edit-size']=await page.evaluate(inspect);
     await page.locator('#global-options').evaluate(e=>e.open=true);await page.click('#shortcuts-help-btn');qaReport.checks[key]['dialog:shortcuts']=await page.evaluate(inspect);await page.click('#close-shortcuts-btn');
     console.log('QA '+key+' '+QA_MODES.length+' modes, four Dimensions workflows, resize controls and shortcuts dialog');
   }
-  qaReport.summary={modeViewportChecks:QA_MODES.length*QA_VIEWPORTS.length,failures:Object.entries(qaReport.checks).flatMap(([viewport,v])=>Object.entries(v).filter(([,r])=>r.overflowX>2||r.problems.length).map(([mode,r])=>({viewport,mode,...r}))),consoleErrors:qaReport.errors.length};
+  qaReport.summary={modeViewportChecks:QA_MODES.length*QA_VIEWPORTS.length,totalLayoutChecks:Object.values(qaReport.checks).reduce((count,checks)=>count+Object.keys(checks).length,0),advancedLayoutChecks:Object.values(qaReport.checks).reduce((count,checks)=>count+Object.keys(checks).filter(key=>key.endsWith(':advanced')).length,0),failures:Object.entries(qaReport.checks).flatMap(([viewport,v])=>Object.entries(v).filter(([,r])=>r.overflowX>2||r.problems.length).map(([mode,r])=>({viewport,mode,...r}))),consoleErrors:qaReport.errors.length};
   await fs.writeFile('qa-report.json',JSON.stringify(qaReport,null,2)+'\n');
   assert.equal(qaReport.errors.length,0,'No browser errors');assert.equal(qaReport.summary.failures.length,0,'Responsive QA findings saved in qa-report.json');
   console.log('PASS current registry-driven responsive QA and physical resize downloads.');

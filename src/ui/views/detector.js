@@ -12,6 +12,10 @@ export function createDetectorView(context) {
   const { state, dom, setUnifiedResultState } = context;
 
   function calculateDetector() {
+    state.lastValidDetector = null;
+    state.lastDetectedRatio = null;
+    if (dom.detectorRatioVal) dom.detectorRatioVal.textContent = '—';
+    if (dom.detectorExplanation) dom.detectorExplanation.textContent = '';
     const rawPaper = dom.detectorPaperVal?.value || '';
     const rawReal = dom.detectorRealVal?.value || '';
 
@@ -23,13 +27,11 @@ export function createDetectorView(context) {
       setUnifiedResultState({
         toolPrefix: 'detector',
         status: 'error',
-        errorText: '⚠️ Paper Dimension: Enter a measured drawing length (e.g. 4.5, 10, 2 1/4).',
+        errorText: 'Measured drawing length: Enter a measured drawing length (e.g. 4.5, 10, 2 1/4).',
         btn: dom.btnRunDetector
       });
       if (dom.detectorPaperVal) dom.detectorPaperVal.classList.add('input-error');
-      if (state.lastValidDetector && dom.detectorRatioVal) {
-        dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
-      }
+
       return;
     }
 
@@ -38,13 +40,11 @@ export function createDetectorView(context) {
       setUnifiedResultState({
         toolPrefix: 'detector',
         status: 'error',
-        errorText: `⚠️ Paper Dimension: Enter a positive drawing length greater than zero (${paperP.error || 'e.g. 4.5 cm'}).`,
+        errorText: `Measured drawing length: Enter a positive drawing length greater than zero (${paperP.error || 'e.g. 4.5 cm'}).`,
         btn: dom.btnRunDetector
       });
       if (dom.detectorPaperVal) dom.detectorPaperVal.classList.add('input-error');
-      if (state.lastValidDetector && dom.detectorRatioVal) {
-        dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
-      }
+
       return;
     }
 
@@ -54,13 +54,11 @@ export function createDetectorView(context) {
       setUnifiedResultState({
         toolPrefix: 'detector',
         status: 'error',
-        errorText: '⚠️ Real-World Dimension: Enter the known physical site distance (e.g. 9, 15, 30).',
+        errorText: 'Known real size: Enter the known physical site distance (e.g. 9, 15, 30).',
         btn: dom.btnRunDetector
       });
       if (dom.detectorRealVal) dom.detectorRealVal.classList.add('input-error');
-      if (state.lastValidDetector && dom.detectorRatioVal) {
-        dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
-      }
+
       return;
     }
 
@@ -69,13 +67,11 @@ export function createDetectorView(context) {
       setUnifiedResultState({
         toolPrefix: 'detector',
         status: 'error',
-        errorText: `⚠️ Real-World Dimension: Enter a positive site dimension greater than zero (${realP.error || 'e.g. 9 m'}).`,
+        errorText: `Known real size: Enter a positive real measurement greater than zero (${realP.error || 'e.g. 9 m'}).`,
         btn: dom.btnRunDetector
       });
       if (dom.detectorRealVal) dom.detectorRealVal.classList.add('input-error');
-      if (state.lastValidDetector && dom.detectorRatioVal) {
-        dom.detectorRatioVal.textContent = state.lastValidDetector.ratioString;
-      }
+
       return;
     }
 
@@ -93,7 +89,7 @@ export function createDetectorView(context) {
         setUnifiedResultState({
           toolPrefix: 'detector',
           status: 'error',
-          errorText: '⚠️ Scale Detection: Dimensions must be greater than zero to determine scale.',
+          errorText: 'Scale Detection: Dimensions must be greater than zero to determine scale.',
           btn: dom.btnRunDetector
         });
         return;
@@ -115,6 +111,8 @@ export function createDetectorView(context) {
         }
       }
 
+      if (dom.detectorExplanation) dom.detectorExplanation.textContent = 'The drawing is approximately '+res.ratioString+'.';
+
       // Update Math Formula Microcopy
       if (dom.detectorMathFormula) {
         dom.detectorMathFormula.innerHTML = `<strong>Formula:</strong> Scale 1:X = Real (${formatNumber(realP.value, 2)} ${state.detectRealUnit}) ÷ Paper (${formatNumber(paperP.value, 2)} ${state.detectPaperUnit}) = <strong>${res.ratioString}</strong>`;
@@ -134,7 +132,7 @@ export function createDetectorView(context) {
       setUnifiedResultState({
         toolPrefix: 'detector',
         status: 'error',
-        errorText: `⚠️ Detection error: ${err.message}`,
+        errorText: `Detection error: ${err.message}`,
         btn: dom.btnRunDetector
       });
     }
