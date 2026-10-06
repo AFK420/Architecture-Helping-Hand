@@ -1,8 +1,11 @@
 import { OBJECT_LIBRARY_PACKS } from './object-library.js';
 import { classifyFurniture } from './furniture-taxonomy.js';
+import { ARCHITECTURAL_OBJECT_ADDITIONS } from './furniture/catalog-additions.js';
+import { annotateObjectCollections } from './furniture/collections.js';
+import { OBJECT_GEOMETRY_BINDINGS } from './furniture/geometry-bindings.js';
 /**
  * Architecture Helping Hand - Comprehensive Furniture, Fixtures & Standards Library
- * Reference planning dimensions across 9 categories spanning residential, commercial,
+ * Reference planning dimensions across architectural object collections spanning residential, commercial,
  * sanitary, circulation, clearances, outdoor, fitness, and accessibility domains.
  */
 
@@ -272,7 +275,11 @@ export const LEGACY_FURNITURE_DATABASE = Object.freeze([
   { id: 'ev-charger-wall', name: 'Wall-Mounted EV Charger (40×20)', category: 'commercial', wCm: 40, dCm: 20, hCm: 60, desc: 'Parking bay wall-pedestal charging unit', type: 'appliance' }
 ]);
 
-export const FURNITURE_DATABASE = Object.freeze([...LEGACY_FURNITURE_DATABASE, ...OBJECT_LIBRARY_PACKS.filter(item => !LEGACY_FURNITURE_DATABASE.some(old => old.id === item.id))].map(classifyFurniture));
+export const FURNITURE_DATABASE = Object.freeze([...LEGACY_FURNITURE_DATABASE, ...OBJECT_LIBRARY_PACKS.filter(item => !LEGACY_FURNITURE_DATABASE.some(old => old.id === item.id)),...ARCHITECTURAL_OBJECT_ADDITIONS].map(record=>{
+  const item=annotateObjectCollections(classifyFurniture(record));
+  return Object.freeze({...item,...(record.dimensionSource?{dimensionSource:record.dimensionSource,dimensionSourceType:record.dimensionSourceType}:{}),
+    geometryId:'object:'+item.id,geometryStatus:OBJECT_GEOMETRY_BINDINGS[item.id]?'ready':'unfinished'});
+}));
 
 
 /**
@@ -332,13 +339,14 @@ export function getScaledFurnitureDimensions(item, ratio = 50, paperUnitKey = 'c
  * Filter furniture catalog by search term, category, and sort order
  * Supports multi-token search by name, category, type, description, and dimensions (e.g. "200", "90x190")
  */
-export function filterFurnitureCatalog(catalog, searchQuery = '', category = 'all', sortKey = 'default') {
+export function filterFurnitureCatalog(catalog, searchQuery = '', category = 'all', sortKey = 'default', collection = 'all') {
   const query = searchQuery ? searchQuery.trim().toLowerCase() : '';
   const tokens = query.split(/\s+/).filter(t => t.length > 0);
 
   let filtered = catalog.filter(item => {
     const matchesCategory = category === 'all' || item.category === category || item.legacyCategory === category || `${item.category}/${item.subcategory}` === category;
     if (!matchesCategory) return false;
+    if (collection !== 'all' && !item.collections?.includes(collection)) return false;
 
     if (tokens.length === 0) return true;
 
@@ -352,7 +360,7 @@ export function filterFurnitureCatalog(catalog, searchQuery = '', category = 'al
     const dimH = `${item.hCm || ''}`;
     const dimCombo = `${item.wCm}x${item.dCm} ${item.wCm}*${item.dCm} ${item.wCm}×${item.dCm} ${item.wCm}cm ${item.dCm}cm`;
 
-    const haystack = `${name} ${desc} ${cat} ${item.subcategory || ''} ${(item.tags || []).join(' ')} ${type} ${dimW} ${dimD} ${dimH} ${dimCombo}`;
+    const haystack = `${name} ${desc} ${cat} ${item.subcategory || ''} ${(item.tags || []).join(' ')} ${item.collectionText||''} ${item.useCases||''} ${item.searchAliases||''} ${type} ${dimW} ${dimD} ${dimH} ${dimCombo}`;
 
     // Every token must match somewhere in the haystack (multi-word tokenized search)
     return tokens.every(token => {
@@ -370,6 +378,12 @@ export function filterFurnitureCatalog(catalog, searchQuery = '', category = 'al
       return false;
     });
   });
+
+  // Prefer names and retained reference names over incidental collection matches.
+  if (query && sortKey === 'default') {
+    const score = item => tokens.reduce((sum,token) => sum + ((item.name||'').toLowerCase().includes(token)?5:0) + ((item.searchAliases||'').toLowerCase().includes(token)?2:0),0);
+    filtered = [...filtered].sort((a,b) => score(b)-score(a));
+  }
 
   // Apply sorting
   if (sortKey && sortKey !== 'default') {

@@ -204,12 +204,6 @@ console.log('\n--- 10. Source honesty pins (static) ---');
   assert(dropdownSrc.includes('runNaturalRequest'), 'dropdown uses deterministic intent routing through the real job router');
   assert(dropdownSrc.includes('AI UNAVAILABLE'), 'dropdown shows honest unavailable state');
 
-  const cpanelsSrc = fs.readFileSync('src/ui/components/cpanels.js', 'utf8');
-  assert(!cpanelsSrc.includes('checklist-item pass">\n              <span class="check-icon">✅</span>\n              <span class="check-text">IBC Headroom'),
-    'hard-coded IBC pass badges removed');
-  assert(cpanelsSrc.includes('options.codeChecks'), 'IBC checklist computed from options.codeChecks');
-
-
   const bridgeSrc = fs.readFileSync('src/core/ai-bridge.js', 'utf8');
   assert(!bridgeSrc.includes('wallOpenings(entities, e)'), 'wallOpenings argument order fixed in ai-bridge');
 

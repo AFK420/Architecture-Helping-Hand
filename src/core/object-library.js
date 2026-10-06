@@ -5,7 +5,7 @@
  * services, civic, sports & stadiums, leisure (cinema/gaming/caravan),
  * hospitality, education, transport, and landscape (plants/trees).
  *
- * Every item carries REAL standard dimensions (typical industry sizes);
+ * Every item carries editable planning reference dimensions, not verified standards;
  * `clearance` records the functional clearance the QA engine should honor.
  * Families with parametric members (seating rows, planters, tree sizes)
  * expand to keep real-world variation without invented numbers.

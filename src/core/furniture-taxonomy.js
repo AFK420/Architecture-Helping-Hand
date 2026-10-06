@@ -6,7 +6,7 @@ export const FURNITURE_CATEGORIES = Object.freeze({
   education: ['classroom','lecture','library','laboratory'],
   retail: ['display','checkout','storage','customer'],
   hospitality: ['restaurant','cafe','hotel','lobby','service'],
-  civic: ['police','government','security','community'],
+  civic: ['police','fire','government','security','community'],
   sports: ['gym','fitness','locker-room','courts'],
   outdoor: ['parking','landscape','street-furniture','recreation'],
   accessibility: ['mobility','clearance'],

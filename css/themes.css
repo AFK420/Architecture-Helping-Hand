@@ -65,7 +65,7 @@
   --note-number: var(--dark-note-number);
 
   /* -------------------------------------------------------------------------
-     4. Accent & Semantic Status Colors (danger/action = #D32F2F)
+     4. Accent & Semantic Status Colors
      ------------------------------------------------------------------------- */
   --accent-primary: #4989D9;
   --accent-primary-hover: #5c99e6;
@@ -76,11 +76,11 @@
   --accent-blueprint: #7aa2ff;
   --accent-success: #3fae6e;
   --accent-danger: var(--dark-danger);
-  --accent-action: var(--dark-danger);
+  --accent-action: var(--accent-primary);
 
-  /* Run button tokens (user-specified #D32F2F) */
-  --btn-run-accent: var(--dark-danger);
-  --btn-run-hover: #e04343;
+  /* Normal actions use blue; danger is reserved for destructive actions. */
+  --btn-run-accent: #376cc9;
+  --btn-run-hover: #285db8;
   --btn-run-text: #ffffff;
 
   --color-success: #3fae6e;

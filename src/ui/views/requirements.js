@@ -1,7 +1,7 @@
 /**
  * Architecture Helping Hand - Requirements Studio View
  * Phase 10: project brief, requirements, adjacency and design intent —
- * evaluated deterministically against the actual model.
+ * Geometry checks require verified evidence from the external CAD model.
  */
 
 import {
@@ -82,12 +82,12 @@ export function createRequirementsView(context) {
     const counts = report.counts;
     host.innerHTML = `
       <div class="requirements-panel">
-        <div class="plan-prop-title">REQUIREMENTS vs MODEL</div>
+        <div class="plan-prop-title">Requirements review</div>
         <div class="issues-summary">
           ${counts.PASS} PASS · ${counts.FAIL} FAIL · ${counts.WARNING} WARNING ·
           ${counts.NEEDS_INPUT} NEEDS INPUT · ${counts.NOT_APPLICABLE} N/A
         </div>
-        ${rows || '<div class="issues-empty">No requirements defined yet. Add room requirements to evaluate against the model.</div>'}
+        ${rows || '<div class="issues-empty">Add room requirements, then check them against verified external drawings.</div>'}
         <div class="plan-prop-title" style="margin-top:0.5rem;">ROOM REQUIREMENTS</div>
         <div class="plan-prop-row"><span class="plan-prop-label">Name</span>
           <input id="req-room-name" class="text-input" placeholder="Bedroom" style="width:100px;" /></div>

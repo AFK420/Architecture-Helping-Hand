@@ -12,7 +12,8 @@
     "reports": "node scripts/report-server.js",
     "test:redesign": "node tests/redesign.test.js",
     "test:browser": "node tests/redesign.browser.test.js",
-    "test:reports": "node tests/report-pagination.browser.test.js"
+    "test:reports": "node tests/report-pagination.browser.test.js",
+    "qa:responsive": "node scripts/qa-responsive.mjs"
   },
   "keywords": [
     "architecture",

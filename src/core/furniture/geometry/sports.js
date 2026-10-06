@@ -1,0 +1,13 @@
+import { objectDrawing } from './primitives.js';
+export const SPORTS_GEOMETRY = {
+  parallelBars: ()=>{const g=objectDrawing();for(const x of [.15,.85]){g.rect(x-.03,0,.06,1);g.rect(x-.13,.12,.26,.09);g.rect(x-.13,.79,.26,.09);}return g.entities;},
+  dartboard: ()=>{const g=objectDrawing();g.rect(0,0,1,1);for(const r of [.05,.12,.22])g.ellipse(.5,.18,r,r*.6);g.line(.1,.8,.9,.8);g.line(.5,.3,.5,.8);return g.entities;},
+  vrZone: ()=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.1,.1,.8,.8);g.rect(.3,.35,.4,.22);g.ellipse(.41,.46,.06,.07);g.ellipse(.59,.46,.06,.07);g.line(.3,.35,.18,.3);g.line(.7,.35,.82,.3);return g.entities;},
+  treadmill: ()=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.18,.24,.64,.7);g.rect(.1,.03,.8,.16);g.line(.1,.12,.1,.65);g.line(.9,.12,.9,.65);g.rect(.3,.07,.4,.06);return g.entities;},
+  bike: ()=>{const g=objectDrawing();g.rect(.05,0,.9,.06);g.rect(.05,.94,.9,.06);g.ellipse(.5,.58,.18,.25);g.rect(.32,.25,.36,.12);g.line(.5,.25,.5,.08);g.path([[.16,.22],[.2,.08],[.8,.08],[.84,.22]]);g.line(.15,.65,.85,.65);return g.entities;},
+  benchPress: o=>{const g=objectDrawing();g.rect(.32,.15,.36,.75);g.line(0,.2,1,.2);for(const x of [.08,.82]){g.rect(x,.1,.1,.2);g.rect(x,.12,.05,.16);}g.rect(.25,0,.07,.06);g.rect(.68,0,.07,.06);if(o.machine){g.path([[.05,1],[.05,0],[.95,0],[.95,1]]);g.line(.1,.1,.5,.7);g.line(.9,.1,.5,.7);}return g.entities;},
+  court: o=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.rect(.04,.03,.92,.94);g.line(0,.5,1,.5);if(o.pool){for(let x=.08;x<1;x+=.1)g.line(x,.03,x,.97);g.line(0,.12,1,.12);g.line(0,.88,1,.88);}else if(o.tennis){g.line(.15,0,.15,1);g.line(.85,0,.85,1);g.line(.15,.27,.85,.27);g.line(.15,.73,.85,.73);g.line(.5,.27,.5,.73);}else if(o.field){g.ellipse(.5,.5,.12,.08);for(const y of [0,.82]){g.rect(.18,y,.64,.18);g.rect(.35,y===0?0:.93,.3,.07);}g.rect(.4,-.025,.2,.025);g.rect(.4,1,.2,.025);}else{g.ellipse(.5,.5,.14,.1);g.rect(.32,0,.36,.19);g.rect(.32,.81,.36,.19);g.arc(.5,.19,.23,.14,0,Math.PI);g.arc(.5,.81,.23,.14,Math.PI,2*Math.PI);}return g.entities;},
+  net: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);for(let x=.05;x<1;x+=.1)g.line(x,0,x,1);for(let y=.05;y<1;y+=.1)g.line(0,y,1,y);g.rect(0,0,.04,1);g.rect(.96,0,.04,1);return g.entities;},
+  arcade: o=>{const g=objectDrawing();g.path([[0,0],[1,0],[1,.6],[.88,1],[.12,1],[0,.6]],true);g.rect(.08,.1,.84,.34);g.rect(.12,.6,.76,.2);g.ellipse(.25,.69,.035);for(let x=.5;x<.8;x+=.1)g.ellipse(x,.69,.02);if(o.racing)g.ellipse(.5,.6,.14,.12);return g.entities;},
+  mat: ()=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.025,.025,.95,.95);g.line(.1,.08,.9,.08);return g.entities;}
+};

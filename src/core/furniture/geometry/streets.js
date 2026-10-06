@@ -1,0 +1,12 @@
+import { objectDrawing } from './primitives.js';
+export const STREETS_GEOMETRY = {
+  vehicle: o=>{const g=objectDrawing('A-VEHICLE');g.path([[.15,0],[.85,0],[1,.12],[1,.86],[.85,1],[.15,1],[0,.86],[0,.12]],true);g.rect(.13,.12,.74,.7);g.path([[.13,.24],[.24,.32],[.76,.32],[.87,.24]],true);g.path([[.13,.72],[.24,.65],[.76,.65],[.87,.72]],true);for(const x of [0,.92])for(const y of [.2,.72])g.rect(x,y,.08,.15);if(o.truck){g.rect(.12,.43,.76,.48);for(let y=.5;y<.9;y+=.07)g.line(.12,y,.88,y);g.rect(.32,.37,.36,.04);}if(o.bus)for(let y=.3;y<.85;y+=.085){g.rect(.05,y,.1,.06);g.rect(.85,y,.1,.06);}if(o.emergency){g.rect(.25,.32,.5,.05);g.line(.5,.48,.5,.62);g.line(.4,.55,.6,.55);}return g.entities;},
+  bicycle: o=>{const g=objectDrawing('A-VEHICLE');g.ellipse(.5,.15,.12,.15);g.ellipse(.5,.85,.12,.15);g.path([[.5,.15],[.35,.5],[.5,.75],[.65,.5],[.5,.15]]);g.line(.35,.5,.65,.5);g.line(.25,.22,.75,.22);g.rect(.4,.55,.2,.14);if(o.motorcycle){g.rect(.22,.28,.56,.35);g.rect(.3,.65,.4,.17);}return g.entities;},
+  parking: o=>{const g=objectDrawing('A-SITE');g.path([[0,0],[0,1],[1,1],[1,0]]);g.line(.4,.65,.4,.35);g.path([[.4,.35],[.64,.35],[.64,.5],[.4,.5]]);if(o.accessible){g.line(.7,0,.7,1);for(let y=.1;y<.9;y+=.1)g.line(.7,y,1,y+.1);g.ellipse(.32,.4,.07,.09);}if(o.ev){g.path([[.6,.15],[.45,.4],[.58,.4],[.42,.65]]);}return g.entities;},
+  crossing: ()=>{const g=objectDrawing('A-SITE');for(let y=0;y<1;y+=.16)g.rect(0,y,1,.08);return g.entities;},
+  shelter: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.rect(.1,.6,.8,.22);g.line(.1,.06,.9,.06);for(const x of [.06,.94])g.rect(x-.03,.1,.06,.8);return g.entities;},
+  bikeRack: o=>{const g=objectDrawing('A-SITE');for(let i=0;i<o.bays;i++){const x=(i+.5)/o.bays;g.path([[x-.3/o.bays,1],[x-.3/o.bays,.2],[x,.05],[x+.3/o.bays,.2],[x+.3/o.bays,1]]);}return g.entities;},
+  light: o=>{const g=objectDrawing('A-SITE');g.ellipse(.5,.5,.15);g.line(.5,.5,.5,.05);g.rect(.3,0,.4,.1);if(o.signal){for(let y=.12;y<.6;y+=.16)g.ellipse(.5,y,.06);g.rect(.36,0,.28,.63);}return g.entities;},
+  gate: ()=>{const g=objectDrawing('A-SITE');g.rect(0,.25,.1,.5);g.rect(.1,.43,.9,.13);for(let x=.2;x<1;x+=.14)g.line(x,.43,x+.08,.56);g.arc(.1,.5,.88,.5,-Math.PI/2,0);return g.entities;},
+  charger: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.rect(.15,.12,.7,.25);g.path([[.5,.43],[.34,.65],[.53,.65],[.42,.87]]);g.path([[.92,.22],[1,.3],[1,.85],[.8,.85]]);return g.entities;}
+};

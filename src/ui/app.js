@@ -1,7 +1,9 @@
 import { createReportsView } from './views/reports.js';
 import { createConceptView } from './views/concept.js';
 import { FURNITURE_CATEGORIES } from '../core/furniture-taxonomy.js';
-import { createFurnitureAsset, furnitureAssetDXF, furnitureAssetSVG } from '../core/furniture-assets.js';
+import { OBJECT_COLLECTIONS } from '../core/furniture/collections.js';
+import { getObjectBrowseCatalog } from '../core/furniture/catalog.js';
+import { renderObjectLibraryCards } from './components/object-library.js';
 import { downloadExport } from '../services/export.js';
 import { createDimensionsView } from './views/dimensions.js';
 import { mountWorkflowHelp } from './components/tool-help.js';
@@ -178,13 +180,13 @@ export function initializeApp() {
     precision: 3,
 
     // Mode 1: Converter
-    direction: 'drawing_to_real',
+    direction: 'real_to_drawing',
     scaleRatio: 50,
     selectedPresetId: '1:50',
     selectedCategory: 'all',
-    converterInputVal: '10',
-    converterInputUnit: 'cm',
-    converterOutputUnit: 'm',
+    converterInputVal: '5',
+    converterInputUnit: 'm',
+    converterOutputUnit: 'mm',
 
     // Mode 2: Rescale
     rescaleOrigRatio: 50,
@@ -501,6 +503,11 @@ export function initializeApp() {
     presetsGrid: document.getElementById('presets-grid'),
     scaleRatioInput: document.getElementById('scale-ratio-input'),
     converterInputVal: document.getElementById('converter-input-val'),
+    converterResultLabel: document.getElementById('converter-result-label'),
+    converterExplanation: document.getElementById('converter-explanation'),
+    converterDirectionDescription: document.getElementById('converter-direction-description'),
+    converterDirectionButtons: document.querySelectorAll('[data-direction]'),
+    converterScaleSelect: document.getElementById('converter-scale-select'),
     converterInputUnit: document.getElementById('converter-input-unit'),
     converterInputBadge: document.getElementById('converter-input-badge'),
     swapDirectionBtn: document.getElementById('swap-direction-btn'),
@@ -2006,11 +2013,17 @@ export function initializeApp() {
     const areaEntries = Object.entries(AREA_UNITS);
     const volumeEntries = Object.entries(VOLUME_UNITS);
 
-    const lengthOptions = lengthEntries.map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
+    const lengthOptions = lengthEntries.map(([k, u]) => `<option value="${k}">${u.name.includes('('+u.symbol+')')?u.name:u.name+' ('+u.symbol+')'}</option>`).join('');
 
     // Converter unit selects
     if (dom.converterInputUnit) dom.converterInputUnit.innerHTML = lengthOptions;
     if (dom.converterOutputUnit) dom.converterOutputUnit.innerHTML = lengthOptions;
+
+    if (dom.converterInputUnit) dom.converterInputUnit.value = state.converterInputUnit;
+    if (dom.converterOutputUnit) dom.converterOutputUnit.value = state.converterOutputUnit;
+    if (dom.converterInputVal) dom.converterInputVal.value = state.converterInputVal;
+    if (dom.scaleRatioInput) dom.scaleRatioInput.value = state.scaleRatio;
+    if (dom.converterScaleSelect) dom.converterScaleSelect.innerHTML = SCALE_PRESETS.map(p => '<option value="'+p.ratio+'">'+escapeHtml(p.name)+'</option>').join('');
 
     // Rescaler + Detector unit selects — these were historically left EMPTY in
     // the static HTML and never populated, so both dropdowns rendered as blank
@@ -2098,6 +2111,8 @@ export function initializeApp() {
     });
   }
 
+  const objectInstances = new Map();
+
   function renderFurnitureGrid() {
     if (!dom.furnitureCardsGrid) return;
 
@@ -2110,16 +2125,17 @@ export function initializeApp() {
     dom.furnitureCardsGrid.classList.toggle('compact-mode', state.furnitureDensity === 'compact');
 
     const filtered = filterFurnitureCatalog(
-      FURNITURE_DATABASE,
+      getObjectBrowseCatalog(),
       state.furnitureSearchQuery,
       state.furnitureActiveCategory,
-      state.furnitureSortKey
+      state.furnitureSortKey,
+      state.furnitureCollection || 'all'
     );
 
     updateCategoryPillCounts();
 
     if (dom.furnitureResultsCount) {
-      dom.furnitureResultsCount.textContent = `Showing ${filtered.length} of ${FURNITURE_DATABASE.length} items`;
+      dom.furnitureResultsCount.textContent = `Showing ${filtered.length} of ${getObjectBrowseCatalog().length} plan symbols (${FURNITURE_DATABASE.length} reference entries)`;
     }
 
     if (filtered.length === 0) {
@@ -2148,6 +2164,8 @@ export function initializeApp() {
         resetBtn.addEventListener('click', () => {
           if (dom.furnitureSearchInput) dom.furnitureSearchInput.value = '';
           state.furnitureSearchQuery = '';
+          state.furnitureCollection = 'all';
+          document.getElementById('object-collection').value = 'all';
           state.furnitureActiveCategory = 'all';
           dom.furnCategoryNav?.querySelectorAll('.furn-cat-pill').forEach(b => {
             b.classList.toggle('active', b.dataset.cat === 'all');
@@ -2169,102 +2187,16 @@ export function initializeApp() {
     }
 
     const limit = state.furnitureLimit || 48;
-    dom.furnitureCardsGrid.innerHTML = filtered.slice(0,limit).map(item => {
-      const scaled = getScaledFurnitureDimensions(item, state.furnitureScaleRatio, state.furniturePaperUnit);
-      const isAda = item.id.includes('ada') || (item.desc && item.desc.toLowerCase().includes('ada')) || item.name.toLowerCase().includes('ada');
-      const isCompact = state.furnitureDensity === 'compact';
-
-      return `
-        <div class="furniture-card ${isCompact ? 'compact-card' : ''}" data-id="${item.id}">
-          <div class="furn-card-header">
-            <div class="furn-title-area">
-              <div class="furn-name">${escapeHtml(item.name)}</div>
-              <div class="furn-header-meta">
-                <span class="furn-category-tag">${escapeHtml(item.category)} / ${escapeHtml(item.subcategory)}</span>
-                <span class="furn-std-badge ${isAda ? 'ada-badge' : ''}">${scaled.standardTag}</span>
-              </div>
-            </div>
-            <div class="furn-dim-badge">1:${state.furnitureScaleRatio}</div>
-          </div>
-
-          <div class="furn-card-body">
-            <div class="furn-plan-preview-box" title="Architectural Blueprint Top-Down Plan">
-              ${furnitureAssetSVG(createFurnitureAsset(item))}
-            </div>
-
-            <div class="furn-footprint-row">
-              <span class="footprint-label">Space Footprint:</span>
-              <span class="footprint-val"><strong>${scaled.footprintM2} m²</strong><span class="footprint-imperial">(${scaled.footprintSqFt} sq ft)</span></span>
-            </div>
-
-            <div class="furn-item-desc">${escapeHtml(item.desc)}</div>
-
-            <div class="furn-specs-grid">
-              <div class="furn-spec-row">
-                <span class="furn-spec-lbl">Real Dimensions:</span>
-                <span class="furn-spec-val highlight">${scaled.realFormattedMetric}</span>
-              </div>
-              <div class="furn-spec-row">
-                <span class="furn-spec-lbl">Imperial Equiv:</span>
-                <span class="furn-spec-val">${scaled.realFormattedImperial}</span>
-              </div>
-              <div class="furn-spec-row">
-                <span class="furn-spec-lbl">Scaled on Paper:</span>
-                <span class="furn-spec-val paper-result">${scaled.paperFormatted}</span>
-              </div>
-              <div class="furn-spec-row">
-                <span class="furn-spec-lbl">Dimension Standard:</span>
-                <span class="furn-spec-val std-type-tag">${scaled.dimensionType}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="furn-card-footer">
-            <button type="button" class="action-tool-btn compact" data-furniture-download="dxf" data-id="${item.id}" title="Full-size DXF in millimeters">Download DXF</button>
-            <button type="button" class="action-tool-btn compact" data-furniture-download="svg" data-id="${item.id}" title="Full-size SVG in millimeters">SVG</button>
-            <details class="furn-tags"><summary>Tags &amp; provenance</summary><p>${escapeHtml(item.tags.join(' · '))}<br>${escapeHtml(item.dimensionSource.note)}</p><label><input type="checkbox" data-include-clearance> Include reference clearance when available</label></details>
-            <button class="btn-furn-copy action-tool-btn compact" data-text="${scaled.paperFormatted}" title="Copy scaled drawing dimensions">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              Copy Size
-            </button>
-            <button class="btn-furn-send action-tool-btn compact" data-w="${item.wCm}" title="Send width to Converter">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-              To Converter
-            </button>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    // Attach click listeners to dynamically rendered card buttons
+    renderObjectLibraryCards({host:dom.furnitureCardsGrid,items:filtered.slice(0,limit),scale:state.furnitureScaleRatio,instances:objectInstances,
+      download:(data,name,format)=>{const ok=downloadExport(data,name,format);showToast(ok?'Downloaded at real size (1:1), millimeters':'Download failed',ok?'success':'error');},
+      copy:copyToClipboard,send:widthMm=>{
+        dom.converterInputVal.value=widthMm;dom.converterInputUnit.value='mm';dom.converterOutputUnit.value='mm';
+        state.direction='real_to_drawing';switchMode('converter');
+      }});
     if (filtered.length > limit) {
-      const more = document.createElement('button'); more.type='button'; more.className='action-tool-btn'; more.textContent='Show 48 more';
-      more.addEventListener('click', () => { state.furnitureLimit=limit+48; renderFurnitureGrid(); }); dom.furnitureCardsGrid.appendChild(more);
+      const more=document.createElement('button');more.type='button';more.className='action-tool-btn';more.textContent='Show 48 more';
+      more.addEventListener('click',()=>{state.furnitureLimit=limit+48;renderFurnitureGrid();});dom.furnitureCardsGrid.appendChild(more);
     }
-    dom.furnitureCardsGrid.querySelectorAll('[data-furniture-download]').forEach(btn => btn.addEventListener('click', () => {
-      const item=FURNITURE_DATABASE.find(item=>item.id===btn.dataset.id);
-      const includeClearance=!!btn.closest('.furniture-card').querySelector('[data-include-clearance]')?.checked;
-      const asset=createFurnitureAsset(item,{includeClearance});const format=btn.dataset.furnitureDownload;
-      const ok=downloadExport(format==='dxf'?furnitureAssetDXF(asset):furnitureAssetSVG(asset), item.id+'.'+format, format);
-      showToast(ok?'Downloaded at real size (1:1), millimeters':'Download failed',ok?'success':'error');
-    }));
-
-    dom.furnitureCardsGrid.querySelectorAll('.btn-furn-copy').forEach(btn => {
-      btn.addEventListener('click', () => {
-        copyToClipboard(btn.dataset.text, 'Scaled Furniture Size');
-      });
-    });
-
-    dom.furnitureCardsGrid.querySelectorAll('.btn-furn-send').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const w = btn.dataset.w;
-        if (dom.converterInputVal) dom.converterInputVal.value = w;
-        if (dom.converterInputUnit) dom.converterInputUnit.value = 'cm';
-        state.direction = 'real_to_drawing';
-        switchMode('converter');
-        showToast(`Sent dimension ${w} cm to Converter`);
-      });
-    });
   }
 
   function calculateCustomFurniture() {
@@ -3924,6 +3856,17 @@ export function initializeApp() {
     }
 
     // Converter Inputs & Run Action
+    dom.converterDirectionButtons.forEach(button => button.addEventListener('click', () => {
+      if (state.direction !== button.dataset.direction) views.callController('converter', 'swapDirection');
+    }));
+    const chooseConverterScale = value => {
+      if (dom.scaleRatioInput) dom.scaleRatioInput.value = value;
+      state.scaleRatio = Number(value);
+      renderPresetChips(state.selectedCategory);
+      views.callController('converter', 'calculateConverter');
+    };
+    dom.converterScaleSelect?.addEventListener('change', () => chooseConverterScale(dom.converterScaleSelect.value));
+    document.querySelectorAll('[data-converter-scale]').forEach(button => button.addEventListener('click', () => chooseConverterScale(button.dataset.converterScale)));
     if (dom.converterInputVal) {
       dom.converterInputVal.addEventListener('input', () => {
         views.callController('converter', 'calculateConverter');
@@ -6359,8 +6302,12 @@ const viewContext = Object.freeze({
       select.addEventListener('change',()=>{state.furnitureActiveCategory=select.value;state.furnitureLimit=48;renderFurnitureGrid();});
     }
   }
+  const collectionSelect=document.getElementById('object-collection');
+  collectionSelect.innerHTML='<option value="all">All collections</option>'+OBJECT_COLLECTIONS.map(c=>'<option value="'+c.id+'">'+escapeHtml(c.label)+'</option>').join('');
+  collectionSelect.addEventListener('change',()=>{state.furnitureCollection=collectionSelect.value;state.furnitureActiveCategory='all';state.furnitureLimit=48;renderFurnitureGrid();});
   renderPresetChips(state.selectedCategory);
   attachEventListeners();
+  document.addEventListener('click',event=>{const options=document.getElementById('global-options');if(options&&!options.contains(event.target))options.open=false;});
   views.mountAll();
   renderSidebar('');
 

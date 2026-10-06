@@ -1,5 +1,5 @@
 /**
- * Architecture Helping Hand - Plan Canvas Coordinate Pipeline & Numerical Accuracy Test Suite
+ * Architecture Helping Hand - Shared Geometry Tools Coordinate Pipeline & Numerical Accuracy Test Suite
  * Validates the complete coordinate pipeline:
  * screen coordinates -> viewport coordinates -> transformed canvas coordinates -> world coordinates -> entity coordinates
  * Across zoom levels, pan offsets, sidebar offsets, DPR scaling, and grid snapping.
@@ -36,7 +36,7 @@ function assertClose(actual, expected, message, eps = 1e-9) {
   }
 }
 
-console.log('🧪 Running tests/plan-canvas-accuracy.test.js...\n');
+console.log('🧪 Running tests/geometry-tools-accuracy.test.js...\n');
 
 // 1. Invertibility of worldToSvg <-> svgToWorld across zoom & pan ranges
 const testZooms = [5, 10, 20, 40, 50, 80, 100, 200, 400];

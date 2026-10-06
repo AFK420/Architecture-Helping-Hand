@@ -1,5 +1,5 @@
 /**
- * Architecture Helping Hand - Plan Canvas & Entities Test Suite
+ * Architecture Helping Hand - Shared Geometry Tools & Entities Test Suite
  * Phases 3+4: view transforms, grid/snapping, selection, undo/redo,
  * and the architectural entity model (rooms/walls/openings/furniture).
  * Real engines only — furniture footprints flow through the placement API
@@ -56,7 +56,7 @@ function assertClose(actual, expected, message, eps = 1e-9) {
   }
 }
 
-console.log('🧪 Running tests/plan-canvas.test.js...');
+console.log('🧪 Running tests/geometry-tools.test.js...');
 
 // ---------------------------------------------------------------------------
 // 1. View transforms (world ↔ SVG)

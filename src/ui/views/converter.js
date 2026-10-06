@@ -12,6 +12,30 @@ import { scaleDimension, getAllUnitEquivalents } from '../../core/calculator.js'
 import { formatNumber, formatFeetInches } from '../../core/formatter.js';
 import { updateVisualization } from '../visualizer.js';
 
+/** All direction-dependent labels are projected from the calculation state. */
+export function syncConverterDirectionUI(state, dom) {
+  state.direction = state.direction === 'drawing_to_real' ? 'drawing_to_real' : 'real_to_drawing';
+  const realFirst = state.direction === 'real_to_drawing';
+  const source = realFirst ? 'Real size' : 'Drawing size';
+  const target = realFirst ? 'Drawing size' : 'Real size';
+  if (dom.converterInputBadge) dom.converterInputBadge.textContent = realFirst ? 'Real measurement' : 'Measurement on drawing';
+  if (dom.converterOutputBadge) dom.converterOutputBadge.textContent = target;
+  if (dom.converterFlowFrom) dom.converterFlowFrom.textContent = source;
+  if (dom.converterFlowTo) dom.converterFlowTo.textContent = target;
+  if (dom.converterResultLabel) dom.converterResultLabel.textContent = realFirst ? 'Size on the drawing' : 'Real-world size';
+  if (dom.converterDirectionDescription) dom.converterDirectionDescription.textContent = realFirst
+    ? 'I know the real measurement and want its size on the drawing.'
+    : 'I measured a plan and want to know the real-world size.';
+  if (dom.converterMathFormula) dom.converterMathFormula.textContent = `${target} = ${source} ${realFirst ? '÷' : '×'} ${state.scaleRatio} (after converting units)`;
+  dom.converterDirectionButtons?.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.direction === state.direction)));
+  if (dom.converterScaleSelect) {
+    const value = String(state.scaleRatio);
+    let option = [...dom.converterScaleSelect.options].find(o => o.value === value);
+    if (!option) { option = document.createElement('option'); option.value = value; option.textContent = `1:${value} (custom)`; dom.converterScaleSelect.appendChild(option); }
+    dom.converterScaleSelect.value = value;
+  }
+}
+
 export function createConverterView(context) {
   const { state, dom, setUnifiedResultState, AudioService } = context;
 
@@ -19,6 +43,7 @@ export function createConverterView(context) {
     const rawRatio = parseFloat(dom.scaleRatioInput?.value);
     const parsedRatio = isNaN(rawRatio) || rawRatio <= 0 ? 50 : rawRatio;
     state.scaleRatio = parsedRatio;
+    syncConverterDirectionUI(state, dom);
 
     const rawInput = dom.converterInputVal?.value || '';
     state.converterInputVal = rawInput;
@@ -30,14 +55,12 @@ export function createConverterView(context) {
       setUnifiedResultState({
         toolPrefix: 'converter',
         status: 'error',
-        errorText: '⚠️ Drawing Measurement: Enter a measurement dimension (e.g. 10, 12.5, 3 1/2, or 12\'-6").',
+        errorText: 'Enter a measurement, such as 5 m or 12\'-6".',
         btn: dom.btnRunConverter
       });
       if (dom.converterInputVal) dom.converterInputVal.classList.add('input-error');
-      if (state.lastValidConverter) {
-        if (dom.converterResultVal) dom.converterResultVal.textContent = state.lastValidConverter.val;
-        if (dom.converterResultUnit) dom.converterResultUnit.textContent = state.lastValidConverter.unit;
-      }
+      if (dom.converterResultVal) dom.converterResultVal.textContent = '—';
+      if (dom.converterExplanation) dom.converterExplanation.textContent = '';
       return;
     }
 
@@ -53,18 +76,13 @@ export function createConverterView(context) {
       setUnifiedResultState({
         toolPrefix: 'converter',
         status: 'error',
-        errorText: `⚠️ Drawing Measurement: Enter a positive dimension greater than zero (${parseRes.error || 'e.g. 10, 12.5, 3 1/2'}).`,
+        errorText: `Enter a positive measurement (${parseRes.error || 'for example, 5 m'}).`,
         btn: dom.btnRunConverter
       });
       if (dom.converterInputVal) dom.converterInputVal.classList.add('input-error');
 
-      // Preserve previous valid result if available
-      if (state.lastValidConverter) {
-        if (dom.converterResultVal) dom.converterResultVal.textContent = state.lastValidConverter.val;
-        if (dom.converterResultUnit) dom.converterResultUnit.textContent = state.lastValidConverter.unit;
-      } else {
-        if (dom.converterResultVal) dom.converterResultVal.textContent = '---';
-      }
+      if (dom.converterResultVal) dom.converterResultVal.textContent = '—';
+      if (dom.converterExplanation) dom.converterExplanation.textContent = '';
       return;
     }
 
@@ -95,6 +113,7 @@ export function createConverterView(context) {
       if (dom.converterResultUnit) {
         dom.converterResultUnit.textContent = state.converterOutputUnit;
       }
+      if (dom.converterExplanation) dom.converterExplanation.textContent = `${formatNumber(parseRes.value, state.precision)} ${state.converterInputUnit} ${state.direction === 'real_to_drawing' ? 'real size' : 'on the drawing'} at 1:${state.scaleRatio} becomes ${formattedVal} ${state.converterOutputUnit} ${state.direction === 'real_to_drawing' ? 'on paper' : 'in real life'}.`;
 
       // Update Secondary Architectural Readout
       if (dom.converterSecondaryReadout) {
@@ -188,18 +207,6 @@ export function createConverterView(context) {
     state.converterInputUnit = prevOutUnit;
     state.converterOutputUnit = prevInUnit;
 
-    if (state.direction === 'drawing_to_real') {
-      if (dom.converterInputBadge) dom.converterInputBadge.textContent = 'Drawing Measurement (Paper)';
-      if (dom.converterOutputBadge) dom.converterOutputBadge.textContent = 'Real-World Dimension';
-      if (dom.converterFlowFrom) dom.converterFlowFrom.textContent = '📐 Paper Drawing';
-      if (dom.converterFlowTo) dom.converterFlowTo.textContent = '🏛️ Real-World Site';
-    } else {
-      if (dom.converterInputBadge) dom.converterInputBadge.textContent = 'Real-World Dimension';
-      if (dom.converterOutputBadge) dom.converterOutputBadge.textContent = 'Drawing Measurement (Paper)';
-      if (dom.converterFlowFrom) dom.converterFlowFrom.textContent = '🏛️ Real-World Site';
-      if (dom.converterFlowTo) dom.converterFlowTo.textContent = '📐 Paper Drawing';
-    }
-
     AudioService.playSwapSound();
     calculateConverter();
   }
@@ -211,7 +218,7 @@ export function createConverterView(context) {
       calculateConverter();
     },
     getController() {
-      return { calculateConverter, swapDirection, renderEquivalentsBreakdown };
+      return { calculateConverter, swapDirection, renderEquivalentsBreakdown, syncConverterDirectionUI: () => syncConverterDirectionUI(state, dom) };
     }
   };
 }

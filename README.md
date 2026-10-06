@@ -28,11 +28,15 @@ One Dimensions workspace contains Quick, Schedule, Chain and Compare Scales. The
 
 Schedule measurements accept expressions such as `2400 + 900`, `2.4m + 600mm`, `7' 6" + 2' 3"` and `(2.4m + 900mm) / 3`. Bare numbers use the selected input unit. Chain quick-add treats separate additions as sequential segments; expressions inside one segment evaluate as one measurement. CAD values stay at real size; print scale belongs in drawing layouts/viewports.
 
-## Furniture
+## Architectural Object Library
 
-The catalog preserves the 215 original records and merges existing domain packs into 638 unique entries. Search by use, tags, category or subcategory: hospital bed, wheelchair, police desk, gym bench, restaurant table or school desk.
+The catalog preserves the original records and domain packs, with 677 reference entries across 15 browsable collections. It presents 623 distinct plan symbols built from 97 reusable compositions; identical legacy footprints are grouped with their other names in More information. Search name, collection, use-case or tags: hospital bed, fire station locker, police interview, palm tree, luxury sofa or mall checkout.
 
-Download DXF or SVG from a card. Geometry is simplified but recognizable, at 1:1 in millimeters, and independent of the preview's paper scale. Optional clearance geometry uses a separate layer and represents a reference allowance. Dimensions are planning references requiring original-source, manufacturer and local-standard verification.
+Open **Edit Size** to change width, depth and height in millimeters, optionally preserving proportions. The preview updates live; **Reset Original** restores the reference dimensions. Resized DXF and SVG use those edited physical dimensions at 1:1. Drawing scale changes only the paper readout under More information. Sizes are temporary session instances and never modify catalog records. Optional reference clearance stays on its own layer. Published/manufacturer/local-standard verification remains necessary; new schematic defaults are labeled illustrative.
+
+## Scale Converter
+
+Choose **Real size → Drawing size** or **Drawing size → Real size**, enter a measurement and choose a scale. Results update live. A 5 m measurement at 1:50 becomes 100 mm on paper. The dropdown and four favorites cover everyday work; Advanced retains all presets, custom ratios, equivalents, formulas, graphic scale, history and scratchpad actions. Secondary global controls are under **More** in the top bar.
 
 ## Research → Site → Concept → Documents
 
@@ -55,7 +59,9 @@ Concept-image generation is an integration point; current transports do not prov
 
 ## Help and shortcuts
 
-Every registered tool has a collapsed “How to use” guide covering purpose, workflow, example and external application handoff. Press Ctrl+K for search/commands. Digits 1–6 open the six sections; 0 opens Home. C opens CAD Clipboard, B batch conversion, Q Quick Dimension, H the journal. Shortcuts remain editable.
+Every registered tool has a plain opening explanation and a collapsed “How to use” guide grouped into Overview, Example, CAD workflow and technical notes. Press Ctrl+K for search/commands. Digits 1–6 open the six sections; 0 opens Home. C opens CAD Clipboard, B batch conversion, Q Quick Dimension, H the journal. Shortcuts remain editable.
+
+Run `npm run qa:responsive` with the optional report/browser runtime configured to regenerate `qa-report.json` across the current navigation at seven viewport sizes. See [UX_OBJECT_LIBRARY_STATUS.md](UX_OBJECT_LIBRARY_STATUS.md) for the follow-up implementation details, geometry counts, validation and limitations.
 
 ## Develop and verify
 

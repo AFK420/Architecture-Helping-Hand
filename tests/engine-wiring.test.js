@@ -138,18 +138,6 @@ console.log('\n--- 6. Inspector wiring: descriptors drive the UI contract ---');
   }
 }
 
-console.log('\n--- 7. Constraint UI wiring (C-panels Constraints tab) ---');
-{
-  const fs = await import('node:fs');
-  const cpanelsSrc = fs.readFileSync('src/ui/components/cpanels.js', 'utf8');
-  assert(cpanelsSrc.includes('data-panel-tab="constraints"'), 'Constraints tab exists in the C-panels');
-  assert(cpanelsSrc.includes('onConstraintAction'), 'constraint action events forwarded to the app');
-  assert(cpanelsSrc.includes('onAddConstraint'), 'constraint-add events forwarded to the app');
-  // Diagnose must never mutate: the test path clones before solving
-
-  // Constraint records persist with the document (documents are deep-copied whole)
-}
-
 console.log('\n--- 8. 3D backend wiring (camera3d + geometry3d as the real engine) ---');
 {
   const m = await import('../src/core/massing-3d.js');

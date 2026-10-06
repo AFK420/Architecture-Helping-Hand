@@ -203,7 +203,7 @@
             </svg>
           </div>
           <div class="sidebar-brand-titles">
-            <span class="sidebar-brand-name">Helping Hand</span>
+            <span class="sidebar-brand-name">Home</span>
             <span class="sidebar-brand-sub">Architectural Workbench</span>
           </div>
         </div>
@@ -253,7 +253,7 @@
             </button>
           </div>
 
-          <div class="topbar-controls">
+          <details id="global-options" class="topbar-options"><summary>More</summary><div class="topbar-controls">
             <!-- Compact classic File menu (New / Save / Export / Shortcuts) -->
             <div class="topbar-file-menu" id="topbar-file-menu">
               <button type="button" class="control-btn topbar-file-trigger" aria-haspopup="true" aria-expanded="false" title="File">File ▾</button>
@@ -314,9 +314,9 @@
 
             <!-- Theme Switcher -->
             <select id="theme-select" class="theme-dropdown" title="Select Theme" aria-label="Theme selector">
-              <option value="dark" selected>📐 Studio Dark</option>
-              <option value="paper">📜 Drafting Paper</option>
-              <option value="blueprint">🟦 Blueprint Cyan</option>
+              <option value="dark" selected>Dark</option>
+              <option value="paper">Paper</option>
+              <option value="blueprint">Blueprint</option>
             </select>
 
             <!-- Sound Toggle -->
@@ -347,7 +347,7 @@
                 <line x1="12" y1="17" x2="12.01" y2="17"></line>
               </svg>
             </button>
-          </div>
+          </div></details>
         </header>
 
         <!-- Omnipresent Top AI Assistant Dropdown Drawer Host -->
@@ -1543,227 +1543,46 @@
       </div>
     </section></section>
     <section id="mode-view-converter" class="tool-mode-view" aria-labelledby="heading-converter">
-      <div class="tool-layout">
-        <!-- Left Column: Primary Instrument Faceplate -->
-        <div class="archi-card main-calc-card">
-          <div class="corner-mark top-left"></div>
-          <div class="corner-mark top-right"></div>
-          <div class="corner-mark bottom-left"></div>
-          <div class="corner-mark bottom-right"></div>
-
-          <!-- Instrument Title & Prominent Active Scale Header -->
-          <div class="instrument-header-bar">
-            <div class="instrument-titles">
-              <h2 id="heading-converter">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"></path>
-                  <path d="m14.5 12.5 2-2"></path>
-                  <path d="m11.5 9.5 2-2"></path>
-                  <path d="m8.5 6.5 2-2"></path>
-                  <path d="m17.5 15.5 2-2"></path>
-                </svg>
-                Scale Conversion Instrument
-              </h2>
-              <p class="instrument-subtitle">Bidirectional Precision Scaling • Live Mathematical Pipeline</p>
-            </div>
-            <div class="instrument-active-scale">
-              <span class="active-scale-label">ACTIVE SCALE</span>
-              <span id="active-scale-badge" class="active-scale-value">SCALE 1:50</span>
-            </div>
+      <div class="simple-converter">
+        <h2 id="heading-converter">Scale Converter</h2>
+        <p class="tool-intro">Convert between a real-world measurement and its size on an architectural drawing.</p>
+        <fieldset class="converter-direction"><legend>What do you want to convert?</legend>
+          <button type="button" data-direction="real_to_drawing" aria-pressed="true">Real size → Drawing size</button>
+          <button type="button" data-direction="drawing_to_real" aria-pressed="false">Drawing size → Real size</button>
+        </fieldset>
+        <p id="converter-direction-description" class="tool-intro"></p>
+        <div class="converter-fields">
+          <div><label id="converter-input-badge" for="converter-input-val">Real measurement</label>
+            <div class="input-with-unit-row"><input type="text" id="converter-input-val" class="form-input" value="5" placeholder="e.g. 5 m or 12'-6&quot;"><select id="converter-input-unit" class="form-select" aria-label="Measurement unit"></select></div>
           </div>
-
-          <!-- Scale Presets Selector Palette (Compact Technical Drawer) -->
-          <div class="scale-selector-block">
-            <div class="selector-toolbar">
-              <span class="section-label">Architectural Scale Standards</span>
-              <div class="preset-category-pills" id="preset-category-pills">
-                <button class="preset-pill-btn active" data-category="all">All (28)</button>
-                <button class="preset-pill-btn" data-category="architectural">Architecture (1:50-250)</button>
-                <button class="preset-pill-btn" data-category="detail">Details (1:1-25)</button>
-                <button class="preset-pill-btn" data-category="urban">Urban & Site</button>
-                <button class="preset-pill-btn" data-category="imperial">Imperial (Ft/In)</button>
-              </div>
-            </div>
-
-            <div class="presets-grid" id="presets-grid">
-              <!-- Preset chips populated dynamically by JS -->
-            </div>
-
-            <!-- Custom Denominator Ratio Input -->
-            <div class="custom-scale-row">
-              <span class="custom-scale-prefix">Custom Scale 1 :</span>
-              <div class="scale-input-box">
-                <input type="number" id="scale-ratio-input" class="form-input" value="50" min="0.001" step="any" placeholder="e.g. 50, 75, 100" aria-label="Custom scale denominator ratio">
-              </div>
-            </div>
+          <div><label for="converter-scale-select">Drawing scale</label><select id="converter-scale-select" class="form-select"></select>
+            <div class="converter-favorites" aria-label="Favorite scales"><button type="button" data-converter-scale="20">1:20</button><button type="button" data-converter-scale="50">1:50</button><button type="button" data-converter-scale="100">1:100</button><button type="button" data-converter-scale="200">1:200</button></div>
           </div>
-
-          <!-- INPUT -> SCALE -> OUTPUT Engineering Pipeline -->
-          <div class="instrument-pipeline">
-
-            <!-- STEP 1: USER SOURCE INPUT -->
-            <div class="pipeline-step step-input" id="converter-input-card">
-              <div class="step-badge-row">
-                <span class="step-num-badge">STEP 1</span>
-                <span class="step-kind-tag user-entry">USER INPUT [EDITABLE]</span>
-                <span id="converter-input-badge" class="step-context-badge">Drawing Measurement (Paper)</span>
-              </div>
-              <div class="input-with-unit-row">
-                <input type="text" id="converter-input-val" class="form-input primary-entry" value="10" placeholder="e.g. 10, 12.5, 3 1/2, 12'-6&quot;" aria-label="Input measurement value">
-                <select id="converter-input-unit" class="form-select primary-unit-select" aria-label="Input measurement unit">
-                  <!-- Populated by JS -->
-                </select>
-              </div>
-              <div class="input-inline-hint">Accepts decimals (12.5), fractions (3 1/2), feet-inches (12'-6 1/2"), or typed units (10m)</div>
-              <!-- Inline Error Message Banner -->
-              <div id="converter-error-msg" class="inline-error-banner" style="display: none;"></div>
-            </div>
-
-            <!-- STEP 2: TRANSFORMATION OPERATOR & DIRECTION SWAP -->
-            <div class="pipeline-step step-operator">
-              <div class="step-badge-row">
-                <span class="step-num-badge">STEP 2</span>
-                <span class="step-kind-tag system-calc">TRANSFORMATION & DIRECTION</span>
-              </div>
-
-              <!-- Direction Flow Strip -->
-              <div class="direction-flow-banner">
-                <div class="direction-path">
-                  <span class="direction-node" id="converter-flow-from">📐 Paper Drawing</span>
-                  <span class="direction-arrow">────────▶</span>
-                  <span class="direction-node highlight" id="converter-flow-to">🏛️ Real-World Site</span>
-                </div>
-                <button id="swap-direction-btn" class="swap-action-btn" title="Swap Conversion Direction (S)" aria-label="Swap conversion direction">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <polyline points="17 14 12 9 7 14"></polyline>
-                  </svg>
-                  <span>REVERSE DIRECTION (S)</span>
-                </button>
-              </div>
-
-              <!-- Target Unit Selector & Math Formula Microcopy -->
-              <div class="target-unit-bar">
-                <div class="target-unit-selector-group">
-                  <label class="form-field-label">Convert To Target Unit:</label>
-                  <select id="converter-output-unit" class="form-select" aria-label="Target output unit">
-                    <!-- Populated by JS -->
-                  </select>
-                  <span id="converter-output-badge" class="field-badge highlight">Real-World Dimension</span>
-                </div>
-                <div class="math-formula-box" id="converter-math-formula">
-                  <strong>Formula:</strong> Real Site = Drawing (10 cm) × 50 = <strong>5.00 m</strong>
-                </div>
-              </div>
-            </div>
-
-            <!-- PRIMARY ACTION TRIGGER & ENTER KEY SHORTCUT -->
-            <div class="pipeline-action-bar">
-              <button id="btn-run-converter" class="btn-primary-action" data-state="ready" aria-label="Run scale calculation">
-                <span class="btn-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                </span>
-                <span class="btn-text">RUN CALCULATION</span>
-                <span class="btn-shortcut-hint">↵ Enter</span>
-              </button>
-              <div class="enter-key-microcopy">Live calculated on keystroke • Press Enter ↵ to log into history</div>
-            </div>
-
-            <!-- STEP 3: FINAL CALCULATED ANSWER (HERO PANEL) -->
-            <div class="pipeline-step step-output result-hero-panel unified-result-panel" id="converter-result-panel" data-state="success">
-              <div class="step-badge-row" style="justify-content: space-between;">
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                  <span class="step-num-badge output-badge">STEP 3</span>
-                  <span class="step-kind-tag final-answer">FINAL CALCULATED ANSWER</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 0.4rem;">
-                  <span id="converter-state-badge" class="result-state-pill state-success">SUCCESS</span>
-                  <span id="converter-result-stale-tag" class="stale-status-tag" style="display: none;">Showing previous valid result</span>
-                </div>
-              </div>
-              
-              <div class="result-hero-label">Calculated Real-World Dimension</div>
-              <div class="result-main-value">
-                <span id="converter-result-val">5.000</span>
-                <span id="converter-result-unit" class="result-unit-suffix">m</span>
-              </div>
-
-              <!-- Context & Active Scale -->
-              <div class="result-context-strip" id="converter-context-strip">
-                <span class="context-pill"><strong>Scale:</strong> 1:50</span>
-                <span class="context-pill"><strong>Input:</strong> 10.00 cm Drawing</span>
-              </div>
-
-              <div class="result-secondary-readout" id="converter-secondary-readout">
-                16'-4 7/8" (196.85 in)
-              </div>
-              
-              <!-- Action Bar (Copy, Save to History) -->
-              <div class="result-actions-bar">
-                <button id="btn-copy-result" class="action-tool-btn" title="Copy calculated result to clipboard">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                  </svg>
-                  Copy Result
-                </button>
-                <button id="btn-save-history" class="action-tool-btn" title="Record this conversion to history log">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                    <polyline points="7 3 7 8 15 8"></polyline>
-                  </svg>
-                  Save Log
-                </button>
-                <button id="btn-scratch-converter" class="action-tool-btn" title="Send conversion result to Universal Scratchpad">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-                  </svg>
-                  Scratchpad
-                </button>
-              </div>
-            </div>
-
-          </div>
+          <div><label for="converter-output-unit">Result unit</label><select id="converter-output-unit" class="form-select" aria-label="Result unit"></select></div>
         </div>
-
-        <!-- Right Column: Visual Proportions & Multi-Unit Table -->
-        <div class="visual-column">
-          <!-- Dynamic Scale Bar & Reference Visualizer -->
-          <div class="archi-card" id="visualizer-container">
-            <!-- Rendered dynamically by visualizer.js -->
-          </div>
-
-          <!-- Multi-Unit Real Dimension Equivalents -->
-          <div class="archi-card quick-equiv-card">
-            <div class="card-title-row" style="margin-bottom: 0.75rem;">
-              <h2>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="8" y1="6" x2="21" y2="6"></line>
-                  <line x1="8" y1="12" x2="21" y2="12"></line>
-                  <line x1="8" y1="18" x2="21" y2="18"></line>
-                  <line x1="3" y1="6" x2="3.01" y2="6"></line>
-                  <line x1="3" y1="12" x2="3.01" y2="12"></line>
-                  <line x1="3" y1="18" x2="3.01" y2="18"></line>
-                </svg>
-                Equivalent Units Breakdown
-              </h2>
-              <span class="card-tag">PARALLEL DIMENSIONS</span>
-            </div>
-            
-            <div class="equiv-columns-grid">
-              <div>
-                <span class="equiv-group-title">Metric Standards</span>
-                <div class="equiv-grid" id="metric-breakdown-list"></div>
-              </div>
-              <div>
-                <span class="equiv-group-title">Imperial Standards</span>
-                <div class="equiv-grid" id="imperial-breakdown-list"></div>
-              </div>
-            </div>
-          </div>
+        <div id="converter-error-msg" class="inline-error-banner" role="alert" style="display:none"></div>
+        <div id="converter-result-panel" class="converter-answer unified-result-panel" aria-live="polite">
+          <span id="converter-result-label">Size on the drawing</span>
+          <div class="result-main-value"><span id="converter-result-val">100</span> <span id="converter-result-unit">mm</span></div>
+          <p id="converter-explanation"></p>
+          <button id="btn-copy-result" type="button" class="action-tool-btn primary">Copy Result</button>
         </div>
+        <details class="converter-advanced"><summary>Advanced</summary>
+          <details><summary>More scales</summary><div id="preset-category-pills" class="preset-category-pills">
+            <button type="button" data-category="all" class="preset-pill-btn active">All</button><button type="button" data-category="detail" class="preset-pill-btn">Detail</button><button type="button" data-category="architectural" class="preset-pill-btn">Architecture</button><button type="button" data-category="urban" class="preset-pill-btn">Site / Urban</button><button type="button" data-category="imperial" class="preset-pill-btn">Imperial</button>
+          </div><div id="presets-grid" class="presets-grid"></div></details>
+          <label for="scale-ratio-input">Custom scale 1 :</label><input type="number" id="scale-ratio-input" class="form-input" value="50" min="0.001" step="any">
+          <span id="active-scale-badge">1:50</span>
+          <p><span id="converter-flow-from"></span> <span id="converter-direction-arrow">→</span> <span id="converter-flow-to"></span></p>
+          <span id="converter-output-badge"></span><p id="converter-math-formula"></p>
+          <button type="button" id="swap-direction-btn" class="action-tool-btn">Reverse direction (S)</button>
+          <p id="converter-secondary-readout"></p>
+          <details><summary>Real size in other units</summary><div class="equiv-columns-grid"><div id="metric-breakdown-list"></div><div id="imperial-breakdown-list"></div></div></details>
+          <details><summary>Graphic scale and size reference</summary><div id="visualizer-container"></div></details>
+          <div id="converter-context-strip"></div><span id="converter-state-badge"></span><span id="converter-result-stale-tag" hidden></span>
+          <div class="companion-actions"><button id="btn-run-converter" type="button" class="action-tool-btn"><span class="btn-text">Recalculate</span></button><button id="btn-save-history" type="button" class="action-tool-btn">Save to history</button><button id="btn-scratch-converter" type="button" class="action-tool-btn">Scratchpad</button></div>
+          <p>Results update as you type. Precision is available in the top bar.</p>
+        </details>
       </div>
     </section>
 
@@ -2170,14 +1989,9 @@
               <path d="M20 18v2"></path>
               <path d="M12 11v4"></path>
             </svg>
-            Architectural Furniture & Fixtures Database
+            Object Library
           </h2>
-          <span class="card-tag">175+ ARCHITECTURAL STANDARDS & BLUEPRINTS</span>
         </div>
-
-        <p class="tool-description" style="margin: 0 0 1rem;">
-          Typical planning furniture and fixture references, each shown scaled at your chosen drawing scale with its plan footprint. Use it to pick pieces that fit a room and check standard clearances. Enter a scale above, then search or filter the catalog.
-        </p>
 
         <!-- Toolbar: Search Bar + Scale Presets + Category Nav -->
         <div class="furniture-toolbar">
@@ -2188,16 +2002,15 @@
                 <circle cx="11" cy="11" r="8"></circle>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
               </svg>
-              <input type="text" id="furniture-search-input" class="furniture-search-input" placeholder="Search by name, category, or dimension (e.g. 'sofa 220', 'king 200', 'dining 6', 'ada', 'desk 160', '90x190')..." aria-label="Search furniture catalog">
+              <input type="text" id="furniture-search-input" class="furniture-search-input" placeholder="Search hospital bed, palm tree, fire station locker…" aria-label="Search furniture catalog">
               <button id="clear-furniture-search-btn" class="clear-search-btn" title="Clear search" aria-label="Clear search">✕</button>
             </div>
             <div id="furniture-results-count" class="furniture-count-badge">
               215 items
             </div>
           </div>
-          <div class="furn-search-hint">
-            💡 Instant space-planning search: Type dimensions (e.g. <code>200</code>, <code>200x200</code>, <code>60cm</code>) or keywords (e.g. <code>ada</code>, <code>island</code>, <code>bunk</code>, <code>sectional</code>)
-          </div>
+          <label for="object-collection">Collection</label><select id="object-collection" class="form-select"></select>
+          <details class="object-library-options"><summary>Library options</summary>
 
           <!-- Space-Planning Controls Bar: Scale + Paper Unit + Sort + Density -->
           <div class="furniture-scale-bar">
@@ -2232,7 +2045,7 @@
             <div class="furn-sort-box">
               <span class="section-label" style="margin: 0;">Sort By:</span>
               <select id="furn-sort-select" class="form-select" aria-label="Sort furniture items">
-                <option value="default">Standards Order</option>
+                <option value="default">Catalog order</option>
                 <option value="name_asc">Name (A ➔ Z)</option>
                 <option value="name_desc">Name (Z ➔ A)</option>
                 <option value="width_desc">Width (Largest ➔ Smallest)</option>
@@ -2267,8 +2080,11 @@
             <button class="furn-cat-pill" data-cat="outdoor">🌳 Outdoor & Site <span class="furn-cat-count" id="count-outdoor">16</span></button>
             <button class="furn-cat-pill" data-cat="commercial">🏪 Commercial, Retail & Fitness <span class="furn-cat-count" id="count-commercial">52</span></button>
           </div>
+          <label for="furniture-subcategory">Subcategory</label><select id="furniture-subcategory" class="calc-select"></select>
+          </details>
         </div>
 
+        <details class="object-library-options"><summary>Custom dimension calculator</summary>
         <!-- Custom Furniture Quick Scaler Box -->
         <div class="custom-furn-box">
           <div class="custom-furn-title">
@@ -2308,8 +2124,9 @@
           </div>
         </div>
 
+        </details>
         <!-- Furniture Cards Grid Container -->
-        <label class="input-label" for="furniture-subcategory">Subcategory</label><select id="furniture-subcategory" class="calc-select"></select>
+
 <div class="furniture-grid" id="furniture-cards-grid">
           <!-- Populated dynamically by JS -->
         </div>
@@ -4205,14 +4022,14 @@
               <h2 id="heading-requirements" class="card-title">Brief &amp; Requirements</h2>
             </div>
           </div>
-          <p class="tool-description">Capture what the building must do: building type, floors, area targets, room requirements, adjacency, and design intent. Requirements are evaluated deterministically against the actual model — never invented.</p>
+          <p class="tool-description">Record building type, floors, area targets, room requirements and adjacencies. Geometry checks require verified evidence from your external CAD drawings.</p>
           <div id="req-brief-editor"></div>
         </div>
         <div class="archi-card main-calc-card">
           <div class="card-header">
             <div>
               <span class="card-tag">EVALUATION</span>
-              <h2 class="card-title">Requirements vs Model</h2>
+              <h2 class="card-title">Requirements review</h2>
             </div>
           </div>
           <div id="req-results" style="padding: 0.5rem;"></div>

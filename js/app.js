@@ -1876,7 +1876,7 @@ function findSegmentIntersections(segments = []) {
  * services, civic, sports & stadiums, leisure (cinema/gaming/caravan),
  * hospitality, education, transport, and landscape (plants/trees).
  *
- * Every item carries REAL standard dimensions (typical industry sizes);
+ * Every item carries editable planning reference dimensions, not verified standards;
  * `clearance` records the functional clearance the QA engine should honor.
  * Families with parametric members (seating rows, planters, tree sizes)
  * expand to keep real-world variation without invented numbers.
@@ -2391,6 +2391,1052 @@ const OBJECT_CATEGORY_LABELS = Object.freeze({
 
 
   // =========================================================================
+  // MODULE: ObjectCatalogAdditions
+  // =========================================================================
+
+/** Editable design defaults, not published standards or manufacturer dimensions. */
+const objectAdditions = [
+  ['lux-sectional','Luxury Sectional Sofa','living',340,250,90,'sectional'],
+  ['cinema-home-row','Home Cinema Recliner Row','living',300,160,110,'cinemaRow'],
+  ['kitchen-island-oversize','Oversized Kitchen Island','kitchen',320,140,90,'kitchen'],
+  ['butler-pantry','Butler Pantry Unit','kitchen',240,65,210,'storage'],
+  ['wine-rack','Wine Rack','living',100,40,180,'wine'],
+  ['wine-wall','Wine Wall','living',280,40,240,'wine'],
+  ['sauna-bench','Sauna Bench','bathroom',220,65,45,'bench'],
+  ['outdoor-kitchen','Outdoor Kitchen','outdoor',300,80,90,'kitchen'],
+  ['pergola-seating','Pergola Seating','outdoor',400,400,260,'pergola'],
+  ['ornamental-fountain','Decorative Fountain','landscape',220,220,120,'fountain'],
+  ['nurse-station','Nurse Station','healthcare',280,120,110,'desk'],
+  ['operating-table','Operating Table','healthcare',80,210,90,'medicalTable'],
+  ['dialysis-chair','Dialysis Recliner','healthcare',95,170,100,'chair'],
+  ['police-interview-chair','Police Interview Chair','emergency',55,55,85,'chair'],
+  ['police-interview-table','Police Interview Table','emergency',160,90,75,'table'],
+  ['police-fingerprint','Police Fingerprint Station','emergency',120,70,90,'desk'],
+  ['police-barrier-gate','Police Barrier Gate','emergency',400,75,110,'gate'],
+  ['fire-turnout-locker','Fire Station Turnout Gear Locker','emergency',70,60,210,'locker'],
+  ['fire-scba-storage','Fire Station SCBA Storage','emergency',160,60,200,'scba'],
+  ['fire-hose-rack','Fire Station Hose Rack','emergency',200,70,180,'hose'],
+  ['fire-watch-desk','Fire Station Watch Desk','emergency',180,80,75,'desk'],
+  ['fire-sleeping-bunk','Fire Station Sleeping Bunk','emergency',100,210,170,'bed'],
+  ['fire-decontamination','Fire Decontamination Sink','emergency',160,70,90,'basin'],
+  ['park-bench-slat','Park Bench without Back','landscape',180,50,45,'bench'],
+  ['park-gazebo','Park Gazebo','landscape',450,450,300,'pergola'],
+  ['park-drinking-fountain','Park Drinking Fountain','landscape',65,55,95,'basin'],
+  ['tree-ornamental','Ornamental Tree','landscape',350,350,450,'tree'],
+  ['shrub-cluster','Shrub Cluster','landscape',240,180,90,'hedge'],
+  ['flower-bed','Flower Bed','landscape',300,180,40,'groundcover'],
+  ['groundcover-patch','Groundcover Patch','landscape',300,200,15,'groundcover'],
+  ['grass-patch','Grass Patch','landscape',300,300,10,'groundcover'],
+  ['climbing-plant','Climbing Plant Trellis','landscape',200,50,240,'screen'],
+  ['street-light','Street Light','transport',80,100,700,'light'],
+  ['traffic-signal','Traffic Signal','transport',70,100,350,'light'],
+  ['pedestrian-crossing','Pedestrian Crossing','transport',350,600,0,'crossing'],
+  ['street-bollard','Street Bollard','transport',35,35,95,'pole'],
+  ['street-curb-ramp','Curb Ramp Symbol','transport',150,180,15,'ramp'],
+  ['street-lane-marker','Road Lane Marker','transport',25,300,0,'mat'],
+  ['mall-checkout','Mall Checkout Counter','commercial',250,100,95,'kitchen']
+];
+const ARCHITECTURAL_OBJECT_ADDITIONS = Object.freeze(objectAdditions.map(([id,name,category,wCm,dCm,hCm,type])=>Object.freeze({id,name,category,wCm,dCm,hCm,type,
+  desc:'Editable schematic design footprint; verify the selected product and project requirements.',
+  dimensionSourceType:'illustrative-reference',dimensionSource:{origin:'Designer-editable schematic default',verified:false,note:'Illustrative dimensions, not a published standard or manufacturer model.'}})));
+
+
+  // =========================================================================
+  // MODULE: ObjectCollections
+  // =========================================================================
+
+const OBJECT_COLLECTIONS = Object.freeze([
+  ['luxury','Luxury Residential','luxury residential home cinema spa'],['healthcare','Healthcare / Hospital','hospital clinic healthcare'],
+  ['police','Police Department','police security interview'],['fire','Fire Department','fire department fire station'],
+  ['parks','Parks & Landscape','park parks landscape outdoor'],['plants','Plants & Trees','plant plants trees vegetation'],
+  ['streets','Streets & Urban','street streets urban transport'],['education','Education','school university education'],
+  ['retail','Retail / Malls','retail mall malls shop checkout'],['hospitality','Hospitality','hospitality restaurant hotel cafe'],
+  ['sports','Sports','sport gym fitness'],['workplace','Office / Workplace','office workplace'],
+  ['accessibility','Accessibility','wheelchair accessible accessibility'],['parking','Parking / Transport','parking transport vehicle'],['openings','Doors / Openings','door doors openings']
+].map(([id,label,search])=>Object.freeze({id,label,search})));
+
+function objectCollections(item) {
+  const t=`${item.id} ${item.name} ${item.desc}`.toLowerCase(),set=new Set();
+  const luxury=/chesterfield|wingback|chaise|grand-piano|super-king|closet-island|vanity-dressing|vanity-double|kitchen-island|butler|wine-|fireplace|jacuzzi|massage|sauna|outdoor-kitchen|bbq|firepit|pool-table|cinema-home|sun-lounger|pergola-seating|outdoor-sectional|ornamental-fountain|lux-sectional/;
+  if(luxury.test(t))set.add('luxury');
+  if(item.category==='healthcare')set.add('healthcare');
+  if(/police|interrogat|custody|evidence|riot|armory|weapons|fingerprint|metal-detector|secure|security|duty-desk/.test(t))set.add('police');
+  if(/fire-|fire station|fire department|fire truck|gear-rack-fire|breathing-apparatus|hose-tower|ambulance/.test(t))set.add('fire');
+  if(item.category==='outdoor'&&item.subcategory!=='parking')set.add('parks');
+  if(/tree-|tree |hedge|shrub|plant|flower|groundcover|grass|lawn|wildflower|green-roof|vertical-garden/.test(t))set.add('plants');
+  if(item.legacyCategory==='transport'||/street|bus-stop|bike-rack|crossing|traffic|bollard/.test(t))set.add('streets');
+  for(const cat of ['education','retail','hospitality','sports','workplace','accessibility','openings'])if(item.category===cat)set.add(cat);
+  if(/parking|vehicle|car-|fire-truck|ambulance|bus-|motor|train|tram|coach/.test(t)||item.subcategory==='parking')set.add('parking');
+  if(/wheelchair|accessible|ada|clearance/.test(t))set.add('accessibility');
+  return [...set];
+}
+
+function annotateObjectCollections(item) {
+  const collections=objectCollections(item);
+  const collectionText=OBJECT_COLLECTIONS.filter(c=>collections.includes(c.id)).map(c=>c.search).join(' ');
+  const aliases=/interrogat|police-interview/.test(item.id)?['police','interview']: /street-light/.test(item.id)?['streetlight']: /checkout/.test(item.id)?['mall','checkout']:[];
+  return {...item,collections,collectionText,useCases:collectionText,tags:[...new Set([...item.tags,...aliases])],...(collections.includes('fire')?{category:'civic',subcategory:'fire'}:{})};
+}
+
+
+  // =========================================================================
+  // MODULE: ObjectGeometryBindings
+  // =========================================================================
+
+/** Explicit object → CAD composition assignments. Unknown IDs are never guessed. */
+const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
+  "sofa-3p": {"family":"sofa","options":{"seats":3}},
+  "sofa-2p": {"family":"sofa","options":{"seats":2}},
+  "sofa-4p": {"family":"sofa","options":{"seats":4}},
+  "sofa-l": {"family":"sectional","options":{}},
+  "sofa-u": {"family":"sectional","options":{"u":true}},
+  "sofa-chesterfield": {"family":"sofa","options":{"seats":2,"tufted":true}},
+  "chaise-lounge": {"family":"chair","options":{"arms":true,"recline":true}},
+  "armchair": {"family":"chair","options":{"arms":true}},
+  "recliner": {"family":"chair","options":{"arms":true,"recline":true}},
+  "wingback-chair": {"family":"chair","options":{"arms":true,"wings":true}},
+  "ottoman-rect": {"family":"ottoman","options":{}},
+  "pouf-round": {"family":"ottoman","options":{"round":true}},
+  "coffee-rect": {"family":"table","options":{"seats":12}},
+  "coffee-square": {"family":"table","options":{"seats":2}},
+  "coffee-round": {"family":"table","options":{"round":true,"seats":2}},
+  "coffee-nesting": {"family":"table","options":{"nesting":true,"seats":2}},
+  "side-table": {"family":"table","options":{"seats":2}},
+  "console-table": {"family":"table","options":{"seats":2}},
+  "tv-console-180": {"family":"storage","options":{"bays":2}},
+  "tv-console-240": {"family":"storage","options":{"bays":2}},
+  "bookshelf-living": {"family":"storage","options":{"bays":2}},
+  "fireplace-hearth": {"family":"fireplace","options":{}},
+  "grand-piano": {"family":"piano","options":{}},
+  "bed-super-king": {"family":"bed","options":{"pillows":3}},
+  "bed-king": {"family":"bed","options":{"pillows":2}},
+  "bed-queen": {"family":"bed","options":{"pillows":2}},
+  "bed-double": {"family":"bed","options":{"pillows":1}},
+  "bed-twin-xl": {"family":"bed","options":{"pillows":1}},
+  "bed-single": {"family":"bed","options":{"pillows":1}},
+  "bed-bunk": {"family":"bed","options":{"pillows":1,"bunk":true}},
+  "bed-trundle": {"family":"bed","options":{"pillows":1,"trundle":true}},
+  "crib-baby": {"family":"bed","options":{"pillows":1,"crib":true}},
+  "bed-toddler": {"family":"bed","options":{"pillows":1}},
+  "nightstand": {"family":"table","options":{"seats":2}},
+  "nightstand-wide": {"family":"table","options":{"seats":6}},
+  "wardrobe-2d": {"family":"storage","options":{"bays":2,"hanging":true}},
+  "wardrobe-3d": {"family":"storage","options":{"bays":3,"hanging":true}},
+  "wardrobe-4d": {"family":"storage","options":{"bays":4,"hanging":true}},
+  "wardrobe-sliding": {"family":"storage","options":{"bays":2,"hanging":true}},
+  "closet-island": {"family":"storage","options":{"bays":2}},
+  "dresser-4d": {"family":"storage","options":{"bays":2}},
+  "dresser-6d": {"family":"storage","options":{"bays":2}},
+  "vanity-dressing": {"family":"table","options":{"seats":2}},
+  "dining-2p-bistro": {"family":"table","options":{"dining":true,"seats":2}},
+  "dining-2p-round": {"family":"table","options":{"round":true,"dining":true,"seats":2}},
+  "dining-4p-sq": {"family":"table","options":{"dining":true,"seats":4}},
+  "dining-4p-round": {"family":"table","options":{"round":true,"dining":true,"seats":4}},
+  "dining-6p-rect": {"family":"table","options":{"dining":true,"seats":6}},
+  "dining-6p-round": {"family":"table","options":{"round":true,"dining":true,"seats":6}},
+  "dining-6p-oval": {"family":"table","options":{"round":true,"dining":true,"seats":6}},
+  "dining-8p-rect": {"family":"table","options":{"dining":true,"seats":8}},
+  "dining-8p-oval": {"family":"table","options":{"round":true,"dining":true,"seats":8}},
+  "dining-10p-rect": {"family":"table","options":{"dining":true,"seats":10}},
+  "dining-12p-rect": {"family":"table","options":{"dining":true,"seats":12}},
+  "dining-chair": {"family":"chair","options":{}},
+  "dining-armchair": {"family":"chair","options":{}},
+  "bar-stool": {"family":"chair","options":{"arms":true}},
+  "banquette-nook": {"family":"sectional","options":{}},
+  "sideboard": {"family":"storage","options":{"bays":2}},
+  "sideboard-large": {"family":"storage","options":{"bays":2}},
+  "bar-cart": {"family":"cart","options":{}},
+  "counter-base-60": {"family":"kitchen","options":{}},
+  "counter-base-90": {"family":"kitchen","options":{}},
+  "counter-corner": {"family":"kitchen","options":{}},
+  "kitchen-island-180": {"family":"kitchen","options":{"bar":true}},
+  "kitchen-island-sink": {"family":"kitchen","options":{"sink":true,"bar":true}},
+  "peninsula-bar": {"family":"kitchen","options":{}},
+  "tall-pantry-60": {"family":"storage","options":{"bays":2}},
+  "oven-tower-60": {"family":"oven","options":{}},
+  "sink-single": {"family":"basin","options":{}},
+  "sink-double": {"family":"basin","options":{"double":true}},
+  "sink-undermount": {"family":"basin","options":{}},
+  "sink-apron": {"family":"basin","options":{}},
+  "cooktop-4b": {"family":"kitchen","options":{"cooktop":true}},
+  "cooktop-5b": {"family":"kitchen","options":{"cooktop":true}},
+  "range-cooker-90": {"family":"kitchen","options":{"cooktop":true}},
+  "range-hood-90": {"family":"oven","options":{"hood":true}},
+  "fridge-single": {"family":"appliance","options":{"fridge":true}},
+  "fridge-french": {"family":"appliance","options":{"fridge":true}},
+  "dishwasher-std": {"family":"appliance","options":{}},
+  "dishwasher-slim": {"family":"appliance","options":{}},
+  "washing-machine": {"family":"appliance","options":{"laundry":true}},
+  "tumble-dryer": {"family":"appliance","options":{"laundry":true}},
+  "toilet-std": {"family":"toilet","options":{}},
+  "toilet-wall": {"family":"toilet","options":{}},
+  "toilet-ada": {"family":"toilet","options":{"accessible":true}},
+  "bidet-std": {"family":"toilet","options":{}},
+  "urinal-wall": {"family":"toilet","options":{"urinal":true}},
+  "basin-cloakroom": {"family":"basin","options":{}},
+  "basin-pedestal": {"family":"basin","options":{}},
+  "vanity-single-60": {"family":"basin","options":{}},
+  "vanity-single-90": {"family":"basin","options":{}},
+  "vanity-double-120": {"family":"basin","options":{"double":true}},
+  "vanity-double-160": {"family":"basin","options":{"double":true}},
+  "bathtub-std": {"family":"bath","options":{}},
+  "bathtub-large": {"family":"bath","options":{}},
+  "bathtub-free-oval": {"family":"bath","options":{}},
+  "bathtub-corner-jacuzzi": {"family":"bath","options":{"corner":true,"jets":true}},
+  "shower-corner-90": {"family":"shower","options":{"corner":true}},
+  "shower-corner-neo": {"family":"shower","options":{"corner":true}},
+  "shower-walkin-120": {"family":"shower","options":{}},
+  "shower-walkin-150": {"family":"shower","options":{}},
+  "shower-ada-rollin": {"family":"shower","options":{"accessible":true}},
+  "desk-compact": {"family":"desk","options":{}},
+  "desk-std-140": {"family":"desk","options":{}},
+  "desk-studio-160": {"family":"desk","options":{}},
+  "desk-standing-150": {"family":"desk","options":{}},
+  "desk-exec-180": {"family":"desk","options":{}},
+  "desk-corner-160": {"family":"deskLayout","options":{}},
+  "desk-u-shaped": {"family":"deskLayout","options":{"u":true}},
+  "drafting-table": {"family":"table","options":{"seats":12}},
+  "desk-pod-2p": {"family":"desk","options":{},"layout":{"rows":2,"columns":1}},
+  "desk-pod-4p": {"family":"desk","options":{},"layout":{"rows":2,"columns":2}},
+  "desk-pod-6p": {"family":"desk","options":{},"layout":{"rows":2,"columns":3}},
+  "reception-desk": {"family":"reception","options":{}},
+  "phone-booth": {"family":"room","options":{"booth":true}},
+  "conf-table-round": {"family":"table","options":{"round":true,"dining":true,"seats":12}},
+  "conf-table-8p": {"family":"table","options":{"dining":true,"seats":8}},
+  "conf-table-12p": {"family":"table","options":{"dining":true,"seats":12}},
+  "chair-task": {"family":"chair","options":{"arms":true,"task":true}},
+  "chair-exec": {"family":"chair","options":{"arms":true,"task":true}},
+  "chair-visitor": {"family":"chair","options":{}},
+  "file-cabinet-4d": {"family":"cabinet","options":{}},
+  "printer-station": {"family":"appliance","options":{}},
+  "server-rack-42u": {"family":"storage","options":{"bays":2}},
+  "door-700": {"family":"door","options":{}},
+  "door-800": {"family":"door","options":{}},
+  "door-900": {"family":"door","options":{}},
+  "door-1000-ada": {"family":"door","options":{}},
+  "door-double-160": {"family":"door","options":{"double":true}},
+  "door-double-180": {"family":"door","options":{"double":true}},
+  "door-pocket-90": {"family":"sliding","options":{"bays":2}},
+  "door-patio-180": {"family":"sliding","options":{"bays":2}},
+  "door-patio-270": {"family":"sliding","options":{"bays":2}},
+  "door-bifold-300": {"family":"sliding","options":{"bays":2}},
+  "window-casement-120": {"family":"window","options":{}},
+  "window-picture-200": {"family":"window","options":{}},
+  "window-sliding-150": {"family":"window","options":{}},
+  "stair-straight": {"family":"stairs","options":{}},
+  "stair-l-shaped": {"family":"stairs","options":{"l":true}},
+  "stair-u-shaped": {"family":"stairs","options":{}},
+  "stair-spiral": {"family":"stairs","options":{"spiral":true}},
+  "clearance-hall": {"family":"clearance","options":{}},
+  "clearance-commercial": {"family":"clearance","options":{}},
+  "clearance-wheelchair": {"family":"clearance","options":{}},
+  "ramp-ada": {"family":"ramp","options":{}},
+  "elevator-shaft": {"family":"room","options":{}},
+  "outdoor-dining-6p": {"family":"table","options":{"dining":true,"seats":6}},
+  "outdoor-chair": {"family":"chair","options":{"arms":true}},
+  "sun-lounger": {"family":"chair","options":{"arms":true,"recline":true}},
+  "outdoor-sectional": {"family":"sectional","options":{}},
+  "outdoor-firepit": {"family":"firepit","options":{}},
+  "patio-umbrella": {"family":"roundShade","options":{}},
+  "bbq-grill-station": {"family":"kitchen","options":{"bbq":true}},
+  "planter-rect": {"family":"planter","options":{}},
+  "planter-square": {"family":"planter","options":{}},
+  "bike-parking": {"family":"parking","options":{}},
+  "motorcycle-bay": {"family":"parking","options":{}},
+  "car-compact": {"family":"parking","options":{}},
+  "car-standard": {"family":"parking","options":{}},
+  "car-ada-bay": {"family":"parking","options":{"accessible":true}},
+  "ev-charger-bay": {"family":"parking","options":{"ev":true}},
+  "garage-single": {"family":"room","options":{}},
+  "restaurant-booth-2p": {"family":"boothSeating","options":{"seats":1}},
+  "restaurant-booth-4p": {"family":"boothSeating","options":{"seats":2}},
+  "bar-service-counter": {"family":"kitchen","options":{}},
+  "retail-clothing-rack": {"family":"storage","options":{"bays":2}},
+  "retail-pos-counter": {"family":"checkout","options":{}},
+  "supermarket-checkout": {"family":"checkout","options":{}},
+  "gym-treadmill": {"family":"treadmill","options":{}},
+  "gym-exercise-bike": {"family":"bike","options":{}},
+  "gym-elliptical": {"family":"elliptical","options":{}},
+  "gym-bench-press": {"family":"benchPress","options":{}},
+  "gym-multigym": {"family":"benchPress","options":{"machine":true}},
+  "hospital-bed": {"family":"medicalBed","options":{}},
+  "medical-exam-table": {"family":"medicalTable","options":{}},
+  "dental-chair": {"family":"dental","options":{}},
+  "massage-treatment-table": {"family":"medicalTable","options":{}},
+  "salon-styling-chair": {"family":"chair","options":{"arms":true}},
+  "waiting-room-chair": {"family":"chair","options":{"arms":true}},
+  "hospital-bed-icu": {"family":"medicalBed","options":{"icu":true}},
+  "bedside-screen": {"family":"screen","options":{"bays":2}},
+  "medication-cart": {"family":"cart","options":{}},
+  "wheelchair-parking-bay": {"family":"parking","options":{}},
+  "classroom-desk-single": {"family":"desk","options":{}},
+  "classroom-desk-double": {"family":"desk","options":{}},
+  "lecture-hall-seat": {"family":"chair","options":{"arms":true}},
+  "teacher-desk": {"family":"desk","options":{}},
+  "whiteboard-wall": {"family":"window","options":{}},
+  "library-stack-double": {"family":"storage","options":{"bays":2}},
+  "library-carrel": {"family":"desk","options":{}},
+  "lab-bench-island": {"family":"lab","options":{}},
+  "fume-hood": {"family":"lab","options":{"hood":true}},
+  "kindergarten-cot": {"family":"bed","options":{"pillows":1}},
+  "cafeteria-table-8": {"family":"table","options":{"seats":8,"dining":true}},
+  "prayer-room-screen": {"family":"screen","options":{"bays":2}},
+  "childcare-cubby": {"family":"locker","options":{"bays":2}},
+  "pallet-standard": {"family":"pallet","options":{}},
+  "pallet-rack-bay": {"family":"pallet","options":{"rack":true}},
+  "forklift-aisle": {"family":"clearance","options":{}},
+  "workbench-heavy": {"family":"table","options":{"seats":2}},
+  "packing-station": {"family":"table","options":{"seats":8}},
+  "loading-dock": {"family":"room","options":{}},
+  "chest-freezer-comm": {"family":"appliance","options":{"fridge":true}},
+  "prep-table-ss": {"family":"kitchen","options":{}},
+  "walkin-coldroom": {"family":"room","options":{}},
+  "dishwasher-hood": {"family":"appliance","options":{}},
+  "laundry-industrial": {"family":"appliance","options":{"laundry":true}},
+  "cleaners-cupboard": {"family":"storage","options":{"bays":2}},
+  "server-room-rack-row": {"family":"storage","options":{"bays":2}},
+  "waste-compound": {"family":"room","options":{}},
+  "goods-lift": {"family":"room","options":{}},
+  "mezz-stair-industrial": {"family":"stairs","options":{}},
+  "fire-hose-cabinet": {"family":"hose","options":{}},
+  "ev-charger-wall": {"family":"charger","options":{}},
+  "hosp-bed-standard": {"family":"medicalBed","options":{}},
+  "hosp-bed-electric": {"family":"medicalBed","options":{"icu":true}},
+  "hosp-bed-bariatric": {"family":"medicalBed","options":{"icu":true}},
+  "hosp-bed-pediatric": {"family":"medicalBed","options":{}},
+  "bedside-cabinet-med": {"family":"cabinet","options":{}},
+  "overbed-table": {"family":"table","options":{"seats":2}},
+  "iv-stand": {"family":"pole","options":{}},
+  "patient-lift": {"family":"lift","options":{}},
+  "bed-screen": {"family":"screen","options":{"bays":2}},
+  "callout-nurse": {"family":"device","options":{}},
+  "exam-table": {"family":"medicalTable","options":{}},
+  "exam-table-procedure": {"family":"medicalTable","options":{}},
+  "gyn-exam-chair": {"family":"chair","options":{"arms":true}},
+  "dental-chair-unit": {"family":"dental","options":{}},
+  "dental-delivery": {"family":"cart","options":{}},
+  "opto-chair": {"family":"chair","options":{"arms":true}},
+  "opto-slitlamp": {"family":"medicalTable","options":{}},
+  "stretcher": {"family":"medicalBed","options":{"stretcher":true}},
+  "wheelchair-std": {"family":"wheelchair","options":{}},
+  "wheelchair-sports": {"family":"wheelchair","options":{"sports":true}},
+  "wheelchair-bariat": {"family":"wheelchair","options":{}},
+  "walker-rollator": {"family":"walker","options":{}},
+  "xray-room-set": {"family":"scanner","options":{}},
+  "ct-scanner": {"family":"scanner","options":{}},
+  "mri-scanner": {"family":"scanner","options":{"mri":true}},
+  "ultrasound-cart": {"family":"cart","options":{"monitor":true}},
+  "ecg-cart": {"family":"cart","options":{"monitor":true}},
+  "vitals-monitor": {"family":"device","options":{}},
+  "infusion-pump": {"family":"device","options":{"pump":true}},
+  "reception-med": {"family":"reception","options":{}},
+  "waiting-bench-3": {"family":"bench","options":{"arms":true}},
+  "waiting-chair-s": {"family":"chair","options":{"arms":true},"layout":{"rows":1,"columns":1}},
+  "waiting-chair-d": {"family":"chair","options":{"arms":true},"layout":{"rows":1,"columns":2}},
+  "waiting-chair-t": {"family":"chair","options":{"arms":true},"layout":{"rows":1,"columns":3}},
+  "waiting-chair-q": {"family":"chair","options":{"arms":true},"layout":{"rows":1,"columns":4}},
+  "trolley-supply": {"family":"cart","options":{}},
+  "crash-cart": {"family":"cart","options":{}},
+  "medicine-cabinet": {"family":"storage","options":{"bays":2}},
+  "scrub-sink": {"family":"basin","options":{}},
+  "glove-box-stand": {"family":"device","options":{}},
+  "biohazard-bin": {"family":"bin","options":{}},
+  "sharps-container": {"family":"bin","options":{}},
+  "pharmacy-counter": {"family":"desk","options":{}},
+  "pharmacy-shelf": {"family":"storage","options":{"bays":2}},
+  "lab-bench-double": {"family":"lab","options":{}},
+  "fume-hood-lab": {"family":"lab","options":{"hood":true}},
+  "biosafety-cabinet": {"family":"lab","options":{"hood":true}},
+  "centrifuge-bench": {"family":"lab","options":{}},
+  "fridge-pharma": {"family":"appliance","options":{"fridge":true}},
+  "autoclave": {"family":"pressureAppliance","options":{}},
+  "operating-light": {"family":"device","options":{}},
+  "anaesthesia-cart": {"family":"cart","options":{}},
+  "mayo-stand": {"family":"medicalTable","options":{}},
+  "kick-bucket": {"family":"bin","options":{}},
+  "physio-plinth": {"family":"medicalTable","options":{}},
+  "parallel-bars": {"family":"parallelBars","options":{}},
+  "therapy-mat": {"family":"mat","options":{}},
+  "pedal-exerciser": {"family":"walker","options":{}},
+  "hydro-therapy": {"family":"court","options":{"pool":true}},
+  "police-desk": {"family":"reception","options":{}},
+  "police-bench-custody": {"family":"bench","options":{"arms":true}},
+  "custody-cell-bed": {"family":"bed","options":{"pillows":1}},
+  "custody-toilet": {"family":"toilet","options":{}},
+  "evidence-locker": {"family":"locker","options":{"bays":2}},
+  "weapons-cabinet": {"family":"storage","options":{"bays":2}},
+  "interrogation-table": {"family":"table","options":{"seats":2}},
+  "control-room-console": {"family":"desk","options":{"console":true}},
+  "comms-rack": {"family":"storage","options":{"bays":2}},
+  "breathing-apparatus": {"family":"scba","options":{}},
+  "fire-pole": {"family":"firePole","options":{}},
+  "gear-rack-fire": {"family":"locker","options":{"bays":1,"gear":true}},
+  "booth-fire-truck": {"family":"vehicle","options":{}},
+  "hose-tower": {"family":"room","options":{}},
+  "fire-truck-2": {"family":"vehicle","options":{"truck":true,"emergency":true}},
+  "ambulance": {"family":"vehicle","options":{"emergency":true}},
+  "police-car": {"family":"vehicle","options":{"emergency":true}},
+  "police-suv": {"family":"vehicle","options":{"emergency":true}},
+  "motorbike-patrol": {"family":"bicycle","options":{"motorcycle":true}},
+  "holding-cell": {"family":"room","options":{"cell":true}},
+  "riot-gear-locker": {"family":"locker","options":{"bays":2}},
+  "duty-desk-sgt": {"family":"desk","options":{}},
+  "bullet-glass-booth": {"family":"room","options":{"booth":true}},
+  "xray-scanner-sec": {"family":"portal","options":{"scanner":true}},
+  "metal-detector-arch": {"family":"portal","options":{}},
+  "bollard-security": {"family":"bollard","options":{}},
+  "front-desk-sec": {"family":"reception","options":{}},
+  "cctv-wall": {"family":"storage","options":{"bays":2}},
+  "armory-workbench": {"family":"table","options":{"seats":2}},
+  "court-bench": {"family":"bench","options":{"arms":true}},
+  "witness-stand": {"family":"room","options":{}},
+  "judge-bench": {"family":"desk","options":{}},
+  "council-desk": {"family":"desk","options":{}},
+  "public-gallery-bench": {"family":"bench","options":{"arms":true}},
+  "court-basketball": {"family":"court","options":{}},
+  "court-basketball-half": {"family":"court","options":{}},
+  "court-tennis": {"family":"court","options":{"tennis":true}},
+  "court-badminton": {"family":"court","options":{"tennis":true}},
+  "court-volleyball": {"family":"court","options":{"tennis":true}},
+  "court-squash": {"family":"court","options":{"tennis":true}},
+  "court-padel": {"family":"court","options":{"tennis":true}},
+  "court-futsal": {"family":"court","options":{"field":true}},
+  "court-handball": {"family":"court","options":{"field":true}},
+  "field-football": {"family":"court","options":{"field":true}},
+  "field-football-small": {"family":"court","options":{"field":true}},
+  "field-hockey": {"family":"court","options":{"field":true}},
+  "field-rugby": {"family":"court","options":{"field":true}},
+  "track-400m": {"family":"track","options":{}},
+  "pool-olympic": {"family":"court","options":{"pool":true}},
+  "pool-25m": {"family":"court","options":{"pool":true}},
+  "pool-kids": {"family":"court","options":{"pool":true}},
+  "gymnastics-floor": {"family":"court","options":{}},
+  "stadium-seat": {"family":"chair","options":{"arms":true}},
+  "stadium-row-10": {"family":"bench","options":{"arms":true}},
+  "stadium-row-20": {"family":"bench","options":{"arms":true}},
+  "vip-box": {"family":"room","options":{"booth":true}},
+  "press-booth": {"family":"room","options":{"booth":true}},
+  "scoreboard-led": {"family":"device","options":{}},
+  "floodlight-mast": {"family":"light","options":{}},
+  "dugout-shelter": {"family":"shelter","options":{}},
+  "ticket-turnstile": {"family":"portal","options":{}},
+  "goal-football": {"family":"net","options":{}},
+  "goal-futsal": {"family":"net","options":{}},
+  "goal-handball": {"family":"net","options":{}},
+  "goal-rugby": {"family":"net","options":{}},
+  "net-volleyball": {"family":"net","options":{}},
+  "net-tennis": {"family":"net","options":{}},
+  "net-badminton": {"family":"net","options":{}},
+  "rebound-wall": {"family":"screen","options":{"bays":2}},
+  "court-divider": {"family":"screen","options":{"bays":2}},
+  "climbing-wall": {"family":"screen","options":{"bays":2}},
+  "skate-ramp": {"family":"slide","options":{}},
+  "skate-rail": {"family":"screen","options":{"bays":2}},
+  "gym-mat-stack": {"family":"mat","options":{}},
+  "treadmill": {"family":"treadmill","options":{}},
+  "elliptical": {"family":"elliptical","options":{}},
+  "spin-bike": {"family":"bike","options":{}},
+  "rower": {"family":"rower","options":{}},
+  "stair-climber": {"family":"bike","options":{}},
+  "smith-rack": {"family":"benchPress","options":{"machine":true}},
+  "power-rack": {"family":"benchPress","options":{"machine":true}},
+  "bench-press": {"family":"benchPress","options":{}},
+  "dumbbell-rack": {"family":"storage","options":{"bays":2}},
+  "plate-tree": {"family":"pole","options":{}},
+  "cable-crossover": {"family":"rig","options":{"cable":true}},
+  "lat-pulldown": {"family":"benchPress","options":{"machine":true}},
+  "leg-press": {"family":"benchPress","options":{"machine":true}},
+  "functional-rig": {"family":"rig","options":{}},
+  "yoga-mat": {"family":"mat","options":{}},
+  "pilates-reformer": {"family":"benchPress","options":{"machine":true}},
+  "stretch-roller": {"family":"walker","options":{}},
+  "water-fountain-gym": {"family":"drinkingFountain","options":{}},
+  "locker-gym": {"family":"locker","options":{"bays":2}},
+  "locker-bank-6": {"family":"locker","options":{"bays":6}},
+  "spin-studio-bike-row": {"family":"bike","options":{},"layout":{"rows":1,"columns":8}},
+  "cinema-seat-std": {"family":"chair","options":{"arms":true}},
+  "cinema-seat-prem": {"family":"chair","options":{"arms":true}},
+  "cinema-seat-duo": {"family":"chair","options":{"arms":true}},
+  "cinema-seat-vip": {"family":"chair","options":{"arms":true,"recline":true}},
+  "cinema-screen": {"family":"screen","options":{"bays":2}},
+  "projector-booth": {"family":"room","options":{"booth":true}},
+  "cinema-row-8std": {"family":"cinemaRow","options":{"seats":8}},
+  "concession-counter": {"family":"desk","options":{}},
+  "popcorn-machine": {"family":"arcade","options":{}},
+  "ticket-booth-cine": {"family":"room","options":{"booth":true}},
+  "arcade-cabinet": {"family":"arcade","options":{}},
+  "arcade-racing": {"family":"arcade","options":{"racing":true}},
+  "arcade-dance": {"family":"arcade","options":{}},
+  "air-hockey": {"family":"sportsTable","options":{"hockey":true}},
+  "pingpong-table": {"family":"sportsTable","options":{}},
+  "foosball": {"family":"sportsTable","options":{"foosball":true}},
+  "pool-table-7ft": {"family":"poolTable","options":{}},
+  "pool-table-9ft": {"family":"poolTable","options":{}},
+  "dartboard-zone": {"family":"dartboard","options":{}},
+  "console-lounge-pod": {"family":"room","options":{}},
+  "esports-station": {"family":"desk","options":{}},
+  "esports-row-5": {"family":"desk","options":{},"layout":{"rows":1,"columns":5}},
+  "vr-arena-pad": {"family":"vrZone","options":{}},
+  "gaming-lounge-seat": {"family":"chair","options":{"arms":true,"recline":true}},
+  "caravan-2berth": {"family":"vehicle","options":{}},
+  "caravan-4berth": {"family":"vehicle","options":{}},
+  "motorhome-alcove": {"family":"vehicle","options":{}},
+  "camper-van": {"family":"vehicle","options":{}},
+  "rv-pitch": {"family":"parking","options":{}},
+  "tent-family": {"family":"pergola","options":{}},
+  "tent-gazebo": {"family":"pergola","options":{}},
+  "campfire-ring": {"family":"firepit","options":{}},
+  "picnic-table": {"family":"picnic","options":{}},
+  "bbq-station": {"family":"kitchen","options":{"bbq":true}},
+  "swing-set-2": {"family":"swing","options":{}},
+  "slide-3m": {"family":"slide","options":{}},
+  "climbing-frame": {"family":"climbingFrame","options":{}},
+  "seesaw": {"family":"seesaw","options":{}},
+  "spring-rocker": {"family":"seesaw","options":{"rocker":true}},
+  "sandpit": {"family":"groundcover","options":{}},
+  "rubber-surface": {"family":"groundcover","options":{}},
+  "trampoline-inground": {"family":"trampoline","options":{}},
+  "outdoor-gym-station": {"family":"benchPress","options":{"machine":true}},
+  "pingpong-outdoor": {"family":"sportsTable","options":{}},
+  "park-bench-back": {"family":"bench","options":{"arms":true}},
+  "sun-lounger-pool": {"family":"chair","options":{"arms":true,"recline":true}},
+  "parasol-base": {"family":"roundShade","options":{}},
+  "shade-sail": {"family":"pergola","options":{}},
+  "school-desk-single": {"family":"desk","options":{}},
+  "school-desk-double": {"family":"desk","options":{}},
+  "school-desk-exam": {"family":"desk","options":{}},
+  "teacher-desk-class": {"family":"desk","options":{}},
+  "classroom-row-5": {"family":"desk","options":{},"layout":{"rows":1,"columns":5}},
+  "whiteboard-3m": {"family":"screen","options":{"bays":2}},
+  "smartboard-86": {"family":"device","options":{}},
+  "locker-student": {"family":"locker","options":{"bays":2}},
+  "library-shelf-double": {"family":"storage","options":{"bays":2}},
+  "reading-carrel": {"family":"desk","options":{}},
+  "lab-station-4": {"family":"lab","options":{}},
+  "fume-hood-school": {"family":"lab","options":{"hood":true}},
+  "canteen-table-8": {"family":"table","options":{"seats":8,"dining":true}},
+  "nursery-playtable": {"family":"table","options":{"seats":2}},
+  "nursery-cubby": {"family":"storage","options":{"bays":2}},
+  "lecture-tiers": {"family":"stairs","options":{}},
+  "lecture-podium": {"family":"desk","options":{}},
+  "instrument-locker": {"family":"locker","options":{"bays":2}},
+  "art-easel-class": {"family":"easel","options":{}},
+  "kiln-art": {"family":"pressureAppliance","options":{"kiln":true}},
+  "school-nurse-bed": {"family":"medicalBed","options":{}},
+  "hotel-bed-queen": {"family":"bed","options":{"pillows":2}},
+  "hotel-bed-king": {"family":"bed","options":{"pillows":2}},
+  "luggage-rack": {"family":"table","options":{"seats":2}},
+  "minibar": {"family":"appliance","options":{"fridge":true}},
+  "hotel-workdesk": {"family":"desk","options":{}},
+  "hotel-wardrobe-mini": {"family":"storage","options":{"bays":2,"hanging":true}},
+  "hotel-bell-desk": {"family":"desk","options":{}},
+  "concierge-desk": {"family":"desk","options":{}},
+  "housekeeping-cart": {"family":"cart","options":{}},
+  "room-service-table": {"family":"table","options":{"seats":2}},
+  "banquet-round-10": {"family":"table","options":{"round":true,"dining":true,"seats":10}},
+  "banquet-round-12": {"family":"table","options":{"round":true,"dining":true,"seats":12}},
+  "banquet-long": {"family":"table","options":{"dining":true,"seats":3}},
+  "chafing-station": {"family":"table","options":{"seats":2}},
+  "cocktail-high-top": {"family":"table","options":{"seats":2}},
+  "bar-counter": {"family":"desk","options":{}},
+  "back-bar-shelf": {"family":"storage","options":{"bays":2}},
+  "bar-stool-pub": {"family":"chair","options":{"arms":true}},
+  "booth-4": {"family":"boothSeating","options":{"seats":2}},
+  "booth-6": {"family":"boothSeating","options":{"seats":3}},
+  "pos-terminal": {"family":"device","options":{}},
+  "hostess-stand": {"family":"desk","options":{}},
+  "kitchen-line-6": {"family":"appliance","options":{}},
+  "salamander": {"family":"oven","options":{}},
+  "walk-in-cooler": {"family":"room","options":{}},
+  "dish-return": {"family":"appliance","options":{}},
+  "pew-5": {"family":"bench","options":{"arms":true}},
+  "altar-table": {"family":"table","options":{}},
+  "podium-lectern-worship": {"family":"desk","options":{}},
+  "fountain-baptismal": {"family":"fountain","options":{}},
+  "mihrab-rug": {"family":"mat","options":{}},
+  "car-compact-mini": {"family":"vehicle","options":{}},
+  "car-sedan": {"family":"vehicle","options":{}},
+  "car-suv": {"family":"vehicle","options":{}},
+  "car-van": {"family":"vehicle","options":{}},
+  "car-pickup": {"family":"vehicle","options":{"truck":true}},
+  "ev-charging": {"family":"parking","options":{"ev":true}},
+  "parking-bay-std": {"family":"parking","options":{}},
+  "parking-bay-wide": {"family":"parking","options":{"accessible":true}},
+  "parking-bay-parallel": {"family":"parking","options":{}},
+  "bus-stop": {"family":"shelter","options":{}},
+  "bus-12m": {"family":"vehicle","options":{"bus":true}},
+  "bus-articulated": {"family":"vehicle","options":{"bus":true}},
+  "coach-tour": {"family":"vehicle","options":{"bus":true}},
+  "taxi-rank": {"family":"parking","options":{}},
+  "bike-rack-5": {"family":"bikeRack","options":{"bays":5}},
+  "bike-parking-row-10": {"family":"parking","options":{}},
+  "escooter-dock": {"family":"bikeRack","options":{"bays":6}},
+  "motorbike-bay": {"family":"bicycle","options":{"motorcycle":true}},
+  "delivery-cargo-bike": {"family":"bicycle","options":{}},
+  "tram-module": {"family":"vehicle","options":{"bus":true}},
+  "train-carriage": {"family":"vehicle","options":{"bus":true}},
+  "platform-edge": {"family":"ramp","options":{}},
+  "helipad": {"family":"helipad","options":{}},
+  "kiss-ride": {"family":"parking","options":{}},
+  "speed-ramp": {"family":"ramp","options":{}},
+  "toll-booth": {"family":"room","options":{"booth":true}},
+  "fuel-pump": {"family":"charger","options":{}},
+  "tree-oak-young": {"family":"tree","options":{"species":"deciduous"}},
+  "tree-oak-semi": {"family":"tree","options":{"species":"deciduous"}},
+  "tree-oak-mature": {"family":"tree","options":{"species":"deciduous"}},
+  "tree-oak-veteran": {"family":"tree","options":{"species":"deciduous"}},
+  "tree-birch-young": {"family":"tree","options":{"species":"deciduous"}},
+  "tree-birch-mature": {"family":"tree","options":{"species":"deciduous"}},
+  "tree-maple-young": {"family":"tree","options":{"species":"deciduous"}},
+  "tree-maple-mature": {"family":"tree","options":{"species":"deciduous"}},
+  "tree-pine-young": {"family":"tree","options":{"species":"conifer"}},
+  "tree-pine-mature": {"family":"tree","options":{"species":"conifer"}},
+  "tree-palm-young": {"family":"tree","options":{"species":"palm"}},
+  "tree-palm-mature": {"family":"tree","options":{"species":"palm"}},
+  "tree-cypress-young": {"family":"tree","options":{"species":"conifer"}},
+  "tree-cypress-mature": {"family":"tree","options":{"species":"conifer"}},
+  "tree-olive-young": {"family":"tree","options":{"species":"olive"}},
+  "tree-olive-mature": {"family":"tree","options":{"species":"olive"}},
+  "tree-cherry-young": {"family":"tree","options":{"species":"ornamental"}},
+  "tree-cherry-mature": {"family":"tree","options":{"species":"ornamental"}},
+  "hedge-low": {"family":"hedge","options":{"bays":5}},
+  "hedge-screen": {"family":"hedge","options":{"bays":5}},
+  "shrub-ball-s": {"family":"hedge","options":{"bays":1}},
+  "shrub-ball-m": {"family":"hedge","options":{"bays":1}},
+  "shrub-ball-l": {"family":"hedge","options":{"bays":1}},
+  "planter-square-s": {"family":"planter","options":{}},
+  "planter-square-m": {"family":"planter","options":{}},
+  "planter-square-l": {"family":"planter","options":{}},
+  "planter-square-xl": {"family":"planter","options":{}},
+  "planter-round": {"family":"planter","options":{"round":true}},
+  "planter-trough": {"family":"planter","options":{}},
+  "green-roof-tray": {"family":"groundcover","options":{}},
+  "rain-garden": {"family":"groundcover","options":{}},
+  "bioswale": {"family":"groundcover","options":{}},
+  "pergola-run": {"family":"pergola","options":{}},
+  "trellis": {"family":"climbingPlant","options":{}},
+  "lawn-zone": {"family":"groundcover","options":{"grass":true}},
+  "wildflower": {"family":"groundcover","options":{"flower":true}},
+  "gravel-bed": {"family":"groundcover","options":{}},
+  "flowerbed-raise": {"family":"groundcover","options":{"flower":true}},
+  "vertical-garden": {"family":"climbingPlant","options":{}},
+  "tree-grate": {"family":"planter","options":{}},
+  "tree-guard": {"family":"planter","options":{}},
+  "bench-planter": {"family":"planter","options":{}},
+  "boulder": {"family":"rock","options":{}},
+  "rockery": {"family":"groundcover","options":{}},
+  "water-feature-wall": {"family":"screen","options":{"bays":2}},
+  "pond-liner-zone": {"family":"groundcover","options":{}},
+  "garden-path": {"family":"groundcover","options":{}},
+  "stepping-stones": {"family":"groundcover","options":{}},
+  "edging-timber": {"family":"screen","options":{"bays":2}},
+  "composter": {"family":"storage","options":{"bays":2}},
+  "shed-garden": {"family":"room","options":{}},
+  "greenhouse-4x6": {"family":"room","options":{}},
+  "cold-frame": {"family":"pergola","options":{}},
+  "allotment-plot": {"family":"groundcover","options":{}},
+  "dining-run-4": {"family":"table","options":{"dining":true,"seats":4}},
+  "dining-run-6": {"family":"table","options":{"dining":true,"seats":6}},
+  "dining-run-8": {"family":"table","options":{"dining":true,"seats":8}},
+  "dining-run-10": {"family":"table","options":{"dining":true,"seats":10}},
+  "dining-run-12": {"family":"table","options":{"dining":true,"seats":12}},
+  "dining-run-14": {"family":"table","options":{"dining":true,"seats":14}},
+  "meeting-run-6": {"family":"table","options":{"seats":6,"dining":true}},
+  "meeting-run-8": {"family":"table","options":{"seats":8,"dining":true}},
+  "meeting-run-10": {"family":"table","options":{"seats":10,"dining":true}},
+  "meeting-run-12": {"family":"table","options":{"seats":12,"dining":true}},
+  "parking-bay-us-compact": {"family":"parking","options":{}},
+  "parking-bay-uk-std": {"family":"parking","options":{}},
+  "parking-bay-eu-std": {"family":"parking","options":{}},
+  "parking-bay-us-std": {"family":"parking","options":{}},
+  "parking-bay-aus-std": {"family":"parking","options":{}},
+  "parking-bay-wide-lux": {"family":"parking","options":{}},
+  "parking-bay-ev-cred": {"family":"parking","options":{"ev":true}},
+  "parking-bay-dis-ada": {"family":"parking","options":{"accessible":true}},
+  "wheelchair-bay-1": {"family":"clearance","options":{}},
+  "wheelchair-bay-2": {"family":"clearance","options":{}},
+  "wheelchair-bay-3": {"family":"clearance","options":{}},
+  "wheelchair-bay-4": {"family":"clearance","options":{}},
+  "planter-d30": {"family":"planter","options":{"round":true}},
+  "planter-d40": {"family":"planter","options":{"round":true}},
+  "planter-d50": {"family":"planter","options":{"round":true}},
+  "planter-d60": {"family":"planter","options":{"round":true}},
+  "planter-d70": {"family":"planter","options":{"round":true}},
+  "planter-d80": {"family":"planter","options":{"round":true}},
+  "planter-d90": {"family":"planter","options":{"round":true}},
+  "planter-d100": {"family":"planter","options":{"round":true}},
+  "planter-d120": {"family":"planter","options":{"round":true}},
+  "bench-run-2": {"family":"bench","options":{"arms":true}},
+  "bench-run-3": {"family":"bench","options":{"arms":true}},
+  "bench-run-4": {"family":"bench","options":{"arms":true}},
+  "bench-run-5": {"family":"bench","options":{"arms":true}},
+  "hedge-h40": {"family":"hedge","options":{"bays":5}},
+  "hedge-h60": {"family":"hedge","options":{"bays":5}},
+  "hedge-h80": {"family":"hedge","options":{"bays":5}},
+  "hedge-h100": {"family":"hedge","options":{"bays":5}},
+  "hedge-h120": {"family":"hedge","options":{"bays":5}},
+  "hedge-h150": {"family":"hedge","options":{"bays":5}},
+  "hedge-h180": {"family":"hedge","options":{"bays":5}},
+  "court-basketball-mini-u10": {"family":"court","options":{}},
+  "court-basketball-u12": {"family":"court","options":{}},
+  "court-basketball-u14": {"family":"court","options":{}},
+  "treadmill-row-2": {"family":"treadmill","options":{},"layout":{"rows":1,"columns":2}},
+  "treadmill-row-3": {"family":"treadmill","options":{},"layout":{"rows":1,"columns":3}},
+  "treadmill-row-4": {"family":"treadmill","options":{},"layout":{"rows":1,"columns":4}},
+  "treadmill-row-5": {"family":"treadmill","options":{},"layout":{"rows":1,"columns":5}},
+  "treadmill-row-6": {"family":"treadmill","options":{},"layout":{"rows":1,"columns":6}},
+  "class-grid-2x4": {"family":"desk","options":{},"layout":{"rows":2,"columns":4}},
+  "class-grid-3x4": {"family":"desk","options":{},"layout":{"rows":3,"columns":4}},
+  "class-grid-4x4": {"family":"desk","options":{},"layout":{"rows":4,"columns":4}},
+  "class-grid-4x5": {"family":"desk","options":{},"layout":{"rows":4,"columns":5}},
+  "class-grid-5x5": {"family":"desk","options":{},"layout":{"rows":5,"columns":5}},
+  "class-grid-5x6": {"family":"desk","options":{},"layout":{"rows":5,"columns":6}},
+  "cinema-row-4": {"family":"cinemaRow","options":{"seats":4}},
+  "cinema-row-6": {"family":"cinemaRow","options":{"seats":6}},
+  "cinema-row-8": {"family":"cinemaRow","options":{"seats":8}},
+  "cinema-row-10": {"family":"cinemaRow","options":{"seats":10}},
+  "cinema-row-12": {"family":"cinemaRow","options":{"seats":12}},
+  "cinema-row-14": {"family":"cinemaRow","options":{"seats":14}},
+  "ev-bank-2": {"family":"parking","options":{"ev":true},"layout":{"rows":1,"columns":2}},
+  "ev-bank-4": {"family":"parking","options":{"ev":true},"layout":{"rows":1,"columns":4}},
+  "ev-bank-6": {"family":"parking","options":{"ev":true},"layout":{"rows":1,"columns":6}},
+  "ev-bank-8": {"family":"parking","options":{"ev":true},"layout":{"rows":1,"columns":8}},
+  "locker-run-2": {"family":"locker","options":{"bays":2}},
+  "locker-run-3": {"family":"locker","options":{"bays":3}},
+  "locker-run-4": {"family":"locker","options":{"bays":4}},
+  "locker-run-6": {"family":"locker","options":{"bays":6}},
+  "locker-run-8": {"family":"locker","options":{"bays":8}},
+  "locker-run-10": {"family":"locker","options":{"bays":10}},
+  "locker-run-12": {"family":"locker","options":{"bays":12}},
+  "stadium-tier-2": {"family":"stairs","options":{}},
+  "stadium-tier-4": {"family":"stairs","options":{}},
+  "stadium-tier-6": {"family":"stairs","options":{}},
+  "stadium-tier-8": {"family":"stairs","options":{}},
+  "stadium-tier-10": {"family":"stairs","options":{}},
+  "stadium-tier-12": {"family":"stairs","options":{}},
+  "stadium-tier-15": {"family":"stairs","options":{}},
+  "stadium-tier-20": {"family":"stairs","options":{}},
+  "picnic-cluster-2": {"family":"picnic","options":{},"layout":{"rows":1,"columns":2}},
+  "picnic-cluster-4": {"family":"picnic","options":{},"layout":{"rows":1,"columns":4}},
+  "picnic-cluster-6": {"family":"picnic","options":{},"layout":{"rows":1,"columns":6}},
+  "buffet-line-2": {"family":"table","options":{"seats":2}},
+  "buffet-line-3": {"family":"table","options":{"seats":3}},
+  "buffet-line-4": {"family":"table","options":{"seats":4}},
+  "buffet-line-5": {"family":"table","options":{"seats":2}},
+  "lux-sectional": {"family":"sectional","options":{}},
+  "cinema-home-row": {"family":"cinemaRow","options":{"seats":4}},
+  "kitchen-island-oversize": {"family":"kitchen","options":{"bar":true}},
+  "butler-pantry": {"family":"storage","options":{"bays":2}},
+  "wine-rack": {"family":"wine","options":{"bays":4}},
+  "wine-wall": {"family":"wine","options":{"bays":8}},
+  "sauna-bench": {"family":"bench","options":{"arms":true}},
+  "outdoor-kitchen": {"family":"kitchen","options":{"bbq":true}},
+  "pergola-seating": {"family":"pergola","options":{"seating":true}},
+  "ornamental-fountain": {"family":"fountain","options":{}},
+  "nurse-station": {"family":"reception","options":{}},
+  "operating-table": {"family":"medicalTable","options":{"operating":true}},
+  "dialysis-chair": {"family":"chair","options":{"arms":true,"recline":true}},
+  "police-interview-chair": {"family":"chair","options":{}},
+  "police-interview-table": {"family":"table","options":{"seats":2}},
+  "police-fingerprint": {"family":"reception","options":{"fingerprint":true}},
+  "police-barrier-gate": {"family":"gate","options":{}},
+  "fire-turnout-locker": {"family":"locker","options":{"bays":1,"gear":true}},
+  "fire-scba-storage": {"family":"scba","options":{}},
+  "fire-hose-rack": {"family":"hose","options":{}},
+  "fire-watch-desk": {"family":"desk","options":{}},
+  "fire-sleeping-bunk": {"family":"bed","options":{"pillows":1,"bunk":true}},
+  "fire-decontamination": {"family":"basin","options":{}},
+  "park-bench-slat": {"family":"bench","options":{"arms":true}},
+  "park-gazebo": {"family":"roundShade","options":{"gazebo":true}},
+  "park-drinking-fountain": {"family":"drinkingFountain","options":{}},
+  "tree-ornamental": {"family":"tree","options":{"species":"ornamental"}},
+  "shrub-cluster": {"family":"hedge","options":{"bays":5}},
+  "flower-bed": {"family":"groundcover","options":{"flower":true}},
+  "groundcover-patch": {"family":"groundcover","options":{}},
+  "grass-patch": {"family":"groundcover","options":{"grass":true}},
+  "climbing-plant": {"family":"climbingPlant","options":{}},
+  "street-light": {"family":"light","options":{}},
+  "traffic-signal": {"family":"light","options":{"signal":true}},
+  "pedestrian-crossing": {"family":"crossing","options":{}},
+  "street-bollard": {"family":"bollard","options":{}},
+  "street-curb-ramp": {"family":"ramp","options":{}},
+  "street-lane-marker": {"family":"mat","options":{}},
+  "mall-checkout": {"family":"checkout","options":{}}
+});
+
+
+  // =========================================================================
+  // MODULE: ObjectPrimitives
+  // =========================================================================
+
+/** Normalized CAD primitives. Curves are sampled polylines, never raster images. */
+function objectDrawing(layer='A-FURN') {
+  const entities=[];
+  const path=(points,closed=false)=>entities.push({type:'polyline',points,closed,layer});
+  const line=(x1,y1,x2,y2)=>entities.push({type:'line',x1,y1,x2,y2,layer});
+  const rect=(x,y,w,h)=>path([[x,y],[x+w,y],[x+w,y+h],[x,y+h]],true);
+  const ellipse=(x,y,rx,ry=rx)=>path(Array.from({length:48},(_,i)=>{const a=i*Math.PI/24;return [x+rx*Math.cos(a),y+ry*Math.sin(a)];}),true);
+  const arc=(x,y,rx,ry,start,end)=>path(Array.from({length:33},(_,i)=>{const a=start+(end-start)*i/32;return [x+rx*Math.cos(a),y+ry*Math.sin(a)];}));
+  const seat=(x,y,w,h,arms=true)=>{rect(x+w*.12,y+h*.2,w*.76,h*.7);rect(x+w*.1,y,w*.8,h*.2);if(arms){rect(x,y+h*.08,w*.12,h*.82);rect(x+w*.88,y+h*.08,w*.12,h*.82);}};
+  const wheels=(x,y,w,h)=>{for(const xx of [x,x+w])for(const yy of [y,y+h])ellipse(xx,yy,.025,.035);};
+  return {entities,path,line,rect,ellipse,arc,seat,wheels};
+}
+
+function objectLayout(parts) {
+  return parts.flatMap(({geometry,x=0,y=0,w=1,h=1})=>geometry.map(e=>e.type==='line'?{...e,x1:x+e.x1*w,y1:y+e.y1*h,x2:x+e.x2*w,y2:y+e.y2*h}:{...e,points:e.points.map(([px,py])=>[x+px*w,y+py*h])}));
+}
+
+
+  // =========================================================================
+  // MODULE: ResidentialGeometry
+  // =========================================================================
+
+
+const RESIDENTIAL_GEOMETRY = {
+  sofa: o=>{const g=objectDrawing();g.seat(0,0,1,1);for(let i=1;i<o.seats;i++)g.line(.12+.76*i/o.seats,.2,.12+.76*i/o.seats,.9);if(o.tufted)for(let i=0;i<8;i++)g.ellipse(.18+i*.09,.1,.017);return g.entities;},
+  sectional: o=>{const g=objectDrawing();g.path([[0,0],[1,0],[1,.4],[.4,.4],[.4,1],[0,1]],true);g.line(.1,.1,.9,.1);g.line(.1,.1,.1,.9);for(let n=1;n<4;n++)g.line(n*.23,.1,n*.23,.4);if(o.u){g.path([[.7,.4],[1,.4],[1,1],[.7,1]],true);g.line(.9,.4,.9,.9);}return g.entities;},
+  chair: o=>{const g=objectDrawing();g.seat(.05,.03,.9,.9,o.arms);if(o.wings){g.path([[.05,.3],[0,.1],[.2,0],[.8,0],[1,.1],[.95,.3]]);g.arc(.5,.15,.45,.12,Math.PI,2*Math.PI);}if(o.recline){g.rect(.2,.7,.6,.3);g.line(.2,.7,.8,.7);}if(o.task){for(let a=0;a<5;a++){const t=a*Math.PI*.4;g.line(.5,.5,.5+.48*Math.cos(t),.5+.48*Math.sin(t));}}return g.entities;},
+  bed: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.04,.08,.92,.88);g.rect(0,0,1,.07);for(let i=0;i<o.pillows;i++)g.rect(.1+i*.8/o.pillows,.12,.72/o.pillows,.18);g.line(.04,.42,.96,.42);if(o.bunk){for(let y=.75;y<1;y+=.06)g.line(.2,y,.8,y);for(const x of [.04,.96])for(const y of [.04,.96])g.ellipse(x,y,.025);}if(o.trundle){g.rect(.08,.54,.84,.38);g.rect(.4,.94,.2,.03);g.line(.08,.68,.92,.68);}if(o.crib)for(let i=1;i<12;i++){g.line(0,i/12,.07,i/12);g.line(.93,i/12,1,i/12);}return g.entities;},
+  table: o=>{const g=objectDrawing();if(o.round)g.ellipse(.5,.5,.5,.5);else g.rect(0,0,1,1);if(o.nesting){g.rect(.05,.1,.45,.8);g.rect(.55,.3,.4,.6);}else if(o.dining){g.rect(.08,.08,.84,.84);const count=o.seats||4;for(let i=0;i<count;i++){const a=i*2*Math.PI/count;g.ellipse(.5+.43*Math.cos(a),.5+.43*Math.sin(a),.045,.045);}}else{for(const x of [.08,.92])for(const y of [.1,.9])g.rect(x-.03,y-.03,.06,.06);}return g.entities;},
+  desk: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.12,.1,.5,.25);g.line(.38,.35,.38,.45);g.rect(.2,.46,.28,.1);g.rect(.73,.08,.2,.85);for(let y=.2;y<.9;y+=.2)g.line(.73,y,.93,y);if(o.console){g.rect(.06,.1,.22,.25);g.rect(.66,.1,.22,.25);}return g.entities;},
+  storage: o=>{const g=objectDrawing();g.rect(0,0,1,1);const bays=o.bays||2;for(let i=0;i<bays;i++){g.rect(i/bays+.025,.1,1/bays-.05,.8);g.line(i/bays+.08,.14,(i+1)/bays-.08,.14);}if(o.hanging)for(let i=0;i<bays;i++)g.line(i/bays+.06,.55,(i+1)/bays-.06,.55);return g.entities;},
+  kitchen: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.04,.06,.92,.88);if(o.sink){g.ellipse(.3,.5,.17,.28);g.line(.3,.1,.3,.25);}if(o.cooktop)for(const x of [.27,.7])for(const y of [.3,.7])g.ellipse(x,y,.11,.17);if(o.bar)for(let x=.15;x<.9;x+=.25)g.ellipse(x,.85,.065,.09);if(o.bbq){g.rect(.12,.2,.5,.6);for(let x=.15;x<.65;x+=.06)g.line(x,.25,x,.75);g.ellipse(.82,.5,.11);}return g.entities;},
+  appliance: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.06,.07,.88,.86);if(o.laundry){g.ellipse(.5,.5,.32,.32);g.rect(.1,.08,.8,.1);}else if(o.fridge){g.line(.5,0,.5,1);g.rect(.38,.1,.04,.45);g.rect(.58,.1,.04,.45);}else{g.rect(.1,.1,.8,.2);g.line(.18,.25,.82,.25);g.rect(.17,.45,.66,.4);}return g.entities;},
+  toilet: o=>{const g=objectDrawing();g.rect(.1,0,.8,.22);g.ellipse(.5,.57,.45,.42);g.ellipse(.5,.57,.28,.26);if(o.accessible){g.line(0,.18,0,.9);g.line(1,.18,1,.9);}if(o.urinal){g.path([[.2,0],[.8,0],[.7,.9],[.3,.9]],true);g.ellipse(.5,.7,.04);}return g.entities;},
+  basin: o=>{const g=objectDrawing();g.rect(0,0,1,1);const count=o.double?2:1;for(let i=0;i<count;i++){const x=(i+.5)/count;g.ellipse(x,.52,.38/count,.35);g.ellipse(x,.52,.025);g.line(x,.04,x,.17);}return g.entities;},
+  bath: o=>{const g=objectDrawing();if(o.corner){g.path([[0,0],[1,0],...Array.from({length:33},(_,i)=>[Math.cos(i*Math.PI/64),Math.sin(i*Math.PI/64)])],true);g.arc(.1,.1,.75,.75,0,Math.PI/2);}else{g.ellipse(.5,.5,.5,.5);g.ellipse(.5,.5,.42,.42);}if(o.jets)for(let n=0;n<8;n++){const t=n*Math.PI/4;g.ellipse(.5+.38*Math.cos(t),.5+.38*Math.sin(t),.025);}g.ellipse(.5,.2,.035);return g.entities;},
+  shower: o=>{const g=objectDrawing();g.path(o.corner?[[0,0],[1,0],[1,.55],[.55,1],[0,1]]:[[0,0],[1,0],[1,1],[0,1]],true);g.ellipse(.5,.5,.04);for(const [x,y] of [[0,0],[1,0],[1,1],[0,1]])g.line(x,y,.5,.5);if(o.accessible){g.rect(.04,.05,.3,.28);g.line(.05,.4,.05,.9);}return g.entities;}
+};
+
+
+  // =========================================================================
+  // MODULE: LuxuryGeometry
+  // =========================================================================
+
+
+const LUXURY_GEOMETRY = {
+  piano: ()=>{const g=objectDrawing();g.path([[0,0],[1,0],...Array.from({length:32},(_,i)=>{const t=i/31;return [1-.18*t-.22*Math.sin(t*Math.PI/2),t];}),[0,1]],true);g.rect(.02,.05,.17,.9);for(let y=.08;y<.95;y+=.065){g.line(.02,y,.19,y);g.rect(.02,y,.08,.023);}g.line(.2,.07,.7,.7);return g.entities;},
+  poolTable: ()=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.08,.08,.84,.84);for(const x of [.08,.92])for(const y of [.08,.5,.92])g.ellipse(x,y,.035);g.line(.25,.5,.75,.5);for(let i=0;i<5;i++)g.ellipse(.48+i*.015,.3+i*.03,.018);return g.entities;},
+  fireplace: ()=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.15,0,.7,.65);for(let x=.2;x<.85;x+=.1)g.line(x,.2,x,.55);g.path([[.45,.5],[.4,.35],[.5,.15],[.55,.38],[.6,.48]],true);g.line(0,.8,1,.8);return g.entities;},
+  wine: o=>{const g=objectDrawing();g.rect(0,0,1,1);for(let i=0;i<o.bays;i++)for(let j=0;j<3;j++){const x=(i+.5)/o.bays,y=(j+.5)/3;g.ellipse(x,y,.3/o.bays,.1);}return g.entities;},
+  cinemaRow: o=>{const g=objectDrawing();for(let i=0;i<o.seats;i++){const x=i/o.seats;g.seat(x,0,.96/o.seats,.82);g.rect(x+.15/o.seats,.82,.67/o.seats,.18);g.ellipse(x+.08/o.seats,.3,.02/o.seats,.025);}return g.entities;}
+};
+
+
+  // =========================================================================
+  // MODULE: HealthcareGeometry
+  // =========================================================================
+
+
+const HEALTHCARE_GEOMETRY = {
+  medicalBed: o=>{const g=objectDrawing();g.rect(.05,.02,.9,.96);g.rect(.12,.1,.76,.78);g.rect(.23,.13,.54,.15);for(const y of [.36,.63,.78])g.line(.12,y,.88,y);g.rect(0,.3,.05,.5);g.rect(.95,.3,.05,.5);g.wheels(.075,.075,.85,.85);if(o.icu){g.rect(.2,0,.6,.06);g.rect(.88,.15,.09,.12);}if(o.stretcher){g.line(.05,0,.95,0);g.line(.05,1,.95,1);}return g.entities;},
+  medicalTable: o=>{const g=objectDrawing();g.rect(.05,.05,.9,.9);g.rect(.1,.1,.8,.75);g.line(.1,.3,.9,.3);g.line(.1,.7,.9,.7);g.rect(.27,.88,.46,.12);if(o.operating){g.rect(0,.4,.1,.25);g.rect(.9,.4,.1,.25);}return g.entities;},
+  dental: ()=>{const g=objectDrawing();g.seat(.08,.03,.47,.72);g.rect(.15,.75,.32,.2);g.ellipse(.33,.04,.12,.04);g.rect(.65,.38,.35,.27);g.line(.55,.3,.82,.25);g.ellipse(.82,.25,.1,.07);g.line(.45,.55,.68,.55);return g.entities;},
+  wheelchair: o=>{const g=objectDrawing();g.seat(.18,.12,.64,.63,false);g.rect(0,.2,.12,.6);g.rect(.88,.2,.12,.6);g.rect(.15,.79,.25,.16);g.rect(.6,.79,.25,.16);g.ellipse(.12,.87,.035);g.ellipse(.88,.87,.035);if(o.sports){g.line(0,.12,.2,.83);g.line(1,.12,.8,.83);}return g.entities;},
+  cart: o=>{const g=objectDrawing();g.rect(.04,.08,.92,.84);g.wheels(.05,.1,.9,.8);g.rect(.13,.17,.74,.66);if(o.monitor){g.rect(.18,.12,.64,.24);g.line(.5,.36,.5,.55);}else{for(let y=.3;y<.8;y+=.15)g.line(.15,y,.85,y);}g.line(.1,0,.9,0);return g.entities;},
+  lift: ()=>{const g=objectDrawing();g.path([[.1,1],[.1,.15],[.9,.15],[.9,1]]);g.rect(.36,0,.28,.3);g.line(.5,.2,.5,.8);g.ellipse(.5,.8,.1,.09);g.wheels(.1,.2,.8,.75);return g.entities;},
+  scanner: o=>{const g=objectDrawing();g.rect(.08,0,.84,.4);g.ellipse(.5,.2,.25,.18);g.ellipse(.5,.2,.12,.09);g.rect(.33,.22,.34,.78);g.line(.33,.65,.67,.65);if(o.mri)g.rect(.02,0,.96,.45);return g.entities;},
+  pole: ()=>{const g=objectDrawing();g.ellipse(.5,.5,.06);for(let n=0;n<5;n++){const a=n*Math.PI*.4,x=.5+.43*Math.cos(a),y=.5+.43*Math.sin(a);g.line(.5,.5,x,y);g.ellipse(x,y,.035);}return g.entities;},
+  walker: ()=>{const g=objectDrawing();g.path([[.05,.9],[.05,.1],[.95,.1],[.95,.9]]);g.rect(.15,.35,.7,.3);g.wheels(.08,.08,.84,.84);g.line(.05,.1,.25,0);g.line(.95,.1,.75,0);return g.entities;},
+  device: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.1,.12,.8,.5);g.rect(.15,.75,.35,.08);for(let x=.62;x<.9;x+=.1)g.ellipse(x,.8,.025);if(o.pump)for(let x=.15;x<.9;x+=.25)g.rect(x,.15,.17,.65);return g.entities;}
+};
+
+
+  // =========================================================================
+  // MODULE: LandscapeGeometry
+  // =========================================================================
+
+
+const LANDSCAPE_GEOMETRY = {
+  climbingPlant: ()=>{const g=objectDrawing('A-VEGETATION');g.rect(0,0,1,1);for(let x=.1;x<1;x+=.2)g.line(x,0,x,1);g.path(Array.from({length:64},(_,i)=>{const y=i/63;return [.5+.23*Math.sin(y*Math.PI*5),y];}));for(let y=.1;y<.95;y+=.1){const x=.5+.23*Math.sin(y*Math.PI*5);g.ellipse(x+.08,y,.1,.035);}return g.entities;},
+  bollard: ()=>{const g=objectDrawing('A-SITE');g.ellipse(.5,.5,.5);g.ellipse(.5,.5,.32);g.line(.35,.5,.65,.5);g.line(.5,.35,.5,.65);return g.entities;},
+  tree: o=>{const g=objectDrawing('A-VEGETATION');const lobes=o.species==='olive'?9: o.species==='ornamental'?7:12;
+    if(o.species==='palm'){for(let i=0;i<10;i++){const a=i*Math.PI/5,dx=Math.cos(a),dy=Math.sin(a);g.path([[.5,.5],[.5+.5*dx,.5+.5*dy],[.5+.26*dx-.08*dy,.5+.26*dy+.08*dx]],true);}}
+    else if(o.species==='conifer'){for(let i=0;i<12;i++){const a=i*Math.PI/6;g.path([[.5,.5],[.5+.5*Math.cos(a),.5+.5*Math.sin(a)],[.5+.18*Math.cos(a+.22),.5+.18*Math.sin(a+.22)]]);}}
+    else{g.path(Array.from({length:96},(_,i)=>{const a=i*Math.PI/48,r=.43+.065*Math.cos(lobes*a);return [.5+r*Math.cos(a),.5+r*Math.sin(a)];}),true);for(let i=0;i<lobes;i++){const a=i*2*Math.PI/lobes;g.line(.5,.5,.5+.3*Math.cos(a),.5+.3*Math.sin(a));}}
+    g.ellipse(.5,.5,.045);return g.entities;},
+  hedge: o=>{const g=objectDrawing('A-VEGETATION');for(let i=0;i<o.bays;i++){g.ellipse((i+.5)/o.bays,.5,.55/o.bays,.48);g.ellipse((i+.5)/o.bays,.5,.28/o.bays,.24);}return g.entities;},
+  groundcover: o=>{const g=objectDrawing('A-VEGETATION');g.rect(0,0,1,1);for(let x=.08;x<.95;x+=.15)for(let y=.1;y<.95;y+=.17){if(o.flower){g.ellipse(x,y,.026);for(let n=0;n<5;n++)g.ellipse(x+.04*Math.cos(n*1.257),y+.04*Math.sin(n*1.257),.022);}else if(o.grass){g.path([[x-.03,y+.05],[x,y],[x+.03,y+.05]]);g.line(x,y,x,y+.06);}else{g.ellipse(x,y,.03,.024);g.line(x-.02,y,x+.02,y);}}return g.entities;},
+  planter: o=>{const g=objectDrawing('A-SITE');if(o.round){g.ellipse(.5,.5,.5);g.ellipse(.5,.5,.4);}else{g.rect(0,0,1,1);g.rect(.06,.08,.88,.84);}g.path(Array.from({length:32},(_,i)=>{const a=i*Math.PI/16,r=.23+.07*Math.cos(6*a);return [.5+r*Math.cos(a),.5+r*Math.sin(a)];}),true);return g.entities;},
+  bench: o=>{const g=objectDrawing('A-SITE');g.rect(0,.12,1,.72);for(let y=.2;y<.8;y+=.14)g.line(0,y,1,y);g.rect(.06,0,.88,.1);if(o.arms){g.rect(0,0,.06,.95);g.rect(.94,0,.06,.95);}return g.entities;},
+  picnic: ()=>{const g=objectDrawing('A-SITE');g.rect(.12,.3,.76,.4);g.rect(0,0,1,.17);g.rect(0,.83,1,.17);for(let y=.35;y<.7;y+=.1)g.line(.12,y,.88,y);g.line(.15,.17,.15,.83);g.line(.85,.17,.85,.83);return g.entities;},
+  pergola: o=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);for(const x of [.04,.96])for(const y of [.04,.96])g.rect(x-.03,y-.03,.06,.06);for(let x=.1;x<1;x+=.1)g.line(x,0,x,1);if(o.seating)g.seat(.2,.3,.6,.35);return g.entities;},
+  fountain: ()=>{const g=objectDrawing('A-SITE');g.ellipse(.5,.5,.5);g.ellipse(.5,.5,.4);g.ellipse(.5,.5,.2);g.ellipse(.5,.5,.06);for(let n=0;n<8;n++){const t=n*Math.PI/4;g.line(.5+.2*Math.cos(t),.5+.2*Math.sin(t),.5+.35*Math.cos(t),.5+.35*Math.sin(t));}return g.entities;},
+  swing: ()=>{const g=objectDrawing('A-SITE');g.rect(0,.07,1,.06);for(const x of [0,.96])g.rect(x,0,.04,1);for(const x of [.2,.65]){g.rect(x,.43,.15,.14);g.line(x,.1,x,.57);g.line(x+.15,.1,x+.15,.57);}return g.entities;},
+  slide: ()=>{const g=objectDrawing('A-SITE');g.rect(.25,0,.5,.2);g.path([[.25,.2],[.25,.65],[0,1],[1,1],[.75,.65],[.75,.2]]);for(let y=.03;y<.2;y+=.04)g.line(.25,y,.75,y);g.line(.35,.2,.35,.65);g.line(.65,.2,.65,.65);return g.entities;},
+  bin: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.rect(.08,.12,.84,.76);g.ellipse(.5,.5,.23);g.line(.15,.05,.85,.05);return g.entities;},
+  rock: ()=>{const g=objectDrawing('A-SITE');g.path([[0,.3],[.15,0],[.7,.04],[1,.4],[.82,.92],[.38,1],[.1,.75]],true);g.path([[.15,0],[.38,.3],[.7,.04]]);g.path([[.38,.3],[.82,.92],[.38,1]],true);return g.entities;}
+};
+
+
+  // =========================================================================
+  // MODULE: StreetsGeometry
+  // =========================================================================
+
+
+const STREETS_GEOMETRY = {
+  vehicle: o=>{const g=objectDrawing('A-VEHICLE');g.path([[.15,0],[.85,0],[1,.12],[1,.86],[.85,1],[.15,1],[0,.86],[0,.12]],true);g.rect(.13,.12,.74,.7);g.path([[.13,.24],[.24,.32],[.76,.32],[.87,.24]],true);g.path([[.13,.72],[.24,.65],[.76,.65],[.87,.72]],true);for(const x of [0,.92])for(const y of [.2,.72])g.rect(x,y,.08,.15);if(o.truck){g.rect(.12,.43,.76,.48);for(let y=.5;y<.9;y+=.07)g.line(.12,y,.88,y);g.rect(.32,.37,.36,.04);}if(o.bus)for(let y=.3;y<.85;y+=.085){g.rect(.05,y,.1,.06);g.rect(.85,y,.1,.06);}if(o.emergency){g.rect(.25,.32,.5,.05);g.line(.5,.48,.5,.62);g.line(.4,.55,.6,.55);}return g.entities;},
+  bicycle: o=>{const g=objectDrawing('A-VEHICLE');g.ellipse(.5,.15,.12,.15);g.ellipse(.5,.85,.12,.15);g.path([[.5,.15],[.35,.5],[.5,.75],[.65,.5],[.5,.15]]);g.line(.35,.5,.65,.5);g.line(.25,.22,.75,.22);g.rect(.4,.55,.2,.14);if(o.motorcycle){g.rect(.22,.28,.56,.35);g.rect(.3,.65,.4,.17);}return g.entities;},
+  parking: o=>{const g=objectDrawing('A-SITE');g.path([[0,0],[0,1],[1,1],[1,0]]);g.line(.4,.65,.4,.35);g.path([[.4,.35],[.64,.35],[.64,.5],[.4,.5]]);if(o.accessible){g.line(.7,0,.7,1);for(let y=.1;y<.9;y+=.1)g.line(.7,y,1,y+.1);g.ellipse(.32,.4,.07,.09);}if(o.ev){g.path([[.6,.15],[.45,.4],[.58,.4],[.42,.65]]);}return g.entities;},
+  crossing: ()=>{const g=objectDrawing('A-SITE');for(let y=0;y<1;y+=.16)g.rect(0,y,1,.08);return g.entities;},
+  shelter: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.rect(.1,.6,.8,.22);g.line(.1,.06,.9,.06);for(const x of [.06,.94])g.rect(x-.03,.1,.06,.8);return g.entities;},
+  bikeRack: o=>{const g=objectDrawing('A-SITE');for(let i=0;i<o.bays;i++){const x=(i+.5)/o.bays;g.path([[x-.3/o.bays,1],[x-.3/o.bays,.2],[x,.05],[x+.3/o.bays,.2],[x+.3/o.bays,1]]);}return g.entities;},
+  light: o=>{const g=objectDrawing('A-SITE');g.ellipse(.5,.5,.15);g.line(.5,.5,.5,.05);g.rect(.3,0,.4,.1);if(o.signal){for(let y=.12;y<.6;y+=.16)g.ellipse(.5,y,.06);g.rect(.36,0,.28,.63);}return g.entities;},
+  gate: ()=>{const g=objectDrawing('A-SITE');g.rect(0,.25,.1,.5);g.rect(.1,.43,.9,.13);for(let x=.2;x<1;x+=.14)g.line(x,.43,x+.08,.56);g.arc(.1,.5,.88,.5,-Math.PI/2,0);return g.entities;},
+  charger: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.rect(.15,.12,.7,.25);g.path([[.5,.43],[.34,.65],[.53,.65],[.42,.87]]);g.path([[.92,.22],[1,.3],[1,.85],[.8,.85]]);return g.entities;}
+};
+
+
+  // =========================================================================
+  // MODULE: InstitutionalGeometry
+  // =========================================================================
+
+
+const INSTITUTIONAL_GEOMETRY = {
+  easel: ()=>{const g=objectDrawing();g.rect(0,.05,1,.1);g.path([[.15,0],[.5,1],[.85,0]]);g.line(.08,.65,.92,.65);g.rect(.12,.2,.76,.35);return g.entities;},
+  locker: o=>{const g=objectDrawing();g.rect(0,0,1,1);for(let i=0;i<o.bays;i++){const x=i/o.bays;g.rect(x+.03/o.bays,.06,.94/o.bays,.88);g.rect(x+.7/o.bays,.42,.07/o.bays,.16);for(let y=.12;y<.3;y+=.07)g.line(x+.15/o.bays,y,x+.85/o.bays,y);if(o.gear){g.ellipse(x+.5/o.bays,.3,.18/o.bays,.12);g.line(x+.3/o.bays,.65,x+.7/o.bays,.65);}}return g.entities;},
+  hose: ()=>{const g=objectDrawing();g.rect(0,0,1,1);for(let y=.2;y<1;y+=.22){g.ellipse(.5,y,.4,.08);g.line(.1,y,.9,y);}return g.entities;},
+  scba: ()=>{const g=objectDrawing();g.rect(0,0,1,1);for(let x=.15;x<1;x+=.23){g.rect(x-.065,.15,.13,.7);g.ellipse(x,.2,.065,.04);g.line(x,.03,x,.15);}return g.entities;},
+  screen: o=>{const g=objectDrawing();const bays=o.bays||3;for(let i=0;i<bays;i++){const x=i/bays;g.rect(x,0,1/bays,.28);g.line(x+.1/bays,.28,x+.1/bays,1);g.line((i+1)/bays-.1/bays,.28,(i+1)/bays-.1/bays,1);}return g.entities;},
+  portal: o=>{const g=objectDrawing();g.rect(0,0,.17,1);g.rect(.83,0,.17,1);g.line(.17,.1,.83,.1);if(o.scanner){g.rect(.25,.15,.5,.7);g.line(.25,.6,.75,.6);}return g.entities;},
+  room: o=>{const g=objectDrawing('A-SITE');g.path([[0,1],[0,0],[1,0],[1,1],[.3,1]]);g.line(0,1,0,.7);g.arc(0,1,.3,.3,-Math.PI/2,0);g.rect(.1,.15,.3,.6);if(o.cell){for(let x=.45;x<.95;x+=.08)g.line(x,0,x,1);g.ellipse(.75,.85,.1,.1);}else if(o.booth){g.rect(.1,.08,.8,.15);g.rect(.6,.4,.22,.3);}else{g.rect(.06,.07,.88,.2);g.rect(.06,.73,.88,.2);}return g.entities;},
+  stairs: o=>{const g=objectDrawing('A-SITE');if(o.spiral){g.ellipse(.5,.5,.5);g.ellipse(.5,.5,.07);for(let i=0;i<12;i++){const a=i*Math.PI/6;g.line(.5,.5,.5+.5*Math.cos(a),.5+.5*Math.sin(a));}}else{g.rect(0,0,1,1);for(let y=.08;y<1;y+=.08)g.line(0,y,1,y);g.path([[.4,.3],[.5,.15],[.6,.3]]);g.line(.5,.15,.5,.85);if(o.l)g.rect(.5,.5,.5,.5);}return g.entities;},
+  door: o=>{const g=objectDrawing('A-DOOR');const bays=o.double?2:1;g.line(0,0,1,0);for(let i=0;i<bays;i++){const x=i?1:0,r=1/bays;g.line(x,0,x,1);g.arc(x,0,r,1,i?Math.PI/2:0,i?Math.PI:Math.PI/2);}return g.entities;},
+  sliding: o=>{const g=objectDrawing('A-DOOR');g.rect(0,.25,1,.5);const bays=o.bays||2;for(let i=0;i<bays;i++)g.rect(i/bays,.25,1/bays,.2);g.line(.1,.9,.9,.9);g.path([[.75,.8],[.9,.9],[.75,1]]);return g.entities;},
+  window: ()=>{const g=objectDrawing('A-DOOR');g.rect(0,0,1,1);g.line(0,.3,1,.3);g.line(0,.7,1,.7);g.line(.5,0,.5,1);return g.entities;},
+  lab: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.05,.05,.9,.9);g.ellipse(.25,.5,.16,.28);g.rect(.53,.2,.35,.58);if(o.hood){g.line(0,.25,1,.25);g.line(.08,.4,.92,.4);}return g.entities;},
+  ramp: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.line(.05,0,.05,1);g.line(.95,0,.95,1);g.line(.5,.85,.5,.15);g.path([[.35,.35],[.5,.15],[.65,.35]]);return g.entities;},
+  clearance: ()=>{const g=objectDrawing('A-CLEARANCE');g.ellipse(.5,.5,.5,.5);g.line(.15,.5,.85,.5);g.path([[.25,.4],[.15,.5],[.25,.6]]);g.path([[.75,.4],[.85,.5],[.75,.6]]);return g.entities;}
+};
+
+
+  // =========================================================================
+  // MODULE: SportsGeometry
+  // =========================================================================
+
+
+const SPORTS_GEOMETRY = {
+  parallelBars: ()=>{const g=objectDrawing();for(const x of [.15,.85]){g.rect(x-.03,0,.06,1);g.rect(x-.13,.12,.26,.09);g.rect(x-.13,.79,.26,.09);}return g.entities;},
+  dartboard: ()=>{const g=objectDrawing();g.rect(0,0,1,1);for(const r of [.05,.12,.22])g.ellipse(.5,.18,r,r*.6);g.line(.1,.8,.9,.8);g.line(.5,.3,.5,.8);return g.entities;},
+  vrZone: ()=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.1,.1,.8,.8);g.rect(.3,.35,.4,.22);g.ellipse(.41,.46,.06,.07);g.ellipse(.59,.46,.06,.07);g.line(.3,.35,.18,.3);g.line(.7,.35,.82,.3);return g.entities;},
+  treadmill: ()=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.18,.24,.64,.7);g.rect(.1,.03,.8,.16);g.line(.1,.12,.1,.65);g.line(.9,.12,.9,.65);g.rect(.3,.07,.4,.06);return g.entities;},
+  bike: ()=>{const g=objectDrawing();g.rect(.05,0,.9,.06);g.rect(.05,.94,.9,.06);g.ellipse(.5,.58,.18,.25);g.rect(.32,.25,.36,.12);g.line(.5,.25,.5,.08);g.path([[.16,.22],[.2,.08],[.8,.08],[.84,.22]]);g.line(.15,.65,.85,.65);return g.entities;},
+  benchPress: o=>{const g=objectDrawing();g.rect(.32,.15,.36,.75);g.line(0,.2,1,.2);for(const x of [.08,.82]){g.rect(x,.1,.1,.2);g.rect(x,.12,.05,.16);}g.rect(.25,0,.07,.06);g.rect(.68,0,.07,.06);if(o.machine){g.path([[.05,1],[.05,0],[.95,0],[.95,1]]);g.line(.1,.1,.5,.7);g.line(.9,.1,.5,.7);}return g.entities;},
+  court: o=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.rect(.04,.03,.92,.94);g.line(0,.5,1,.5);if(o.pool){for(let x=.08;x<1;x+=.1)g.line(x,.03,x,.97);g.line(0,.12,1,.12);g.line(0,.88,1,.88);}else if(o.tennis){g.line(.15,0,.15,1);g.line(.85,0,.85,1);g.line(.15,.27,.85,.27);g.line(.15,.73,.85,.73);g.line(.5,.27,.5,.73);}else if(o.field){g.ellipse(.5,.5,.12,.08);for(const y of [0,.82]){g.rect(.18,y,.64,.18);g.rect(.35,y===0?0:.93,.3,.07);}g.rect(.4,-.025,.2,.025);g.rect(.4,1,.2,.025);}else{g.ellipse(.5,.5,.14,.1);g.rect(.32,0,.36,.19);g.rect(.32,.81,.36,.19);g.arc(.5,.19,.23,.14,0,Math.PI);g.arc(.5,.81,.23,.14,Math.PI,2*Math.PI);}return g.entities;},
+  net: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);for(let x=.05;x<1;x+=.1)g.line(x,0,x,1);for(let y=.05;y<1;y+=.1)g.line(0,y,1,y);g.rect(0,0,.04,1);g.rect(.96,0,.04,1);return g.entities;},
+  arcade: o=>{const g=objectDrawing();g.path([[0,0],[1,0],[1,.6],[.88,1],[.12,1],[0,.6]],true);g.rect(.08,.1,.84,.34);g.rect(.12,.6,.76,.2);g.ellipse(.25,.69,.035);for(let x=.5;x<.8;x+=.1)g.ellipse(x,.69,.02);if(o.racing)g.ellipse(.5,.6,.14,.12);return g.entities;},
+  mat: ()=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.025,.025,.95,.95);g.line(.1,.08,.9,.08);return g.entities;}
+};
+
+
+  // =========================================================================
+  // MODULE: SpecialistObjectGeometry
+  // =========================================================================
+
+
+
+/** Equipment and civic/service symbols whose plan compositions cannot use furniture templates. */
+const SPECIALIST_GEOMETRY = {
+  firePole: ()=>{const g=objectDrawing('A-SITE');g.ellipse(.5,.5,.5);g.ellipse(.5,.5,.06);g.line(.25,.5,.42,.5);g.line(.58,.5,.75,.5);g.line(.5,.25,.5,.42);g.line(.5,.58,.5,.75);return g.entities;},
+  ottoman: o=>{const g=objectDrawing();if(o.round){g.ellipse(.5,.5,.5);g.ellipse(.5,.5,.43);}else{g.rect(0,0,1,1);g.rect(.06,.06,.88,.88);}for(const x of [.3,.7])for(const y of [.3,.7])g.ellipse(x,y,.018);return g.entities;},
+  cabinet: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.04,.04,.92,.92);for(let i=0;i<(o.drawers||3);i++){const y=(i+.5)/(o.drawers||3);g.line(.04,y+.1,.96,y+.1);g.rect(.38,y-.025,.24,.04);}return g.entities;},
+  checkout: ()=>{const g=objectDrawing();g.path([[0,0],[.72,0],[.72,.2],[1,.2],[1,.8],[.72,.8],[.72,1],[0,1]],true);g.rect(.06,.05,.6,.52);for(let y=.1;y<.57;y+=.08)g.line(.06,y,.66,y);g.rect(.08,.65,.25,.17);g.line(.2,.82,.2,.92);g.rect(.42,.63,.22,.2);g.rect(.78,.3,.16,.4);return g.entities;},
+  deskLayout: o=>{const g=objectDrawing();if(o.u){g.path([[0,0],[1,0],[1,1],[.72,1],[.72,.3],[.28,.3],[.28,1],[0,1]],true);}else{g.path([[0,0],[1,0],[1,.35],[.35,.35],[.35,1],[0,1]],true);}g.rect(.4,.04,.3,.15);g.line(.55,.19,.55,.25);g.rect(.06,.6,.2,.28);return g.entities;},
+  reception: o=>{const g=objectDrawing();g.path([[0,1],[0,0],[1,0],[1,1],[.8,1],[.8,.25],[.2,.25],[.2,1]],true);g.line(.05,.08,.95,.08);g.rect(.32,.07,.28,.14);g.line(.46,.21,.46,.3);if(o.fingerprint){g.rect(.63,.05,.25,.14);for(let r=.015;r<.08;r+=.015)g.arc(.76,.13,r,r*.7,0,Math.PI);}return g.entities;},
+  roundShade: o=>{const g=objectDrawing('A-SITE');g.ellipse(.5,.5,.5);for(let i=0;i<8;i++){const a=i*Math.PI/4;g.line(.5,.5,.5+.5*Math.cos(a),.5+.5*Math.sin(a));}g.ellipse(.5,.5,.025);if(o.gazebo)g.ellipse(.5,.5,.4);return g.entities;},
+  drinkingFountain: ()=>{const g=objectDrawing('A-SITE');g.rect(.06,.08,.88,.84);g.ellipse(.5,.5,.35,.3);g.ellipse(.5,.5,.035);g.rect(.15,0,.18,.17);g.line(.24,.17,.38,.25);return g.entities;},
+  firepit: ()=>{const g=objectDrawing('A-SITE');g.ellipse(.5,.5,.5);g.ellipse(.5,.5,.4);g.line(.25,.35,.75,.65);g.line(.25,.65,.75,.35);g.path([[.4,.6],[.33,.45],[.5,.18],[.53,.43],[.68,.55],[.6,.65]],true);return g.entities;},
+  pressureAppliance: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.08,.1,.84,.8);g.ellipse(.5,.55,.32,.29);g.ellipse(.5,.55,.25,.22);g.line(.5,.3,.5,.8);g.line(.24,.55,.76,.55);for(let x=.2;x<.85;x+=.2)g.ellipse(x,.15,.025);if(o.kiln)for(let x=.2;x<1;x+=.2)g.line(x,.85,x,.95);return g.entities;},
+  oven: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.08,.25,.84,.65);g.rect(.12,.31,.76,.5);for(let x=.15;x<.9;x+=.17)g.ellipse(x,.12,.03);g.line(.22,.26,.78,.26);if(o.hood)for(let x=.15;x<.9;x+=.12)g.line(x,.35,x,.75);return g.entities;},
+  pallet: o=>{const g=objectDrawing();g.rect(0,0,1,1);for(let x=0;x<1;x+=.2)g.rect(x,0,.12,1);for(const y of [.06,.82])g.rect(0,y,1,.12);if(o.rack){g.rect(0,0,.04,1);g.rect(.96,0,.04,1);g.line(0,.5,1,.5);}return g.entities;},
+  boothSeating: o=>{const g=objectDrawing();g.seat(0,.05,.25,.9,false);g.seat(.75,.05,.25,.9,false);g.rect(.32,.08,.36,.84);for(let i=1;i<(o.seats||2);i++){const y=.05+i*.9/(o.seats||2);g.line(0,y,.25,y);g.line(.75,y,1,y);}return g.entities;},
+  sportsTable: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.04,.04,.92,.92);g.line(0,.5,1,.5);if(o.foosball){for(let y=.15;y<1;y+=.14){g.line(-.05,y,1.05,y);for(let x=.22;x<.9;x+=.27)g.rect(x-.035,y-.035,.07,.07);}}else if(o.hockey){g.ellipse(.5,.5,.16,.1);g.rect(.28,0,.44,.025);g.rect(.28,.975,.44,.025);g.ellipse(.5,.18,.04);}else{g.line(.5,0,.5,1);g.line(0,.48,1,.48);g.line(0,.52,1,.52);}return g.entities;},
+  elliptical: ()=>{const g=objectDrawing();g.rect(.05,0,.9,.07);g.rect(.05,.93,.9,.07);for(const x of [.3,.7]){g.ellipse(x,.63,.13,.23);g.line(x,.4,x,.08);g.rect(x-.05,.15,.1,.07);}g.rect(.35,.04,.3,.12);g.line(.15,.38,.85,.38);return g.entities;},
+  rower: ()=>{const g=objectDrawing();g.rect(.1,0,.8,.16);g.ellipse(.5,.08,.22,.07);g.rect(.44,.16,.12,.84);g.rect(.25,.58,.5,.12);g.rect(.17,.23,.2,.1);g.rect(.63,.23,.2,.1);g.line(.2,.2,.8,.2);return g.entities;},
+  rig: o=>{const g=objectDrawing();g.rect(0,0,1,1);for(const x of [0,.96])for(const y of [0,.96])g.rect(x,y,.04,.04);g.line(.04,.15,.96,.15);g.line(.04,.85,.96,.85);g.rect(.12,.35,.18,.3);g.rect(.7,.35,.18,.3);if(o.cable){g.line(.2,.5,.5,.68);g.line(.8,.5,.5,.68);}else{for(let x=.15;x<.9;x+=.17)g.line(x,0,x,1);}return g.entities;},
+  seesaw: o=>{const g=objectDrawing('A-SITE');g.rect(.4,.4,.2,.2);g.path([[0,.4],[1,.4],[1,.6],[0,.6]],true);for(const x of [.08,.92]){g.rect(x-.07,.3,.14,.4);g.line(x,.24,x,.76);}if(o.rocker)g.ellipse(.5,.5,.32,.45);return g.entities;},
+  climbingFrame: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);for(let x=0;x<=1;x+=.2)g.line(x,0,x,1);for(let y=0;y<=1;y+=.2)g.line(0,y,1,y);g.rect(.3,.3,.4,.4);return g.entities;},
+  helipad: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.ellipse(.5,.5,.45);g.path([[.3,.25],[.3,.75],[.4,.75],[.4,.55],[.6,.55],[.6,.75],[.7,.75],[.7,.25],[.6,.25],[.6,.45],[.4,.45],[.4,.25]],true);return g.entities;},
+  track: ()=>{const g=objectDrawing('A-SITE');for(let i=0;i<6;i++){const r=.5-i*.035;g.path([[.5-r,.3],...Array.from({length:25},(_,n)=>{const a=Math.PI+n*Math.PI/24;return [.5+r*Math.cos(a),.3+.3*r/.5*Math.sin(a)];}),[.5+r,.7],...Array.from({length:25},(_,n)=>{const a=n*Math.PI/24;return [.5+r*Math.cos(a),.7+.3*r/.5*Math.sin(a)];})],true);}g.line(.6,.02,.6,.3);return g.entities;},
+  trampoline: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.rect(.1,.1,.8,.8);for(let x=.1;x<.9;x+=.08){g.line(x,0,x,.1);g.line(x,.9,x,1);}for(let y=.1;y<.9;y+=.08){g.line(0,y,.1,y);g.line(.9,y,1,y);}return g.entities;}
+};
+
+
+  // =========================================================================
+  // MODULE: ObjectGeometryRegistry
+  // =========================================================================
+
+
+
+
+
+
+
+
+
+
+
+
+const OBJECT_GEOMETRY_FAMILIES = Object.freeze({...RESIDENTIAL_GEOMETRY,...LUXURY_GEOMETRY,...HEALTHCARE_GEOMETRY,...LANDSCAPE_GEOMETRY,...STREETS_GEOMETRY,...INSTITUTIONAL_GEOMETRY,...SPORTS_GEOMETRY,...SPECIALIST_GEOMETRY});
+
+function getObjectGeometryDefinition(geometryId) {
+  const id=String(geometryId||'').replace(/^object:/,''),binding=OBJECT_GEOMETRY_BINDINGS[id];
+  if (!binding) return null;
+  const renderer=OBJECT_GEOMETRY_FAMILIES[binding.family];
+  if (!renderer) throw new Error('Geometry composition is not registered: '+binding.family);
+  return {...binding,render:()=>{
+    const shape=renderer(binding.options);
+    const layout=binding.layout;
+    return layout?objectLayout(Array.from({length:layout.rows*layout.columns},(_,n)=>({geometry:shape,x:(n%layout.columns)/layout.columns,y:Math.floor(n/layout.columns)/layout.rows,w:.96/layout.columns,h:.96/layout.rows}))):shape;
+  }};
+}
+
+function geometryCoordinates(entities) {
+  return entities.flatMap(e=>e.type==='polyline'?e.points:[[e.x1,e.y1],[e.x2,e.y2]]);
+}
+
+function objectGeometryBounds(entities) {
+  const points=geometryCoordinates(entities);
+  if(!points.length||points.some(p=>p.some(v=>!Number.isFinite(v))))throw new Error('Object geometry is empty or invalid.');
+  const xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
+  return {minX:Math.min(...xs),minY:Math.min(...ys),maxX:Math.max(...xs),maxY:Math.max(...ys)};
+}
+
+function buildObjectGeometry(geometryId,width,depth) {
+  const definition=getObjectGeometryDefinition(geometryId);
+  if(!definition)throw new Error('Official object has no registered geometry: '+geometryId);
+  const shape=definition.render(),b=objectGeometryBounds(shape);
+  const sx=width/(b.maxX-b.minX),sy=depth/(b.maxY-b.minY);
+  if(!Number.isFinite(sx)||!Number.isFinite(sy))throw new Error('Object geometry has no physical extent.');
+  return objectLayout([{geometry:shape,x:-b.minX*sx,y:-b.minY*sy,w:sx,h:sy}]);
+}
+
+
+  // =========================================================================
+  // MODULE: ObjectScaling
+  // =========================================================================
+
+/** Physical dimensions create temporary instances; paper scale never changes CAD. */
+function resolveObjectDimensions(item,options={}) {
+  const original={widthMm:item.wCm*10,depthMm:item.dCm*10,heightMm:item.hCm==null?null:item.hCm*10};
+  let widthMm=options.widthMm??original.widthMm,depthMm=options.depthMm??original.depthMm;
+  if(options.preserveProportions){
+    if(options.widthMm!=null&&options.depthMm==null)depthMm=original.depthMm*widthMm/original.widthMm;
+    else if(options.depthMm!=null&&options.widthMm==null)widthMm=original.widthMm*depthMm/original.depthMm;
+    else if(Math.abs(widthMm/depthMm-original.widthMm/original.depthMm)>1e-7)throw new Error('Locked proportions need matching width and depth.');
+  }
+  const heightMm=options.heightMm??original.heightMm;
+  if(![widthMm,depthMm].every(v=>typeof v==='number'&&Number.isFinite(v)&&v>0&&v<=1000000)||heightMm!=null&&(!Number.isFinite(heightMm)||heightMm<0||heightMm>1000000))throw new Error('Enter positive, finite dimensions in millimeters (maximum 1,000,000 mm).');
+  return {widthMm,depthMm,heightMm,original,modified:widthMm!==original.widthMm||depthMm!==original.depthMm||heightMm!==original.heightMm};
+}
+
+function objectPaperDimensions(dimensions,scale=50) {
+  if(!Number.isFinite(scale)||scale<=0)throw new Error('Drawing scale must be positive.');
+  return {widthMm:dimensions.widthMm/scale,depthMm:dimensions.depthMm/scale};
+}
+
+
+  // =========================================================================
   // MODULE: FurnitureTaxonomy
   // =========================================================================
 
@@ -2402,7 +3448,7 @@ const FURNITURE_CATEGORIES = Object.freeze({
   education: ['classroom','lecture','library','laboratory'],
   retail: ['display','checkout','storage','customer'],
   hospitality: ['restaurant','cafe','hotel','lobby','service'],
-  civic: ['police','government','security','community'],
+  civic: ['police','fire','government','security','community'],
   sports: ['gym','fitness','locker-room','courts'],
   outdoor: ['parking','landscape','street-furniture','recreation'],
   accessibility: ['mobility','clearance'],
@@ -2452,9 +3498,12 @@ function classifyFurniture(record) {
 
 
 
+
+
+
 /**
  * Architecture Helping Hand - Comprehensive Furniture, Fixtures & Standards Library
- * Reference planning dimensions across 9 categories spanning residential, commercial,
+ * Reference planning dimensions across architectural object collections spanning residential, commercial,
  * sanitary, circulation, clearances, outdoor, fitness, and accessibility domains.
  */
 
@@ -2724,7 +3773,11 @@ const LEGACY_FURNITURE_DATABASE = Object.freeze([
   { id: 'ev-charger-wall', name: 'Wall-Mounted EV Charger (40×20)', category: 'commercial', wCm: 40, dCm: 20, hCm: 60, desc: 'Parking bay wall-pedestal charging unit', type: 'appliance' }
 ]);
 
-const FURNITURE_DATABASE = Object.freeze([...LEGACY_FURNITURE_DATABASE, ...OBJECT_LIBRARY_PACKS.filter(item => !LEGACY_FURNITURE_DATABASE.some(old => old.id === item.id))].map(classifyFurniture));
+const FURNITURE_DATABASE = Object.freeze([...LEGACY_FURNITURE_DATABASE, ...OBJECT_LIBRARY_PACKS.filter(item => !LEGACY_FURNITURE_DATABASE.some(old => old.id === item.id)),...ARCHITECTURAL_OBJECT_ADDITIONS].map(record=>{
+  const item=annotateObjectCollections(classifyFurniture(record));
+  return Object.freeze({...item,...(record.dimensionSource?{dimensionSource:record.dimensionSource,dimensionSourceType:record.dimensionSourceType}:{}),
+    geometryId:'object:'+item.id,geometryStatus:OBJECT_GEOMETRY_BINDINGS[item.id]?'ready':'unfinished'});
+}));
 
 
 /**
@@ -2784,13 +3837,14 @@ function getScaledFurnitureDimensions(item, ratio = 50, paperUnitKey = 'cm') {
  * Filter furniture catalog by search term, category, and sort order
  * Supports multi-token search by name, category, type, description, and dimensions (e.g. "200", "90x190")
  */
-function filterFurnitureCatalog(catalog, searchQuery = '', category = 'all', sortKey = 'default') {
+function filterFurnitureCatalog(catalog, searchQuery = '', category = 'all', sortKey = 'default', collection = 'all') {
   const query = searchQuery ? searchQuery.trim().toLowerCase() : '';
   const tokens = query.split(/\s+/).filter(t => t.length > 0);
 
   let filtered = catalog.filter(item => {
     const matchesCategory = category === 'all' || item.category === category || item.legacyCategory === category || `${item.category}/${item.subcategory}` === category;
     if (!matchesCategory) return false;
+    if (collection !== 'all' && !item.collections?.includes(collection)) return false;
 
     if (tokens.length === 0) return true;
 
@@ -2804,7 +3858,7 @@ function filterFurnitureCatalog(catalog, searchQuery = '', category = 'all', sor
     const dimH = `${item.hCm || ''}`;
     const dimCombo = `${item.wCm}x${item.dCm} ${item.wCm}*${item.dCm} ${item.wCm}×${item.dCm} ${item.wCm}cm ${item.dCm}cm`;
 
-    const haystack = `${name} ${desc} ${cat} ${item.subcategory || ''} ${(item.tags || []).join(' ')} ${type} ${dimW} ${dimD} ${dimH} ${dimCombo}`;
+    const haystack = `${name} ${desc} ${cat} ${item.subcategory || ''} ${(item.tags || []).join(' ')} ${item.collectionText||''} ${item.useCases||''} ${item.searchAliases||''} ${type} ${dimW} ${dimD} ${dimH} ${dimCombo}`;
 
     // Every token must match somewhere in the haystack (multi-word tokenized search)
     return tokens.every(token => {
@@ -2822,6 +3876,12 @@ function filterFurnitureCatalog(catalog, searchQuery = '', category = 'all', sor
       return false;
     });
   });
+
+  // Prefer names and retained reference names over incidental collection matches.
+  if (query && sortKey === 'default') {
+    const score = item => tokens.reduce((sum,token) => sum + ((item.name||'').toLowerCase().includes(token)?5:0) + ((item.searchAliases||'').toLowerCase().includes(token)?2:0),0);
+    filtered = [...filtered].sort((a,b) => score(b)-score(a));
+  }
 
   // Apply sorting
   if (sortKey && sortKey !== 'default') {
@@ -3084,8 +4144,8 @@ const WORKSPACES = [
       },
       {
         "toolId": "furniture",
-        "label": "Furniture & Clearances",
-        "desc": "215 scaled standards with footprints",
+        "label": "Object Library",
+        "desc": "Editable architectural CAD objects and planning references",
         "keywords": [
           "furniture",
           "clearance",
@@ -3097,6 +4157,7 @@ const WORKSPACES = [
         ],
         "aliases": [
           "furniture library",
+          "object library",
           "clearances"
         ]
       },
@@ -28353,38 +29414,19 @@ function buildExport(request) {
 
 
 
+
+
 /** Recognizable, simplified top views. Coordinates are always real meters. */
-function createFurnitureAsset(item, { includeClearance = false } = {}) {
+function createFurnitureAsset(item, options = {}) {
   if (!item || !Number.isFinite(item.wCm) || !Number.isFinite(item.dCm) || item.wCm<=0 || item.dCm<=0) throw new Error('Furniture needs positive, finite width and depth.');
-  const w=item.wCm/100, d=item.dCm/100;
-  const geometry=[];
-  const rect=(x,y,width,depth,layer='A-FURN')=>geometry.push({type:'polyline',closed:true,layer,points:[[x,y],[x+width,y],[x+width,y+depth],[x,y+depth]]});
-  const line=(x1,y1,x2,y2)=>geometry.push({type:'line',layer:'A-FURN',x1,y1,x2,y2});
-  const ellipse=(cx,cy,rx,ry,layer='A-FURN')=>geometry.push({type:'polyline',closed:true,layer,points:Array.from({length:40},(_,i)=>{const a=i*Math.PI/20;return [cx+rx*Math.cos(a),cy+ry*Math.sin(a)];})});
-  const t=`${item.type} ${item.name}`.toLowerCase();
-  if(/door/.test(t)) {
-    line(0,0,w,0);line(0,0,0,w);
-    geometry.push({type:'polyline',closed:false,layer:'A-DOOR',points:Array.from({length:33},(_,i)=>[w*Math.cos(i*Math.PI/64),w*Math.sin(i*Math.PI/64)])});
-  } else if(/toilet|wc\b|urinal/.test(t)) {
-    rect(w*.15,0,w*.7,d*.22);ellipse(w/2,d*.57,w*.43,d*.4);ellipse(w/2,d*.57,w*.27,d*.25);
-  } else if(/sink|basin/.test(t)) {
-    rect(0,0,w,d);ellipse(w/2,d*.55,w*.38,d*.33);geometry.push({type:'circle',x:w/2,y:d*.2,r:Math.min(w,d)*.025,layer:'A-FURN'});
-  } else if(/bed|crib|stretcher/.test(t)) {
-    rect(0,0,w,d);rect(w*.06,d*.06,w*.88,d*.88);rect(w*.12,d*.1,w*.32,d*.16);if(w>1.2)rect(w*.56,d*.1,w*.32,d*.16);line(w*.06,d*.35,w*.94,d*.35);
-    if(/med|hospital|stretcher/.test(t)){line(0,d*.3,0,d*.8);line(w,d*.3,w,d*.8);}
-  } else if(/chair|sofa|bench|seating/.test(t)) {
-    if(/round/.test(t)) ellipse(w/2,d/2,w/2,d/2);
-    else {rect(0,0,w,d);rect(w*.07,d*.2,w*.86,d*.73);line(w*.07,d*.2,w*.93,d*.2);if(/sofa|bench/.test(t)){const count=/4|quad/.test(t)?4:/3|triple/.test(t)?3:2;for(let i=1;i<count;i++)line(w*i/count,d*.2,w*i/count,d*.9);}}
-  } else if(/desk/.test(t)) {
-    rect(0,0,w,d);line(w*.75,0,w*.75,d);rect(w*.06,d*.12,w*.4,d*.15);
-  } else if(/round|circle|tree/.test(t)) ellipse(w/2,d/2,w/2,d/2);
-  else if(/parking|bay/.test(t)) {line(0,0,0,d);line(0,d,w,d);line(w,d,w,0);}
-  else {rect(0,0,w,d);if(/storage|locker|shelf/.test(t)){line(0,d*.15,w,d*.15);line(w/2,d*.15,w/2,d);}}
+  const dimensions=resolveObjectDimensions(item,options),w=dimensions.widthMm/1000,d=dimensions.depthMm/1000;
+  const geometry=buildObjectGeometry(item.geometryId || 'object:'+item.id,w,d);
   const clearanceGeometry=[];
   const c=Number.isFinite(item.clearance)&&item.clearance>0?item.clearance/100:0;
   if(c)clearanceGeometry.push({type:'polyline',closed:true,layer:'A-CLEARANCE',points:[[-c,-c],[w+c,-c],[w+c,d+c],[-c,d+c]]});
-  return {id:item.id,name:item.name,category:item.category,subcategory:item.subcategory,tags:item.tags||[],width:w,depth:d,height:item.hCm?item.hCm/100:null,description:item.desc,dimensionSourceType:item.dimensionSourceType||'user-defined',planGeometry:geometry,clearanceGeometry,
-    cadMetadata:{units:'m',exportUnits:'mm',scale:1,origin:[0,0],clearanceNote:'Reference planning allowance, not a certified access zone.'},includeClearance};
+  return {id:item.id,name:item.name,category:item.category,subcategory:item.subcategory,tags:item.tags||[],geometryId:item.geometryId||'object:'+item.id,
+    width:w,depth:d,height:dimensions.heightMm==null?null:dimensions.heightMm/1000,dimensions,description:item.desc,dimensionSourceType:dimensions.modified?'user-defined':item.dimensionSourceType||'user-defined',planGeometry:geometry,clearanceGeometry,
+    cadMetadata:{units:'m',exportUnits:'mm',scale:1,origin:[0,0],clearanceNote:'Reference planning allowance, not a certified access zone.',resizeNote:dimensions.modified?'Edited schematic footprint; verify functional details.':''},includeClearance:!!options.includeClearance};
 }
 
 function furnitureAssetDXF(asset, { includeClearance = asset.includeClearance } = {}) {
@@ -28396,7 +29438,7 @@ function furnitureAssetSVG(asset, { includeClearance = asset.includeClearance } 
   const coords=entities.flatMap(e=>e.type==='polyline'?e.points:e.type==='line'?[[e.x1,e.y1],[e.x2,e.y2]]:[[e.x-e.r,e.y-e.r],[e.x+e.r,e.y+e.r]]);
   const xs=coords.map(p=>p[0]),ys=coords.map(p=>p[1]);
   const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
-  const W=(maxX-minX)*1000,H=(maxY-minY)*1000;
+  const W=Number(((maxX-minX)*1000).toFixed(4)),H=Number(((maxY-minY)*1000).toFixed(4));
   const n=v=>Number((v*1000).toFixed(4));
   const safe=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const marks=entities.map(e=>{
@@ -28406,6 +29448,33 @@ function furnitureAssetSVG(asset, { includeClearance = asset.includeClearance } 
     return `<circle cx="${n(e.x)}" cy="${n(e.y)}" r="${n(e.r)}"/>`;
   }).join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="${n(minX)} ${-n(maxY)} ${W} ${H}" role="img" aria-label="${safe(asset.name)} top view"><title>${safe(asset.name)} — real size, millimeters</title><g transform="scale(1,-1)" fill="none" stroke="currentColor" stroke-width="${Math.max(2,Math.min(W,H)*.006)}">${marks}</g></svg>`;
+}
+
+
+  // =========================================================================
+  // MODULE: ObjectBrowseCatalog
+  // =========================================================================
+
+
+
+
+let objectBrowseCatalog=null;
+/** Preserve reference IDs, but browse identical plan symbols once with their aliases. */
+function getObjectBrowseCatalog() {
+  if(objectBrowseCatalog)return objectBrowseCatalog;
+  const groups=new Map();
+  for(const item of FURNITURE_DATABASE){
+    const signature=JSON.stringify(createFurnitureAsset(item).planGeometry);
+    const group=groups.get(signature)||[];group.push(item);groups.set(signature,group);
+  }
+  objectBrowseCatalog=Object.freeze([...groups.values()].map(group=>{
+    const first=group[0];
+    return Object.freeze({...first,aliases:group.slice(1).map(i=>({id:i.id,name:i.name,heightMm:i.hCm?i.hCm*10:null})),
+      searchAliases:group.slice(1).map(i=>`${i.name} ${i.desc}`).join(' '),
+      collections:[...new Set(group.flatMap(i=>i.collections))],collectionText:group.map(i=>i.collectionText).join(' '),
+      tags:[...new Set(group.flatMap(i=>i.tags))]});
+  }));
+  return objectBrowseCatalog;
 }
 
 
@@ -34554,6 +35623,7 @@ function validateViewContext(context) {
   // MODULE: Visualizer
   // =========================================================================
 
+
 /**
  * Architecture Helping Hand - Proportional Visualizer & Graphic Scale Bar Renderer
  * Rich 2D Top-Down Architectural Blueprint Drawings & Proportional Visualizer
@@ -34754,676 +35824,65 @@ function updateVisualization(params = {}) {
  * for every individual item in the architectural library.
  */
 function getFurniturePlanSVG(item) {
-  if (!item) return '';
-  const id = item.id || '';
-  const type = item.type || 'table';
+  return item ? furnitureAssetSVG(createFurnitureAsset(item)) : '';
+}
 
-  // 1. Precise Individual Item ID Handlers
-  if (id === 'sofa-2p') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 130 80" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="6" y="6" width="118" height="68" rx="8" fill="currentColor" fill-opacity="0.14"/>
-        <rect x="22" y="9" width="86" height="15" rx="3" fill="currentColor" fill-opacity="0.25"/>
-        <rect x="8" y="9" width="15" height="62" rx="4" fill="currentColor" fill-opacity="0.25"/>
-        <rect x="107" y="9" width="15" height="62" rx="4" fill="currentColor" fill-opacity="0.25"/>
-        <line x1="65" y1="24" x2="65" y2="70" stroke="currentColor" stroke-width="1.6"/>
-        <path d="M23,24 L107,24" stroke-width="1.5" stroke-dasharray="2 2" stroke-opacity="0.6"/>
-      </svg>
-    `;
-  }
 
-  if (id === 'sofa-4p') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 180 80" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="6" y="6" width="168" height="68" rx="8" fill="currentColor" fill-opacity="0.14"/>
-        <rect x="24" y="9" width="132" height="15" rx="3" fill="currentColor" fill-opacity="0.25"/>
-        <rect x="8" y="9" width="16" height="62" rx="4" fill="currentColor" fill-opacity="0.25"/>
-        <rect x="156" y="9" width="16" height="62" rx="4" fill="currentColor" fill-opacity="0.25"/>
-        <line x1="57" y1="24" x2="57" y2="70" stroke="currentColor" stroke-width="1.5"/>
-        <line x1="90" y1="24" x2="90" y2="70" stroke="currentColor" stroke-width="1.5"/>
-        <line x1="123" y1="24" x2="123" y2="70" stroke="currentColor" stroke-width="1.5"/>
-        <path d="M24,24 L156,24" stroke-width="1.5" stroke-dasharray="2 2" stroke-opacity="0.6"/>
-      </svg>
-    `;
-  }
+  // =========================================================================
+  // MODULE: ObjectLibraryCards
+  // =========================================================================
 
-  if (id === 'sofa-u') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 170 120" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M6,6 L164,6 L164,114 L114,114 L114,56 L56,56 L56,114 L6,114 Z" fill="currentColor" fill-opacity="0.15"/>
-        <rect x="18" y="8" width="134" height="14" rx="3" fill="currentColor" fill-opacity="0.25"/>
-        <rect x="8" y="8" width="14" height="102" rx="3" fill="currentColor" fill-opacity="0.25"/>
-        <rect x="148" y="8" width="14" height="102" rx="3" fill="currentColor" fill-opacity="0.25"/>
-        <!-- Central Table Space -->
-        <rect x="68" y="70" width="34" height="34" rx="4" stroke-dasharray="3 3" stroke-opacity="0.7"/>
-      </svg>
-    `;
-  }
 
-  if (id === 'sofa-chesterfield') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 160 85" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="6" y="6" width="148" height="72" rx="14" fill="currentColor" fill-opacity="0.15"/>
-        <rect x="22" y="8" width="116" height="22" rx="6" fill="currentColor" fill-opacity="0.3"/>
-        <circle cx="15" cy="42" r="9" fill="currentColor" fill-opacity="0.3"/>
-        <circle cx="145" cy="42" r="9" fill="currentColor" fill-opacity="0.3"/>
-        <!-- Tufted Button Grid -->
-        ${[18, 42, 66, 90, 114, 138].map(x => `<circle cx="${x}" cy="18" r="2.5" fill="currentColor"/>`).join('')}
-        ${[30, 54, 78, 102, 126].map(x => `<circle cx="${x}" cy="26" r="2.5" fill="currentColor"/>`).join('')}
-        <line x1="80" y1="30" x2="80" y2="74" stroke-width="1.5"/>
-      </svg>
-    `;
-  }
 
-  if (id === 'chaise-lounge') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 150 75" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="6" y="8" width="138" height="58" rx="10" fill="currentColor" fill-opacity="0.15"/>
-        <!-- Single Arm & Reclined Headrest -->
-        <rect x="8" y="8" width="18" height="58" rx="6" fill="currentColor" fill-opacity="0.3"/>
-        <rect x="26" y="10" width="34" height="54" rx="4" fill="currentColor" fill-opacity="0.2"/>
-        <line x1="60" y1="8" x2="60" y2="66" stroke-dasharray="3 3"/>
-      </svg>
-    `;
-  }
 
-  if (id === 'wingback-chair') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 90 90" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="10" y="10" width="70" height="70" rx="8" fill="currentColor" fill-opacity="0.15"/>
-        <!-- Wing Ears -->
-        <path d="M10,24 C10,12 24,12 24,12 L66,12 C66,12 80,12 80,24" stroke-width="3.5" fill="currentColor" fill-opacity="0.25"/>
-        <rect x="12" y="22" width="12" height="52" rx="4" fill="currentColor" fill-opacity="0.3"/>
-        <rect x="66" y="22" width="12" height="52" rx="4" fill="currentColor" fill-opacity="0.3"/>
-        <rect x="24" y="32" width="42" height="42" rx="4" fill="currentColor" fill-opacity="0.1"/>
-      </svg>
-    `;
-  }
 
-  if (id === 'recliner') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 95 95" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="10" y="10" width="75" height="75" rx="12" fill="currentColor" fill-opacity="0.15"/>
-        <rect x="20" y="12" width="55" height="18" rx="6" fill="currentColor" fill-opacity="0.35"/>
-        <rect x="12" y="16" width="12" height="64" rx="5" fill="currentColor" fill-opacity="0.3"/>
-        <rect x="71" y="16" width="12" height="64" rx="5" fill="currentColor" fill-opacity="0.3"/>
-        <!-- Footrest Line -->
-        <line x1="24" y1="74" x2="71" y2="74" stroke-width="2" stroke-dasharray="3 3"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'bed-super-king') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 150 130" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="8" y="8" width="134" height="114" rx="6" fill="currentColor" fill-opacity="0.12"/>
-        <rect x="8" y="8" width="134" height="16" rx="2" fill="currentColor" fill-opacity="0.35"/>
-        <!-- 3 King Pillows -->
-        <rect x="14" y="28" width="36" height="26" rx="4" fill="currentColor" fill-opacity="0.25"/>
-        <rect x="57" y="28" width="36" height="26" rx="4" fill="currentColor" fill-opacity="0.25"/>
-        <rect x="100" y="28" width="36" height="26" rx="4" fill="currentColor" fill-opacity="0.25"/>
-        <!-- Luxury Quilt Line -->
-        <path d="M8,72 Q75,84 142,72" stroke-width="2" stroke-dasharray="3 3"/>
-        <line x1="8" y1="96" x2="142" y2="96" stroke-width="1.2" stroke-opacity="0.4"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'bed-bunk') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 95 125" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="10" y="8" width="75" height="108" rx="4" fill="currentColor" fill-opacity="0.12"/>
-        <rect x="10" y="8" width="75" height="14" rx="2" fill="currentColor" fill-opacity="0.35"/>
-        <rect x="18" y="26" width="59" height="24" rx="4" fill="currentColor" fill-opacity="0.25"/>
-        <!-- Bunk Bed Frame Posts & Foot Ladder -->
-        <circle cx="14" cy="12" r="3" fill="currentColor"/>
-        <circle cx="81" cy="12" r="3" fill="currentColor"/>
-        <circle cx="14" cy="112" r="3" fill="currentColor"/>
-        <circle cx="81" cy="112" r="3" fill="currentColor"/>
-        <!-- Ladder Rungs at Foot -->
-        <line x1="28" y1="102" x2="67" y2="102" stroke-width="2.5"/>
-        <line x1="28" y1="108" x2="67" y2="108" stroke-width="2.5"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'crib-baby') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 85 115" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="8" y="8" width="69" height="98" rx="6" fill="currentColor" fill-opacity="0.1"/>
-        <!-- Safety Slats -->
-        ${[18, 28, 38, 48, 58, 68].map(x => `<line x1="${x}" y1="8" x2="${x}" y2="106" stroke-width="1" stroke-opacity="0.3"/>`).join('')}
-        <rect x="16" y="16" width="53" height="82" rx="4" stroke="currentColor" stroke-width="1.8" fill="currentColor" fill-opacity="0.15"/>
-        <!-- Baby Pillow -->
-        <rect x="24" y="24" width="37" height="18" rx="4" fill="currentColor" fill-opacity="0.3"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'fireplace-hearth') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 140 75" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="8" y="8" width="124" height="58" rx="2" fill="currentColor" fill-opacity="0.18"/>
-        <!-- Firebox Opening -->
-        <rect x="36" y="8" width="68" height="34" fill="var(--bg-app)" stroke="currentColor" stroke-width="2.2"/>
-        <!-- Fire grate & flames -->
-        <line x1="44" y1="30" x2="96" y2="30" stroke-width="2"/>
-        <path d="M70,18 Q76,26 70,30 Q64,26 70,18 Z" fill="currentColor" fill-opacity="0.5"/>
-        <line x1="8" y1="44" x2="132" y2="44" stroke-dasharray="3 3"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'grand-piano') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 130 130" fill="none" stroke="currentColor" stroke-width="2">
-        <!-- Baby Grand Curved Rim -->
-        <path d="M15,10 L115,10 C115,48 95,85 88,118 L15,118 Z" fill="currentColor" fill-opacity="0.2"/>
-        <!-- Keyboard Front -->
-        <rect x="15" y="10" width="18" height="108" fill="currentColor" fill-opacity="0.35"/>
-        ${[18, 30, 42, 54, 66, 78, 90, 102].map(y => `
-          <rect x="22" y="${y}" width="10" height="7" fill="currentColor"/>
-        `).join('')}
-        <!-- Piano Stool -->
-        <rect x="4" y="45" width="8" height="38" rx="2" stroke="currentColor" fill="currentColor" fill-opacity="0.4"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'sink-double') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 140 80" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="8" y="10" width="124" height="60" rx="4" fill="currentColor" fill-opacity="0.12"/>
-        <!-- Two Basins -->
-        <rect x="16" y="18" width="48" height="44" rx="6" fill="currentColor" fill-opacity="0.22"/>
-        <circle cx="40" cy="40" r="3.5" fill="currentColor"/>
-        <rect x="76" y="18" width="48" height="44" rx="6" fill="currentColor" fill-opacity="0.22"/>
-        <circle cx="100" cy="40" r="3.5" fill="currentColor"/>
-        <!-- Center Mixer Tap -->
-        <circle cx="70" cy="18" r="4" fill="currentColor"/>
-        <line x1="70" y1="18" x2="70" y2="28" stroke-width="3" stroke-linecap="round"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'vanity-double-120' || id === 'vanity-double-160') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 160 80" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="8" y="10" width="144" height="60" rx="4" fill="currentColor" fill-opacity="0.12"/>
-        <!-- Left Basin -->
-        <ellipse cx="45" cy="40" rx="24" ry="18" fill="currentColor" fill-opacity="0.22"/>
-        <circle cx="45" cy="40" r="3.5" fill="currentColor"/>
-        <circle cx="45" cy="22" r="3" fill="currentColor"/>
-        <!-- Right Basin -->
-        <ellipse cx="115" cy="40" rx="24" ry="18" fill="currentColor" fill-opacity="0.22"/>
-        <circle cx="115" cy="40" r="3.5" fill="currentColor"/>
-        <circle cx="115" cy="22" r="3" fill="currentColor"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'toilet-ada') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 100 110" fill="none" stroke="currentColor" stroke-width="2">
-        <!-- Wall Frame & Cistern -->
-        <rect x="22" y="8" width="56" height="22" rx="4" fill="currentColor" fill-opacity="0.3"/>
-        <ellipse cx="50" cy="64" rx="24" ry="30" fill="currentColor" fill-opacity="0.14"/>
-        <ellipse cx="50" cy="66" rx="15" ry="20" stroke-dasharray="3 3" stroke-opacity="0.6"/>
-        <!-- Left & Right ADA Grab Bars -->
-        <line x1="8" y1="30" x2="8" y2="95" stroke-width="4.5" stroke-linecap="round" stroke="var(--accent-primary)"/>
-        <line x1="92" y1="30" x2="92" y2="95" stroke-width="4.5" stroke-linecap="round" stroke="var(--accent-primary)"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'urinal-wall') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 90 90" fill="none" stroke="currentColor" stroke-width="2">
-        <!-- Wall Line -->
-        <line x1="10" y1="12" x2="80" y2="12" stroke-width="3"/>
-        <!-- Privacy Partition Fin -->
-        <line x1="18" y1="8" x2="18" y2="75" stroke-width="3.5" stroke-linecap="round"/>
-        <line x1="72" y1="8" x2="72" y2="75" stroke-width="3.5" stroke-linecap="round"/>
-        <!-- Ceramic Urinal Bowl -->
-        <path d="M30,12 L60,12 L56,65 C56,72 34,72 34,65 Z" fill="currentColor" fill-opacity="0.22"/>
-        <circle cx="45" cy="50" r="3" fill="currentColor"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'bathtub-corner-jacuzzi') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 110 110" fill="none" stroke="currentColor" stroke-width="2">
-        <!-- Corner Triangle / Quarter Round Tub -->
-        <path d="M10,10 L100,10 A90,90 0 0,1 10,100 Z" fill="currentColor" fill-opacity="0.18"/>
-        <!-- Inner Tub Contour -->
-        <path d="M22,22 L86,22 A64,64 0 0,1 22,86 Z" stroke-dasharray="3 3" stroke-opacity="0.7"/>
-        <circle cx="35" cy="35" r="4.5" fill="currentColor"/>
-        <!-- Whirlpool Jet Nozzles -->
-        ${[30, 48, 66].map(a => `<circle cx="${24 + a * 0.7}" cy="${86 - a * 0.7}" r="2" fill="currentColor"/>`).join('')}
-      </svg>
-    `;
-  }
-
-  if (id === 'shower-corner-neo') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2">
-        <!-- Neo-Angle Corner (5-Sided Diamond) -->
-        <path d="M10,10 L90,10 L90,45 L45,90 L10,90 Z" fill="currentColor" fill-opacity="0.14"/>
-        <line x1="45" y1="90" x2="90" y2="45" stroke-width="3" stroke="var(--accent-primary)"/>
-        <!-- Drain & Slopes -->
-        <line x1="10" y1="10" x2="50" y2="50" stroke-dasharray="3 3" stroke-opacity="0.4"/>
-        <line x1="90" y1="10" x2="50" y2="50" stroke-dasharray="3 3" stroke-opacity="0.4"/>
-        <line x1="10" y1="90" x2="50" y2="50" stroke-dasharray="3 3" stroke-opacity="0.4"/>
-        <circle cx="50" cy="50" r="5" fill="currentColor"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'shower-ada-rollin') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 110 110" fill="none" stroke="currentColor" stroke-width="2">
-        <!-- Zero Threshold Floor -->
-        <rect x="8" y="8" width="94" height="94" stroke-dasharray="4 4" fill="currentColor" fill-opacity="0.1"/>
-        <!-- Fold-Down Seat -->
-        <rect x="12" y="12" width="30" height="30" rx="3" fill="currentColor" fill-opacity="0.35"/>
-        <line x1="12" y1="12" x2="42" y2="42" stroke-width="1.5"/>
-        <!-- Wall Grab Bars -->
-        <line x1="10" y1="46" x2="10" y2="96" stroke-width="4.5" stroke-linecap="round" stroke="var(--accent-primary)"/>
-        <line x1="46" y1="10" x2="96" y2="10" stroke-width="4.5" stroke-linecap="round" stroke="var(--accent-primary)"/>
-        <!-- Linear Drain -->
-        <rect x="14" y="90" width="82" height="6" rx="2" fill="currentColor"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'stair-straight') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 140 70" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="6" y="8" width="128" height="54" fill="currentColor" fill-opacity="0.08"/>
-        <!-- 10 Parallel Treads -->
-        ${[18, 30, 42, 54, 66, 78, 90, 102, 114].map(x => `<line x1="${x}" y1="8" x2="${x}" y2="62" stroke-width="1.6"/>`).join('')}
-        <!-- Walking Line with UP arrow -->
-        <line x1="12" y1="35" x2="122" y2="35" stroke-width="2"/>
-        <circle cx="12" cy="35" r="3.5" fill="currentColor"/>
-        <polyline points="114 29 122 35 114 41" stroke-width="2"/>
-        <text x="96" y="28" font-size="9" font-family="sans-serif" font-weight="800" fill="currentColor">UP</text>
-      </svg>
-    `;
-  }
-
-  if (id === 'stair-l-shaped') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 110 110" fill="none" stroke="currentColor" stroke-width="2">
-        <!-- L-Shape Stairs -->
-        <path d="M8,8 L102,8 L102,48 L48,48 L48,102 L8,102 Z" fill="currentColor" fill-opacity="0.08"/>
-        <!-- Landing Square -->
-        <rect x="8" y="8" width="40" height="40" fill="currentColor" fill-opacity="0.18"/>
-        ${[58, 68, 78, 88, 98].map(x => `<line x1="${x}" y1="8" x2="${x}" y2="48" stroke-width="1.5"/>`).join('')}
-        ${[58, 68, 78, 88, 98].map(y => `<line x1="8" y1="${y}" x2="48" y2="${y}" stroke-width="1.5"/>`).join('')}
-        <path d="M28,95 L28,28 L95,28" stroke-width="2" stroke-linejoin="round"/>
-        <polyline points="88 22 95 28 88 34" stroke-width="2"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'stair-spiral') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="50" cy="50" r="42" fill="currentColor" fill-opacity="0.08"/>
-        <circle cx="50" cy="50" r="7" fill="currentColor"/>
-        <!-- Radial Steps -->
-        ${[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map(deg => {
-          const rad = (deg * Math.PI) / 180;
-          return `<line x1="50" y1="50" x2="${(50 + 42 * Math.cos(rad)).toFixed(1)}" y2="${(50 + 42 * Math.sin(rad)).toFixed(1)}" stroke-width="1.4"/>`;
-        }).join('')}
-        <path d="M72,50 A22,22 0 1,1 50,28" stroke-width="2.2" stroke-linecap="round"/>
-        <polyline points="54 24 50 28 54 32" stroke-width="2"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'car-ada-bay') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 150 90" fill="none" stroke="currentColor" stroke-width="2">
-        <!-- Parking Stall -->
-        <rect x="8" y="8" width="94" height="74" fill="currentColor" fill-opacity="0.1"/>
-        <!-- Hatched Transfer Aisle -->
-        <rect x="102" y="8" width="40" height="74" fill="currentColor" fill-opacity="0.05"/>
-        ${[18, 30, 42, 54, 66].map(y => `<line x1="102" y1="${y}" x2="142" y2="${y + 12}" stroke-width="1.2" stroke-dasharray="2 2"/>`).join('')}
-        <!-- International Symbol of Access (Wheelchair) -->
-        <circle cx="55" cy="35" r="5" fill="var(--accent-primary)"/>
-        <path d="M55,42 L55,56 L65,56" stroke="var(--accent-primary)" stroke-width="3" stroke-linecap="round"/>
-        <circle cx="55" cy="56" r="10" stroke="var(--accent-primary)" stroke-width="2.5" fill="none"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'gym-treadmill') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 130 75" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="8" y="8" width="114" height="58" rx="6" fill="currentColor" fill-opacity="0.14"/>
-        <!-- Front Display Console & Handrails -->
-        <rect x="12" y="14" width="22" height="46" rx="4" fill="currentColor" fill-opacity="0.4"/>
-        <line x1="24" y1="12" x2="70" y2="12" stroke-width="3.5" stroke-linecap="round"/>
-        <line x1="24" y1="62" x2="70" y2="62" stroke-width="3.5" stroke-linecap="round"/>
-        <!-- Running Belt Surface -->
-        <rect x="36" y="18" width="80" height="38" rx="3" fill="currentColor" fill-opacity="0.25"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'gym-bench-press') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 120 90" fill="none" stroke="currentColor" stroke-width="2">
-        <!-- Padded Workout Bench -->
-        <rect x="25" y="32" width="70" height="26" rx="4" fill="currentColor" fill-opacity="0.3"/>
-        <!-- Upright Support Posts -->
-        <rect x="25" y="12" width="8" height="8" fill="currentColor"/>
-        <rect x="25" y="70" width="8" height="8" fill="currentColor"/>
-        <!-- Barbell with Weight Plates -->
-        <line x1="29" y1="4" x2="29" y2="86" stroke-width="3.5"/>
-        <rect x="24" y="6" width="10" height="8" rx="1" fill="currentColor"/>
-        <rect x="24" y="76" width="10" height="8" rx="1" fill="currentColor"/>
-      </svg>
-    `;
-  }
-
-  if (id === 'hospital-bed') {
-    return `
-      <svg class="furn-plan-svg" viewBox="0 0 140 85" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="8" y="10" width="124" height="65" rx="5" fill="currentColor" fill-opacity="0.12"/>
-        <!-- Head Section & Pillow -->
-        <line x1="42" y1="10" x2="42" y2="75" stroke-width="2"/>
-        <rect x="14" y="24" width="22" height="37" rx="3" fill="currentColor" fill-opacity="0.3"/>
-        <!-- Side Safety Rails -->
-        <rect x="42" y="8" width="50" height="5" rx="2" fill="currentColor" fill-opacity="0.5"/>
-        <rect x="42" y="72" width="50" height="5" rx="2" fill="currentColor" fill-opacity="0.5"/>
-        <!-- Medical Cross -->
-        <path d="M78,36 H84 V30 H90 V36 H96 V42 H90 V48 H84 V42 H78 Z" fill="currentColor" fill-opacity="0.3"/>
-      </svg>
-    `;
-  }
-
-  // 2. Specialized Type Fallbacks
-  switch (type) {
-    case 'sofa':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 160 80" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="6" y="6" width="148" height="68" rx="8" fill="currentColor" fill-opacity="0.14"/>
-          <rect x="24" y="9" width="112" height="16" rx="4" fill="currentColor" fill-opacity="0.25"/>
-          <rect x="9" y="9" width="16" height="62" rx="4" fill="currentColor" fill-opacity="0.25"/>
-          <rect x="135" y="9" width="16" height="62" rx="4" fill="currentColor" fill-opacity="0.25"/>
-          <line x1="62" y1="26" x2="62" y2="70" stroke="currentColor" stroke-width="1.6"/>
-          <line x1="98" y1="26" x2="98" y2="70" stroke="currentColor" stroke-width="1.6"/>
-          <path d="M26,26 L134,26" stroke-width="1.5" stroke-dasharray="2 2" stroke-opacity="0.6"/>
-        </svg>
-      `;
-
-    case 'sectional':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 160 110" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M6,6 L154,6 L154,62 L94,62 L94,104 L6,104 Z" fill="currentColor" fill-opacity="0.15"/>
-          <rect x="22" y="9" width="128" height="14" rx="3" fill="currentColor" fill-opacity="0.25"/>
-          <rect x="9" y="9" width="14" height="92" rx="3" fill="currentColor" fill-opacity="0.25"/>
-          <rect x="138" y="9" width="13" height="50" rx="3" fill="currentColor" fill-opacity="0.22"/>
-          <line x1="60" y1="24" x2="60" y2="62" stroke="currentColor" stroke-width="1.5"/>
-          <line x1="100" y1="24" x2="100" y2="62" stroke="currentColor" stroke-width="1.5"/>
-          <line x1="24" y1="62" x2="94" y2="62" stroke="currentColor" stroke-width="1.5"/>
-        </svg>
-      `;
-
-    case 'chair':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 90 90" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="10" y="10" width="70" height="70" rx="10" fill="currentColor" fill-opacity="0.15"/>
-          <rect x="20" y="14" width="50" height="16" rx="4" fill="currentColor" fill-opacity="0.3"/>
-          <rect x="13" y="14" width="10" height="60" rx="4" fill="currentColor" fill-opacity="0.25"/>
-          <rect x="67" y="14" width="10" height="60" rx="4" fill="currentColor" fill-opacity="0.25"/>
-          <rect x="24" y="32" width="42" height="42" rx="4" fill="currentColor" fill-opacity="0.1"/>
-        </svg>
-      `;
-
-    case 'chair_small':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 75 75" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="12" y="12" width="51" height="51" rx="6" fill="currentColor" fill-opacity="0.15"/>
-          <path d="M12,24 L63,24" stroke-width="2.5"/>
-          <rect x="16" y="14" width="43" height="8" rx="2" fill="currentColor" fill-opacity="0.3"/>
-        </svg>
-      `;
-
-    case 'chair_round':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 90 90" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="45" cy="45" r="34" fill="currentColor" fill-opacity="0.18"/>
-          <line x1="45" y1="15" x2="45" y2="75" stroke-dasharray="3 3" stroke-opacity="0.5"/>
-          <line x1="15" y1="45" x2="75" y2="45" stroke-dasharray="3 3" stroke-opacity="0.5"/>
-          <circle cx="45" cy="45" r="4" fill="currentColor"/>
-        </svg>
-      `;
-
-    case 'bed':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 140 120" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="10" y="8" width="120" height="104" rx="6" fill="currentColor" fill-opacity="0.12"/>
-          <rect x="10" y="8" width="120" height="14" rx="2" fill="currentColor" fill-opacity="0.35"/>
-          <rect x="18" y="28" width="46" height="26" rx="5" fill="currentColor" fill-opacity="0.25"/>
-          <rect x="76" y="28" width="46" height="26" rx="5" fill="currentColor" fill-opacity="0.25"/>
-          <path d="M10,68 Q70,78 130,68" stroke-width="1.8" stroke-dasharray="3 3"/>
-        </svg>
-      `;
-
-    case 'bed_single':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 90 120" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="10" y="8" width="70" height="104" rx="6" fill="currentColor" fill-opacity="0.12"/>
-          <rect x="10" y="8" width="70" height="14" rx="2" fill="currentColor" fill-opacity="0.35"/>
-          <rect x="18" y="28" width="54" height="24" rx="4" fill="currentColor" fill-opacity="0.25"/>
-          <path d="M10,66 Q45,74 80,66" stroke-width="1.8" stroke-dasharray="3 3"/>
-        </svg>
-      `;
-
-    case 'table':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 140 80" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="8" y="10" width="124" height="60" rx="6" fill="currentColor" fill-opacity="0.18"/>
-          <circle cx="18" cy="20" r="4" fill="currentColor"/>
-          <circle cx="122" cy="20" r="4" fill="currentColor"/>
-          <circle cx="18" cy="60" r="4" fill="currentColor"/>
-          <circle cx="122" cy="60" r="4" fill="currentColor"/>
-          <rect x="36" y="4" width="28" height="5" rx="1" fill="currentColor" fill-opacity="0.4"/>
-          <rect x="76" y="4" width="28" height="5" rx="1" fill="currentColor" fill-opacity="0.4"/>
-          <rect x="36" y="71" width="28" height="5" rx="1" fill="currentColor" fill-opacity="0.4"/>
-          <rect x="76" y="71" width="28" height="5" rx="1" fill="currentColor" fill-opacity="0.4"/>
-        </svg>
-      `;
-
-    case 'table_round':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="50" cy="50" r="38" fill="currentColor" fill-opacity="0.18"/>
-          <circle cx="50" cy="50" r="8" stroke-dasharray="2 2" stroke-opacity="0.6"/>
-          <circle cx="50" cy="6" r="4" fill="currentColor" fill-opacity="0.4"/>
-          <circle cx="50" cy="94" r="4" fill="currentColor" fill-opacity="0.4"/>
-          <circle cx="6" cy="50" r="4" fill="currentColor" fill-opacity="0.4"/>
-          <circle cx="94" cy="50" r="4" fill="currentColor" fill-opacity="0.4"/>
-        </svg>
-      `;
-
-    case 'counter':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 140 80" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="8" y="10" width="124" height="60" rx="3" fill="currentColor" fill-opacity="0.15"/>
-          <line x1="8" y1="52" x2="132" y2="52" stroke-dasharray="3 3" stroke-opacity="0.6"/>
-          <circle cx="40" cy="66" r="4" fill="currentColor" fill-opacity="0.4"/>
-          <circle cx="70" cy="66" r="4" fill="currentColor" fill-opacity="0.4"/>
-          <circle cx="100" cy="66" r="4" fill="currentColor" fill-opacity="0.4"/>
-        </svg>
-      `;
-
-    case 'storage':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 140 70" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="8" y="10" width="124" height="50" rx="3" fill="currentColor" fill-opacity="0.15"/>
-          <line x1="49" y1="10" x2="49" y2="60"/>
-          <line x1="90" y1="10" x2="90" y2="60"/>
-          <line x1="45" y1="35" x2="45" y2="42" stroke-width="3" stroke-linecap="round"/>
-          <line x1="53" y1="35" x2="53" y2="42" stroke-width="3" stroke-linecap="round"/>
-          <line x1="86" y1="35" x2="86" y2="42" stroke-width="3" stroke-linecap="round"/>
-          <line x1="94" y1="35" x2="94" y2="42" stroke-width="3" stroke-linecap="round"/>
-        </svg>
-      `;
-
-    case 'toilet':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 80 100" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="14" y="8" width="52" height="22" rx="4" fill="currentColor" fill-opacity="0.3"/>
-          <ellipse cx="40" cy="62" rx="24" ry="30" fill="currentColor" fill-opacity="0.12"/>
-          <ellipse cx="40" cy="64" rx="15" ry="20" stroke-dasharray="3 3" stroke-opacity="0.6"/>
-          <circle cx="40" cy="19" r="4" fill="currentColor"/>
-        </svg>
-      `;
-
-    case 'sink':
-    case 'vanity':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="8" y="10" width="104" height="60" rx="4" fill="currentColor" fill-opacity="0.12"/>
-          <ellipse cx="60" cy="40" rx="34" ry="22" fill="currentColor" fill-opacity="0.22"/>
-          <circle cx="60" cy="22" r="3" fill="currentColor"/>
-          <circle cx="60" cy="42" r="4" fill="currentColor"/>
-        </svg>
-      `;
-
-    case 'bath':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 150 75" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="6" y="8" width="138" height="59" rx="14" fill="currentColor" fill-opacity="0.15"/>
-          <ellipse cx="75" cy="37.5" rx="58" ry="22" stroke-dasharray="3 3" stroke-opacity="0.7"/>
-          <circle cx="25" cy="37.5" r="4.5" fill="currentColor"/>
-        </svg>
-      `;
-
-    case 'shower':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 90 90" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="8" y="8" width="74" height="74" rx="2" fill="currentColor" fill-opacity="0.1"/>
-          <line x1="8" y1="8" x2="82" y2="82" stroke-dasharray="3 3" stroke-opacity="0.4"/>
-          <line x1="8" y1="82" x2="82" y2="8" stroke-dasharray="3 3" stroke-opacity="0.4"/>
-          <circle cx="45" cy="45" r="7" fill="currentColor" fill-opacity="0.3"/>
-        </svg>
-      `;
-
-    case 'cooktop':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 90 90" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="8" y="8" width="74" height="74" rx="4" fill="currentColor" fill-opacity="0.18"/>
-          <circle cx="28" cy="28" r="12" stroke-width="2"/>
-          <circle cx="62" cy="28" r="9" stroke-width="2"/>
-          <circle cx="28" cy="62" r="9" stroke-width="2"/>
-          <circle cx="62" cy="62" r="14" stroke-width="2"/>
-        </svg>
-      `;
-
-    case 'fridge':
-    case 'appliance':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 90 90" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="8" y="8" width="74" height="74" rx="4" fill="currentColor" fill-opacity="0.16"/>
-          <line x1="8" y1="20" x2="82" y2="20" stroke-width="2"/>
-          <circle cx="45" cy="52" r="18" stroke-dasharray="3 3" stroke-opacity="0.6"/>
-          <circle cx="45" cy="52" r="7" fill="currentColor" fill-opacity="0.3"/>
-        </svg>
-      `;
-
-    case 'door':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="8" y="8" width="12" height="10" fill="currentColor"/>
-          <rect x="80" y="8" width="12" height="10" fill="currentColor"/>
-          <line x1="20" y1="13" x2="20" y2="82" stroke-width="3.5" stroke-linecap="round"/>
-          <path d="M20,82 A68,68 0 0,0 88,13" stroke-width="2" stroke-dasharray="4 4" stroke-opacity="0.8"/>
-        </svg>
-      `;
-
-    case 'door_double':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 140 80" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="6" y="8" width="10" height="10" fill="currentColor"/>
-          <rect x="124" y="8" width="10" height="10" fill="currentColor"/>
-          <line x1="16" y1="13" x2="16" y2="60" stroke-width="3" stroke-linecap="round"/>
-          <line x1="124" y1="13" x2="124" y2="60" stroke-width="3" stroke-linecap="round"/>
-          <path d="M16,60 A47,47 0 0,0 63,13" stroke-width="1.8" stroke-dasharray="3 3"/>
-          <path d="M124,60 A47,47 0 0,1 77,13" stroke-width="1.8" stroke-dasharray="3 3"/>
-        </svg>
-      `;
-
-    case 'door_sliding':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 140 50" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="10" y="14" width="65" height="8" rx="2" fill="currentColor" fill-opacity="0.4"/>
-          <rect x="65" y="26" width="65" height="8" rx="2" fill="currentColor" fill-opacity="0.4"/>
-          <line x1="8" y1="18" x2="132" y2="18" stroke-dasharray="2 2" stroke-opacity="0.5"/>
-          <line x1="8" y1="30" x2="132" y2="30" stroke-dasharray="2 2" stroke-opacity="0.5"/>
-        </svg>
-      `;
-
-    case 'window':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 140 40" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="8" y="12" width="124" height="16" rx="2" fill="currentColor" fill-opacity="0.12"/>
-          <line x1="8" y1="20" x2="132" y2="20" stroke-width="2.5" stroke="var(--accent-primary)"/>
-          <rect x="6" y="8" width="8" height="24" fill="currentColor"/>
-          <rect x="126" y="8" width="8" height="24" fill="currentColor"/>
-        </svg>
-      `;
-
-    case 'stair':
-    case 'stairs':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="8" y="8" width="104" height="64" fill="currentColor" fill-opacity="0.08"/>
-          ${[20, 34, 48, 62, 76, 90].map(x => `<line x1="${x}" y1="8" x2="${x}" y2="72" stroke-width="1.5"/>`).join('')}
-          <line x1="15" y1="40" x2="95" y2="40" stroke-width="2"/>
-          <circle cx="15" cy="40" r="3" fill="currentColor"/>
-          <polyline points="88 34 95 40 88 46" stroke-width="2"/>
-          <text x="76" y="32" font-size="9" font-family="sans-serif" font-weight="700" fill="currentColor">UP</text>
-        </svg>
-      `;
-
-    case 'clearance':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="10" y="10" width="80" height="80" stroke-dasharray="4 4" fill="currentColor" fill-opacity="0.08"/>
-          <line x1="10" y1="50" x2="90" y2="50" stroke-width="2"/>
-          <polyline points="20 44 10 50 20 56" stroke-width="2"/>
-          <polyline points="80 44 90 50 80 56" stroke-width="2"/>
-        </svg>
-      `;
-
-    case 'vehicle':
-    case 'parking':
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 140 80" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="10" y1="8" x2="130" y2="8" stroke-dasharray="4 4" stroke-opacity="0.5"/>
-          <line x1="10" y1="72" x2="130" y2="72" stroke-dasharray="4 4" stroke-opacity="0.5"/>
-          <path d="M22,58 C16,55 16,25 22,22 L40,18 L100,18 L122,24 C128,26 128,54 122,56 L100,62 L40,62 Z" fill="currentColor" fill-opacity="0.18"/>
-          <path d="M48,22 L56,26 L56,54 L48,58 Z" fill="currentColor" fill-opacity="0.3"/>
-          <path d="M96,24 L90,26 L90,54 L96,56 Z" fill="currentColor" fill-opacity="0.3"/>
-          <rect x="54" y="14" width="6" height="4" rx="1" fill="currentColor"/>
-          <rect x="54" y="62" width="6" height="4" rx="1" fill="currentColor"/>
-        </svg>
-      `;
-
-    default:
-      return `
-        <svg class="furn-plan-svg" viewBox="0 0 120 70" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="10" y="10" width="100" height="50" rx="4" fill="currentColor" fill-opacity="0.15"/>
-          <line x1="10" y1="10" x2="110" y2="60" stroke-dasharray="3 3" stroke-opacity="0.3"/>
-        </svg>
-      `;
-  }
+/** Temporary sizes belong to the open library session, never to catalog records. */
+function renderObjectLibraryCards({host,items,scale,instances,download,copy,send}) {
+  const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const sizeText=a=>`${formatNumber(a.dimensions.widthMm,1)} × ${formatNumber(a.dimensions.depthMm,1)} mm`;
+  host.innerHTML=items.map(item=>{
+    const asset=createFurnitureAsset(item,instances.get(item.id)||{}),d=asset.dimensions;
+    return `<article class="furniture-card object-card" data-id="${safe(item.id)}">
+      <h3 class="furn-name">${safe(item.name)}</h3><p class="object-category">${safe(item.category.replaceAll('-',' '))} › ${safe(item.subcategory.replaceAll('-',' '))}</p>
+      <div class="furn-plan-preview-box" data-object-preview>${furnitureAssetSVG(asset)}</div>
+      <p class="object-size" data-object-size>${sizeText(asset)}</p><p class="object-provenance" data-object-provenance>${d.modified?'Edited size':item.dimensionSourceType==='accessibility-guideline'?'Accessibility reference — verify local code':item.dimensionSourceType==='illustrative-reference'?'Editable design reference':'Typical planning dimension'}</p>
+      <details class="object-size-editor"><summary>Edit Size</summary><div class="object-size-fields">
+        <label>Width (mm)<input class="form-input" type="number" min="1" max="1000000" step="any" data-size="widthMm" value="${d.widthMm}"></label>
+        <label>Depth (mm)<input class="form-input" type="number" min="1" max="1000000" step="any" data-size="depthMm" value="${d.depthMm}"></label>
+        ${d.heightMm!=null?`<label>Height (mm)<input class="form-input" type="number" min="0" max="1000000" step="any" data-size="heightMm" value="${d.heightMm}"></label>`:''}
+      </div><label class="object-check"><input type="checkbox" data-lock-proportions> Preserve proportions</label><button type="button" class="action-tool-btn" data-reset-size>Reset Original</button><p class="object-error" role="alert" data-size-error></p><p class="object-note">This stretches the schematic top view. Verify functional details and working clearances.</p></details>
+      <div class="object-actions"><button type="button" class="action-tool-btn primary" data-furniture-download="dxf">Download DXF</button><button type="button" class="action-tool-btn" data-furniture-download="svg">SVG</button><button type="button" class="action-tool-btn" data-copy-object>Copy Dimensions</button></div>
+      <details class="object-information"><summary>More information</summary><p>Original: ${item.wCm*10} × ${item.dCm*10}${item.hCm?` × ${item.hCm*10}`:''} mm</p><p data-object-imperial>Imperial: ${formatNumber(d.widthMm/25.4,2)} × ${formatNumber(d.depthMm/25.4,2)} in</p><p data-paper-preview></p><p>${safe(item.desc)}</p><p>${safe(item.dimensionSource.note)}</p><p>${safe(item.tags.join(' · '))}</p>
+      ${item.aliases?.length?`<p>Same plan symbol is also listed as: ${item.aliases.map(a=>safe(a.name)+(a.heightMm?' (height '+a.heightMm+' mm)':'')).join('; ')}. Edit height when using a size variant.</p>`:''}
+      ${item.clearance?'<label class="object-check"><input type="checkbox" data-include-clearance> Include reference clearance</label>':''}<p class="object-note">DXF and SVG always use real-size millimeters. Drawing scale affects only the paper readout.</p><button type="button" class="action-tool-btn btn-furn-send" data-send-object>To Converter</button></details>
+    </article>`;
+  }).join('');
+  host.querySelectorAll('.object-card').forEach(card=>{
+    const item=items.find(i=>i.id===card.dataset.id);
+    let valid=true;
+    const options=()=>instances.get(item.id)||{};
+    const asset=()=>createFurnitureAsset(item,{...options(),includeClearance:!!card.querySelector('[data-include-clearance]')?.checked});
+    const paper=()=>{const p=objectPaperDimensions(asset().dimensions,scale);card.querySelector('[data-paper-preview]').textContent=`Drawing preview at 1:${scale}: ${formatNumber(p.widthMm,2)} × ${formatNumber(p.depthMm,2)} mm on paper.`;};
+    const paint=()=>{const a=asset();card.querySelector('[data-object-preview]').innerHTML=furnitureAssetSVG(a);card.querySelector('[data-object-size]').textContent=sizeText(a);card.querySelector('[data-object-imperial]').textContent='Imperial: '+formatNumber(a.dimensions.widthMm/25.4,2)+' × '+formatNumber(a.dimensions.depthMm/25.4,2)+' in';card.querySelector('[data-object-provenance]').textContent=a.dimensions.modified?'Edited size — verify before use':item.dimensionSourceType==='illustrative-reference'?'Editable design reference':item.dimensionSourceType==='accessibility-guideline'?'Accessibility reference — verify local code':'Typical planning dimension';paper();};
+    card.querySelectorAll('[data-size]').forEach(input=>input.addEventListener('input',()=>{
+      try {
+        const next={};card.querySelectorAll('[data-size]').forEach(field=>next[field.dataset.size]=field.value===''?NaN:Number(field.value));
+        if(card.querySelector('[data-lock-proportions]').checked&&input.dataset.size!=='heightMm'){
+          if(input.dataset.size==='widthMm'){next.depthMm=next.widthMm*item.dCm/item.wCm;card.querySelector('[data-size=depthMm]').value=String(next.depthMm);}
+          else{next.widthMm=next.depthMm*item.wCm/item.dCm;card.querySelector('[data-size=widthMm]').value=String(next.widthMm);}
+        }
+        createFurnitureAsset(item,next);instances.set(item.id,next);valid=true;card.querySelector('[data-size-error]').textContent='';paint();
+      } catch(error){valid=false;card.querySelector('[data-size-error]').textContent=error.message;}
+      card.querySelectorAll('[data-furniture-download],[data-copy-object],[data-send-object]').forEach(button=>button.disabled=!valid);
+    }));
+    card.querySelector('[data-reset-size]').addEventListener('click',()=>{instances.delete(item.id);const d=asset().dimensions;card.querySelectorAll('[data-size]').forEach(field=>field.value=d[field.dataset.size]);valid=true;card.querySelector('[data-size-error]').textContent='';card.querySelectorAll('button').forEach(b=>b.disabled=false);paint();});
+    card.querySelector('[data-include-clearance]')?.addEventListener('change',paint);
+    card.querySelectorAll('[data-furniture-download]').forEach(button=>button.addEventListener('click',()=>{if(!valid)return;const a=asset(),format=button.dataset.furnitureDownload;download(format==='dxf'?furnitureAssetDXF(a):furnitureAssetSVG(a),`${item.id}-${a.dimensions.widthMm}x${a.dimensions.depthMm}mm.${format}`,format);}));
+    card.querySelector('[data-copy-object]').addEventListener('click',()=>{if(valid){const a=asset();copy(sizeText(a)+(a.dimensions.heightMm!=null?' × height '+formatNumber(a.dimensions.heightMm,1)+' mm':''),'Object dimensions');}});
+    card.querySelector('[data-send-object]').addEventListener('click',()=>{if(valid)send(asset().dimensions.widthMm);});
+    card.querySelector('[data-lock-proportions]').addEventListener('change',()=>{if(!valid||!card.querySelector('[data-lock-proportions]').checked)return;card.querySelector('[data-size=widthMm]').dispatchEvent(new Event('input'));});
+    paper();
+  });
 }
 
 
@@ -35445,6 +35904,30 @@ function getFurniturePlanSVG(item) {
 
 
 
+/** All direction-dependent labels are projected from the calculation state. */
+function syncConverterDirectionUI(state, dom) {
+  state.direction = state.direction === 'drawing_to_real' ? 'drawing_to_real' : 'real_to_drawing';
+  const realFirst = state.direction === 'real_to_drawing';
+  const source = realFirst ? 'Real size' : 'Drawing size';
+  const target = realFirst ? 'Drawing size' : 'Real size';
+  if (dom.converterInputBadge) dom.converterInputBadge.textContent = realFirst ? 'Real measurement' : 'Measurement on drawing';
+  if (dom.converterOutputBadge) dom.converterOutputBadge.textContent = target;
+  if (dom.converterFlowFrom) dom.converterFlowFrom.textContent = source;
+  if (dom.converterFlowTo) dom.converterFlowTo.textContent = target;
+  if (dom.converterResultLabel) dom.converterResultLabel.textContent = realFirst ? 'Size on the drawing' : 'Real-world size';
+  if (dom.converterDirectionDescription) dom.converterDirectionDescription.textContent = realFirst
+    ? 'I know the real measurement and want its size on the drawing.'
+    : 'I measured a plan and want to know the real-world size.';
+  if (dom.converterMathFormula) dom.converterMathFormula.textContent = `${target} = ${source} ${realFirst ? '÷' : '×'} ${state.scaleRatio} (after converting units)`;
+  dom.converterDirectionButtons?.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.direction === state.direction)));
+  if (dom.converterScaleSelect) {
+    const value = String(state.scaleRatio);
+    let option = [...dom.converterScaleSelect.options].find(o => o.value === value);
+    if (!option) { option = document.createElement('option'); option.value = value; option.textContent = `1:${value} (custom)`; dom.converterScaleSelect.appendChild(option); }
+    dom.converterScaleSelect.value = value;
+  }
+}
+
 function createConverterView(context) {
   const { state, dom, setUnifiedResultState, AudioService } = context;
 
@@ -35452,6 +35935,7 @@ function createConverterView(context) {
     const rawRatio = parseFloat(dom.scaleRatioInput?.value);
     const parsedRatio = isNaN(rawRatio) || rawRatio <= 0 ? 50 : rawRatio;
     state.scaleRatio = parsedRatio;
+    syncConverterDirectionUI(state, dom);
 
     const rawInput = dom.converterInputVal?.value || '';
     state.converterInputVal = rawInput;
@@ -35463,14 +35947,12 @@ function createConverterView(context) {
       setUnifiedResultState({
         toolPrefix: 'converter',
         status: 'error',
-        errorText: '⚠️ Drawing Measurement: Enter a measurement dimension (e.g. 10, 12.5, 3 1/2, or 12\'-6").',
+        errorText: 'Enter a measurement, such as 5 m or 12\'-6".',
         btn: dom.btnRunConverter
       });
       if (dom.converterInputVal) dom.converterInputVal.classList.add('input-error');
-      if (state.lastValidConverter) {
-        if (dom.converterResultVal) dom.converterResultVal.textContent = state.lastValidConverter.val;
-        if (dom.converterResultUnit) dom.converterResultUnit.textContent = state.lastValidConverter.unit;
-      }
+      if (dom.converterResultVal) dom.converterResultVal.textContent = '—';
+      if (dom.converterExplanation) dom.converterExplanation.textContent = '';
       return;
     }
 
@@ -35486,18 +35968,13 @@ function createConverterView(context) {
       setUnifiedResultState({
         toolPrefix: 'converter',
         status: 'error',
-        errorText: `⚠️ Drawing Measurement: Enter a positive dimension greater than zero (${parseRes.error || 'e.g. 10, 12.5, 3 1/2'}).`,
+        errorText: `Enter a positive measurement (${parseRes.error || 'for example, 5 m'}).`,
         btn: dom.btnRunConverter
       });
       if (dom.converterInputVal) dom.converterInputVal.classList.add('input-error');
 
-      // Preserve previous valid result if available
-      if (state.lastValidConverter) {
-        if (dom.converterResultVal) dom.converterResultVal.textContent = state.lastValidConverter.val;
-        if (dom.converterResultUnit) dom.converterResultUnit.textContent = state.lastValidConverter.unit;
-      } else {
-        if (dom.converterResultVal) dom.converterResultVal.textContent = '---';
-      }
+      if (dom.converterResultVal) dom.converterResultVal.textContent = '—';
+      if (dom.converterExplanation) dom.converterExplanation.textContent = '';
       return;
     }
 
@@ -35528,6 +36005,7 @@ function createConverterView(context) {
       if (dom.converterResultUnit) {
         dom.converterResultUnit.textContent = state.converterOutputUnit;
       }
+      if (dom.converterExplanation) dom.converterExplanation.textContent = `${formatNumber(parseRes.value, state.precision)} ${state.converterInputUnit} ${state.direction === 'real_to_drawing' ? 'real size' : 'on the drawing'} at 1:${state.scaleRatio} becomes ${formattedVal} ${state.converterOutputUnit} ${state.direction === 'real_to_drawing' ? 'on paper' : 'in real life'}.`;
 
       // Update Secondary Architectural Readout
       if (dom.converterSecondaryReadout) {
@@ -35621,18 +36099,6 @@ function createConverterView(context) {
     state.converterInputUnit = prevOutUnit;
     state.converterOutputUnit = prevInUnit;
 
-    if (state.direction === 'drawing_to_real') {
-      if (dom.converterInputBadge) dom.converterInputBadge.textContent = 'Drawing Measurement (Paper)';
-      if (dom.converterOutputBadge) dom.converterOutputBadge.textContent = 'Real-World Dimension';
-      if (dom.converterFlowFrom) dom.converterFlowFrom.textContent = '📐 Paper Drawing';
-      if (dom.converterFlowTo) dom.converterFlowTo.textContent = '🏛️ Real-World Site';
-    } else {
-      if (dom.converterInputBadge) dom.converterInputBadge.textContent = 'Real-World Dimension';
-      if (dom.converterOutputBadge) dom.converterOutputBadge.textContent = 'Drawing Measurement (Paper)';
-      if (dom.converterFlowFrom) dom.converterFlowFrom.textContent = '🏛️ Real-World Site';
-      if (dom.converterFlowTo) dom.converterFlowTo.textContent = '📐 Paper Drawing';
-    }
-
     AudioService.playSwapSound();
     calculateConverter();
   }
@@ -35644,7 +36110,7 @@ function createConverterView(context) {
       calculateConverter();
     },
     getController() {
-      return { calculateConverter, swapDirection, renderEquivalentsBreakdown };
+      return { calculateConverter, swapDirection, renderEquivalentsBreakdown, syncConverterDirectionUI: () => syncConverterDirectionUI(state, dom) };
     }
   };
 }
@@ -40847,366 +41313,6 @@ function createProjectsView(context) {
 
 
   // =========================================================================
-  // MODULE: StudioRibbon
-  // =========================================================================
-
-/**
- * Architecture Helping Hand - Top Ribbon Bar Component
- * Unified consolidated header merging Persona Switcher and Ribbon Tabs,
- * with streamlined panel cards and hover flyouts.
- */
-
-
-
-
-
-function renderStudioRibbon(container, options = {}) {
-  if (!container) return;
-
-  const currentPersona = options.activePersona || 'studio';
-  const currentTabId = options.activeRibbonTab || PERSONA_RIBBON_CONFIGS[currentPersona]?.tabs[0]?.id || 'home';
-  const activeToolId = options.activeToolId || 'select';
-
-  const personaConfig = PERSONA_RIBBON_CONFIGS[currentPersona] || PERSONA_RIBBON_CONFIGS.studio;
-  const tabs = personaConfig.tabs || [];
-  const currentTab = tabs.find(t => t.id === currentTabId) || tabs[0] || { id: 'home', label: 'Home', panels: [] };
-
-  const personaKeys = Object.keys(STUDIO_PERSONAS);
-
-  let html = `
-    <div class="studio-ribbon-bar">
-      <!-- Unified Header: Persona Switcher (Left) + Ribbon Suite Tabs (Right) -->
-      <div class="studio-ribbon-header">
-        <div class="persona-pill-group" role="tablist" aria-label="Software Persona Switcher">
-          ${personaKeys.map(k => {
-            const p = STUDIO_PERSONAS[k];
-            const isActive = k === currentPersona;
-            return `
-              <button type="button" class="persona-pill-btn ${isActive ? 'active' : ''}" data-persona="${p.id}" title="${p.name} — ${p.description}">
-                <span class="persona-icon">${personaIcon(p.id, { size: 14 })}</span>
-                <span class="persona-label">${p.shortLabel}</span>
-              </button>
-            `;
-          }).join('')}
-        </div>
-
-        <div class="ribbon-header-divider" aria-hidden="true"></div>
-
-        <div class="studio-ribbon-tabs" role="tablist" aria-label="Ribbon Tabs">
-          ${tabs.map(tab => {
-            const isTabActive = tab.id === currentTab.id;
-            return `
-              <button type="button" class="ribbon-tab-btn ${isTabActive ? 'active' : ''}" data-ribbon-tab="${tab.id}">
-                ${tab.label}
-              </button>
-            `;
-          }).join('')}
-        </div>
-      </div>
-
-      <!-- Ribbon Panels Area -->
-      <div class="studio-ribbon-panels-wrap">
-        ${(currentTab.panels || []).map(panel => {
-          return `
-            <div class="ribbon-panel-card" data-panel-id="${panel.id}">
-              <div class="ribbon-panel-body">
-                ${panel.tools.map(toolId => {
-                  const tool = STUDIO_TOOL_CATALOG.find(t => t.id === toolId);
-                  if (!tool) return '';
-                  const isActive = tool.id === activeToolId;
-                  const hasFlyout = Array.isArray(tool.flyout) && tool.flyout.length > 0;
-                  const isPlanned = PLANNED_TOOLS.has(tool.id);
-                  return `
-                    <div class="ribbon-tool-wrap ${hasFlyout ? 'has-flyout' : ''} ${isPlanned ? 'planned-tool' : ''}">
-                      <button type="button" class="ribbon-tool-btn ${isActive ? 'active' : ''} ${isPlanned ? 'planned' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}${isPlanned ? ' — PLANNED (not implemented yet)' : ''}">
-                        <span class="ribbon-tool-icon">${toolIcon(tool, { size: 20 })}</span>
-                        <span class="ribbon-tool-name">${tool.name}</span>
-                        ${tool.shortcut ? `<kbd class="ribbon-tool-kbd">${tool.shortcut}</kbd>` : ''}
-                        ${hasFlyout ? `<span class="flyout-arrow">▾</span>` : ''}
-                      </button>
-                      ${hasFlyout ? `
-                        <div class="ribbon-flyout-popover" style="display: none;">
-                          ${tool.flyout.map(sub => `
-                            <button type="button" class="flyout-item-btn" data-tool="${sub.id}">
-                              <span class="flyout-item-icon">${toolIcon(sub, { size: 14 })}</span>
-                              <span class="flyout-item-name">${sub.name}</span>
-                              ${sub.shortcut ? `<kbd class="flyout-item-kbd">${sub.shortcut}</kbd>` : ''}
-                            </button>
-                          `).join('')}
-                        </div>
-                      ` : ''}
-                    </div>
-                  `;
-                }).join('')}
-              </div>
-              <div class="ribbon-panel-footer">${panel.title}</div>
-            </div>
-          `;
-        }).join('')}
-      </div>
-    </div>
-  `;
-
-  container.innerHTML = html;
-
-  // Event wiring
-  container.querySelectorAll('.persona-pill-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const persona = btn.dataset.persona;
-      if (typeof options.onSelectPersona === 'function') {
-        options.onSelectPersona(persona);
-      }
-    });
-  });
-
-  container.querySelectorAll('.ribbon-tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tabId = btn.dataset.ribbonTab;
-      if (typeof options.onSelectRibbonTab === 'function') {
-        options.onSelectRibbonTab(tabId);
-      }
-    });
-  });
-
-  container.querySelectorAll('.ribbon-tool-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const toolId = btn.dataset.tool;
-      if (typeof options.onSelectTool === 'function') {
-        options.onSelectTool(toolId);
-      }
-    });
-  });
-
-  // Flyout popover toggle
-  container.querySelectorAll('.ribbon-tool-wrap.has-flyout').forEach(wrap => {
-    const popover = wrap.querySelector('.ribbon-flyout-popover');
-    const arrow = wrap.querySelector('.flyout-arrow');
-    if (popover && arrow) {
-      arrow.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const isShown = popover.style.display !== 'none';
-        container.querySelectorAll('.ribbon-flyout-popover').forEach(p => p.style.display = 'none');
-        popover.style.display = isShown ? 'none' : 'flex';
-      });
-    }
-
-    wrap.querySelectorAll('.flyout-item-btn').forEach(fBtn => {
-      fBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        popover.style.display = 'none';
-        const subId = fBtn.dataset.tool;
-        if (typeof options.onSelectTool === 'function') {
-          options.onSelectTool(subId);
-        }
-      });
-    });
-  });
-}
-
-
-  // =========================================================================
-  // MODULE: StudioPalette
-  // =========================================================================
-
-/**
- * Architecture Helping Hand - Left Vertical Tool Palette Component
- * Sleek 2-column iconic CAD toolstrip with live search, flyouts, and dual-tier guidance integration.
- */
-
-
-
-
-
-function renderStudioPalette(container, options = {}) {
-  if (!container) return;
-
-  const currentPersona = options.activePersona || 'studio';
-  const activeToolId = options.activeToolId || 'select';
-
-  // Filter tools for current persona (or 'all')
-  const personaTools = STUDIO_TOOL_CATALOG.filter(t =>
-    t.personas.includes(currentPersona) || t.personas.includes('all')
-  );
-
-  // Group by category
-  const categoriesPresent = TOOL_CATEGORIES.filter(cat =>
-    personaTools.some(t => t.category === cat.id)
-  );
-
-  let html = `
-    <div class="studio-vertical-toolstrip iconic-toolstrip">
-      <!-- Universal Tool Search Header -->
-      <div class="palette-search-wrap">
-        <div class="palette-search-input-box" title="Search tools by name, hotkey or command (e.g. 'stair', 'W', 'loft')">
-          <span class="search-icon">${icon("search", { size: 14 })}</span>
-          <input type="text" id="palette-tool-search" class="palette-search-input" placeholder="Find…" autocomplete="off" spellcheck="false" />
-        </div>
-        <div id="palette-search-results" class="palette-search-dropdown" style="display: none;"></div>
-      </div>
-
-      <!-- 2-Column Iconic Tools Grid -->
-      <div class="palette-categories-scroll iconic-scroll">
-        ${categoriesPresent.map(cat => {
-          const toolsInCat = personaTools.filter(t => t.category === cat.id);
-          if (toolsInCat.length === 0) return '';
-          return `
-            <div class="palette-category-group iconic-group" data-category="${cat.id}">
-              <div class="palette-category-divider" title="${cat.name}">
-                <span class="divider-icon">${categoryIcon(cat.id, { size: 14 })}</span>
-              </div>
-              <div class="palette-tools-grid iconic-grid">
-                ${toolsInCat.map(tool => {
-                  const isActive = tool.id === activeToolId;
-                  const hasFlyout = Array.isArray(tool.flyout) && tool.flyout.length > 0;
-                  const isPlanned = PLANNED_TOOLS.has(tool.id);
-                  let badge = tool.shortcut || (tool.commandAlias ? tool.commandAlias.slice(0, 3) : '');
-                  if (badge === 'Space+Drag') badge = 'Pan';
-                  if (badge === 'Z+E') badge = 'ZE';
-                  if (badge === 'Shift+R') badge = '';
-                  if (isPlanned) badge = '⏳';
-                  const plannedTitle = isPlanned ? ' — PLANNED (not implemented yet)' : '';
-                  return `
-                    <div class="palette-tool-wrapper iconic-wrapper ${hasFlyout ? 'has-flyout' : ''} ${isPlanned ? 'planned-tool' : ''}">
-                      <button type="button" class="palette-tool-btn iconic-tool-btn ${isActive ? 'active' : ''} ${isPlanned ? 'planned' : ''}" data-tool="${tool.id}" title="${tool.name} (${tool.shortcut || tool.commandAlias || ''}) — ${tool.description}${plannedTitle}">
-                        <span class="tool-icon">${toolIcon(tool, { size: 18 })}</span>
-                        ${badge ? `<kbd class="tool-badge">${badge}</kbd>` : ''}
-                        ${hasFlyout ? `<span class="tool-flyout-indicator">▾</span>` : ''}
-                      </button>
-                      ${hasFlyout ? `
-                        <div class="palette-flyout-menu iconic-flyout-menu" style="display: none;">
-                          ${tool.flyout.map(sub => `
-                            <button type="button" class="flyout-sub-btn ${PLANNED_TOOLS.has(sub.id) ? 'planned' : ''}" data-tool="${sub.id}" title="${sub.name}${PLANNED_TOOLS.has(sub.id) ? ' — PLANNED' : ''}">
-                              <span class="sub-icon">${toolIcon(sub, { size: 14 })}</span>
-                              <span class="sub-label">${sub.name}</span>
-                              ${sub.shortcut ? `<kbd class="sub-kbd">${sub.shortcut}</kbd>` : ''}
-                            </button>
-                          `).join('')}
-                        </div>
-                      ` : ''}
-                    </div>
-                  `;
-                }).join('')}
-              </div>
-            </div>
-          `;
-        }).join('')}
-      </div>
-    </div>
-  `;
-
-  container.innerHTML = html;
-
-  // Search input handler
-  const searchInput = container.querySelector('#palette-tool-search');
-  const searchResults = container.querySelector('#palette-search-results');
-
-  if (searchInput && searchResults) {
-    searchInput.addEventListener('input', (e) => {
-      const q = e.target.value.trim();
-      if (!q) {
-        searchResults.style.display = 'none';
-        searchResults.innerHTML = '';
-        return;
-      }
-      const matches = searchStudioTools(q, { persona: currentPersona });
-      if (matches.length === 0) {
-        const safeQ = q.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-        searchResults.innerHTML = `<div class="search-empty-hint">No tools found matching "${safeQ}"</div>`;
-        searchResults.style.display = 'block';
-        return;
-      }
-
-      searchResults.innerHTML = matches.map(m => `
-        <button type="button" class="search-result-item" data-tool="${m.id}" data-is-tab="${m.isRibbonTab ? '1' : '0'}" data-tab-id="${m.tabId || ''}" data-persona-id="${m.personaId || ''}" data-is-cat="${m.isCategory ? '1' : '0'}" data-cat-id="${m.categoryId || ''}">
-          <span class="search-item-icon">${m.icon}</span>
-          <div class="search-item-details">
-            <div class="search-item-title-row">
-              <span class="search-item-name">${m.name}</span>
-              ${m.shortcut ? `<kbd class="search-item-kbd">${m.shortcut}</kbd>` : ''}
-            </div>
-            <span class="search-item-cat">${m.categoryIcon || '📁'} ${m.categoryName || 'Tools'}${m.commandAlias ? ` · [${m.commandAlias}]` : ''}</span>
-          </div>
-        </button>
-      `).join('');
-      searchResults.style.display = 'block';
-
-      searchResults.querySelectorAll('.search-result-item').forEach(itemBtn => {
-        itemBtn.addEventListener('click', () => {
-          const isTab = itemBtn.dataset.isTab === '1';
-          const isCat = itemBtn.dataset.isCat === '1';
-          searchResults.style.display = 'none';
-          searchInput.value = '';
-
-          if (isTab) {
-            const tabId = itemBtn.dataset.tabId;
-            const pId = itemBtn.dataset.personaId;
-            if (typeof options.onSelectRibbonTab === 'function') {
-              options.onSelectRibbonTab(tabId, pId);
-            }
-          } else if (isCat) {
-            const catId = itemBtn.dataset.catId;
-            const catSection = container.querySelector(`.palette-category-group[data-category="${catId}"]`);
-            if (catSection) {
-              catSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
-          } else {
-            const toolId = itemBtn.dataset.tool;
-            if (typeof options.onSelectTool === 'function') {
-              options.onSelectTool(toolId);
-            }
-          }
-        });
-      });
-    });
-
-    // Close search dropdown on click outside
-    document.addEventListener('click', (e) => {
-      if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
-        searchResults.style.display = 'none';
-      }
-    });
-  }
-
-  // Tool buttons
-  container.querySelectorAll('.palette-tool-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const toolId = btn.dataset.tool;
-      if (typeof options.onSelectTool === 'function') {
-        options.onSelectTool(toolId);
-      }
-    });
-  });
-
-  // Flyout menus
-  container.querySelectorAll('.palette-tool-wrapper.has-flyout').forEach(wrap => {
-    const flyout = wrap.querySelector('.palette-flyout-menu');
-    const indicator = wrap.querySelector('.tool-flyout-indicator');
-    if (flyout && indicator) {
-      indicator.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const isOpen = flyout.style.display !== 'none';
-        container.querySelectorAll('.palette-flyout-menu').forEach(m => m.style.display = 'none');
-        flyout.style.display = isOpen ? 'none' : 'flex';
-      });
-    }
-
-    wrap.querySelectorAll('.flyout-sub-btn').forEach(sBtn => {
-      sBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        flyout.style.display = 'none';
-        const subId = sBtn.dataset.tool;
-        if (typeof options.onSelectTool === 'function') {
-          options.onSelectTool(subId);
-        }
-      });
-    });
-  });
-}
-
-
-  // =========================================================================
   // MODULE: ToolGuides
   // =========================================================================
 
@@ -41985,7 +42091,7 @@ const WORKFLOW_GUIDES = Object.freeze({
   projects: ['Projects', 'Save, open, duplicate and back up project data.', 'Keep research, site findings and design decisions together.', 'At the start of work and before moving devices.', 'Create a named project, save it, take snapshots before major changes, and export JSON backups.', 'Duplicate a library project to explore a new concept while keeping the original evidence.'],
   dimensions: ['Dimensions', 'Quick measurements, named schedules, dimension chains and scale comparisons.', 'Keep related measurements together and avoid repeated conversion.', 'During surveying, setting out and preparation of CAD schedules.', 'Choose Quick, Schedule, Chain or Compare Scales. Enter units or expressions. Review totals, then copy or export.', 'Chain: 1200 + 1800 + 900 + 1500 mm gives setting-out coordinates 0, 1200, 3000, 3900, 5400 mm.'],
   converter: ['Scale', 'Convert between real dimensions and dimensions on paper.', 'Relate a drawing measurement to a full-size design value.', 'When reading scaled drawings or planning a sheet.', 'Choose direction, scale and units; enter a dimension; copy the result.', 'A 5 m wall at 1:50 is 100 mm on paper. CAD model geometry stays 5000 mm.'],
-  furniture: ['Space & Furniture', 'Search planning footprints and download recognizable top-view CAD assets.', 'Test room capacity and communicate furniture dimensions.', 'During early spatial planning before choosing a manufacturer.', 'Search by use or object; choose category and subcategory; inspect dimensions; download DXF or SVG at 1:1.', 'Search hospital bed, download a full-size asset, then verify clinical working space with the project brief.'],
+  furniture: ['Architectural Object Library', 'Find architectural objects, edit their physical size, and download full-size CAD symbols.', 'Test room capacity and communicate object dimensions.', 'During spatial planning before choosing a manufacturer.', 'Choose a collection or search. Open Edit Size, change millimeters, inspect the live preview, then download DXF or SVG at 1:1. More information shows paper size and reference clearance.', 'Resize a hospital bed to 1100 × 2400 mm; its DXF stays full-size while the 1:50 paper readout is 22 × 48 mm.'],
   research_dashboard: ['Research', 'Project sections, evidence-linked findings, interpretations and notes.', 'Make design decisions traceable to their evidence.', 'Before design and whenever assumptions change.', 'Enable sections, add sources, write findings and cite source IDs. Ask AI for a draft, review it, then accept it.', 'A climate finding links to a climate dataset; shading remains a design recommendation.'],
   research_library: ['Sources', 'A project library of references and precedents.', 'Preserve provenance and revisit original material.', 'Whenever recording a sourced finding or image.', 'Enter title and URL, publisher, author and dates. Add a summary and verification status.', 'Record a precedent with its architect, publication date and project-specific takeaway.'],
   site_dashboard: ['Site Analysis', 'An analysis checklist linking observations to interpretations and design responses.', 'Turn site conditions into actionable design drivers.', 'After visiting the site or obtaining surveys, maps and climate records.', 'Choose an analysis. Record data, visual and sources, then write an interpretation and design implication.', 'Western exposure → possible afternoon overheating → consider shade, fins or a vegetation buffer.'],
@@ -42015,557 +42121,6 @@ function getWorkflowGuide(toolId) {
     return { name: existing.name, what: existing.desc, why: existing.proTip, when: 'During design development.', how: existing.usage.join(' '), example: existing.standards, autocad: 'Use verified values in model units.', rhino: 'Use model units for guides and geometry.', sketchup: 'Enter values with explicit units.', other: 'Verify local code and source provenance.' };
   }
   return { name: entry[0], what: entry[1], why: entry[2], when: entry[3], how: entry[4], example: entry[5], autocad: 'Draft at full size. Use model-space dimensions, blocks and setting-out coordinates; choose print scale in layouts.', rhino: 'Check model units. Use Move, Offset, Array and guides with real dimensions; import DXF where supported.', sketchup: 'Use Tape Measure guides and dimensioned components. SVG/DXF import depends on your edition or extensions.', other: 'Use QGIS for verified spatial data and Google Earth for context. Record map/image attribution. General planning guidance requires local-code verification.' };
-}
-
-
-  // =========================================================================
-  // MODULE: StudioTooltip
-  // =========================================================================
-
-/**
- * Architecture Helping Hand - Dual-Tier Tool Guidance System
- * Provides:
- * 1. Tier 1: Floating cursor-following smart card popover near hovered tool
- *    ("What is it?" + "How to use it 1-2-3")
- * 2. Tier 2: Permanent Architectural Standards Inspector card in C-Panels
- *    (IBC / ADA Building codes, formulas, cavity wall thicknesses, and pro tips)
- */
-
-
-
-
-
-let activePopoverEl = null;
-let popoverTimeout = null;
-
-/**
- * Initializes the Dual-Tier Tool Guidance System
- * Attaches event listeners to ribbon buttons, toolstrip buttons, and HUD controls.
- */
-function initToolGuidance(container) {
-  if (!container) return;
-
-  // Ensure Tier 1 Popover DOM exists
-  let popover = document.getElementById('studio-tool-popover');
-  if (!popover) {
-    popover = document.createElement('div');
-    popover.id = 'studio-tool-popover';
-    popover.className = 'studio-tool-popover';
-    popover.style.display = 'none';
-    document.body.appendChild(popover);
-  }
-  activePopoverEl = popover;
-
-  const toolSelectors = [
-    '.ribbon-tool-btn',
-    '.palette-tool-btn',
-    '.iconic-tool-btn',
-    '.hud-btn',
-    '[data-tool]'
-  ];
-
-  const elements = container.querySelectorAll(toolSelectors.join(', '));
-  elements.forEach(btn => {
-    btn.addEventListener('mouseenter', (e) => {
-      const toolId = btn.dataset.tool;
-      if (!toolId) return;
-      showToolPopover(e, toolId);
-      updateInspectorGuide(toolId);
-    });
-
-    btn.addEventListener('mouseleave', () => {
-      hideToolPopover();
-    });
-
-    btn.addEventListener('mousemove', (e) => {
-      positionPopoverNearMouse(e);
-    });
-  });
-}
-
-/**
- * Shows Tier 1 Floating Popover near the mouse cursor
- */
-function showToolPopover(e, toolId) {
-  if (!activePopoverEl) return;
-  clearTimeout(popoverTimeout);
-
-  const guide = getToolGuide(toolId);
-
-  activePopoverEl.innerHTML = `
-    <div class="popover-header">
-      <span class="popover-icon">${guide.icon}</span>
-      <div class="popover-title-group">
-        <span class="popover-title">${guide.name}</span>
-        ${guide.shortcut ? `<span class="popover-badge"><kbd>${guide.shortcut}</kbd></span>` : ''}
-      </div>
-    </div>
-    <div class="popover-section">
-      <span class="popover-sublabel">WHAT IS IT?</span>
-      <p class="popover-desc">${guide.desc}</p>
-    </div>
-    <div class="popover-section">
-      <span class="popover-sublabel">HOW TO USE IT:</span>
-      <ol class="popover-steps">
-        ${guide.usage.map(step => `<li>${step}</li>`).join('')}
-      </ol>
-    </div>
-    ${guide.standards ? `
-      <div class="popover-section standards">
-        <span class="popover-sublabel">📐 STANDARD / CODE:</span>
-        <p class="popover-code">${guide.standards}</p>
-      </div>
-    ` : ''}
-  `;
-
-  popoverTimeout = setTimeout(() => {
-    if (activePopoverEl) {
-      activePopoverEl.style.display = 'block';
-      positionPopoverNearMouse(e);
-    }
-  }, 120);
-}
-
-/**
- * Hides Tier 1 Floating Popover
- */
-function hideToolPopover() {
-  clearTimeout(popoverTimeout);
-  if (activePopoverEl) {
-    activePopoverEl.style.display = 'none';
-  }
-}
-
-/**
- * Positions Tier 1 popover near cursor, keeping it within viewport boundaries
- */
-function positionPopoverNearMouse(e) {
-  if (!activePopoverEl || activePopoverEl.style.display === 'none') return;
-
-  const pad = 16;
-  let x = e.clientX + pad;
-  let y = e.clientY + pad;
-
-  const rect = activePopoverEl.getBoundingClientRect();
-  const winW = window.innerWidth;
-  const winH = window.innerHeight;
-
-  if (x + rect.width > winW - 12) {
-    x = e.clientX - rect.width - pad;
-  }
-  if (y + rect.height > winH - 12) {
-    y = e.clientY - rect.height - pad;
-  }
-  if (x < 12) x = 12;
-  if (y < 12) y = 12;
-
-  activePopoverEl.style.left = `${x}px`;
-  activePopoverEl.style.top = `${y}px`;
-}
-
-/**
- * Updates Tier 2 Dedicated Permanent Inspector Card in Right C-Panels
- */
-function updateInspectorGuide(toolId) {
-  const guideCard = document.getElementById('cpanel-tool-guide-card');
-  if (!guideCard) return;
-
-  const guide = getToolGuide(toolId);
-
-  guideCard.innerHTML = `
-    <div class="tool-guide-header">
-      <div class="guide-title-row">
-        <span class="guide-icon">${guide.icon}</span>
-        <span class="guide-name">${guide.name}</span>
-      </div>
-      ${guide.shortcut ? `<span class="guide-shortcut"><kbd>${guide.shortcut}</kbd></span>` : ''}
-    </div>
-
-    <div class="tool-guide-body">
-      <div class="guide-block">
-        <span class="guide-label">PURPOSE</span>
-        <p class="guide-text">${guide.desc}</p>
-      </div>
-
-      <div class="guide-block">
-        <span class="guide-label">WORKFLOW</span>
-        <div class="guide-steps">
-          ${guide.usage.map((step, i) => `
-            <div class="guide-step-item">
-              <span class="step-num">${i + 1}</span>
-              <span class="step-text">${step}</span>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-
-      <div class="guide-block standards-block">
-        <span class="guide-label">IBC / ADA BUILDING STANDARD</span>
-        <p class="guide-code">${guide.standards}</p>
-      </div>
-
-      <div class="guide-block protip-block">
-        <span class="guide-label">PRO ARCHITECT TIP</span>
-        <p class="guide-protip">💡 ${guide.proTip}</p>
-      </div>
-    </div>
-  `;
-}
-
-
-  // =========================================================================
-  // MODULE: StudioCPanels
-  // =========================================================================
-
-/**
- * Architecture Helping Hand - Right C-Panels & Containers Component
- * Rhino/AutoCAD style dockable side-panel container (Properties, Layers, Validation, Detailing).
- * Includes Tier 2 Permanent Architectural Standards & Guidance Inspector.
- */
-
-
-
-function renderStudioCPanels(container, options = {}) {
-  if (!container) return;
-
-  const activeTab = options.activePanelTab || 'properties';
-  const selectedEntity = options.selectedEntity || null;
-  const entityCount = options.entityCount || 0;
-  const layerCount = options.layerCount || 10;
-  const activeToolId = options.activeToolId || 'select';
-
-  let html = `
-    <div class="studio-cpanels-container">
-      <!-- C-Panel Header Navigation Tabs (Compact & Responsive - Zero Text Overflow) -->
-      <div class="cpanels-tab-bar" role="tablist">
-        <button type="button" class="cpanel-tab-btn ${activeTab === 'properties' ? 'active' : ''}" data-panel-tab="properties" title="Object Properties Inspector">
-          <span class="cpanel-tab-icon">📋</span>
-          <span class="cpanel-tab-text">Props</span>
-        </button>
-        <button type="button" class="cpanel-tab-btn ${activeTab === 'layers' ? 'active' : ''}" data-panel-tab="layers" title="CAD Layers & Materials (${layerCount})">
-          <span class="cpanel-tab-icon">🗂️</span>
-          <span class="cpanel-tab-text">Layers</span>
-        </button>
-        <button type="button" class="cpanel-tab-btn ${activeTab === 'validation' ? 'active' : ''}" data-panel-tab="validation" title="Space Planning & IBC Code Compliance">
-          <span class="cpanel-tab-icon">✓</span>
-          <span class="cpanel-tab-text">Code</span>
-        </button>
-        <button type="button" class="cpanel-tab-btn ${activeTab === 'details' ? 'active' : ''}" data-panel-tab="details" title="Construction Details & Keynotes">
-          <span class="cpanel-tab-icon">🔍</span>
-          <span class="cpanel-tab-text">Details</span>
-        </button>
-        <button type="button" class="cpanel-tab-btn ${activeTab === 'constraints' ? 'active' : ''}" data-panel-tab="constraints" title="Deterministic Constraints — diagnose & satisfy">
-          <span class="cpanel-tab-icon">🔗</span>
-          <span class="cpanel-tab-text">Constr</span>
-        </button>
-        <button type="button" class="cpanel-tab-btn ${activeTab === 'transform' ? 'active' : ''}" data-panel-tab="transform" title="Transform — precise numeric position & size">
-          <span class="cpanel-tab-icon">⤢</span>
-          <span class="cpanel-tab-text">Xform</span>
-        </button>
-      </div>
-
-      <!-- C-Panel Content Body -->
-      <div class="cpanel-content-body">
-        <!-- 1. Properties Inspector -->
-        <div class="cpanel-pane ${activeTab === 'properties' ? 'active' : ''}" id="cpanel-pane-properties">
-          ${selectedEntity ? `
-            <div class="cpanel-section-title">
-              <span>${selectedEntity.kind.toUpperCase()} PROPERTIES</span>
-              <span class="cpanel-id-badge">${selectedEntity.id}</span>
-            </div>
-            <div class="cpanel-props-table">
-              <div class="cpanel-prop-row">
-                <span class="prop-key">Name</span>
-                <span class="prop-val">${selectedEntity.name || '—'}</span>
-              </div>
-              <div class="cpanel-prop-row">
-                <span class="prop-key">Kind</span>
-                <span class="prop-val">${selectedEntity.kind}</span>
-              </div>
-              <div class="cpanel-prop-row">
-                <span class="prop-key">Layer</span>
-                <span class="prop-val">${selectedEntity.layerId || 'A-WALL'}</span>
-              </div>
-              ${typeof selectedEntity.width === 'number' ? `
-                <div class="cpanel-prop-row">
-                  <span class="prop-key">Width</span>
-                  <span class="prop-val">${selectedEntity.width.toFixed(2)} m</span>
-                </div>
-              ` : ''}
-              ${(typeof selectedEntity.depth === 'number' || typeof selectedEntity.run === 'number') ? `
-                <div class="cpanel-prop-row">
-                  <span class="prop-key">Length / Run</span>
-                  <span class="prop-val">${(typeof selectedEntity.depth === 'number' ? selectedEntity.depth : selectedEntity.run ?? 0).toFixed(2)} m</span>
-                </div>
-              ` : ''}
-              ${selectedEntity.kind === 'stair' ? `
-                <div class="cpanel-prop-row">
-                  <span class="prop-key">Risers</span>
-                  <span class="prop-val">${selectedEntity.risers || 16}R @ ${(selectedEntity.riserHeight * 1000 || 175).toFixed(1)} mm</span>
-                </div>
-                <div class="cpanel-prop-row">
-                  <span class="prop-key">Blondel 2R+T</span>
-                  <span class="prop-val">${Math.round((selectedEntity.blondel || 0.63) * 1000)} mm (${selectedEntity.isCompliant ? '✅ IBC Pass' : '⚠️ Review'})</span>
-                </div>
-              ` : ''}
-            </div>
-          ` : `
-            <div class="cpanel-empty-state">
-              <span class="empty-icon">➤</span>
-              <p>No entity selected</p>
-              <span class="empty-hint">Click any entity on the drawing canvas to inspect and edit properties. (${entityCount} total entities)</span>
-            </div>
-          `}
-        </div>
-
-        <!-- 2. Layers Manager -->
-        <div class="cpanel-pane ${activeTab === 'layers' ? 'active' : ''}" id="cpanel-pane-layers">
-          <div class="cpanel-section-title">
-            <span>CAD LAYERS</span>
-            <button type="button" class="btn btn-xs btn-outline" id="cpanel-auto-tag-btn">🏷️ Auto-Tag</button>
-          </div>
-          <div id="cpanel-layers-target" class="cpanel-layers-list">
-            <!-- Populated from state CAD layers -->
-          </div>
-        </div>
-
-        <!-- 3. Space Planning & Code Validation -->
-        <div class="cpanel-pane ${activeTab === 'validation' ? 'active' : ''}" id="cpanel-pane-validation">
-          <div class="cpanel-section-title">
-            <span>IBC CODE & AREA METRICS</span>
-          </div>
-          <div class="cpanel-validation-metrics">
-            <div class="metric-card">
-              <span class="metric-num" id="cpanel-metric-gross-area">—</span>
-              <span class="metric-lbl">Total Gross Area</span>
-            </div>
-            <div class="metric-card">
-              <span class="metric-num" id="cpanel-metric-rooms-count">—</span>
-              <span class="metric-lbl">Rooms & Zones</span>
-            </div>
-          </div>
-          <div class="cpanel-code-checklist">
-            ${(options.codeChecks && options.codeChecks.length ? options.codeChecks : [
-              { label: 'IBC Headroom Clearance (≥ 2.0m)', status: 'unknown', detail: 'No stairs/ramps in this document' },
-              { label: 'Egress Corridor Width (≥ 1.10m)', status: 'unknown', detail: 'No corridor rooms named' },
-              { label: 'Stair Blondel 2R+T Compliance', status: 'unknown', detail: 'No stairs in this document' }
-            ]).map(check => {
-              const cls = check.status === 'pass' ? 'pass' : check.status === 'fail' ? 'fail' : 'unknown';
-              const icon = check.status === 'pass' ? '✅' : check.status === 'fail' ? '❌' : '—';
-              return `
-            <div class="checklist-item ${cls}" title="${check.detail || ''}">
-              <span class="check-icon">${icon}</span>
-              <span class="check-text">${check.label}${check.detail ? ` <small style="color: var(--text-muted);">· ${check.detail}</small>` : ''}</span>
-            </div>`;
-            }).join('')}
-          </div>
-        </div>
-
-        <!-- 4. Construction Detailing -->
-        <div class="cpanel-pane ${activeTab === 'details' ? 'active' : ''}" id="cpanel-pane-details">
-          <div class="cpanel-section-title">
-            <span>CONSTRUCTION DETAILS</span>
-          </div>
-          <p class="cpanel-desc">Parametric standard assemblies linked to plan callouts:</p>
-          <div class="cpanel-detail-links">
-            <div class="detail-link-card" data-detail-key="footing">
-              <span class="detail-icon">🧱</span>
-              <div class="detail-meta">
-                <span class="detail-title">Strip Footing & Stem Wall</span>
-                <span class="detail-sub">Scale 1:10 · Rebar & Drain Tile</span>
-              </div>
-            </div>
-            <div class="detail-link-card" data-detail-key="parapet">
-              <span class="detail-icon">🏛️</span>
-              <div class="detail-meta">
-                <span class="detail-title">Roof Parapet & Coping</span>
-                <span class="detail-sub">Scale 1:10 · EPDM & Insulation</span>
-              </div>
-            </div>
-            <div class="detail-link-card" data-detail-key="window_sill">
-              <span class="detail-icon">🪟</span>
-              <div class="detail-meta">
-                <span class="detail-title">Window Sill Cavity Wall</span>
-                <span class="detail-sub">Scale 1:5 · Stone Sill & Flashing</span>
-              </div>
-            </div>
-            <div class="detail-link-card" data-detail-key="stair_nosing">
-              <span class="detail-icon">🪜</span>
-              <div class="detail-meta">
-                <span class="detail-title">Stair Nosing & Baluster</span>
-                <span class="detail-sub">Scale 1:5 · Carborundum & Post</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 5. Constraints (deterministic) -->
-        <div class="cpanel-pane ${activeTab === 'constraints' ? 'active' : ''}" id="cpanel-pane-constraints">
-          <div class="cpanel-section-title">
-            <span>CONSTRAINTS</span>
-            <span class="cpanel-id-badge" id="cpanel-constraint-count">${(options.constraints && options.constraints.length) || 0}</span>
-          </div>
-          <div id="cpanel-constraint-list" class="cpanel-constraint-list">
-            ${(options.constraints && options.constraints.length > 0) ? options.constraints.map(c => `
-              <div class="constraint-card status-${c.status || 'untested'}" data-constraint-id="${c.id}">
-                <div class="constraint-head">
-                  <span class="constraint-name">${c.label || c.type}</span>
-                  <span class="constraint-status status-${c.status || 'untested'}">${(c.status || 'untested').toUpperCase()}</span>
-                </div>
-                ${c.message ? `<div class="constraint-msg">${c.message}</div>` : ''}
-                <div class="constraint-targets">${(c.targetIds || []).join(' · ')}</div>
-                ${c.resolutions && c.resolutions.length ? `
-                  <div class="constraint-resolutions">
-                    ${c.resolutions.map(r => `<div>→ ${r}</div>`).join('')}
-                  </div>` : ''}
-                <div class="constraint-actions">
-                  <button type="button" class="btn btn-xs btn-outline" data-constraint-act="test" data-constraint-id="${c.id}">Diagnose</button>
-                  <button type="button" class="btn btn-xs btn-primary" data-constraint-act="solve" data-constraint-id="${c.id}">Satisfy</button>
-                  <button type="button" class="btn btn-xs btn-outline" data-constraint-act="remove" data-constraint-id="${c.id}">✕</button>
-                </div>
-              </div>
-            `).join('') : `
-              <div class="cpanel-empty-state">
-                <span class="empty-icon">🔗</span>
-                <p>No constraints on this document</p>
-                <span class="empty-hint">Select entities, then add a constraint below. Every constraint is one deterministic rule — conflicts never distort geometry.</span>
-              </div>
-            `}
-          </div>
-          ${options.constraintTargets && options.constraintTargets.length > 0 ? `
-            <div class="constraint-adder">
-              <div class="cpanel-section-title" style="margin-top: 0.5rem;">
-                <span>ADD ON SELECTION (${options.constraintTargets.length})</span>
-              </div>
-              <select id="cpanel-constraint-type" class="calc-input" style="width: 100%; font-size: 0.72rem; height: 26px;">
-                ${(options.constraintChoices || []).map(ch => `<option value="${ch.value}">${ch.label}</option>`).join('')}
-              </select>
-              <input type="number" id="cpanel-constraint-param" class="calc-input" placeholder="value (m)" step="0.05" min="0" style="width: 100%; font-size: 0.72rem; height: 26px; margin-top: 4px;" />
-              <button type="button" class="btn btn-xs btn-primary" id="cpanel-constraint-add" style="width: 100%; margin-top: 4px;">+ Add Constraint</button>
-            </div>
-          ` : ''}
-        </div>
-
-        <!-- 6. Transform — precise numeric control of the selection -->
-        <div class="cpanel-pane ${activeTab === 'transform' ? 'active' : ''}" id="cpanel-pane-transform">
-          <div class="cpanel-section-title"><span>TRANSFORM</span></div>
-          ${(options.transformRows && options.transformRows.length > 0) ? `
-            <div style="display: flex; flex-direction: column; gap: 0.3rem;">
-              ${options.transformRows.map(r => `
-                <div style="display: flex; align-items: center; gap: 6px;">
-                  <span style="font-size: 0.68rem; color: var(--text-secondary); min-width: 2.6em; font-family: var(--font-mono);" title="${r.title || ''}">${r.label}</span>
-                  <input type="number" class="calc-input xform-input" data-xform="${r.key}" value="${r.value}" step="${r.step || 0.1}"
-                    style="flex: 1; height: 24px; font-size: 0.72rem; padding: 0 6px; font-family: var(--font-mono);" />
-                  <span style="font-size: 0.62rem; color: var(--text-muted);">${r.unit || 'm'}</span>
-                </div>`).join('')}
-            </div>
-            <div style="font-size: 0.63rem; color: var(--text-muted); margin-top: 0.4rem; line-height: 1.35;">
-              Edit any value and press Enter to apply (undoable). Height applies to walls/solids; rotation spins about the selection center.
-            </div>
-          ` : `
-            <div class="cpanel-empty-state">
-              <span class="empty-icon">⤢</span>
-              <p>No selection</p>
-              <span class="empty-hint">Select any entity — its exact position, size, and rotation become editable numbers here.</span>
-            </div>
-          `}
-          ${options.cameraRows && options.cameraRows.length > 0 ? `
-            <div class="cpanel-section-title" style="margin-top: 0.6rem;"><span>3D CAMERA</span></div>
-            <div style="display: flex; flex-direction: column; gap: 0.3rem;">
-              ${options.cameraRows.map(r => `
-                <div style="display: flex; align-items: center; gap: 6px;">
-                  <span style="font-size: 0.68rem; color: var(--text-secondary); min-width: 2.6em; font-family: var(--font-mono);">${r.label}</span>
-                  <input type="number" class="calc-input xform-input" data-cam="${r.key}" value="${r.value}" step="${r.step || 1}"
-                    style="flex: 1; height: 24px; font-size: 0.72rem; padding: 0 6px; font-family: var(--font-mono);" />
-                  <span style="font-size: 0.62rem; color: var(--text-muted);">${r.unit || ''}</span>
-                </div>`).join('')}
-              <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
-                ${(options.cameraPresets || []).map(p => `<button type="button" class="btn btn-xs btn-outline" data-cam-shot="${p.id}" title="${p.title}">${p.label}</button>`).join('')}
-              </div>
-            </div>
-          ` : ''}
-        </div>
-      </div>
-
-      <!-- Tier 2: Dedicated Architectural Tool Guide & Standards Inspector -->
-      <div id="cpanel-tool-guide-card" class="cpanel-tool-guide-card">
-        <!-- Populated dynamically by updateInspectorGuide() -->
-      </div>
-    </div>
-  `;
-
-  container.innerHTML = html;
-
-  // Initialize Tier 2 Architectural Guide
-  updateInspectorGuide(activeToolId);
-
-  container.querySelectorAll('.cpanel-tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tab = btn.dataset.panelTab;
-      if (typeof options.onSelectPanelTab === 'function') {
-        options.onSelectPanelTab(tab);
-      }
-    });
-  });
-
-  container.querySelectorAll('.detail-link-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const key = card.dataset.detailKey;
-      if (typeof options.onSelectDetailLink === 'function') {
-        options.onSelectDetailLink(key);
-      }
-    });
-  });
-
-  container.querySelectorAll('[data-constraint-act]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const act = btn.dataset.constraintAct;
-      const id = btn.dataset.constraintId;
-      if (typeof options.onConstraintAction === 'function') {
-        options.onConstraintAction(act, id);
-      }
-    });
-  });
-
-  const addBtn = container.querySelector('#cpanel-constraint-add');
-  if (addBtn) {
-    addBtn.addEventListener('click', () => {
-      const typeSel = container.querySelector('#cpanel-constraint-type');
-      const paramInput = container.querySelector('#cpanel-constraint-param');
-      if (typeof options.onAddConstraint === 'function') {
-        options.onAddConstraint(
-          typeSel ? typeSel.value : null,
-          paramInput ? parseFloat(paramInput.value) : null
-        );
-      }
-    });
-  }
-
-  // Transform tab: numeric edits apply on Enter/blur; camera fields likewise.
-  container.querySelectorAll('[data-xform]').forEach(inp => {
-    const apply = () => {
-      if (typeof options.onTransformField === 'function') {
-        options.onTransformField(inp.dataset.xform, parseFloat(inp.value));
-      }
-    };
-    inp.addEventListener('change', apply);
-    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
-  });
-  container.querySelectorAll('[data-cam]').forEach(inp => {
-    const apply = () => {
-      if (typeof options.onCameraField === 'function') {
-        options.onCameraField(inp.dataset.cam, parseFloat(inp.value));
-      }
-    };
-    inp.addEventListener('change', apply);
-    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
-  });
-  container.querySelectorAll('[data-cam-shot]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (typeof options.onCameraShot === 'function') options.onCameraShot(btn.dataset.camShot);
-    });
-  });
 }
 
 
@@ -44865,7 +44420,7 @@ function createSurveyView(context) {
 /**
  * Architecture Helping Hand - Requirements Studio View
  * Phase 10: project brief, requirements, adjacency and design intent —
- * evaluated deterministically against the actual model.
+ * Geometry checks require verified evidence from the external CAD model.
  */
 
 
@@ -44943,12 +44498,12 @@ function createRequirementsView(context) {
     const counts = report.counts;
     host.innerHTML = `
       <div class="requirements-panel">
-        <div class="plan-prop-title">REQUIREMENTS vs MODEL</div>
+        <div class="plan-prop-title">Requirements review</div>
         <div class="issues-summary">
           ${counts.PASS} PASS · ${counts.FAIL} FAIL · ${counts.WARNING} WARNING ·
           ${counts.NEEDS_INPUT} NEEDS INPUT · ${counts.NOT_APPLICABLE} N/A
         </div>
-        ${rows || '<div class="issues-empty">No requirements defined yet. Add room requirements to evaluate against the model.</div>'}
+        ${rows || '<div class="issues-empty">Add room requirements, then check them against verified external drawings.</div>'}
         <div class="plan-prop-title" style="margin-top:0.5rem;">ROOM REQUIREMENTS</div>
         <div class="plan-prop-row"><span class="plan-prop-label">Name</span>
           <input id="req-room-name" class="text-input" placeholder="Bedroom" style="width:100px;" /></div>
@@ -46646,8 +46201,15 @@ function mountWorkflowHelp(toolId) {
   const safe = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const details = document.createElement('details');
   details.className = 'workflow-help';
-  details.innerHTML = `<summary>How to use ${safe(guide.name)}</summary><div class="workflow-help-grid">${['what','why','when','how','example','autocad','rhino','sketchup','other'].map(key => `<div><strong>${safe(key.toUpperCase())}</strong><p>${safe(guide[key])}</p></div>`).join('')}</div>`;
-  host.prepend(details);
+  details.innerHTML = `<summary>How to use</summary><div class="workflow-help-grid"><section><h3>Overview</h3><p>${safe(guide.what)}</p><p>${safe(guide.why)}</p><p>${safe(guide.how)}</p></section><section><h3>Example</h3><p>${safe(guide.example)}</p></section><section><h3>CAD workflow</h3>${['autocad','rhino','sketchup'].map(key=>`<h4>${safe({autocad:'AutoCAD',rhino:'Rhino',sketchup:'SketchUp'}[key])}</h4><p>${safe(guide[key])}</p>`).join('')}</section><section><h3>Other tools and technical notes</h3><p>${safe(guide.other)}</p></section></div>`;
+  const intro = document.createElement('div');
+  intro.className = 'workflow-intro';
+  intro.innerHTML = `<p>${safe(guide.what)}</p><p><strong>Use this when</strong> ${safe(guide.when)}</p>`;
+  const heading=host.querySelector('h2');
+  if(heading && toolId!=='converter')heading.textContent=guide.name;
+  const anchor=toolId==='converter'?host.querySelector('.tool-intro'):host.querySelector('.instrument-header-bar,.card-title-row')||heading;
+  if(anchor){if(toolId==='converter')anchor.after(details);else anchor.after(intro,details);}
+  else host.prepend(intro,details);
 }
 
 
@@ -46710,6 +46272,8 @@ function createReportsView(context) {
   // =========================================================================
   // MODULE: App
   // =========================================================================
+
+
 
 
 
@@ -46811,13 +46375,13 @@ function initializeApp() {
     precision: 3,
 
     // Mode 1: Converter
-    direction: 'drawing_to_real',
+    direction: 'real_to_drawing',
     scaleRatio: 50,
     selectedPresetId: '1:50',
     selectedCategory: 'all',
-    converterInputVal: '10',
-    converterInputUnit: 'cm',
-    converterOutputUnit: 'm',
+    converterInputVal: '5',
+    converterInputUnit: 'm',
+    converterOutputUnit: 'mm',
 
     // Mode 2: Rescale
     rescaleOrigRatio: 50,
@@ -47134,6 +46698,11 @@ function initializeApp() {
     presetsGrid: document.getElementById('presets-grid'),
     scaleRatioInput: document.getElementById('scale-ratio-input'),
     converterInputVal: document.getElementById('converter-input-val'),
+    converterResultLabel: document.getElementById('converter-result-label'),
+    converterExplanation: document.getElementById('converter-explanation'),
+    converterDirectionDescription: document.getElementById('converter-direction-description'),
+    converterDirectionButtons: document.querySelectorAll('[data-direction]'),
+    converterScaleSelect: document.getElementById('converter-scale-select'),
     converterInputUnit: document.getElementById('converter-input-unit'),
     converterInputBadge: document.getElementById('converter-input-badge'),
     swapDirectionBtn: document.getElementById('swap-direction-btn'),
@@ -48639,11 +48208,17 @@ function initializeApp() {
     const areaEntries = Object.entries(AREA_UNITS);
     const volumeEntries = Object.entries(VOLUME_UNITS);
 
-    const lengthOptions = lengthEntries.map(([k, u]) => `<option value="${k}">${u.name} (${u.symbol})</option>`).join('');
+    const lengthOptions = lengthEntries.map(([k, u]) => `<option value="${k}">${u.name.includes('('+u.symbol+')')?u.name:u.name+' ('+u.symbol+')'}</option>`).join('');
 
     // Converter unit selects
     if (dom.converterInputUnit) dom.converterInputUnit.innerHTML = lengthOptions;
     if (dom.converterOutputUnit) dom.converterOutputUnit.innerHTML = lengthOptions;
+
+    if (dom.converterInputUnit) dom.converterInputUnit.value = state.converterInputUnit;
+    if (dom.converterOutputUnit) dom.converterOutputUnit.value = state.converterOutputUnit;
+    if (dom.converterInputVal) dom.converterInputVal.value = state.converterInputVal;
+    if (dom.scaleRatioInput) dom.scaleRatioInput.value = state.scaleRatio;
+    if (dom.converterScaleSelect) dom.converterScaleSelect.innerHTML = SCALE_PRESETS.map(p => '<option value="'+p.ratio+'">'+escapeHtml(p.name)+'</option>').join('');
 
     // Rescaler + Detector unit selects — these were historically left EMPTY in
     // the static HTML and never populated, so both dropdowns rendered as blank
@@ -48731,6 +48306,8 @@ function initializeApp() {
     });
   }
 
+  const objectInstances = new Map();
+
   function renderFurnitureGrid() {
     if (!dom.furnitureCardsGrid) return;
 
@@ -48743,16 +48320,17 @@ function initializeApp() {
     dom.furnitureCardsGrid.classList.toggle('compact-mode', state.furnitureDensity === 'compact');
 
     const filtered = filterFurnitureCatalog(
-      FURNITURE_DATABASE,
+      getObjectBrowseCatalog(),
       state.furnitureSearchQuery,
       state.furnitureActiveCategory,
-      state.furnitureSortKey
+      state.furnitureSortKey,
+      state.furnitureCollection || 'all'
     );
 
     updateCategoryPillCounts();
 
     if (dom.furnitureResultsCount) {
-      dom.furnitureResultsCount.textContent = `Showing ${filtered.length} of ${FURNITURE_DATABASE.length} items`;
+      dom.furnitureResultsCount.textContent = `Showing ${filtered.length} of ${getObjectBrowseCatalog().length} plan symbols (${FURNITURE_DATABASE.length} reference entries)`;
     }
 
     if (filtered.length === 0) {
@@ -48781,6 +48359,8 @@ function initializeApp() {
         resetBtn.addEventListener('click', () => {
           if (dom.furnitureSearchInput) dom.furnitureSearchInput.value = '';
           state.furnitureSearchQuery = '';
+          state.furnitureCollection = 'all';
+          document.getElementById('object-collection').value = 'all';
           state.furnitureActiveCategory = 'all';
           dom.furnCategoryNav?.querySelectorAll('.furn-cat-pill').forEach(b => {
             b.classList.toggle('active', b.dataset.cat === 'all');
@@ -48802,102 +48382,16 @@ function initializeApp() {
     }
 
     const limit = state.furnitureLimit || 48;
-    dom.furnitureCardsGrid.innerHTML = filtered.slice(0,limit).map(item => {
-      const scaled = getScaledFurnitureDimensions(item, state.furnitureScaleRatio, state.furniturePaperUnit);
-      const isAda = item.id.includes('ada') || (item.desc && item.desc.toLowerCase().includes('ada')) || item.name.toLowerCase().includes('ada');
-      const isCompact = state.furnitureDensity === 'compact';
-
-      return `
-        <div class="furniture-card ${isCompact ? 'compact-card' : ''}" data-id="${item.id}">
-          <div class="furn-card-header">
-            <div class="furn-title-area">
-              <div class="furn-name">${escapeHtml(item.name)}</div>
-              <div class="furn-header-meta">
-                <span class="furn-category-tag">${escapeHtml(item.category)} / ${escapeHtml(item.subcategory)}</span>
-                <span class="furn-std-badge ${isAda ? 'ada-badge' : ''}">${scaled.standardTag}</span>
-              </div>
-            </div>
-            <div class="furn-dim-badge">1:${state.furnitureScaleRatio}</div>
-          </div>
-
-          <div class="furn-card-body">
-            <div class="furn-plan-preview-box" title="Architectural Blueprint Top-Down Plan">
-              ${furnitureAssetSVG(createFurnitureAsset(item))}
-            </div>
-
-            <div class="furn-footprint-row">
-              <span class="footprint-label">Space Footprint:</span>
-              <span class="footprint-val"><strong>${scaled.footprintM2} m²</strong><span class="footprint-imperial">(${scaled.footprintSqFt} sq ft)</span></span>
-            </div>
-
-            <div class="furn-item-desc">${escapeHtml(item.desc)}</div>
-
-            <div class="furn-specs-grid">
-              <div class="furn-spec-row">
-                <span class="furn-spec-lbl">Real Dimensions:</span>
-                <span class="furn-spec-val highlight">${scaled.realFormattedMetric}</span>
-              </div>
-              <div class="furn-spec-row">
-                <span class="furn-spec-lbl">Imperial Equiv:</span>
-                <span class="furn-spec-val">${scaled.realFormattedImperial}</span>
-              </div>
-              <div class="furn-spec-row">
-                <span class="furn-spec-lbl">Scaled on Paper:</span>
-                <span class="furn-spec-val paper-result">${scaled.paperFormatted}</span>
-              </div>
-              <div class="furn-spec-row">
-                <span class="furn-spec-lbl">Dimension Standard:</span>
-                <span class="furn-spec-val std-type-tag">${scaled.dimensionType}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="furn-card-footer">
-            <button type="button" class="action-tool-btn compact" data-furniture-download="dxf" data-id="${item.id}" title="Full-size DXF in millimeters">Download DXF</button>
-            <button type="button" class="action-tool-btn compact" data-furniture-download="svg" data-id="${item.id}" title="Full-size SVG in millimeters">SVG</button>
-            <details class="furn-tags"><summary>Tags &amp; provenance</summary><p>${escapeHtml(item.tags.join(' · '))}<br>${escapeHtml(item.dimensionSource.note)}</p><label><input type="checkbox" data-include-clearance> Include reference clearance when available</label></details>
-            <button class="btn-furn-copy action-tool-btn compact" data-text="${scaled.paperFormatted}" title="Copy scaled drawing dimensions">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              Copy Size
-            </button>
-            <button class="btn-furn-send action-tool-btn compact" data-w="${item.wCm}" title="Send width to Converter">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-              To Converter
-            </button>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    // Attach click listeners to dynamically rendered card buttons
+    renderObjectLibraryCards({host:dom.furnitureCardsGrid,items:filtered.slice(0,limit),scale:state.furnitureScaleRatio,instances:objectInstances,
+      download:(data,name,format)=>{const ok=downloadExport(data,name,format);showToast(ok?'Downloaded at real size (1:1), millimeters':'Download failed',ok?'success':'error');},
+      copy:copyToClipboard,send:widthMm=>{
+        dom.converterInputVal.value=widthMm;dom.converterInputUnit.value='mm';dom.converterOutputUnit.value='mm';
+        state.direction='real_to_drawing';switchMode('converter');
+      }});
     if (filtered.length > limit) {
-      const more = document.createElement('button'); more.type='button'; more.className='action-tool-btn'; more.textContent='Show 48 more';
-      more.addEventListener('click', () => { state.furnitureLimit=limit+48; renderFurnitureGrid(); }); dom.furnitureCardsGrid.appendChild(more);
+      const more=document.createElement('button');more.type='button';more.className='action-tool-btn';more.textContent='Show 48 more';
+      more.addEventListener('click',()=>{state.furnitureLimit=limit+48;renderFurnitureGrid();});dom.furnitureCardsGrid.appendChild(more);
     }
-    dom.furnitureCardsGrid.querySelectorAll('[data-furniture-download]').forEach(btn => btn.addEventListener('click', () => {
-      const item=FURNITURE_DATABASE.find(item=>item.id===btn.dataset.id);
-      const includeClearance=!!btn.closest('.furniture-card').querySelector('[data-include-clearance]')?.checked;
-      const asset=createFurnitureAsset(item,{includeClearance});const format=btn.dataset.furnitureDownload;
-      const ok=downloadExport(format==='dxf'?furnitureAssetDXF(asset):furnitureAssetSVG(asset), item.id+'.'+format, format);
-      showToast(ok?'Downloaded at real size (1:1), millimeters':'Download failed',ok?'success':'error');
-    }));
-
-    dom.furnitureCardsGrid.querySelectorAll('.btn-furn-copy').forEach(btn => {
-      btn.addEventListener('click', () => {
-        copyToClipboard(btn.dataset.text, 'Scaled Furniture Size');
-      });
-    });
-
-    dom.furnitureCardsGrid.querySelectorAll('.btn-furn-send').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const w = btn.dataset.w;
-        if (dom.converterInputVal) dom.converterInputVal.value = w;
-        if (dom.converterInputUnit) dom.converterInputUnit.value = 'cm';
-        state.direction = 'real_to_drawing';
-        switchMode('converter');
-        showToast(`Sent dimension ${w} cm to Converter`);
-      });
-    });
   }
 
   function calculateCustomFurniture() {
@@ -50557,6 +50051,17 @@ function initializeApp() {
     }
 
     // Converter Inputs & Run Action
+    dom.converterDirectionButtons.forEach(button => button.addEventListener('click', () => {
+      if (state.direction !== button.dataset.direction) views.callController('converter', 'swapDirection');
+    }));
+    const chooseConverterScale = value => {
+      if (dom.scaleRatioInput) dom.scaleRatioInput.value = value;
+      state.scaleRatio = Number(value);
+      renderPresetChips(state.selectedCategory);
+      views.callController('converter', 'calculateConverter');
+    };
+    dom.converterScaleSelect?.addEventListener('change', () => chooseConverterScale(dom.converterScaleSelect.value));
+    document.querySelectorAll('[data-converter-scale]').forEach(button => button.addEventListener('click', () => chooseConverterScale(button.dataset.converterScale)));
     if (dom.converterInputVal) {
       dom.converterInputVal.addEventListener('input', () => {
         views.callController('converter', 'calculateConverter');
@@ -52992,8 +52497,12 @@ const viewContext = Object.freeze({
       select.addEventListener('change',()=>{state.furnitureActiveCategory=select.value;state.furnitureLimit=48;renderFurnitureGrid();});
     }
   }
+  const collectionSelect=document.getElementById('object-collection');
+  collectionSelect.innerHTML='<option value="all">All collections</option>'+OBJECT_COLLECTIONS.map(c=>'<option value="'+c.id+'">'+escapeHtml(c.label)+'</option>').join('');
+  collectionSelect.addEventListener('change',()=>{state.furnitureCollection=collectionSelect.value;state.furnitureActiveCategory='all';state.furnitureLimit=48;renderFurnitureGrid();});
   renderPresetChips(state.selectedCategory);
   attachEventListeners();
+  document.addEventListener('click',event=>{const options=document.getElementById('global-options');if(options&&!options.contains(event.target))options.open=false;});
   views.mountAll();
   renderSidebar('');
 

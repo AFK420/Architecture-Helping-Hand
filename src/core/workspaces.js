@@ -223,8 +223,8 @@ export const WORKSPACES = [
       },
       {
         "toolId": "furniture",
-        "label": "Furniture & Clearances",
-        "desc": "215 scaled standards with footprints",
+        "label": "Object Library",
+        "desc": "Editable architectural CAD objects and planning references",
         "keywords": [
           "furniture",
           "clearance",
@@ -236,6 +236,7 @@ export const WORKSPACES = [
         ],
         "aliases": [
           "furniture library",
+          "object library",
           "clearances"
         ]
       },
