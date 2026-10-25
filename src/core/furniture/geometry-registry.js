@@ -24,7 +24,7 @@ export function getObjectGeometryDefinition(geometryId) {
 }
 
 export function geometryCoordinates(entities) {
-  return entities.flatMap(e=>e.type==='polyline'?e.points:[[e.x1,e.y1],[e.x2,e.y2]]);
+  return entities.flatMap(e => e.type === 'polyline' ? e.points : e.type === 'circle' ? [[e.x - e.r, e.y - e.r], [e.x + e.r, e.y + e.r]] : [[e.x1, e.y1], [e.x2, e.y2]]);
 }
 
 export function objectGeometryBounds(entities) {

@@ -2,6 +2,9 @@
 node_modules/
 .report-test-artifacts/
 package-lock.json
+dist/
+release/
+scratch/
 
 # Operating System Files
 .DS_Store

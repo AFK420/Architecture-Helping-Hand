@@ -279,6 +279,16 @@ const DEFAULT_COMMANDS = [
     available: true
   },
   {
+    id: 'nav-cad-automation',
+    title: 'AutoCAD & BIM Automation',
+    description: 'AutoLISP AIA layer setup, Tool Palettes (.atc), DXF purger & sanitizer, Revit Shared Parameters and BIM schedules',
+    category: 'Navigation',
+    icon: '⚡',
+    keywords: ['automation', 'cad', 'bim', 'revit', 'autolisp', 'lisp', 'palette', 'atc', 'purger', 'dxf', 'layers', 'schedule'],
+    actionType: 'navigation',
+    available: true
+  },
+  {
     id: 'nav-stairs',
     title: 'Stair Calculator',
     description: 'Straight-flight stair proportions: risers, goings, Blondel 2R+T, angle, run, and candidate options',

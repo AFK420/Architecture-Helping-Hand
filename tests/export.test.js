@@ -312,5 +312,43 @@ console.log('\n--- 7. Store + export integration ---');
   assertEqual(store.getProject().notes[0].body, 'B', 'Re-imported note intact');
 }
 
+// ---------------------------------------------------------------------------
+// 8. Layer-Based Accessibility & Regulatory Code Clearances (A-CLEARANCE)
+// ---------------------------------------------------------------------------
+console.log('\n--- 8. Regulatory code & accessibility clearances ---');
+
+{
+  const { createFurnitureAsset, furnitureAssetDXF, buildClearanceGeometry } = await import('../src/core/furniture-assets.js');
+
+  // ADA Stall Clearance
+  const adaStall = createFurnitureAsset({ id: 'toilet-stall-ada', name: 'ADA Stall', category: 'bathroom', wCm: 155, dCm: 155 });
+  const adaClr = buildClearanceGeometry(adaStall, 1.55, 1.55);
+  assert(adaClr.some(e => e.layer === 'A-CLEARANCE' && e.type === 'circle' && e.r === 0.75), 'ADA stall generates 1500mm turning circle on A-CLEARANCE');
+  assert(adaClr.some(e => e.layer === 'A-CLEARANCE' && e.type === 'polyline'), 'ADA stall generates transfer floor space box on A-CLEARANCE');
+
+  // Door Approach Maneuvering Clearance (ADA 404)
+  const doorItem = createFurnitureAsset({ id: 'door-900', name: 'Single Door 90', category: 'door', subcategory: 'doors', wCm: 90, dCm: 10 });
+  const doorClr = buildClearanceGeometry(doorItem, 0.9, 0.1);
+  assert(doorClr.some(e => e.layer === 'A-CLEARANCE' && e.points && e.points.some(p => p[1] === 1.5)), 'Door generates 1500mm pull-side approach clearance box');
+  assert(doorClr.some(e => e.layer === 'A-CLEARANCE' && e.points && e.points.some(p => p[1] === -1.2)), 'Door generates 1200mm push-side approach clearance box');
+
+  // Desk Chair Roll-out Zone
+  const deskItem = createFurnitureAsset({ id: 'desk-exec-180', name: 'Executive Desk', category: 'workplace', wCm: 180, dCm: 80 });
+  const deskClr = buildClearanceGeometry(deskItem, 1.8, 0.8);
+  assert(deskClr.some(e => e.layer === 'A-CLEARANCE' && e.points && e.points.some(p => Math.abs(p[1] - 1.8) < 0.001)), 'Desk generates 1000mm chair rollout clearance zone');
+
+  // Commercial Kitchen Cook Aisle Zone
+  const kitchenItem = createFurnitureAsset({ id: 'kitchen-line-6', name: '6-Burner Range', category: 'kitchen', wCm: 90, dCm: 90 });
+  const kitchenClr = buildClearanceGeometry(kitchenItem, 0.9, 0.9);
+  assert(kitchenClr.some(e => e.layer === 'A-CLEARANCE' && e.points && e.points.some(p => Math.abs(p[1] - 1.95) < 0.001)), 'Kitchen range generates 1050mm cook aisle clearance');
+
+  // DXF Export with includeClearance
+  const dxfWithout = furnitureAssetDXF(adaStall, { includeClearance: false });
+  const dxfWith = furnitureAssetDXF(adaStall, { includeClearance: true });
+  assert(!dxfWithout.includes('A-CLEARANCE'), 'DXF without clearance omits A-CLEARANCE layer');
+  assert(dxfWith.includes('A-CLEARANCE'), 'DXF with clearance includes A-CLEARANCE layer');
+  assert(dxfWith.includes('CIRCLE'), 'DXF with clearance includes ADA CIRCLE geometry on A-CLEARANCE');
+}
+
 console.log(`\nSummary: ${passed} passed, ${failed} failed.\n`);
 if (failed > 0) process.exit(1);

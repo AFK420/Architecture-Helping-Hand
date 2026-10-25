@@ -1,23 +1,39 @@
 @echo off
+setlocal
 title Architecture Helping Hand Desktop
 echo Launching Architecture Helping Hand in Desktop App Window...
 
-:: Try Microsoft Edge App Mode (present on all Windows 10/11 PCs)
-if exist "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" (
-    start "" "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --app="file:///%~dp0index.html"
-    exit
+:: Generate cache-busting token to ensure latest updates load
+set "CACHE_BUST=%RANDOM%%RANDOM%"
+
+:: Get absolute file URI path with forward slashes
+set "APP_DIR=%~dp0"
+set "APP_PATH=%APP_DIR:\=/%index.html"
+
+:: 1. Try Microsoft Edge (Installed on 100% of Windows 10 & 11 PCs)
+for %%E in (
+    "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
+    "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
+    "%LocalAppData%\Microsoft\Edge\Application\msedge.exe"
+) do (
+    if exist %%E (
+        start "" %%E --app="file:///%APP_PATH%?v=%CACHE_BUST%" --disable-cache
+        exit /b 0
+    )
 )
 
-if exist "C:\Program Files\Microsoft\Edge\Application\msedge.exe" (
-    start "" "C:\Program Files\Microsoft\Edge\Application\msedge.exe" --app="file:///%~dp0index.html"
-    exit
+:: 2. Try Google Chrome
+for %%C in (
+    "%ProgramFiles%\Google\Chrome\Application\chrome.exe"
+    "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
+    "%LocalAppData%\Google\Chrome\Application\chrome.exe"
+) do (
+    if exist %%C (
+        start "" %%C --app="file:///%APP_PATH%?v=%CACHE_BUST%" --disable-cache
+        exit /b 0
+    )
 )
 
-:: Try Google Chrome App Mode
-if exist "C:\Program Files\Google\Chrome\Application\chrome.exe" (
-    start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --app="file:///%~dp0index.html"
-    exit
-)
-
-:: Fallback to opening in default browser
-start "" "%~dp0index.html"
+:: 3. Fallback to default browser
+start "" "file:///%APP_PATH%?v=%CACHE_BUST%"
+exit /b 0

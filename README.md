@@ -2,9 +2,14 @@
 
 A personal architecture research, site-analysis, calculation, CAD-assistance and presentation companion. It complements AutoCAD, Rhino, SketchUp, QGIS and Google Earth.
 
-## Start
+## Start & Standalone Desktop Installation
 
-Open `index.html` for offline calculations, project work, furniture downloads and report preview. Work is stored in the current browser; export project JSON to back it up. Use a local web server when browser restrictions prevent a feature.
+### Instant Desktop Run (Zero Setup)
+1. **Launch Directly:** Double-click `Launch Architecture App.bat`. The app opens immediately in a dedicated, high-performance desktop window (using Microsoft Edge or Google Chrome app-mode).
+2. **Install Desktop Shortcut:** Double-click `Install Desktop Shortcut.bat` to place a permanent "Architecture Helping Hand" icon on your Windows Desktop.
+3. **Web Browser Mode:** Open `index.html` directly in any modern browser for offline use.
+
+To package a clean, portable distribution to share with others, run `npm run package` (or `node scripts/package-dist.js`). This generates a self-contained ~3 MB ZIP in `dist/Architecture-Helping-Hand-v2.8.0.zip` containing everything needed to run on any Windows PC without Node.js, Python, or administrative rights.
 
 For direct PDF export, follow [REPORT_ENGINE.md](REPORT_ENGINE.md) and run `npm run reports`. Open the local URL printed by the server. The optional report runtime is isolated from the dependency-free frontend.
 
@@ -12,9 +17,10 @@ For direct PDF export, follow [REPORT_ENGINE.md](REPORT_ENGINE.md) and run `npm 
 
 | Section | Workflow |
 | --- | --- |
-| Home | Project snapshot, recent tools and next steps |
+| Home | Project snapshot, recent tools, quick launch, and next steps |
 | Project | Research, sources, Site Analysis, context, Sun Path, Survey, Concept, Brief & Requirements and saved projects |
-| Design Tools | Scale, Dimensions, Furniture, stairs/ramps/slopes, references, scale detection/rescaling and area/volume |
+| Design Tools | Scale, Dimensions, Furniture, stairs/ramps/slopes, references, scale detection/rescaling, solar shading, and area/volume |
+| CAD & BIM Studio | AIA Standard Layers, Stair & Ramp CAD Details, Parking Lot Bay Generator, Door & Window Elevation Schedules, AutoCAD Plot Style (CTB) Pen Weights, Tool Palettes (.atc), DXF Sanitizer, and Revit & Dynamo BIM integration |
 | CAD Tools | CAD Clipboard, target-specific handoff, batch conversion and import review |
 | Documents | Reports & Boards and utility exports |
 | AI Assistant | Ask naturally; inspect the selected task, provider and model |

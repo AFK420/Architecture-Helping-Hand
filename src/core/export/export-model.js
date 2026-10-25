@@ -35,7 +35,10 @@ export const EXPORT_CONTENT_TYPES = Object.freeze({
   csv: 'text/csv',
   tsv: 'text/tab-separated-values',
   svg: 'image/svg+xml',
-  dxf: 'application/dxf'
+  dxf: 'application/dxf',
+  zip: 'application/zip',
+  lsp: 'text/plain',
+  scr: 'text/plain'
 });
 
 /** Human-readable format descriptions for the export UI. */
@@ -339,15 +342,25 @@ function dxfText(x, y, text, height = 0.2, layer = '0') {
   ].join('\n');
 }
 
+export function dxfInsert(name, x, y, layer = '0', scale = 1, rotation = 0) {
+  const S = v => (typeof v === 'number' ? v.toFixed(4) : String(v));
+  return [
+    dxfPair(0, 'INSERT'),
+    dxfPair(8, layer),
+    dxfPair(2, name),
+    dxfPair(10, S(x)), dxfPair(20, S(y)), dxfPair(30, '0.0000'),
+    dxfPair(41, S(scale)), dxfPair(42, S(scale)), dxfPair(43, S(scale)),
+    dxfPair(50, S(rotation))
+  ].join('\n');
+}
+
 /**
  * Builds a DXF document from a normalized entity list.
+ * Supports standard AutoCAD AC1009/R12 specifications, true named BLOCK definitions,
+ * AIA CAD layer standards, and millimeters insertion units ($INSUNITS = 4).
  *
  * @param {Array<Object>} entities - { type: 'line'|'polyline'|'text'|'circle', ... }
- *   line: { x1, y1, x2, y2 }
- *   polyline: { points: [[x,y]...], closed }
- *   text: { x, y, text, height }
- *   circle: { x, y, r }
- * @param {Object} [options] - { scale (default 1000 → m to mm), header }
+ * @param {Object} [options] - { scale (default 1000), blockName, asBlock, basePoint }
  * @returns {string} DXF text
  */
 export function buildDXF(entities, options = {}) {
@@ -392,15 +405,44 @@ export function buildDXF(entities, options = {}) {
     'A-ANNO-TEXT': 7,
     'A-ANNO-TAGS': 2,
     'A-GRID': 8,
+    'A-CLEARANCE': 8,
+    'A-SITE': 3,
+    'A-VEHICLE': 6,
+    'A-VEGETATION': 3,
     'REF': 1,
     'CHAIN': 4,
     'ROOM': 3,
     'PLAN': 7
   };
 
+  const LAYER_LTYPE_MAP = {
+    'A-CLEARANCE': 'DASHED',
+    'A-GRID': 'CENTER'
+  };
+
   const tableParts = [
     dxfPair(0, 'SECTION'),
     dxfPair(2, 'TABLES'),
+    dxfPair(0, 'TABLE'),
+    dxfPair(2, 'LTYPE'),
+    dxfPair(70, 2),
+    dxfPair(0, 'LTYPE'),
+    dxfPair(2, 'CONTINUOUS'),
+    dxfPair(70, 64),
+    dxfPair(3, 'Solid line'),
+    dxfPair(72, 65),
+    dxfPair(73, 0),
+    dxfPair(40, '0.0'),
+    dxfPair(0, 'LTYPE'),
+    dxfPair(2, 'DASHED'),
+    dxfPair(70, 64),
+    dxfPair(3, '__ __ __ __ __ __ __ __'),
+    dxfPair(72, 65),
+    dxfPair(73, 2),
+    dxfPair(40, '12.0'),
+    dxfPair(49, '9.0'),
+    dxfPair(49, '-3.0'),
+    dxfPair(0, 'ENDTAB'),
     dxfPair(0, 'TABLE'),
     dxfPair(2, 'LAYER'),
     dxfPair(70, sortedLayers.length)
@@ -408,12 +450,173 @@ export function buildDXF(entities, options = {}) {
 
   for (const lyr of sortedLayers) {
     const col = LAYER_COLOR_MAP[lyr] || 7;
+    const lt = LAYER_LTYPE_MAP[lyr] || 'CONTINUOUS';
     tableParts.push(
       dxfPair(0, 'LAYER'),
       dxfPair(2, lyr),
       dxfPair(70, 0),
       dxfPair(62, col),
-      dxfPair(6, 'CONTINUOUS')
+      dxfPair(6, lt)
+    );
+  }
+  tableParts.push(dxfPair(0, 'ENDTAB'), dxfPair(0, 'ENDSEC'));
+
+  let blocksSection = '';
+  let entitiesBody = body.join('\n');
+
+  if (options.blockName || options.asBlock) {
+    const rawName = options.blockName || 'AHH_BLOCK';
+    const blockName = String(rawName).replace(/[^A-Za-z0-9_]/g, '_');
+    const basePoint = options.basePoint || [0, 0];
+    const bx = S(basePoint[0]), by = S(basePoint[1]);
+    const blockLayer = sortedLayers.find(l => l !== '0' && l !== 'A-CLEARANCE') || 'A-FURN';
+
+    blocksSection = [
+      dxfPair(0, 'SECTION'),
+      dxfPair(2, 'BLOCKS'),
+      dxfPair(0, 'BLOCK'),
+      dxfPair(8, '0'),
+      dxfPair(2, blockName),
+      dxfPair(70, 0),
+      dxfPair(10, bx), dxfPair(20, by), dxfPair(30, '0.0000'),
+      dxfPair(3, blockName),
+      body.join('\n'),
+      dxfPair(0, 'ENDBLK'),
+      dxfPair(0, 'ENDSEC')
+    ].join('\n');
+
+    entitiesBody = dxfInsert(blockName, 0, 0, blockLayer);
+  }
+
+  return [
+    dxfPair(0, 'SECTION'),
+    dxfPair(2, 'HEADER'),
+    dxfPair(9, '$ACADVER'), dxfPair(1, 'AC1009'),
+    dxfPair(9, '$INSUNITS'), dxfPair(70, 4), // 4 = millimeters
+    dxfPair(0, 'ENDSEC'),
+    tableParts.join('\n'),
+    ...(blocksSection ? [blocksSection] : []),
+    dxfPair(0, 'SECTION'),
+    dxfPair(2, 'ENTITIES'),
+    entitiesBody,
+    dxfPair(0, 'ENDSEC'),
+    dxfPair(0, 'EOF')
+  ].join('\n');
+}
+
+/**
+ * Builds a multi-block AutoCAD Tool Palette drawing (.dxf).
+ * Lays out multiple block definitions in an organized grid with text labels in Model Space.
+ *
+ * @param {Array<{id: string, name: string, dimensions: {widthMm: number, depthMm: number}, entities: Array<Object>, basePoint?: [number, number]}>} items
+ * @param {Object} [options] - { columns: number, gapMm: number, scale: number }
+ * @returns {string} DXF text
+ */
+export function buildMultiBlockDXF(items, options = {}) {
+  const scale = 1; // items already in mm or scaled
+  const cols = options.columns || 4;
+  const gap = options.gapMm || 800; // 800mm margin between blocks
+
+  const S = v => (Number(v) || 0).toFixed(4);
+  const usedLayers = new Set(['0', 'A-ANNO-TEXT', 'A-ANNO-TAGS', 'A-CLEARANCE', 'A-FURN', 'A-DOOR', 'A-VEHICLE', 'A-SITE', 'A-VEGETATION']);
+
+  const blocksBody = [];
+  const entitiesBody = [];
+
+  let curCol = 0;
+  let curRow = 0;
+  let curX = 0;
+  let curY = 0;
+  let rowMaxHeight = 0;
+
+  for (let idx = 0; idx < items.length; idx++) {
+    const item = items[idx];
+    const rawName = 'AHH_' + (item.id || `ITEM_${idx}`).toUpperCase().replace(/[^A-Za-z0-9_]/g, '_');
+    const w = (item.dimensions?.widthMm) || 1000;
+    const d = (item.dimensions?.depthMm) || 1000;
+    const basePoint = item.basePoint || [0, 0];
+
+    const blockEntities = [];
+    for (const e of (item.entities || [])) {
+      if (!e) continue;
+      const lyr = e.layer || '0';
+      usedLayers.add(lyr);
+      if (e.type === 'line') {
+        blockEntities.push(dxfLine(S(e.x1 * 1000), S(e.y1 * 1000), S(e.x2 * 1000), S(e.y2 * 1000), lyr));
+      } else if (e.type === 'polyline' && Array.isArray(e.points) && e.points.length >= 2) {
+        blockEntities.push(dxfPolyline(e.points.map(p => [S(p[0] * 1000), S(p[1] * 1000)]), lyr, !!e.closed));
+      } else if (e.type === 'circle') {
+        blockEntities.push([
+          dxfPair(0, 'CIRCLE'),
+          dxfPair(8, lyr),
+          dxfPair(10, S(e.x * 1000)), dxfPair(20, S(e.y * 1000)),
+          dxfPair(40, S(e.r * 1000))
+        ].join('\n'));
+      }
+    }
+
+    blocksBody.push([
+      dxfPair(0, 'BLOCK'),
+      dxfPair(8, '0'),
+      dxfPair(2, rawName),
+      dxfPair(70, 0),
+      dxfPair(10, S(basePoint[0] * 1000)), dxfPair(20, S(basePoint[1] * 1000)), dxfPair(30, '0.0000'),
+      dxfPair(3, rawName),
+      blockEntities.join('\n'),
+      dxfPair(0, 'ENDBLK')
+    ].join('\n'));
+
+    // Place instance in grid
+    const mainLayer = (item.entities || []).find(e => e.layer && e.layer !== 'A-CLEARANCE')?.layer || 'A-FURN';
+    entitiesBody.push(dxfInsert(rawName, curX, curY, mainLayer));
+
+    // Place annotation label under block
+    const labelText = `${item.name || rawName} (${Math.round(w)}x${Math.round(d)}mm)`;
+    entitiesBody.push(dxfText(S(curX), S(curY - 180), labelText, 90, 'A-ANNO-TEXT'));
+
+    rowMaxHeight = Math.max(rowMaxHeight, d);
+    curCol++;
+    if (curCol >= cols) {
+      curCol = 0;
+      curRow++;
+      curX = 0;
+      curY -= (rowMaxHeight + gap + 300);
+      rowMaxHeight = 0;
+    } else {
+      curX += (w + gap);
+    }
+  }
+
+  const sortedLayers = Array.from(usedLayers).sort();
+  const LAYER_COLOR_MAP = {
+    '0': 7, 'A-WALL': 4, 'A-DOOR': 2, 'A-GLAZ': 4, 'A-AREA': 3, 'A-FLOR-STRS': 6,
+    'A-FURN': 5, 'A-DIMS': 1, 'A-ANNO-TEXT': 7, 'A-ANNO-TAGS': 2, 'A-GRID': 8,
+    'A-CLEARANCE': 8, 'A-SITE': 3, 'A-VEHICLE': 6, 'A-VEGETATION': 3, 'REF': 1, 'CHAIN': 4
+  };
+
+  const tableParts = [
+    dxfPair(0, 'SECTION'),
+    dxfPair(2, 'TABLES'),
+    dxfPair(0, 'TABLE'),
+    dxfPair(2, 'LTYPE'),
+    dxfPair(70, 2),
+    dxfPair(0, 'LTYPE'), dxfPair(2, 'CONTINUOUS'), dxfPair(70, 64), dxfPair(3, 'Solid line'), dxfPair(72, 65), dxfPair(73, 0), dxfPair(40, '0.0'),
+    dxfPair(0, 'LTYPE'), dxfPair(2, 'DASHED'), dxfPair(70, 64), dxfPair(3, '__ __ __ __'), dxfPair(72, 65), dxfPair(73, 2), dxfPair(40, '12.0'), dxfPair(49, '9.0'), dxfPair(49, '-3.0'),
+    dxfPair(0, 'ENDTAB'),
+    dxfPair(0, 'TABLE'),
+    dxfPair(2, 'LAYER'),
+    dxfPair(70, sortedLayers.length)
+  ];
+
+  for (const lyr of sortedLayers) {
+    const col = LAYER_COLOR_MAP[lyr] || 7;
+    const lt = lyr === 'A-CLEARANCE' ? 'DASHED' : 'CONTINUOUS';
+    tableParts.push(
+      dxfPair(0, 'LAYER'),
+      dxfPair(2, lyr),
+      dxfPair(70, 0),
+      dxfPair(62, col),
+      dxfPair(6, lt)
     );
   }
   tableParts.push(dxfPair(0, 'ENDTAB'), dxfPair(0, 'ENDSEC'));
@@ -426,8 +629,12 @@ export function buildDXF(entities, options = {}) {
     dxfPair(0, 'ENDSEC'),
     tableParts.join('\n'),
     dxfPair(0, 'SECTION'),
+    dxfPair(2, 'BLOCKS'),
+    blocksBody.join('\n'),
+    dxfPair(0, 'ENDSEC'),
+    dxfPair(0, 'SECTION'),
     dxfPair(2, 'ENTITIES'),
-    body.join('\n'),
+    entitiesBody.join('\n'),
     dxfPair(0, 'ENDSEC'),
     dxfPair(0, 'EOF')
   ].join('\n');

@@ -83,7 +83,7 @@ console.log('🧪 Running tests/workspaces.test.js...');
     'site_dashboard', 'sun_path', 'site_context', // site (Phase G)
     'converter', 'rescale', 'detector', 'area_volume', 'dimensions', 'concept', 'reports',
     'reference', // dimensions
-    'cad_clipboard', 'batch_cad', 'cad_handoff', // cad
+    'cad_clipboard', 'batch_cad', 'cad_handoff', 'cad_automation', // cad
     'stairs', 'ramps', 'slopes', // architecture
     'furniture', // space
     'projects', 'requirements', 'imports', 'export', // project

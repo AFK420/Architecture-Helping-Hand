@@ -1,0 +1,57 @@
+======================================================================
+  🏛️ ARCHITECTURE HELPING HAND (v2.8.0) — PORTABLE STANDALONE EDITION
+======================================================================
+
+Thank you for using Architecture Helping Hand! This software runs 100%
+locally on your computer without requiring any installation, account,
+internet connection, or administrative privileges.
+
+----------------------------------------------------------------------
+⚡ HOW TO RUN ON ANY WINDOWS PC:
+----------------------------------------------------------------------
+Option 1 (Instant Run):
+  - Simply double-click "Launch Architecture App.bat".
+  - The application opens immediately in a clean, borderless desktop window.
+
+Option 2 (Install Desktop Shortcut):
+  - Double-click "Install Desktop Shortcut.bat".
+  - This automatically creates an "Architecture Helping Hand" icon on your
+    Windows Desktop so you can launch it like any other program!
+
+Option 3 (Run in Default Web Browser):
+  - Double-click "index.html" directly.
+
+----------------------------------------------------------------------
+📦 WHAT IS INCLUDED IN THIS FOLDER:
+----------------------------------------------------------------------
+- Launch Architecture App.bat     : Instant desktop app launcher (Edge/Chrome app-mode)
+- Install Desktop Shortcut.bat    : Adds an app shortcut with icon to your Desktop
+- Uninstall Shortcut.bat          : Removes the Desktop shortcut
+- index.html                      : Complete application UI and workspace
+- css/                            : Design system, themes, and responsive layouts
+- js/app.js                       : Standalone production bundle (all 35 tools)
+- assets/                         : Application icons (192px, 512px, SVG, ICO)
+- manifest.json & sw.js           : PWA offline caching support
+
+----------------------------------------------------------------------
+🎯 KEY ARCHITECTURAL TOOLS INCLUDED:
+----------------------------------------------------------------------
+1. 📐 Universal Scale Converter: Real-to-drawing & drawing-to-real conversions
+2. 🛋️ Object Library & CAD Blocks: 681 resizable architectural symbols
+3. ⚡ AutoCAD & BIM Studio:
+   - AIA NCS Standard Layers & Lineweights generator (.scr / .lsp)
+   - Stair & Ramp CAD Detail Generator (1:1 mm cross-sections with Blondel check)
+   - Parking Lot & ADA Bay Generator (90°, 60°, 45° with ISA wheelchair symbols)
+   - Door & Window Elevation Schedule Generator (D01-D06, W01-W05 along FFL)
+   - AutoCAD Plot Style Table (CTB) & Pen Weight Manager
+   - Autodesk Tool Palette (.atc) Exporter
+   - DXF Sanitizer & Layer Remapper
+   - Revit Shared Parameters & Dynamo Python Exporter
+4. ☀️ Solar Shading & Overhang Calculator: Summer cutoff & winter heating
+5. 📊 Dimension Chains, Workspace, Geometry, and Multi-Scale Comparison
+
+----------------------------------------------------------------------
+🌐 SOURCE CODE & UPDATES:
+----------------------------------------------------------------------
+GitHub Repository: https://github.com/AFK420/Architecture-Helping-Hand
+======================================================================

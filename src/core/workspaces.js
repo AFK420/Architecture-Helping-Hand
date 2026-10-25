@@ -92,7 +92,7 @@ export const WORKSPACES = [
       {
         "toolId": "sun_path",
         "label": "Sun Path & Shadow",
-        "desc": "Sunrise, sunset, solar position, and shadow lengths — computed live",
+        "desc": "Sunrise, sunset, solar position, shadow lengths & solar shading overhangs — computed live",
         "keywords": [
           "sun",
           "solar",
@@ -100,6 +100,15 @@ export const WORKSPACES = [
           "sunpath",
           "shadow",
           "shadows",
+          "overhang",
+          "shading",
+          "brise soleil",
+          "brise-soleil",
+          "louver",
+          "louvers",
+          "vsa",
+          "profile angle",
+          "passive solar",
           "sunrise",
           "sunset",
           "azimuth",
@@ -111,7 +120,10 @@ export const WORKSPACES = [
           "solar analysis",
           "shadow calculator",
           "sun study",
-          "solar position"
+          "solar position",
+          "solar shading",
+          "overhang calculator",
+          "brise soleil calculator"
         ]
       },
       {
@@ -445,6 +457,31 @@ export const WORKSPACES = [
         "aliases": [
           "import file",
           "import schedule"
+        ]
+      },
+      {
+        "toolId": "cad_automation",
+        "label": "AutoCAD & BIM Automation",
+        "desc": "AutoLISP setup, Tool Palettes (.atc), DXF hygiene, Revit Shared Parameters & BIM schedules",
+        "keywords": [
+          "automation",
+          "autolisp",
+          "lisp",
+          "bim",
+          "revit",
+          "dynamo",
+          "tool palette",
+          "atc",
+          "layers",
+          "purger",
+          "dxf hygiene",
+          "schedule"
+        ],
+        "aliases": [
+          "bim automation",
+          "cad automation",
+          "autolisp generator",
+          "revit tools"
         ]
       }
     ],

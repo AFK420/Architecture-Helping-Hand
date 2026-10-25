@@ -121,6 +121,7 @@ import { createExpressionView, createMultiScaleView } from './views/expression-m
 import { createChainsView } from './views/dimension-chains.js';
 import { createCadClipboardView, createCadHandoffView } from './views/cad-clipboard-handoff.js';
 import { createBatchCadView } from './views/batch-cad.js';
+import { createCadAutomationView } from './views/cad-automation.js';
 import { createQuickDimensionView } from './views/quick-dimension.js';
 import { createHistoryView } from './views/history.js';
 import { createScratchpadView } from './views/scratchpad.js';
@@ -1930,6 +1931,9 @@ export function initializeApp() {
     }
     else if (targetMode === 'cad_handoff') {
       views.callController('cad_handoff', 'renderCadHandoff');
+    }
+    else if (targetMode === 'cad_automation') {
+      views.callController('cad_automation', 'render');
     }
     else if (targetMode === 'stairs') {
       views.callController('stairs', 'calculate');
@@ -6311,6 +6315,7 @@ const viewContext = Object.freeze({
   views.register(createCadClipboardView(viewContext));
   views.register(createCadHandoffView(viewContext));
   views.register(createBatchCadView(viewContext));
+  views.register(createCadAutomationView(viewContext));
   views.register(createQuickDimensionView({ ...viewContext, renderHistoryListRef: () => views.callController('history', 'renderHistoryList') }));
   views.register(createHistoryView({
     ...viewContext,

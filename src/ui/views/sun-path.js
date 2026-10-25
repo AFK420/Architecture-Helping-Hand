@@ -17,10 +17,18 @@ import {
   sunPathForDay,
   shadowSummaryForDay
 } from '../../core/solar.js';
+import {
+  calculateSolarShading,
+  shadingSectionToSVG,
+  shadingSectionToDXF
+} from '../../core/solar-shading.js';
+import { downloadExport } from '../../services/export.js';
 import { ensureSiteStudy } from '../../core/site.js';
 
 export function createSunPathView(context) {
   const { dom, showToast, copyToClipboard, AudioService, projectStore } = context;
+
+  let activeSubTab = 'sun_path'; // 'sun_path' or 'solar_shading'
 
   // UI state — defaults from the project's site study when present
   const ui = {
@@ -28,6 +36,17 @@ export function createSunPathView(context) {
     date: new Date().toISOString().slice(0, 10),
     hour: 12, minute: 0,
     height: 10
+  };
+
+  const shadingUi = {
+    facadeAz: 180,
+    winH: 1.8,
+    winW: 2.4,
+    sillH: 0.9,
+    gapH: 0.15,
+    depth: null, // null = auto optimal
+    louvers: 1,
+    hour: 12
   };
 
   function escapeHtml(str) {
@@ -140,8 +159,234 @@ export function createSunPathView(context) {
     const posOk = pos.ok && pos.position;
     const shadowOk = shadow.ok && shadow.shadow;
 
+    if (activeSubTab === 'solar_shading') {
+      const shading = calculateSolarShading({
+        latitudeDeg: ui.lat,
+        longitudeDeg: ui.lon,
+        timezoneOffsetHours: ui.tz,
+        facadeAzimuthDeg: shadingUi.facadeAz,
+        windowHeightM: shadingUi.winH,
+        windowWidthM: shadingUi.winW,
+        sillHeightM: shadingUi.sillH,
+        headToOverhangM: shadingUi.gapH,
+        overhangDepthM: shadingUi.depth,
+        louverCount: shadingUi.louvers,
+        designHour: shadingUi.hour
+      });
+
+      host.innerHTML = `
+        <div class="sun-tool-grid">
+          <div class="sun-subnav-bar" style="grid-column: 1 / -1; display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+            <button type="button" class="action-tool-btn" id="btn-subtab-sun" style="padding: 0.45rem 1rem;">☀️ Sun Path &amp; Shadow</button>
+            <button type="button" class="action-tool-btn primary" id="btn-subtab-shading" style="padding: 0.45rem 1rem; font-weight: 600;">🏛️ Solar Shading &amp; Overhang Calculator</button>
+          </div>
+
+          <!-- Facade & Window Inputs Card -->
+          <section class="archi-card sun-input-card" aria-label="Facade and window geometry">
+            <div class="result-header"><span class="result-label">FACADE &amp; OVERHANG GEOMETRY</span></div>
+            <div class="sun-input-form">
+              <label class="input-label" for="shading-lat-input">Site Latitude (° N+)</label>
+              <input type="number" id="shading-lat-input" class="sun-input" step="0.1" min="-90" max="90" value="${ui.lat}" />
+
+              <label class="input-label">Facade Orientation</label>
+              <div class="orientation-pills" style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.5rem;">
+                <button type="button" class="action-tool-btn compact ${shadingUi.facadeAz === 180 ? 'primary' : ''}" data-az="180">South (180°)</button>
+                <button type="button" class="action-tool-btn compact ${shadingUi.facadeAz === 135 ? 'primary' : ''}" data-az="135">SE (135°)</button>
+                <button type="button" class="action-tool-btn compact ${shadingUi.facadeAz === 225 ? 'primary' : ''}" data-az="225">SW (225°)</button>
+                <button type="button" class="action-tool-btn compact ${shadingUi.facadeAz === 90 ? 'primary' : ''}" data-az="90">East (90°)</button>
+                <button type="button" class="action-tool-btn compact ${shadingUi.facadeAz === 270 ? 'primary' : ''}" data-az="270">West (270°)</button>
+                <button type="button" class="action-tool-btn compact ${shadingUi.facadeAz === 0 ? 'primary' : ''}" data-az="0">North (0°)</button>
+              </div>
+              <input type="number" id="shading-az-input" class="sun-input" step="1" min="0" max="360" value="${shadingUi.facadeAz}" placeholder="Facade Azimuth (0–360°)" />
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <div>
+                  <label class="input-label" for="shading-winh-input">Window Height (m)</label>
+                  <input type="number" id="shading-winh-input" class="sun-input" step="0.05" min="0.2" value="${shadingUi.winH}" />
+                </div>
+                <div>
+                  <label class="input-label" for="shading-winw-input">Window Width (m)</label>
+                  <input type="number" id="shading-winw-input" class="sun-input" step="0.05" min="0.2" value="${shadingUi.winW}" />
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <div>
+                  <label class="input-label" for="shading-sillh-input">Sill Height (m)</label>
+                  <input type="number" id="shading-sillh-input" class="sun-input" step="0.05" min="0" value="${shadingUi.sillH}" />
+                </div>
+                <div>
+                  <label class="input-label" for="shading-gaph-input">Lintel Gap (m)</label>
+                  <input type="number" id="shading-gaph-input" class="sun-input" step="0.05" min="0" value="${shadingUi.gapH}" />
+                </div>
+              </div>
+
+              <label class="input-label" for="shading-depth-input">Overhang Projection (m)</label>
+              <input type="number" id="shading-depth-input" class="sun-input" step="0.05" min="0.05" placeholder="Optimal auto (${shading.optimalOverhangDepthM} m)" value="${shadingUi.depth !== null ? shadingUi.depth : ''}" />
+
+              <label class="input-label" for="shading-louvers-input">Shading System</label>
+              <select id="shading-louvers-input" class="form-select sun-input" style="width: 100%;">
+                <option value="1" ${shadingUi.louvers === 1 ? 'selected' : ''}>Solid Cantilever Overhang (1 Blade)</option>
+                <option value="2" ${shadingUi.louvers === 2 ? 'selected' : ''}>Brise-Soleil (2 Horizontal Blades)</option>
+                <option value="3" ${shadingUi.louvers === 3 ? 'selected' : ''}>Brise-Soleil (3 Horizontal Blades)</option>
+                <option value="4" ${shadingUi.louvers === 4 ? 'selected' : ''}>Brise-Soleil (4 Horizontal Blades)</option>
+                <option value="5" ${shadingUi.louvers === 5 ? 'selected' : ''}>Brise-Soleil (5 Horizontal Blades)</option>
+                <option value="6" ${shadingUi.louvers === 6 ? 'selected' : ''}>Brise-Soleil (6 Horizontal Blades)</option>
+              </select>
+
+              <button type="button" class="result-action-btn primary sun-run-btn" id="shading-calc-btn">Update Shading Analysis</button>
+              <button type="button" class="result-action-btn sun-copy-btn" id="shading-reset-depth-btn">Reset to Optimal Depth</button>
+            </div>
+          </section>
+
+          <!-- Shading Performance & Seasonal Metrics Card -->
+          <section class="archi-card sun-times-card" aria-label="Passive solar performance">
+            <div class="result-header"><span class="result-label">PASSIVE SOLAR SHADING PERFORMANCE</span></div>
+            <div class="sun-times-row" style="margin-bottom: 1rem;">
+              <div class="sun-time-tile"><span class="sun-time-value" style="color: #4ade80;">${shading.summer.shadePercent}%</span><span class="sun-time-label">Summer Solstice Shade</span></div>
+              <div class="sun-time-tile"><span class="sun-time-value" style="color: #fb923c;">${(100 - shading.winter.shadePercent).toFixed(1)}%</span><span class="sun-time-label">Winter Sun Gain</span></div>
+              <div class="sun-time-tile"><span class="sun-time-value">${shading.actualOverhangDepthM}<span class="sun-time-unit">m</span></span><span class="sun-time-label">Overhang Depth</span></div>
+              <div class="sun-time-tile"><span class="sun-time-value">${shading.winter.sunPenetrationM}<span class="sun-time-unit">m</span></span><span class="sun-time-label">Winter Sun Floor Depth</span></div>
+            </div>
+
+            <table class="standards-table" style="width: 100%; margin-top: 0.5rem;">
+              <thead>
+                <tr>
+                  <th>Season</th>
+                  <th>Solar Altitude</th>
+                  <th>Profile Angle (VSA)</th>
+                  <th>Window Shaded</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="standards-label">☀️ Summer Solstice</td>
+                  <td class="standards-value">${shading.summer.altitudeDeg}°</td>
+                  <td class="standards-value"><strong>${shading.summer.vsaDeg}°</strong></td>
+                  <td class="standards-value">${shading.summer.shadedHeightM} m (${shading.summer.shadePercent}%)</td>
+                  <td class="standards-value" style="color: #4ade80;">Full 100% Protection</td>
+                </tr>
+                <tr>
+                  <td class="standards-label">❄️ Winter Solstice</td>
+                  <td class="standards-value">${shading.winter.altitudeDeg}°</td>
+                  <td class="standards-value"><strong>${shading.winter.vsaDeg}°</strong></td>
+                  <td class="standards-value">${shading.winter.shadedHeightM} m (${shading.winter.shadePercent}%)</td>
+                  <td class="standards-value" style="color: #fb923c;">${(100 - shading.winter.shadePercent).toFixed(1)}% Passive Heating</td>
+                </tr>
+                <tr>
+                  <td class="standards-label">🌱 Equinox (Spring/Fall)</td>
+                  <td class="standards-value">${shading.equinox.altitudeDeg}°</td>
+                  <td class="standards-value"><strong>${shading.equinox.vsaDeg}°</strong></td>
+                  <td class="standards-value">${shading.equinox.shadedHeightM} m (${shading.equinox.shadePercent}%)</td>
+                  <td class="standards-value">Balanced Transition</td>
+                </tr>
+              </tbody>
+            </table>
+
+            ${shading.briseSoleil.louverCount > 1 ? `
+              <div style="margin-top: 0.75rem; padding: 0.6rem; background: rgba(255,255,255,0.03); border-radius: 6px; font-size: 0.85rem;">
+                <strong>Brise-Soleil Specification:</strong> ${shading.briseSoleil.louverCount} blades @ ${Math.round(shading.briseSoleil.louverSpacingM * 1000)} mm vertical spacing, blade projection: ${Math.round(shading.briseSoleil.bladeDepthM * 1000)} mm.
+              </div>
+            ` : ''}
+
+            <div style="margin-top: 0.75rem; padding: 0.6rem; background: rgba(255,255,255,0.03); border-radius: 6px; font-size: 0.85rem;">
+              <strong>Side Fin Recommendation:</strong> For low morning/afternoon sun protection, use vertical side fins of ${Math.round(shading.verticalFins.finDepthM * 1000)} mm projection.
+            </div>
+          </section>
+
+          <!-- 2D Architectural Section Preview Card -->
+          <section class="archi-card sun-path-card" style="grid-column: 1 / -1;" aria-label="Architectural section detail">
+            <div class="result-header">
+              <span class="result-label">1:1 ARCHITECTURAL DETAIL SECTION — PASSIVE SOLAR CUTOFF</span>
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <button type="button" class="action-tool-btn primary compact" id="shading-dxf-btn">Download 1:1 DXF (AutoCAD)</button>
+                <button type="button" class="action-tool-btn compact" id="shading-svg-btn">Download SVG</button>
+                <button type="button" class="action-tool-btn compact" id="shading-copy-btn">Copy Spec Report</button>
+              </div>
+            </div>
+            <div style="padding: 0.5rem 0;">
+              ${shadingSectionToSVG(shading)}
+            </div>
+            <p class="sun-hint">Real-scale architectural section detail showing wall, glazing, overhang profile, summer cutoff angle (${shading.summer.vsaDeg}°), and winter penetration ray. DXF exports true 1:1 millimeter AutoCAD entities on layers A-WALL, A-GLAZ, A-ROOF, and A-SITE.</p>
+          </section>
+        </div>
+      `;
+
+      document.getElementById('btn-subtab-sun')?.addEventListener('click', () => {
+        activeSubTab = 'sun_path';
+        AudioService.playTick();
+        render();
+      });
+
+      document.querySelectorAll('.orientation-pills button').forEach(b => {
+        b.addEventListener('click', () => {
+          shadingUi.facadeAz = parseInt(b.dataset.az, 10);
+          AudioService.playTick();
+          render();
+        });
+      });
+
+      document.getElementById('shading-calc-btn')?.addEventListener('click', () => {
+        const g = id => document.getElementById(id);
+        const latVal = parseFloat(g('shading-lat-input')?.value);
+        if (Number.isFinite(latVal)) ui.lat = latVal;
+        const azVal = parseFloat(g('shading-az-input')?.value);
+        if (Number.isFinite(azVal)) shadingUi.facadeAz = azVal;
+        shadingUi.winH = parseFloat(g('shading-winh-input')?.value || 1.8);
+        shadingUi.winW = parseFloat(g('shading-winw-input')?.value || 2.4);
+        shadingUi.sillH = parseFloat(g('shading-sillh-input')?.value || 0.9);
+        shadingUi.gapH = parseFloat(g('shading-gaph-input')?.value || 0.15);
+        const depthVal = parseFloat(g('shading-depth-input')?.value);
+        shadingUi.depth = Number.isFinite(depthVal) && depthVal > 0 ? depthVal : null;
+        shadingUi.louvers = parseInt(g('shading-louvers-input')?.value || 1, 10);
+        AudioService.playTick();
+        render();
+      });
+
+      document.getElementById('shading-reset-depth-btn')?.addEventListener('click', () => {
+        shadingUi.depth = null;
+        AudioService.playTick();
+        render();
+      });
+
+      document.getElementById('shading-dxf-btn')?.addEventListener('click', () => {
+        const dxf = shadingSectionToDXF(shading);
+        const ok = downloadExport(dxf, `solar-shading-section-${Math.round(shading.actualOverhangDepthM * 1000)}mm.dxf`, 'dxf');
+        showToast(ok ? 'Downloaded 1:1 AutoCAD Section DXF' : 'Download failed', ok ? 'success' : 'error');
+      });
+
+      document.getElementById('shading-svg-btn')?.addEventListener('click', () => {
+        const svg = shadingSectionToSVG(shading);
+        const ok = downloadExport(svg, `solar-shading-section.svg`, 'svg');
+        showToast(ok ? 'Downloaded SVG Section Detail' : 'Download failed', ok ? 'success' : 'error');
+      });
+
+      document.getElementById('shading-copy-btn')?.addEventListener('click', () => {
+        const report = [
+          `Passive Solar Shading Report`,
+          `Site Latitude: ${ui.lat}° | Facade Azimuth: ${shadingUi.facadeAz}°`,
+          `Window: ${shadingUi.winW}m W x ${shadingUi.winH}m H | Sill: ${shadingUi.sillH}m | Head Gap: ${shadingUi.gapH}m`,
+          `Optimal Overhang Depth: ${shading.optimalOverhangDepthM}m (${Math.round(shading.optimalOverhangDepthM * 1000)} mm)`,
+          `Actual Depth: ${shading.actualOverhangDepthM}m (${Math.round(shading.actualOverhangDepthM * 1000)} mm)`,
+          `Summer Solstice (June 21): VSA ${shading.summer.vsaDeg}° -> ${shading.summer.shadePercent}% Shade`,
+          `Winter Solstice (Dec 21): VSA ${shading.winter.vsaDeg}° -> ${(100 - shading.winter.shadePercent).toFixed(1)}% Solar Heat Gain (Floor penetration: ${shading.winter.sunPenetrationM}m)`,
+          shading.briseSoleil.louverCount > 1
+            ? `Brise-Soleil: ${shading.briseSoleil.louverCount} louvers @ ${Math.round(shading.briseSoleil.louverSpacingM * 1000)}mm spacing, blade depth ${Math.round(shading.briseSoleil.bladeDepthM * 1000)}mm`
+            : `Solid Cantilever Overhang`
+        ].join('\n');
+        copyToClipboard(report, 'Shading report');
+      });
+
+      return;
+    }
+
     host.innerHTML = `
       <div class="sun-tool-grid">
+        <div class="sun-subnav-bar" style="grid-column: 1 / -1; display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+          <button type="button" class="action-tool-btn primary" id="btn-subtab-sun" style="padding: 0.45rem 1rem; font-weight: 600;">☀️ Sun Path &amp; Shadow</button>
+          <button type="button" class="action-tool-btn" id="btn-subtab-shading" style="padding: 0.45rem 1rem; font-weight: 600;">🏛️ Solar Shading &amp; Overhang Calculator</button>
+        </div>
         <!-- Location & time inputs -->
         <section class="archi-card sun-input-card" aria-label="Location and time">
           <div class="result-header"><span class="result-label">SITE &amp; TIME</span></div>
@@ -230,6 +475,17 @@ export function createSunPathView(context) {
         </section>` : ''}
       </div>
     `;
+
+    document.getElementById('btn-subtab-shading')?.addEventListener('click', () => {
+      activeSubTab = 'solar_shading';
+      AudioService.playTick();
+      render();
+    });
+    document.getElementById('btn-subtab-sun')?.addEventListener('click', () => {
+      activeSubTab = 'sun_path';
+      AudioService.playTick();
+      render();
+    });
 
     document.getElementById('sun-run-btn')?.addEventListener('click', () => {
       readInputs();

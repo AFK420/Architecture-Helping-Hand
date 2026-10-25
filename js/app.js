@@ -2434,7 +2434,11 @@ const objectAdditions = [
   ['street-bollard','Street Bollard','transport',35,35,95,'pole'],
   ['street-curb-ramp','Curb Ramp Symbol','transport',150,180,15,'ramp'],
   ['street-lane-marker','Road Lane Marker','transport',25,300,0,'mat'],
-  ['mall-checkout','Mall Checkout Counter','commercial',250,100,95,'kitchen']
+  ['mall-checkout','Mall Checkout Counter','commercial',250,100,95,'kitchen'],
+  ['poker-table-oval','Poker Table (10-Player Casino/Home)','living',240,120,76,'sportsTable'],
+  ['toilet-stall-std','Standard Commercial Toilet Stall','bathroom',90,150,200,'toilet'],
+  ['toilet-stall-ada','ADA Accessible Toilet Stall','bathroom',155,155,200,'toilet'],
+  ['salon-shampoo-station','Hair Salon Backwash Shampoo Station','commercial',65,130,95,'basin']
 ];
 const ARCHITECTURAL_OBJECT_ADDITIONS = Object.freeze(objectAdditions.map(([id,name,category,wCm,dCm,hCm,type])=>Object.freeze({id,name,category,wCm,dCm,hCm,type,
   desc:'Editable schematic design footprint; verify the selected product and project requirements.',
@@ -2568,10 +2572,10 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "dishwasher-slim": {"family":"appliance","options":{}},
   "washing-machine": {"family":"appliance","options":{"laundry":true}},
   "tumble-dryer": {"family":"appliance","options":{"laundry":true}},
-  "toilet-std": {"family":"toilet","options":{}},
-  "toilet-wall": {"family":"toilet","options":{}},
-  "toilet-ada": {"family":"toilet","options":{"accessible":true}},
-  "bidet-std": {"family":"toilet","options":{}},
+  "toilet-std": {"family":"toilet","options":{"type":"standard"}},
+  "toilet-wall": {"family":"toilet","options":{"type":"wall_hung"}},
+  "toilet-ada": {"family":"toilet","options":{"accessible":true,"type":"ada"}},
+  "bidet-std": {"family":"toilet","options":{"type":"bidet"}},
   "urinal-wall": {"family":"toilet","options":{"urinal":true}},
   "basin-cloakroom": {"family":"basin","options":{}},
   "basin-pedestal": {"family":"basin","options":{}},
@@ -2588,19 +2592,19 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "shower-walkin-120": {"family":"shower","options":{}},
   "shower-walkin-150": {"family":"shower","options":{}},
   "shower-ada-rollin": {"family":"shower","options":{"accessible":true}},
-  "desk-compact": {"family":"desk","options":{}},
-  "desk-std-140": {"family":"desk","options":{}},
-  "desk-studio-160": {"family":"desk","options":{}},
-  "desk-standing-150": {"family":"desk","options":{}},
-  "desk-exec-180": {"family":"desk","options":{}},
+  "desk-compact": {"family":"desk","options":{"type":"compact"}},
+  "desk-std-140": {"family":"desk","options":{"type":"standard"}},
+  "desk-studio-160": {"family":"desk","options":{"type":"studio"}},
+  "desk-standing-150": {"family":"desk","options":{"type":"standing"}},
+  "desk-exec-180": {"family":"desk","options":{"type":"executive"}},
   "desk-corner-160": {"family":"deskLayout","options":{}},
   "desk-u-shaped": {"family":"deskLayout","options":{"u":true}},
   "drafting-table": {"family":"table","options":{"seats":12}},
-  "desk-pod-2p": {"family":"desk","options":{},"layout":{"rows":2,"columns":1}},
-  "desk-pod-4p": {"family":"desk","options":{},"layout":{"rows":2,"columns":2}},
-  "desk-pod-6p": {"family":"desk","options":{},"layout":{"rows":2,"columns":3}},
-  "reception-desk": {"family":"reception","options":{}},
-  "phone-booth": {"family":"room","options":{"booth":true}},
+  "desk-pod-2p": {"family":"desk","options":{"type":"pod"},"layout":{"rows":2,"columns":1}},
+  "desk-pod-4p": {"family":"desk","options":{"type":"pod"},"layout":{"rows":2,"columns":2}},
+  "desk-pod-6p": {"family":"desk","options":{"type":"pod"},"layout":{"rows":2,"columns":3}},
+  "reception-desk": {"family":"reception","options":{"type":"corporate"}},
+  "phone-booth": {"family":"acousticPod","options":{}},
   "conf-table-round": {"family":"table","options":{"round":true,"dining":true,"seats":12}},
   "conf-table-8p": {"family":"table","options":{"dining":true,"seats":8}},
   "conf-table-12p": {"family":"table","options":{"dining":true,"seats":12}},
@@ -2650,7 +2654,7 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "garage-single": {"family":"room","options":{}},
   "restaurant-booth-2p": {"family":"boothSeating","options":{"seats":1}},
   "restaurant-booth-4p": {"family":"boothSeating","options":{"seats":2}},
-  "bar-service-counter": {"family":"kitchen","options":{}},
+  "bar-service-counter": {"family":"kitchen","options":{"barStation":true}},
   "retail-clothing-rack": {"family":"storage","options":{"bays":2}},
   "retail-pos-counter": {"family":"checkout","options":{}},
   "supermarket-checkout": {"family":"checkout","options":{}},
@@ -2663,25 +2667,25 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "medical-exam-table": {"family":"medicalTable","options":{}},
   "dental-chair": {"family":"dental","options":{}},
   "massage-treatment-table": {"family":"medicalTable","options":{}},
-  "salon-styling-chair": {"family":"chair","options":{"arms":true}},
+  "salon-styling-chair": {"family":"chair","options":{"salon":true}},
   "waiting-room-chair": {"family":"chair","options":{"arms":true}},
   "hospital-bed-icu": {"family":"medicalBed","options":{"icu":true}},
   "bedside-screen": {"family":"screen","options":{"bays":2}},
   "medication-cart": {"family":"cart","options":{}},
   "wheelchair-parking-bay": {"family":"parking","options":{}},
-  "classroom-desk-single": {"family":"desk","options":{}},
-  "classroom-desk-double": {"family":"desk","options":{}},
+  "classroom-desk-single": {"family":"desk","options":{"type":"school_single"}},
+  "classroom-desk-double": {"family":"desk","options":{"type":"school_double"}},
   "lecture-hall-seat": {"family":"chair","options":{"arms":true}},
-  "teacher-desk": {"family":"desk","options":{}},
-  "whiteboard-wall": {"family":"window","options":{}},
+  "teacher-desk": {"family":"desk","options":{"type":"teacher"}},
+  "whiteboard-wall": {"family":"mobileWhiteboard","options":{}},
   "library-stack-double": {"family":"storage","options":{"bays":2}},
-  "library-carrel": {"family":"desk","options":{}},
+  "library-carrel": {"family":"desk","options":{"type":"carrel"}},
   "lab-bench-island": {"family":"lab","options":{}},
   "fume-hood": {"family":"lab","options":{"hood":true}},
   "kindergarten-cot": {"family":"bed","options":{"pillows":1}},
   "cafeteria-table-8": {"family":"table","options":{"seats":8,"dining":true}},
   "prayer-room-screen": {"family":"screen","options":{"bays":2}},
-  "childcare-cubby": {"family":"locker","options":{"bays":2}},
+  "childcare-cubby": {"family":"locker","options":{"bays":2,"cubby":true}},
   "pallet-standard": {"family":"pallet","options":{}},
   "pallet-rack-bay": {"family":"pallet","options":{"rack":true}},
   "forklift-aisle": {"family":"clearance","options":{}},
@@ -2699,7 +2703,7 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "goods-lift": {"family":"room","options":{}},
   "mezz-stair-industrial": {"family":"stairs","options":{}},
   "fire-hose-cabinet": {"family":"hose","options":{}},
-  "ev-charger-wall": {"family":"charger","options":{}},
+  "ev-charger-wall": {"family":"charger","options":{"fast":true}},
   "hosp-bed-standard": {"family":"medicalBed","options":{}},
   "hosp-bed-electric": {"family":"medicalBed","options":{"icu":true}},
   "hosp-bed-bariatric": {"family":"medicalBed","options":{"icu":true}},
@@ -2723,7 +2727,7 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "wheelchair-bariat": {"family":"wheelchair","options":{}},
   "walker-rollator": {"family":"walker","options":{}},
   "xray-room-set": {"family":"scanner","options":{}},
-  "ct-scanner": {"family":"scanner","options":{}},
+  "ct-scanner": {"family":"scanner","options":{"ct":true}},
   "mri-scanner": {"family":"scanner","options":{"mri":true}},
   "ultrasound-cart": {"family":"cart","options":{"monitor":true}},
   "ecg-cart": {"family":"cart","options":{"monitor":true}},
@@ -2736,13 +2740,13 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "waiting-chair-t": {"family":"chair","options":{"arms":true},"layout":{"rows":1,"columns":3}},
   "waiting-chair-q": {"family":"chair","options":{"arms":true},"layout":{"rows":1,"columns":4}},
   "trolley-supply": {"family":"cart","options":{}},
-  "crash-cart": {"family":"cart","options":{}},
+  "crash-cart": {"family":"cart","options":{"crash":true}},
   "medicine-cabinet": {"family":"storage","options":{"bays":2}},
   "scrub-sink": {"family":"basin","options":{}},
   "glove-box-stand": {"family":"device","options":{}},
   "biohazard-bin": {"family":"bin","options":{}},
   "sharps-container": {"family":"bin","options":{}},
-  "pharmacy-counter": {"family":"desk","options":{}},
+  "pharmacy-counter": {"family":"reception","options":{"type":"counter"}},
   "pharmacy-shelf": {"family":"storage","options":{"bays":2}},
   "lab-bench-double": {"family":"lab","options":{}},
   "fume-hood-lab": {"family":"lab","options":{"hood":true}},
@@ -2759,10 +2763,10 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "therapy-mat": {"family":"mat","options":{}},
   "pedal-exerciser": {"family":"walker","options":{}},
   "hydro-therapy": {"family":"court","options":{"pool":true}},
-  "police-desk": {"family":"reception","options":{}},
+  "police-desk": {"family":"reception","options":{"type":"security"}},
   "police-bench-custody": {"family":"bench","options":{"arms":true}},
   "custody-cell-bed": {"family":"bed","options":{"pillows":1}},
-  "custody-toilet": {"family":"toilet","options":{}},
+  "custody-toilet": {"family":"toilet","options":{"custody":true}},
   "evidence-locker": {"family":"locker","options":{"bays":2}},
   "weapons-cabinet": {"family":"storage","options":{"bays":2}},
   "interrogation-table": {"family":"table","options":{"seats":2}},
@@ -2770,22 +2774,22 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "comms-rack": {"family":"storage","options":{"bays":2}},
   "breathing-apparatus": {"family":"scba","options":{}},
   "fire-pole": {"family":"firePole","options":{}},
-  "gear-rack-fire": {"family":"locker","options":{"bays":1,"gear":true}},
+  "gear-rack-fire": {"family":"locker","options":{"bays":1,"fire":true,"gear":true}},
   "booth-fire-truck": {"family":"vehicle","options":{}},
   "hose-tower": {"family":"room","options":{}},
   "fire-truck-2": {"family":"vehicle","options":{"truck":true,"emergency":true}},
   "ambulance": {"family":"vehicle","options":{"emergency":true}},
   "police-car": {"family":"vehicle","options":{"emergency":true}},
-  "police-suv": {"family":"vehicle","options":{"emergency":true}},
-  "motorbike-patrol": {"family":"bicycle","options":{"motorcycle":true}},
+  "police-suv": {"family":"vehicle","options":{"suv":true,"emergency":true}},
+  "motorbike-patrol": {"family":"bicycle","options":{"motorcycle":true,"police":true}},
   "holding-cell": {"family":"room","options":{"cell":true}},
   "riot-gear-locker": {"family":"locker","options":{"bays":2}},
-  "duty-desk-sgt": {"family":"desk","options":{}},
+  "duty-desk-sgt": {"family":"desk","options":{"type":"executive"}},
   "bullet-glass-booth": {"family":"room","options":{"booth":true}},
   "xray-scanner-sec": {"family":"portal","options":{"scanner":true}},
   "metal-detector-arch": {"family":"portal","options":{}},
   "bollard-security": {"family":"bollard","options":{}},
-  "front-desk-sec": {"family":"reception","options":{}},
+  "front-desk-sec": {"family":"reception","options":{"type":"security"}},
   "cctv-wall": {"family":"storage","options":{"bays":2}},
   "armory-workbench": {"family":"table","options":{"seats":2}},
   "court-bench": {"family":"bench","options":{"arms":true}},
@@ -2819,7 +2823,7 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "scoreboard-led": {"family":"device","options":{}},
   "floodlight-mast": {"family":"light","options":{}},
   "dugout-shelter": {"family":"shelter","options":{}},
-  "ticket-turnstile": {"family":"portal","options":{}},
+  "ticket-turnstile": {"family":"turnstile","options":{}},
   "goal-football": {"family":"net","options":{}},
   "goal-futsal": {"family":"net","options":{}},
   "goal-handball": {"family":"net","options":{}},
@@ -2839,11 +2843,11 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "rower": {"family":"rower","options":{}},
   "stair-climber": {"family":"bike","options":{}},
   "smith-rack": {"family":"benchPress","options":{"machine":true}},
-  "power-rack": {"family":"benchPress","options":{"machine":true}},
+  "power-rack": {"family":"squatRack","options":{}},
   "bench-press": {"family":"benchPress","options":{}},
-  "dumbbell-rack": {"family":"storage","options":{"bays":2}},
+  "dumbbell-rack": {"family":"dumbbellRack","options":{}},
   "plate-tree": {"family":"pole","options":{}},
-  "cable-crossover": {"family":"rig","options":{"cable":true}},
+  "cable-crossover": {"family":"cableCrossover","options":{}},
   "lat-pulldown": {"family":"benchPress","options":{"machine":true}},
   "leg-press": {"family":"benchPress","options":{"machine":true}},
   "functional-rig": {"family":"rig","options":{}},
@@ -2861,27 +2865,27 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "cinema-screen": {"family":"screen","options":{"bays":2}},
   "projector-booth": {"family":"room","options":{"booth":true}},
   "cinema-row-8std": {"family":"cinemaRow","options":{"seats":8}},
-  "concession-counter": {"family":"desk","options":{}},
+  "concession-counter": {"family":"reception","options":{"type":"counter"}},
   "popcorn-machine": {"family":"arcade","options":{}},
   "ticket-booth-cine": {"family":"room","options":{"booth":true}},
   "arcade-cabinet": {"family":"arcade","options":{}},
   "arcade-racing": {"family":"arcade","options":{"racing":true}},
   "arcade-dance": {"family":"arcade","options":{}},
   "air-hockey": {"family":"sportsTable","options":{"hockey":true}},
-  "pingpong-table": {"family":"sportsTable","options":{}},
+  "pingpong-table": {"family":"sportsTable","options":{"pingpong":true}},
   "foosball": {"family":"sportsTable","options":{"foosball":true}},
   "pool-table-7ft": {"family":"poolTable","options":{}},
   "pool-table-9ft": {"family":"poolTable","options":{}},
   "dartboard-zone": {"family":"dartboard","options":{}},
   "console-lounge-pod": {"family":"room","options":{}},
-  "esports-station": {"family":"desk","options":{}},
-  "esports-row-5": {"family":"desk","options":{},"layout":{"rows":1,"columns":5}},
+  "esports-station": {"family":"desk","options":{"type":"esports"}},
+  "esports-row-5": {"family":"desk","options":{"type":"esports"},"layout":{"rows":1,"columns":5}},
   "vr-arena-pad": {"family":"vrZone","options":{}},
   "gaming-lounge-seat": {"family":"chair","options":{"arms":true,"recline":true}},
-  "caravan-2berth": {"family":"vehicle","options":{}},
-  "caravan-4berth": {"family":"vehicle","options":{}},
-  "motorhome-alcove": {"family":"vehicle","options":{}},
-  "camper-van": {"family":"vehicle","options":{}},
+  "caravan-2berth": {"family":"vehicle","options":{"caravan":true,"berths":2}},
+  "caravan-4berth": {"family":"vehicle","options":{"caravan":true,"berths":4}},
+  "motorhome-alcove": {"family":"vehicle","options":{"camper":true}},
+  "camper-van": {"family":"vehicle","options":{"camper":true}},
   "rv-pitch": {"family":"parking","options":{}},
   "tent-family": {"family":"pergola","options":{}},
   "tent-gazebo": {"family":"pergola","options":{}},
@@ -2902,23 +2906,23 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "sun-lounger-pool": {"family":"chair","options":{"arms":true,"recline":true}},
   "parasol-base": {"family":"roundShade","options":{}},
   "shade-sail": {"family":"pergola","options":{}},
-  "school-desk-single": {"family":"desk","options":{}},
-  "school-desk-double": {"family":"desk","options":{}},
-  "school-desk-exam": {"family":"desk","options":{}},
-  "teacher-desk-class": {"family":"desk","options":{}},
-  "classroom-row-5": {"family":"desk","options":{},"layout":{"rows":1,"columns":5}},
-  "whiteboard-3m": {"family":"screen","options":{"bays":2}},
+  "school-desk-single": {"family":"desk","options":{"type":"school_single"}},
+  "school-desk-double": {"family":"desk","options":{"type":"school_double"}},
+  "school-desk-exam": {"family":"desk","options":{"type":"school_single"}},
+  "teacher-desk-class": {"family":"desk","options":{"type":"teacher"}},
+  "classroom-row-5": {"family":"desk","options":{"type":"school_single"},"layout":{"rows":1,"columns":5}},
+  "whiteboard-3m": {"family":"mobileWhiteboard","options":{}},
   "smartboard-86": {"family":"device","options":{}},
   "locker-student": {"family":"locker","options":{"bays":2}},
   "library-shelf-double": {"family":"storage","options":{"bays":2}},
-  "reading-carrel": {"family":"desk","options":{}},
+  "reading-carrel": {"family":"desk","options":{"type":"carrel"}},
   "lab-station-4": {"family":"lab","options":{}},
   "fume-hood-school": {"family":"lab","options":{"hood":true}},
   "canteen-table-8": {"family":"table","options":{"seats":8,"dining":true}},
   "nursery-playtable": {"family":"table","options":{"seats":2}},
   "nursery-cubby": {"family":"storage","options":{"bays":2}},
   "lecture-tiers": {"family":"stairs","options":{}},
-  "lecture-podium": {"family":"desk","options":{}},
+  "lecture-podium": {"family":"reception","options":{"type":"podium"}},
   "instrument-locker": {"family":"locker","options":{"bays":2}},
   "art-easel-class": {"family":"easel","options":{}},
   "kiln-art": {"family":"pressureAppliance","options":{"kiln":true}},
@@ -2927,10 +2931,10 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "hotel-bed-king": {"family":"bed","options":{"pillows":2}},
   "luggage-rack": {"family":"table","options":{"seats":2}},
   "minibar": {"family":"appliance","options":{"fridge":true}},
-  "hotel-workdesk": {"family":"desk","options":{}},
+  "hotel-workdesk": {"family":"desk","options":{"type":"compact"}},
   "hotel-wardrobe-mini": {"family":"storage","options":{"bays":2,"hanging":true}},
-  "hotel-bell-desk": {"family":"desk","options":{}},
-  "concierge-desk": {"family":"desk","options":{}},
+  "hotel-bell-desk": {"family":"reception","options":{"type":"hotel"}},
+  "concierge-desk": {"family":"reception","options":{"type":"hotel"}},
   "housekeeping-cart": {"family":"cart","options":{}},
   "room-service-table": {"family":"table","options":{"seats":2}},
   "banquet-round-10": {"family":"table","options":{"round":true,"dining":true,"seats":10}},
@@ -2938,26 +2942,26 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "banquet-long": {"family":"table","options":{"dining":true,"seats":3}},
   "chafing-station": {"family":"table","options":{"seats":2}},
   "cocktail-high-top": {"family":"table","options":{"seats":2}},
-  "bar-counter": {"family":"desk","options":{}},
+  "bar-counter": {"family":"kitchen","options":{"barStation":true}},
   "back-bar-shelf": {"family":"storage","options":{"bays":2}},
   "bar-stool-pub": {"family":"chair","options":{"arms":true}},
   "booth-4": {"family":"boothSeating","options":{"seats":2}},
   "booth-6": {"family":"boothSeating","options":{"seats":3}},
   "pos-terminal": {"family":"device","options":{}},
-  "hostess-stand": {"family":"desk","options":{}},
-  "kitchen-line-6": {"family":"appliance","options":{}},
+  "hostess-stand": {"family":"reception","options":{"type":"podium"}},
+  "kitchen-line-6": {"family":"kitchen","options":{"range6":true}},
   "salamander": {"family":"oven","options":{}},
   "walk-in-cooler": {"family":"room","options":{}},
   "dish-return": {"family":"appliance","options":{}},
   "pew-5": {"family":"bench","options":{"arms":true}},
   "altar-table": {"family":"table","options":{}},
-  "podium-lectern-worship": {"family":"desk","options":{}},
+  "podium-lectern-worship": {"family":"reception","options":{"type":"podium"}},
   "fountain-baptismal": {"family":"fountain","options":{}},
   "mihrab-rug": {"family":"mat","options":{}},
   "car-compact-mini": {"family":"vehicle","options":{}},
   "car-sedan": {"family":"vehicle","options":{}},
-  "car-suv": {"family":"vehicle","options":{}},
-  "car-van": {"family":"vehicle","options":{}},
+  "car-suv": {"family":"vehicle","options":{"suv":true}},
+  "car-van": {"family":"vehicle","options":{"van":true}},
   "car-pickup": {"family":"vehicle","options":{"truck":true}},
   "ev-charging": {"family":"parking","options":{"ev":true}},
   "parking-bay-std": {"family":"parking","options":{}},
@@ -2965,16 +2969,16 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "parking-bay-parallel": {"family":"parking","options":{}},
   "bus-stop": {"family":"shelter","options":{}},
   "bus-12m": {"family":"vehicle","options":{"bus":true}},
-  "bus-articulated": {"family":"vehicle","options":{"bus":true}},
+  "bus-articulated": {"family":"vehicle","options":{"bus":true,"articulated":true}},
   "coach-tour": {"family":"vehicle","options":{"bus":true}},
   "taxi-rank": {"family":"parking","options":{}},
   "bike-rack-5": {"family":"bikeRack","options":{"bays":5}},
   "bike-parking-row-10": {"family":"parking","options":{}},
   "escooter-dock": {"family":"bikeRack","options":{"bays":6}},
   "motorbike-bay": {"family":"bicycle","options":{"motorcycle":true}},
-  "delivery-cargo-bike": {"family":"bicycle","options":{}},
-  "tram-module": {"family":"vehicle","options":{"bus":true}},
-  "train-carriage": {"family":"vehicle","options":{"bus":true}},
+  "delivery-cargo-bike": {"family":"bicycle","options":{"cargo":true}},
+  "tram-module": {"family":"vehicle","options":{"tram":true}},
+  "train-carriage": {"family":"vehicle","options":{"train":true}},
   "platform-edge": {"family":"ramp","options":{}},
   "helipad": {"family":"helipad","options":{}},
   "kiss-ride": {"family":"parking","options":{}},
@@ -2987,14 +2991,14 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "tree-oak-veteran": {"family":"tree","options":{"species":"deciduous"}},
   "tree-birch-young": {"family":"tree","options":{"species":"deciduous"}},
   "tree-birch-mature": {"family":"tree","options":{"species":"deciduous"}},
-  "tree-maple-young": {"family":"tree","options":{"species":"deciduous"}},
-  "tree-maple-mature": {"family":"tree","options":{"species":"deciduous"}},
+  "tree-maple-young": {"family":"tree","options":{"species":"japanese_maple"}},
+  "tree-maple-mature": {"family":"tree","options":{"species":"japanese_maple"}},
   "tree-pine-young": {"family":"tree","options":{"species":"conifer"}},
   "tree-pine-mature": {"family":"tree","options":{"species":"conifer"}},
   "tree-palm-young": {"family":"tree","options":{"species":"palm"}},
   "tree-palm-mature": {"family":"tree","options":{"species":"palm"}},
-  "tree-cypress-young": {"family":"tree","options":{"species":"conifer"}},
-  "tree-cypress-mature": {"family":"tree","options":{"species":"conifer"}},
+  "tree-cypress-young": {"family":"tree","options":{"species":"cypress"}},
+  "tree-cypress-mature": {"family":"tree","options":{"species":"cypress"}},
   "tree-olive-young": {"family":"tree","options":{"species":"olive"}},
   "tree-olive-mature": {"family":"tree","options":{"species":"olive"}},
   "tree-cherry-young": {"family":"tree","options":{"species":"ornamental"}},
@@ -3140,10 +3144,10 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "police-interview-table": {"family":"table","options":{"seats":2}},
   "police-fingerprint": {"family":"reception","options":{"fingerprint":true}},
   "police-barrier-gate": {"family":"gate","options":{}},
-  "fire-turnout-locker": {"family":"locker","options":{"bays":1,"gear":true}},
+  "fire-turnout-locker": {"family":"locker","options":{"bays":1,"fire":true,"gear":true}},
   "fire-scba-storage": {"family":"scba","options":{}},
   "fire-hose-rack": {"family":"hose","options":{}},
-  "fire-watch-desk": {"family":"desk","options":{}},
+  "fire-watch-desk": {"family":"desk","options":{"type":"console"}},
   "fire-sleeping-bunk": {"family":"bed","options":{"pillows":1,"bunk":true}},
   "fire-decontamination": {"family":"basin","options":{}},
   "park-bench-slat": {"family":"bench","options":{"arms":true}},
@@ -3161,7 +3165,11 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   "street-bollard": {"family":"bollard","options":{}},
   "street-curb-ramp": {"family":"ramp","options":{}},
   "street-lane-marker": {"family":"mat","options":{}},
-  "mall-checkout": {"family":"checkout","options":{}}
+  "mall-checkout": {"family":"checkout","options":{}},
+  "poker-table-oval": {"family":"sportsTable","options":{"poker":true}},
+  "toilet-stall-std": {"family":"toilet","options":{"stall":true}},
+  "toilet-stall-ada": {"family":"toilet","options":{"stall":true,"accessible":true}},
+  "salon-shampoo-station": {"family":"basin","options":{"shampoo":true}}
 });
 
 
@@ -3169,21 +3177,93 @@ const OBJECT_GEOMETRY_BINDINGS = Object.freeze({
   // MODULE: ObjectPrimitives
   // =========================================================================
 
-/** Normalized CAD primitives. Curves are sampled polylines, never raster images. */
-function objectDrawing(layer='A-FURN') {
-  const entities=[];
-  const path=(points,closed=false)=>entities.push({type:'polyline',points,closed,layer});
-  const line=(x1,y1,x2,y2)=>entities.push({type:'line',x1,y1,x2,y2,layer});
-  const rect=(x,y,w,h)=>path([[x,y],[x+w,y],[x+w,y+h],[x,y+h]],true);
-  const ellipse=(x,y,rx,ry=rx)=>path(Array.from({length:48},(_,i)=>{const a=i*Math.PI/24;return [x+rx*Math.cos(a),y+ry*Math.sin(a)];}),true);
-  const arc=(x,y,rx,ry,start,end)=>path(Array.from({length:33},(_,i)=>{const a=start+(end-start)*i/32;return [x+rx*Math.cos(a),y+ry*Math.sin(a)];}));
-  const seat=(x,y,w,h,arms=true)=>{rect(x+w*.12,y+h*.2,w*.76,h*.7);rect(x+w*.1,y,w*.8,h*.2);if(arms){rect(x,y+h*.08,w*.12,h*.82);rect(x+w*.88,y+h*.08,w*.12,h*.82);}};
-  const wheels=(x,y,w,h)=>{for(const xx of [x,x+w])for(const yy of [y,y+h])ellipse(xx,yy,.025,.035);};
-  return {entities,path,line,rect,ellipse,arc,seat,wheels};
+/** Normalized CAD primitives for architectural plan blocks. Curves are sampled polylines, never raster images. */
+function objectDrawing(layer = 'A-FURN') {
+  const entities = [];
+  const path = (points, closed = false) => entities.push({ type: 'polyline', points, closed, layer });
+  const line = (x1, y1, x2, y2) => entities.push({ type: 'line', x1, y1, x2, y2, layer });
+  const rect = (x, y, w, h) => path([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], true);
+  const ellipse = (x, y, rx, ry = rx, steps = 48) => path(Array.from({ length: steps }, (_, i) => {
+    const a = i * 2 * Math.PI / steps;
+    return [x + rx * Math.cos(a), y + ry * Math.sin(a)];
+  }), true);
+  const circle = (x, y, r, steps = 36) => ellipse(x, y, r, r, steps);
+  const arc = (x, y, rx, ry, start, end, steps = 32) => path(Array.from({ length: steps + 1 }, (_, i) => {
+    const a = start + (end - start) * i / steps;
+    return [x + rx * Math.cos(a), y + ry * Math.sin(a)];
+  }));
+
+  const roundRect = (x, y, w, h, r = 0.03, steps = 6) => {
+    r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+    if (r <= 0.001) return rect(x, y, w, h);
+    const pts = [];
+    const corner = (cx, cy, sa, ea) => {
+      for (let i = 0; i <= steps; i++) {
+        const a = sa + (ea - sa) * i / steps;
+        pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+      }
+    };
+    corner(x + w - r, y + r, -Math.PI / 2, 0);
+    corner(x + w - r, y + h - r, 0, Math.PI / 2);
+    corner(x + r, y + h - r, Math.PI / 2, Math.PI);
+    corner(x + r, y + r, Math.PI, 3 * Math.PI / 2);
+    path(pts, true);
+  };
+
+  const pillow = (x, y, w, h) => {
+    const r = Math.min(w, h) * 0.28;
+    roundRect(x, y, w, h, r);
+    const mx = x + w / 2, my = y + h / 2;
+    if (w >= h) {
+      arc(mx, my - h * 0.05, w * 0.28, h * 0.18, 0.15 * Math.PI, 0.85 * Math.PI, 16);
+    } else {
+      arc(mx - w * 0.05, my, w * 0.18, h * 0.28, -0.35 * Math.PI, 0.35 * Math.PI, 16);
+    }
+  };
+
+  const seat = (x, y, w, h, arms = true) => {
+    const backH = h * 0.22;
+    const armW = arms ? w * 0.13 : 0;
+    roundRect(x, y, w, h, 0.03);
+    roundRect(x + armW * 0.2, y, w - armW * 0.4, backH, 0.02);
+    line(x + armW * 0.2, y + backH * 0.5, x + w - armW * 0.2, y + backH * 0.5);
+    const seatW = w - 2 * armW;
+    const seatH = h - backH;
+    roundRect(x + armW, y + backH * 0.9, seatW, seatH, 0.03);
+    line(x + armW + 0.02, y + h - 0.03, x + w - armW - 0.02, y + h - 0.03);
+    if (arms) {
+      roundRect(x, y + backH * 0.2, armW, h - backH * 0.2, armW * 0.35);
+      roundRect(x + w - armW, y + backH * 0.2, armW, h - backH * 0.2, armW * 0.35);
+      line(x + armW * 0.5, y + backH * 0.35, x + armW * 0.5, y + h - 0.04);
+      line(x + w - armW * 0.5, y + backH * 0.35, x + w - armW * 0.5, y + h - 0.04);
+    }
+  };
+
+  const starBase = (cx, cy, r, prongs = 5) => {
+    circle(cx, cy, r * 0.16);
+    circle(cx, cy, r * 0.07);
+    for (let i = 0; i < prongs; i++) {
+      const a = i * 2 * Math.PI / prongs - Math.PI / 2;
+      const ex = cx + r * Math.cos(a), ey = cy + r * Math.sin(a);
+      line(cx + r * 0.16 * Math.cos(a), cy + r * 0.16 * Math.sin(a), ex, ey);
+      ellipse(ex, ey, r * 0.1, r * 0.05);
+    }
+  };
+
+  const wheels = (x, y, w, h) => {
+    for (const xx of [x, x + w]) {
+      for (const yy of [y, y + h]) {
+        ellipse(xx, yy, 0.025, 0.035);
+        line(xx - 0.018, yy, xx + 0.018, yy);
+      }
+    }
+  };
+
+  return { entities, path, line, rect, roundRect, ellipse, circle, arc, pillow, seat, starBase, wheels };
 }
 
 function objectLayout(parts) {
-  return parts.flatMap(({geometry,x=0,y=0,w=1,h=1})=>geometry.map(e=>e.type==='line'?{...e,x1:x+e.x1*w,y1:y+e.y1*h,x2:x+e.x2*w,y2:y+e.y2*h}:{...e,points:e.points.map(([px,py])=>[x+px*w,y+py*h])}));
+  return parts.flatMap(({ geometry, x = 0, y = 0, w = 1, h = 1 }) => geometry.map(e => e.type === 'line' ? { ...e, x1: x + e.x1 * w, y1: y + e.y1 * h, x2: x + e.x2 * w, y2: y + e.y2 * h } : { ...e, points: e.points.map(([px, py]) => [x + px * w, y + py * h]) }));
 }
 
 
@@ -3192,20 +3272,794 @@ function objectLayout(parts) {
   // =========================================================================
 
 
+
 const RESIDENTIAL_GEOMETRY = {
-  sofa: o=>{const g=objectDrawing();g.seat(0,0,1,1);for(let i=1;i<o.seats;i++)g.line(.12+.76*i/o.seats,.2,.12+.76*i/o.seats,.9);if(o.tufted)for(let i=0;i<8;i++)g.ellipse(.18+i*.09,.1,.017);return g.entities;},
-  sectional: o=>{const g=objectDrawing();g.path([[0,0],[1,0],[1,.4],[.4,.4],[.4,1],[0,1]],true);g.line(.1,.1,.9,.1);g.line(.1,.1,.1,.9);for(let n=1;n<4;n++)g.line(n*.23,.1,n*.23,.4);if(o.u){g.path([[.7,.4],[1,.4],[1,1],[.7,1]],true);g.line(.9,.4,.9,.9);}return g.entities;},
-  chair: o=>{const g=objectDrawing();g.seat(.05,.03,.9,.9,o.arms);if(o.wings){g.path([[.05,.3],[0,.1],[.2,0],[.8,0],[1,.1],[.95,.3]]);g.arc(.5,.15,.45,.12,Math.PI,2*Math.PI);}if(o.recline){g.rect(.2,.7,.6,.3);g.line(.2,.7,.8,.7);}if(o.task){for(let a=0;a<5;a++){const t=a*Math.PI*.4;g.line(.5,.5,.5+.48*Math.cos(t),.5+.48*Math.sin(t));}}return g.entities;},
-  bed: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.04,.08,.92,.88);g.rect(0,0,1,.07);for(let i=0;i<o.pillows;i++)g.rect(.1+i*.8/o.pillows,.12,.72/o.pillows,.18);g.line(.04,.42,.96,.42);if(o.bunk){for(let y=.75;y<1;y+=.06)g.line(.2,y,.8,y);for(const x of [.04,.96])for(const y of [.04,.96])g.ellipse(x,y,.025);}if(o.trundle){g.rect(.08,.54,.84,.38);g.rect(.4,.94,.2,.03);g.line(.08,.68,.92,.68);}if(o.crib)for(let i=1;i<12;i++){g.line(0,i/12,.07,i/12);g.line(.93,i/12,1,i/12);}return g.entities;},
-  table: o=>{const g=objectDrawing();if(o.round)g.ellipse(.5,.5,.5,.5);else g.rect(0,0,1,1);if(o.nesting){g.rect(.05,.1,.45,.8);g.rect(.55,.3,.4,.6);}else if(o.dining){g.rect(.08,.08,.84,.84);const count=o.seats||4;for(let i=0;i<count;i++){const a=i*2*Math.PI/count;g.ellipse(.5+.43*Math.cos(a),.5+.43*Math.sin(a),.045,.045);}}else{for(const x of [.08,.92])for(const y of [.1,.9])g.rect(x-.03,y-.03,.06,.06);}return g.entities;},
-  desk: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.12,.1,.5,.25);g.line(.38,.35,.38,.45);g.rect(.2,.46,.28,.1);g.rect(.73,.08,.2,.85);for(let y=.2;y<.9;y+=.2)g.line(.73,y,.93,y);if(o.console){g.rect(.06,.1,.22,.25);g.rect(.66,.1,.22,.25);}return g.entities;},
-  storage: o=>{const g=objectDrawing();g.rect(0,0,1,1);const bays=o.bays||2;for(let i=0;i<bays;i++){g.rect(i/bays+.025,.1,1/bays-.05,.8);g.line(i/bays+.08,.14,(i+1)/bays-.08,.14);}if(o.hanging)for(let i=0;i<bays;i++)g.line(i/bays+.06,.55,(i+1)/bays-.06,.55);return g.entities;},
-  kitchen: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.04,.06,.92,.88);if(o.sink){g.ellipse(.3,.5,.17,.28);g.line(.3,.1,.3,.25);}if(o.cooktop)for(const x of [.27,.7])for(const y of [.3,.7])g.ellipse(x,y,.11,.17);if(o.bar)for(let x=.15;x<.9;x+=.25)g.ellipse(x,.85,.065,.09);if(o.bbq){g.rect(.12,.2,.5,.6);for(let x=.15;x<.65;x+=.06)g.line(x,.25,x,.75);g.ellipse(.82,.5,.11);}return g.entities;},
-  appliance: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.06,.07,.88,.86);if(o.laundry){g.ellipse(.5,.5,.32,.32);g.rect(.1,.08,.8,.1);}else if(o.fridge){g.line(.5,0,.5,1);g.rect(.38,.1,.04,.45);g.rect(.58,.1,.04,.45);}else{g.rect(.1,.1,.8,.2);g.line(.18,.25,.82,.25);g.rect(.17,.45,.66,.4);}return g.entities;},
-  toilet: o=>{const g=objectDrawing();g.rect(.1,0,.8,.22);g.ellipse(.5,.57,.45,.42);g.ellipse(.5,.57,.28,.26);if(o.accessible){g.line(0,.18,0,.9);g.line(1,.18,1,.9);}if(o.urinal){g.path([[.2,0],[.8,0],[.7,.9],[.3,.9]],true);g.ellipse(.5,.7,.04);}return g.entities;},
-  basin: o=>{const g=objectDrawing();g.rect(0,0,1,1);const count=o.double?2:1;for(let i=0;i<count;i++){const x=(i+.5)/count;g.ellipse(x,.52,.38/count,.35);g.ellipse(x,.52,.025);g.line(x,.04,x,.17);}return g.entities;},
-  bath: o=>{const g=objectDrawing();if(o.corner){g.path([[0,0],[1,0],...Array.from({length:33},(_,i)=>[Math.cos(i*Math.PI/64),Math.sin(i*Math.PI/64)])],true);g.arc(.1,.1,.75,.75,0,Math.PI/2);}else{g.ellipse(.5,.5,.5,.5);g.ellipse(.5,.5,.42,.42);}if(o.jets)for(let n=0;n<8;n++){const t=n*Math.PI/4;g.ellipse(.5+.38*Math.cos(t),.5+.38*Math.sin(t),.025);}g.ellipse(.5,.2,.035);return g.entities;},
-  shower: o=>{const g=objectDrawing();g.path(o.corner?[[0,0],[1,0],[1,.55],[.55,1],[0,1]]:[[0,0],[1,0],[1,1],[0,1]],true);g.ellipse(.5,.5,.04);for(const [x,y] of [[0,0],[1,0],[1,1],[0,1]])g.line(x,y,.5,.5);if(o.accessible){g.rect(.04,.05,.3,.28);g.line(.05,.4,.05,.9);}return g.entities;}
+  sofa: o => {
+    const g = objectDrawing();
+    const count = o.seats || 3;
+    g.roundRect(0, 0, 1, 1, 0.04);
+    g.roundRect(0.04, 0, 0.92, 0.22, 0.03);
+    g.line(0.06, 0.11, 0.94, 0.11);
+    g.roundRect(0, 0.08, 0.13, 0.92, 0.04);
+    g.roundRect(0.87, 0.08, 0.13, 0.92, 0.04);
+    for (let i = 1; i < count; i++) {
+      const sx = 0.13 + 0.74 * i / count;
+      g.line(sx, 0.22, sx, 0.96);
+    }
+    for (let i = 0; i < count; i++) {
+      const x1 = 0.15 + 0.74 * i / count;
+      const x2 = 0.13 + 0.74 * (i + 1) / count - 0.02;
+      g.line(x1, 0.94, x2, 0.94);
+    }
+    g.pillow(0.14, 0.23, 0.09, 0.24);
+    g.pillow(0.77, 0.23, 0.09, 0.24);
+    if (o.tufted) {
+      g.arc(0.065, 0.88, 0.04, 0.05, 0, 2 * Math.PI, 16);
+      g.arc(0.935, 0.88, 0.04, 0.05, 0, 2 * Math.PI, 16);
+      for (let i = 0; i < 8; i++) {
+        const bx = 0.16 + i * 0.09;
+        g.circle(bx, 0.11, 0.016);
+        g.line(bx - 0.03, 0.05, bx + 0.03, 0.17);
+        g.line(bx - 0.03, 0.17, bx + 0.03, 0.05);
+      }
+    }
+    return g.entities;
+  },
+
+  sectional: o => {
+    const g = objectDrawing();
+    if (o.u) {
+      g.path([[0, 0], [1, 0], [1, 1], [0.72, 1], [0.72, 0.38], [0.28, 0.38], [0.28, 1], [0, 1]], true);
+      g.line(0.14, 0.14, 0.86, 0.14);
+      g.line(0.14, 0.14, 0.14, 0.96);
+      g.line(0.86, 0.14, 0.86, 0.96);
+      g.line(0.14, 0.14, 0.28, 0.38);
+      g.line(0.86, 0.14, 0.72, 0.38);
+      for (let y = 0.58; y < 0.95; y += 0.2) {
+        g.line(0, y, 0.28, y);
+        g.line(0.72, y, 1, y);
+      }
+      g.line(0.44, 0, 0.44, 0.38);
+      g.line(0.56, 0, 0.56, 0.38);
+      g.pillow(0.16, 0.18, 0.1, 0.1);
+      g.pillow(0.74, 0.18, 0.1, 0.1);
+    } else {
+      g.path([[0, 0], [1, 0], [1, 0.38], [0.38, 0.38], [0.38, 1], [0, 1]], true);
+      g.line(0.14, 0.14, 0.96, 0.14);
+      g.line(0.14, 0.14, 0.14, 0.96);
+      g.line(0.14, 0.14, 0.38, 0.38);
+      for (let x = 0.54; x < 0.95; x += 0.2) g.line(x, 0.14, x, 0.38);
+      for (let y = 0.54; y < 0.95; y += 0.2) g.line(0.14, y, 0.38, y);
+      g.pillow(0.16, 0.16, 0.1, 0.1);
+      g.pillow(0.86, 0.16, 0.08, 0.18);
+      g.pillow(0.16, 0.86, 0.18, 0.08);
+    }
+    return g.entities;
+  },
+
+  chair: o => {
+    const g = objectDrawing();
+    if (o.salon || o.barber) {
+      g.rect(0, 0, 1, 1);
+      g.circle(0.5, 0.5, 0.48);
+      g.circle(0.5, 0.5, 0.42);
+      g.circle(0.5, 0.5, 0.14);
+      g.roundRect(0.45, 0.88, 0.1, 0.12, 0.02);
+      g.line(0.42, 0.95, 0.58, 0.95);
+      g.roundRect(0.2, 0.3, 0.6, 0.44, 0.06);
+      g.roundRect(0.22, 0.1, 0.56, 0.2, 0.05);
+      g.roundRect(0.34, 0.02, 0.32, 0.09, 0.03);
+      g.line(0.45, 0.1, 0.45, 0.12);
+      g.line(0.55, 0.1, 0.55, 0.12);
+      g.roundRect(0.08, 0.32, 0.1, 0.4, 0.03);
+      g.roundRect(0.82, 0.32, 0.1, 0.4, 0.03);
+      g.roundRect(0.24, 0.76, 0.52, 0.18, 0.03);
+      for (let y = 0.8; y < 0.92; y += 0.04) g.line(0.28, y, 0.72, y);
+    } else if (o.task) {
+      g.rect(0, 0, 1, 1);
+      g.starBase(0.5, 0.52, 0.46, 5);
+      g.roundRect(0.15, 0.26, 0.7, 0.54, 0.1);
+      g.arc(0.5, 0.76, 0.32, 0.04, 0, Math.PI, 16);
+      g.roundRect(0.18, 0.04, 0.64, 0.2, 0.06);
+      g.rect(0.46, 0.22, 0.08, 0.06);
+      if (o.arms) {
+        g.roundRect(0.04, 0.32, 0.11, 0.36, 0.04);
+        g.roundRect(0.85, 0.32, 0.11, 0.36, 0.04);
+        g.line(0.15, 0.5, 0.08, 0.5);
+        g.line(0.85, 0.5, 0.92, 0.5);
+      }
+    } else if (o.wings) {
+      g.roundRect(0, 0, 1, 1, 0.04);
+      g.path([[0.05, 0.32], [0, 0.12], [0.15, 0], [0.85, 0], [1, 0.12], [0.95, 0.32]]);
+      g.arc(0.5, 0.15, 0.45, 0.12, Math.PI, 2 * Math.PI, 24);
+      g.roundRect(0, 0.12, 0.15, 0.86, 0.05);
+      g.roundRect(0.85, 0.12, 0.15, 0.86, 0.05);
+      g.roundRect(0.18, 0.22, 0.64, 0.72, 0.06);
+      g.pillow(0.32, 0.26, 0.36, 0.16);
+    } else if (o.recline) {
+      g.roundRect(0, 0, 1, 1, 0.04);
+      g.roundRect(0.16, 0.68, 0.68, 0.3, 0.04);
+      g.line(0.16, 0.82, 0.84, 0.82);
+      g.roundRect(0.14, 0.26, 0.72, 0.4, 0.04);
+      g.roundRect(0.18, 0.02, 0.64, 0.22, 0.06);
+      g.pillow(0.25, 0.05, 0.5, 0.14);
+      if (o.arms) {
+        g.roundRect(0.02, 0.12, 0.12, 0.54, 0.04);
+        g.roundRect(0.86, 0.12, 0.12, 0.54, 0.04);
+      }
+    } else {
+      g.seat(0.02, 0.02, 0.96, 0.96, o.arms);
+      g.line(0.18, 0.88, 0.82, 0.88);
+    }
+    return g.entities;
+  },
+
+  bed: o => {
+    const g = objectDrawing();
+    g.roundRect(0, 0, 1, 0.08, 0.01);
+    g.roundRect(0.03, 0.08, 0.94, 0.92, 0.04);
+    g.roundRect(0.06, 0.11, 0.88, 0.86, 0.03);
+    const pCount = o.pillows || 2;
+    for (let i = 0; i < pCount; i++) {
+      g.pillow(0.1 + i * 0.8 / pCount, 0.13, 0.72 / pCount, 0.2);
+    }
+    g.line(0.06, 0.38, 0.94, 0.38);
+    g.line(0.06, 0.42, 0.94, 0.42);
+    g.arc(0.5, 0.4, 0.32, 0.03, 0, Math.PI, 16);
+    g.line(0.25, 0.48, 0.25, 0.92);
+    g.line(0.75, 0.48, 0.75, 0.92);
+    if (o.bunk) {
+      for (const x of [0.03, 0.93]) {
+        for (const y of [0.03, 0.93]) {
+          g.circle(x + 0.02, y + 0.02, 0.03);
+        }
+      }
+      g.line(0.2, 0.72, 0.2, 0.98);
+      g.line(0.8, 0.72, 0.8, 0.98);
+      for (let y = 0.76; y < 0.98; y += 0.05) g.line(0.2, y, 0.8, y);
+      g.line(0.08, 0.1, 0.08, 0.9);
+      g.line(0.92, 0.1, 0.92, 0.9);
+    }
+    if (o.trundle) {
+      g.roundRect(0.08, 0.54, 0.84, 0.42, 0.03);
+      g.line(0.1, 0.7, 0.9, 0.7);
+      g.line(0.4, 0.98, 0.6, 0.98);
+      g.ellipse(0.12, 0.95, 0.02, 0.03);
+      g.ellipse(0.88, 0.95, 0.02, 0.03);
+    }
+    if (o.crib) {
+      g.rect(0, 0, 1, 0.06);
+      g.rect(0, 0.94, 1, 0.06);
+      for (let i = 1; i <= 14; i++) {
+        const t = i / 15;
+        g.line(t, 0, t, 0.06);
+        g.line(t, 0.94, t, 1);
+        g.line(0, t, 0.06, t);
+        g.line(0.94, t, 1, t);
+      }
+      g.roundRect(0.08, 0.08, 0.84, 0.84, 0.03);
+      g.pillow(0.3, 0.12, 0.4, 0.18);
+    }
+    return g.entities;
+  },
+
+  table: o => {
+    const g = objectDrawing();
+    if (o.round) {
+      g.circle(0.5, 0.5, 0.49);
+      g.circle(0.5, 0.5, 0.44);
+      if (o.dining) {
+        const count = o.seats || 4;
+        for (let i = 0; i < count; i++) {
+          const a = i * 2 * Math.PI / count;
+          const cx = 0.5 + 0.42 * Math.cos(a);
+          const cy = 0.5 + 0.42 * Math.sin(a);
+          g.ellipse(cx, cy, 0.06, 0.06);
+          g.arc(cx, cy, 0.07, 0.07, a - Math.PI * 0.6, a + Math.PI * 0.6, 12);
+        }
+    } else {
+        g.circle(0.5, 0.5, 0.18);
+        g.line(0.15, 0.5, 0.85, 0.5);
+        g.line(0.5, 0.15, 0.5, 0.85);
+      }
+    } else if (o.nesting) {
+      g.roundRect(0, 0, 0.65, 0.85, 0.06);
+      g.roundRect(0.04, 0.04, 0.57, 0.77, 0.04);
+      g.roundRect(0.42, 0.22, 0.56, 0.76, 0.06);
+      g.roundRect(0.46, 0.26, 0.48, 0.68, 0.04);
+    } else if (o.dining) {
+      g.roundRect(0.08, 0.08, 0.84, 0.84, 0.03);
+      g.roundRect(0.11, 0.11, 0.78, 0.78, 0.02);
+      g.line(0.2, 0.5, 0.8, 0.5);
+      const count = o.seats || 4;
+      const half = Math.floor(count / 2);
+      for (let i = 0; i < half; i++) {
+        const cx = 0.15 + 0.7 * (i + 0.5) / half;
+        g.roundRect(cx - 0.06, 0, 0.12, 0.07, 0.02);
+        g.roundRect(cx - 0.06, 0.93, 0.12, 0.07, 0.02);
+      }
+    } else {
+      g.roundRect(0, 0, 1, 1, 0.03);
+      g.roundRect(0.06, 0.06, 0.88, 0.88, 0.02);
+      for (const x of [0.03, 0.89]) {
+        for (const y of [0.03, 0.89]) g.rect(x, y, 0.08, 0.08);
+      }
+      g.roundRect(0.18, 0.18, 0.64, 0.64, 0.02);
+    }
+    return g.entities;
+  },
+
+  desk: o => {
+    const g = objectDrawing();
+    const type = o.type || (o.console ? 'console' : 'standard');
+
+    if (type === 'compact') {
+      // 100x50 Compact study/writing desk: slim top, laptop, desk lamp, notebook, light chair
+      g.roundRect(0, 0, 1, 1, 0.02);
+      // Laptop
+      g.roundRect(0.35, 0.18, 0.3, 0.22, 0.015);
+      g.roundRect(0.38, 0.2, 0.24, 0.09, 0.01);
+      g.rect(0.44, 0.33, 0.12, 0.04);
+      // Desk lamp
+      g.circle(0.12, 0.14, 0.04);
+      g.ellipse(0.16, 0.2, 0.05, 0.035);
+      g.line(0.12, 0.14, 0.16, 0.2);
+      // Notebook & pen
+      g.roundRect(0.74, 0.14, 0.16, 0.24, 0.01);
+      g.line(0.93, 0.14, 0.93, 0.38);
+      // Study chair (4-legged curved-back wooden chair, no heavy 5-star base)
+      g.roundRect(0.32, 0.58, 0.36, 0.3, 0.04);
+      g.arc(0.5, 0.88, 0.2, 0.06, 0, Math.PI, 16);
+      for (const cx of [0.34, 0.66]) {
+        for (const cy of [0.6, 0.86]) g.circle(cx, cy, 0.015);
+      }
+    } else if (type === 'studio') {
+      // 160x80 Creative/architecture workstation: dual angled monitors, graphics tablet, desk blotter, mobile return, mesh task chair
+      g.roundRect(0, 0, 1, 1, 0.02);
+      // Dual monitors angled
+      g.rect(0.14, 0.08, 0.34, 0.03);
+      g.rect(0.52, 0.08, 0.34, 0.03);
+      g.line(0.48, 0.04, 0.52, 0.04);
+      g.circle(0.5, 0.04, 0.025);
+      // Graphics tablet on left
+      g.roundRect(0.15, 0.2, 0.22, 0.16, 0.015);
+      g.line(0.35, 0.22, 0.35, 0.34);
+      // Wide blotter mat with keyboard and mouse
+      g.roundRect(0.4, 0.18, 0.46, 0.24, 0.02);
+      g.roundRect(0.44, 0.22, 0.26, 0.1, 0.01);
+      g.ellipse(0.77, 0.27, 0.025, 0.04);
+      // Mobile caddy / drawer return
+      g.rect(0.04, 0.45, 0.18, 0.5);
+      g.line(0.04, 0.7, 0.22, 0.7);
+      // Dual grommets
+      g.circle(0.08, 0.08, 0.02);
+      g.circle(0.92, 0.08, 0.02);
+      // High-end ergonomic task chair
+      g.starBase(0.5, 0.68, 0.22, 5);
+      g.roundRect(0.34, 0.54, 0.32, 0.26, 0.06);
+      g.roundRect(0.28, 0.58, 0.05, 0.18, 0.02);
+      g.roundRect(0.67, 0.58, 0.05, 0.18, 0.02);
+      g.roundRect(0.35, 0.78, 0.3, 0.08, 0.03);
+    } else if (type === 'standing') {
+      // 150x75 Motorized sit-stand desk: dual T-leg columns, digital keypad, cable snake, anti-fatigue mat
+      g.roundRect(0, 0, 1, 1, 0.02);
+      g.rect(0.14, 0.2, 0.08, 0.6);
+      g.rect(0.78, 0.2, 0.08, 0.6);
+      g.line(0.25, 0.04, 0.75, 0.04);
+      for (let x = 0.28; x < 0.75; x += 0.06) g.line(x, 0.02, x, 0.06);
+      // Digital keypad
+      g.roundRect(0.82, 0.94, 0.14, 0.04, 0.01);
+      g.line(0.85, 0.96, 0.87, 0.96);
+      g.line(0.9, 0.96, 0.92, 0.96);
+      // Widescreen monitor on clamp arm
+      g.roundRect(0.28, 0.1, 0.44, 0.04, 0.01);
+      g.circle(0.5, 0.05, 0.025);
+      g.roundRect(0.34, 0.22, 0.32, 0.14, 0.015);
+      // Anti-fatigue mat
+      g.roundRect(0.26, 0.5, 0.48, 0.44, 0.06);
+      g.roundRect(0.32, 0.56, 0.36, 0.32, 0.04);
+    } else if (type === 'executive') {
+      // 180x90 Executive Director Desk: bow-front, double pedestals, leather blotter, executive chair + 2 visitor chairs
+      g.path([[0, 0.06], [0.5, 0], [1, 0.06], [1, 1], [0, 1]], true);
+      // Pedestals
+      g.rect(0.04, 0.15, 0.24, 0.75);
+      g.rect(0.72, 0.15, 0.24, 0.75);
+      g.line(0.12, 0.35, 0.2, 0.35);
+      g.line(0.12, 0.65, 0.2, 0.65);
+      g.line(0.8, 0.35, 0.88, 0.35);
+      g.line(0.8, 0.65, 0.88, 0.65);
+      g.line(0.28, 0.28, 0.72, 0.28);
+      // Leather blotter pad
+      g.roundRect(0.28, 0.24, 0.44, 0.3, 0.02);
+      g.roundRect(0.3, 0.26, 0.4, 0.26, 0.01);
+      g.circle(0.68, 0.28, 0.015);
+      // Executive director armchair
+      g.starBase(0.5, 0.72, 0.22, 5);
+      g.roundRect(0.32, 0.56, 0.36, 0.3, 0.06);
+      g.roundRect(0.32, 0.84, 0.36, 0.1, 0.04);
+      g.roundRect(0.26, 0.6, 0.06, 0.24, 0.02);
+      g.roundRect(0.68, 0.6, 0.06, 0.24, 0.02);
+    } else if (type === 'school_single' || type === 'school_double') {
+      // Student classroom desk with pencil groove and matching school chairs
+      g.roundRect(0, 0, 1, 0.62, 0.03);
+      if (type === 'school_double') {
+        g.roundRect(0.1, 0.05, 0.35, 0.04, 0.02);
+        g.roundRect(0.55, 0.05, 0.35, 0.04, 0.02);
+        g.rect(0.12, 0.16, 0.32, 0.38);
+        g.rect(0.56, 0.16, 0.32, 0.38);
+        for (const cx of [0.28, 0.72]) {
+          g.roundRect(cx - 0.16, 0.68, 0.32, 0.24, 0.03);
+          g.roundRect(cx - 0.14, 0.9, 0.28, 0.07, 0.02);
+        }
+    } else {
+        g.roundRect(0.2, 0.05, 0.6, 0.04, 0.02);
+        g.rect(0.25, 0.16, 0.5, 0.38);
+        g.line(0.5, 0.16, 0.5, 0.54);
+        g.roundRect(0.22, 0.68, 0.56, 0.24, 0.03);
+        g.roundRect(0.24, 0.9, 0.52, 0.07, 0.02);
+      }
+    } else if (type === 'teacher') {
+      // Teacher / Lecturer desk: front modesty panel, laptop, grading paper trays, lockable drawers
+      g.roundRect(0, 0, 1, 1, 0.02);
+      g.line(0.04, 0.2, 0.96, 0.2);
+      g.roundRect(0.15, 0.24, 0.3, 0.22, 0.015);
+      g.rect(0.68, 0.24, 0.22, 0.28);
+      g.line(0.68, 0.38, 0.9, 0.38);
+      g.rect(0.68, 0.6, 0.26, 0.36);
+      g.starBase(0.42, 0.68, 0.2, 5);
+      g.roundRect(0.3, 0.56, 0.26, 0.24, 0.04);
+    } else if (type === 'carrel') {
+      // Library study carrel: acoustic side privacy wings, reading light, book ledge, chair
+      g.rect(0, 0, 0.05, 1);
+      g.rect(0.95, 0, 0.05, 1);
+      g.rect(0, 0, 1, 0.05);
+      g.rect(0.05, 0.05, 0.9, 0.65);
+      g.line(0.25, 0.08, 0.75, 0.08);
+      g.rect(0.3, 0.2, 0.4, 0.3);
+      g.roundRect(0.3, 0.68, 0.4, 0.26, 0.04);
+      g.roundRect(0.32, 0.92, 0.36, 0.06, 0.02);
+    } else if (type === 'pod') {
+      // Workstation bench pod: center acoustic screen, dual opposing workstations
+      g.rect(0, 0, 1, 1);
+      g.rect(0, 0.47, 1, 0.06);
+      g.roundRect(0.32, 0.38, 0.36, 0.04, 0.01);
+      g.roundRect(0.32, 0.58, 0.36, 0.04, 0.01);
+      g.starBase(0.5, 0.22, 0.16, 5);
+      g.starBase(0.5, 0.78, 0.16, 5);
+    } else if (type === 'console') {
+      // Multi-screen command/security console
+      g.rect(0, 0, 1, 1);
+      g.arc(0.5, 0.5, 0.48, 0.48, 0, Math.PI, 24);
+      g.roundRect(0.12, 0.1, 0.22, 0.04, 0.01);
+      g.roundRect(0.39, 0.08, 0.22, 0.04, 0.01);
+      g.roundRect(0.66, 0.1, 0.22, 0.04, 0.01);
+      g.starBase(0.32, 0.65, 0.18, 5);
+      g.starBase(0.68, 0.65, 0.18, 5);
+    } else if (type === 'esports') {
+      // Pro Esports / Gaming Workstation: ultrawide curved monitor, RGB desk pad, mechanical keyboard, gaming chair
+      g.roundRect(0, 0, 1, 1, 0.02);
+      g.arc(0.5, -0.05, 0.42, 0.16, 0.2 * Math.PI, 0.8 * Math.PI, 20);
+      g.arc(0.5, -0.03, 0.42, 0.16, 0.2 * Math.PI, 0.8 * Math.PI, 20);
+      g.circle(0.5, 0.05, 0.025);
+      g.roundRect(0.18, 0.16, 0.64, 0.26, 0.02);
+      g.roundRect(0.24, 0.2, 0.36, 0.12, 0.01);
+      g.ellipse(0.68, 0.26, 0.025, 0.04);
+      g.circle(0.68, 0.18, 0.015);
+      g.roundRect(0.84, 0.1, 0.12, 0.4, 0.02);
+      g.circle(0.9, 0.2, 0.03);
+      g.circle(0.9, 0.38, 0.03);
+      g.starBase(0.5, 0.7, 0.22, 5);
+      g.roundRect(0.3, 0.54, 0.4, 0.28, 0.06);
+      g.roundRect(0.24, 0.56, 0.06, 0.22, 0.02);
+      g.roundRect(0.7, 0.56, 0.06, 0.22, 0.02);
+      g.roundRect(0.32, 0.78, 0.36, 0.1, 0.03);
+      g.pillow(0.36, 0.66, 0.28, 0.08);
+    } else {
+      // Standard commercial office desk (140x70)
+      g.roundRect(0, 0, 1, 1, 0.02);
+      g.line(0.02, 0.98, 0.98, 0.98);
+      g.circle(0.88, 0.12, 0.03);
+      g.circle(0.88, 0.12, 0.012);
+      g.roundRect(0.24, 0.08, 0.52, 0.04, 0.01);
+      g.line(0.5, 0.12, 0.5, 0.16);
+      g.ellipse(0.5, 0.17, 0.08, 0.03);
+      g.roundRect(0.32, 0.24, 0.36, 0.12, 0.015);
+      g.line(0.38, 0.33, 0.62, 0.33);
+      g.roundRect(0.72, 0.24, 0.14, 0.13, 0.015);
+      g.ellipse(0.79, 0.3, 0.025, 0.04);
+      g.rect(0.74, 0.42, 0.24, 0.56);
+      g.line(0.74, 0.68, 0.98, 0.68);
+      g.line(0.82, 0.54, 0.9, 0.54);
+      g.line(0.82, 0.82, 0.9, 0.82);
+      g.starBase(0.46, 0.68, 0.2, 5);
+      g.roundRect(0.32, 0.56, 0.28, 0.24, 0.05);
+      g.roundRect(0.33, 0.77, 0.26, 0.07, 0.02);
+    }
+    return g.entities;
+  },
+
+  storage: o => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    g.line(0, 0.05, 1, 0.05);
+    g.line(0, 0.95, 1, 0.95);
+    const bays = o.bays || 2;
+    for (let i = 0; i < bays; i++) {
+      const x1 = i / bays, x2 = (i + 1) / bays;
+      g.rect(x1, 0, 1 / bays, 1);
+      g.line(x1 + 0.03, 0.5, x1 + 0.03, 0.58);
+      if (o.hanging) {
+        g.line(x1 + 0.05, 0.48, x2 - 0.05, 0.48);
+        for (let hx = x1 + 0.08; hx < x2 - 0.04; hx += 0.07) {
+          g.path([[hx - 0.025, 0.54], [hx, 0.48], [hx + 0.025, 0.54], [hx - 0.025, 0.54]]);
+        }
+        g.line(x1 + 0.04, 0.2, x2 - 0.04, 0.2);
+      }
+    }
+    return g.entities;
+  },
+
+  kitchen: o => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    g.line(0, 0.05, 1, 0.05);
+    g.line(0, 0.95, 1, 0.95);
+    if (o.range6) {
+      // 6-Burner Commercial Restaurant Cooking Range
+      g.rect(0, 0, 1, 0.08);
+      g.line(0, 0.88, 1, 0.88);
+      for (const x of [0.2, 0.5, 0.8]) {
+        for (const y of [0.28, 0.62]) {
+          g.rect(x - 0.13, y - 0.14, 0.26, 0.28);
+          g.circle(x, y, 0.1);
+          g.circle(x, y, 0.035);
+          g.line(x - 0.12, y, x + 0.12, y);
+          g.line(x, y - 0.12, x, y + 0.12);
+        }
+      }
+      for (let k = 0; k < 6; k++) g.circle(0.12 + k * 0.15, 0.94, 0.025);
+    } else if (o.fryer) {
+      // Commercial Double-Vat Deep Fryer with Twin Wire Baskets
+      g.rect(0, 0, 1, 0.1);
+      g.roundRect(0.08, 0.14, 0.38, 0.62, 0.03);
+      g.roundRect(0.54, 0.14, 0.38, 0.62, 0.03);
+      g.rect(0.12, 0.18, 0.3, 0.52);
+      g.rect(0.58, 0.18, 0.3, 0.52);
+      g.line(0.27, 0.7, 0.27, 0.9);
+      g.line(0.73, 0.7, 0.73, 0.9);
+      g.circle(0.27, 0.95, 0.025);
+      g.circle(0.73, 0.95, 0.025);
+    } else if (o.pizza) {
+      // Commercial Wood-Fired / Stone Deck Pizza Oven
+      g.roundRect(0.04, 0.04, 0.92, 0.92, 0.08);
+      g.arc(0.5, 0.65, 0.42, 0.28, 0, Math.PI, 24);
+      g.circle(0.5, 0.2, 0.12);
+      g.circle(0.5, 0.2, 0.05);
+      g.circle(0.5, 0.55, 0.14);
+      g.line(0.5, 0.69, 0.5, 0.98);
+    } else if (o.espresso) {
+      // Commercial Multi-Group Espresso Machine
+      g.roundRect(0.04, 0.04, 0.92, 0.92, 0.04);
+      for (let x = 0.12; x <= 0.88; x += 0.08) g.line(x, 0.08, x, 0.4);
+      for (const x of [0.32, 0.68]) {
+        g.circle(x, 0.55, 0.07);
+        g.circle(x, 0.55, 0.025);
+        g.line(x, 0.62, x - 0.04, 0.88);
+        g.roundRect(x - 0.06, 0.8, 0.04, 0.14, 0.015);
+      }
+      g.line(0.12, 0.5, 0.06, 0.74);
+      g.line(0.88, 0.5, 0.94, 0.74);
+      g.rect(0.1, 0.88, 0.8, 0.08);
+    } else if (o.barStation) {
+      // Commercial Restaurant Bar Station & Draught Tap Tower
+      g.rect(0, 0, 1, 0.24);
+      g.rect(0.42, 0.06, 0.16, 0.1);
+      g.circle(0.46, 0.2, 0.02);
+      g.circle(0.5, 0.2, 0.02);
+      g.circle(0.54, 0.2, 0.02);
+      g.rect(0.06, 0.28, 0.42, 0.48);
+      g.line(0.06, 0.52, 0.48, 0.52);
+      g.rect(0.54, 0.28, 0.4, 0.48);
+      for (const bx of [0.62, 0.74, 0.86]) {
+        for (const by of [0.36, 0.5, 0.64]) g.circle(bx, by, 0.04);
+      }
+      g.line(0, 0.76, 1, 0.76);
+      for (const x of [0.2, 0.5, 0.8]) {
+        g.circle(x, 0.88, 0.09);
+        g.circle(x, 0.88, 0.04);
+      }
+    } else {
+      if (o.sink) {
+        g.roundRect(0.12, 0.12, 0.76, 0.76, 0.05);
+        g.roundRect(0.16, 0.18, 0.68, 0.66, 0.04);
+        g.circle(0.5, 0.55, 0.045);
+        g.circle(0.5, 0.55, 0.015);
+        g.roundRect(0.48, 0.08, 0.04, 0.12, 0.01);
+        g.circle(0.5, 0.08, 0.025);
+        g.line(0.42, 0.12, 0.58, 0.12);
+      }
+      if (o.cooktop) {
+        for (const x of [0.28, 0.72]) {
+          for (const y of [0.28, 0.72]) {
+            g.circle(x, y, 0.12);
+            g.circle(x, y, 0.05);
+            g.line(x - 0.12, y, x + 0.12, y);
+            g.line(x, y - 0.12, x, y + 0.12);
+          }
+        }
+        for (let k = 0; k < 4; k++) g.circle(0.25 + k * 0.17, 0.88, 0.025);
+      }
+      if (o.bar) {
+        g.line(0, 0.75, 1, 0.75);
+        for (let x = 0.18; x < 0.95; x += 0.28) {
+          g.circle(x, 0.88, 0.09);
+          g.circle(x, 0.88, 0.05);
+        }
+      }
+      if (o.bbq) {
+        g.roundRect(0.08, 0.12, 0.84, 0.76, 0.04);
+        for (let x = 0.14; x < 0.86; x += 0.045) g.line(x, 0.22, x, 0.76);
+        g.rect(0.25, 0.14, 0.5, 0.04);
+        g.circle(0.5, 0.16, 0.025);
+        for (let k = 0; k < 4; k++) g.circle(0.25 + k * 0.17, 0.82, 0.025);
+      }
+    }
+    return g.entities;
+  },
+
+  appliance: o => {
+    const g = objectDrawing();
+    if (o.laundry) {
+      g.roundRect(0, 0, 1, 1, 0.02);
+      g.arc(0.5, 0.96, 0.44, 0.035, 0, Math.PI, 16);
+      g.circle(0.5, 0.52, 0.32);
+      g.circle(0.5, 0.52, 0.22);
+      g.circle(0.5, 0.52, 0.16);
+      g.rect(0.8, 0.48, 0.04, 0.08);
+      g.rect(0.18, 0.5, 0.03, 0.04);
+      g.rect(0.08, 0.08, 0.28, 0.1);
+      g.circle(0.5, 0.13, 0.04);
+      g.circle(0.5, 0.13, 0.015);
+      g.rect(0.64, 0.08, 0.26, 0.08);
+    } else if (o.fridge) {
+      g.rect(0, 0, 1, 1);
+      g.line(0.5, 0, 0.5, 1);
+      g.rect(0.46, 0.15, 0.03, 0.45);
+      g.rect(0.51, 0.15, 0.03, 0.45);
+      g.line(0, 0.68, 1, 0.68);
+      g.rect(0.35, 0.72, 0.3, 0.035);
+      g.rect(0.12, 0.22, 0.24, 0.26);
+      g.ellipse(0.24, 0.38, 0.04, 0.02);
+    } else {
+      g.rect(0, 0, 1, 1);
+      g.rect(0.15, 0.06, 0.7, 0.04);
+      g.line(0, 0.16, 1, 0.16);
+      for (let i = 0; i < 4; i++) g.circle(0.6 + i * 0.09, 0.11, 0.02);
+      g.line(0.1, 0.35, 0.9, 0.35);
+      g.line(0.1, 0.65, 0.9, 0.65);
+    }
+    return g.entities;
+  },
+
+  toilet: o => {
+    const g = objectDrawing();
+    if (o.stall || o.cubicle) {
+      if (o.accessible || o.type === 'ada') {
+        // ADA Accessible Commercial Toilet Stall (1550x1550mm)
+        g.rect(0, 0, 0.03, 1);
+        g.line(0, 0, 1, 0);
+        g.rect(0.97, 0, 0.03, 1);
+        g.rect(0, 0.94, 0.15, 0.06);
+        g.rect(0.85, 0.94, 0.15, 0.06);
+        // 900mm clear door with hinge & swing arc
+        g.rect(0.15, 0.34, 0.03, 0.6);
+        g.arc(0.15, 0.94, 0.6, 0.6, -Math.PI / 2, 0, 24);
+        g.circle(0.18, 0.36, 0.015);
+        // 42" side grab bar
+        g.roundRect(0.04, 0.15, 0.04, 0.7, 0.015);
+        g.circle(0.06, 0.18, 0.025);
+        g.circle(0.06, 0.82, 0.025);
+        // 36" rear grab bar
+        g.roundRect(0.1, 0.04, 0.55, 0.04, 0.015);
+        g.circle(0.13, 0.06, 0.025);
+        g.circle(0.62, 0.06, 0.025);
+        // ADA Commercial toilet offset 450mm from wall
+        g.ellipse(0.32, 0.48, 0.16, 0.24);
+        g.ellipse(0.32, 0.5, 0.12, 0.18);
+        g.circle(0.32, 0.58, 0.04);
+        g.line(0.32, 0.04, 0.32, 0.24);
+        g.rect(0.28, 0.14, 0.08, 0.04);
+        // 1500mm wheelchair turning clearance circle (dashed)
+        g.circle(0.55, 0.55, 0.35, 36);
+        // Accessible paper dispenser
+        g.roundRect(0.04, 0.42, 0.04, 0.16, 0.01);
+      } else {
+        // Standard Commercial Toilet Stall (900x1500mm)
+        g.rect(0, 0, 0.03, 1);
+        g.line(0, 0, 1, 0);
+        g.rect(0.97, 0, 0.03, 1);
+        g.rect(0, 0.94, 0.18, 0.06);
+        g.rect(0.82, 0.94, 0.18, 0.06);
+        // Inswing 600mm door
+        g.rect(0.18, 0.32, 0.03, 0.62);
+        g.arc(0.18, 0.94, 0.62, 0.62, -Math.PI / 2, 0, 24);
+        g.circle(0.21, 0.35, 0.015);
+        // Commercial flushometer toilet
+        g.ellipse(0.5, 0.42, 0.18, 0.24);
+        g.ellipse(0.5, 0.44, 0.14, 0.18);
+        g.circle(0.5, 0.52, 0.04);
+        g.line(0.5, 0, 0.5, 0.18);
+        g.line(0.42, 0.12, 0.58, 0.12);
+        g.circle(0.42, 0.12, 0.015);
+        g.roundRect(0.04, 0.36, 0.04, 0.16, 0.01);
+      }
+    } else if (o.urinal) {
+      // Wall-hung commercial urinal with porcelain privacy partitions on both sides
+      g.rect(0, 0, 0.04, 0.98);
+      g.rect(0.96, 0, 0.04, 0.98);
+      g.circle(0.02, 0.06, 0.015);
+      g.circle(0.02, 0.92, 0.015);
+      g.circle(0.98, 0.06, 0.015);
+      g.circle(0.98, 0.92, 0.015);
+      g.path([[0.2, 0], [0.15, 0.25], [0.2, 0.75], [0.5, 0.99], [0.8, 0.75], [0.85, 0.25], [0.8, 0]], true);
+      g.path([[0.26, 0.08], [0.23, 0.3], [0.28, 0.7], [0.5, 0.88], [0.72, 0.7], [0.77, 0.3], [0.74, 0.08]], true);
+      g.circle(0.5, 0.74, 0.04);
+      g.circle(0.5, 0.74, 0.015);
+      g.line(0.5, 0, 0.5, 0.12);
+      g.rect(0.46, 0.02, 0.08, 0.06);
+    } else if (o.custody) {
+      // Stainless steel tamper-proof prison combo toilet/basin
+      g.rect(0, 0, 1, 1);
+      g.ellipse(0.5, 0.65, 0.24, 0.28);
+      g.circle(0.5, 0.72, 0.04);
+      g.roundRect(0.2, 0.04, 0.6, 0.32, 0.06);
+      g.circle(0.5, 0.2, 0.03);
+      g.rect(0.47, 0.06, 0.06, 0.08);
+      g.circle(0.5, 0.08, 0.015);
+      for (const x of [0.15, 0.85]) {
+        for (const y of [0.08, 0.92]) g.circle(x, y, 0.02);
+      }
+    } else if (o.type === 'bidet' || o.bidet) {
+      // Sanitary bidet
+      g.path([[0.24, 0.02], [0.18, 0.35], [0.22, 0.75], [0.5, 0.98], [0.78, 0.75], [0.82, 0.35], [0.76, 0.02]], true);
+      g.ellipse(0.5, 0.54, 0.22, 0.3);
+      g.rect(0.47, 0.06, 0.06, 0.12);
+      g.circle(0.5, 0.1, 0.025);
+      g.line(0.4, 0.12, 0.6, 0.12);
+      g.circle(0.5, 0.68, 0.035);
+      g.circle(0.5, 0.52, 0.02);
+      g.line(0, 0.1, 0.1, 0.1);
+      g.line(0.9, 0.1, 1, 0.1);
+    } else if (o.type === 'wall_hung' || o.wall_hung) {
+      // Wall-hung concealed cistern toilet
+      g.rect(0.08, 0, 0.84, 0.14);
+      g.rect(0.38, 0.02, 0.24, 0.06);
+      g.line(0, 0.14, 1, 0.14);
+      g.path([[0.24, 0.14], [0.2, 0.42], [0.26, 0.78], [0.5, 0.99], [0.74, 0.78], [0.8, 0.42], [0.76, 0.14]], true);
+      g.ellipse(0.5, 0.58, 0.24, 0.3);
+      g.circle(0.5, 0.72, 0.04);
+      g.circle(0.38, 0.24, 0.015);
+      g.circle(0.62, 0.24, 0.015);
+    } else {
+      // Standard close-coupled WC
+      g.roundRect(0.1, 0, 0.8, 0.24, 0.03);
+      g.circle(0.46, 0.12, 0.03);
+      g.circle(0.54, 0.12, 0.02);
+      g.circle(0.5, 0.12, 0.055);
+      g.path([[0.22, 0.24], [0.15, 0.45], [0.2, 0.8], [0.5, 0.99], [0.8, 0.8], [0.85, 0.45], [0.78, 0.24]], true);
+      g.ellipse(0.5, 0.62, 0.28, 0.32);
+      g.ellipse(0.5, 0.66, 0.18, 0.22);
+      g.circle(0.5, 0.76, 0.045);
+      g.circle(0.36, 0.28, 0.018);
+      g.circle(0.64, 0.28, 0.018);
+      g.line(0, 0.12, 0.1, 0.12);
+      g.line(0.9, 0.12, 1, 0.12);
+      if (o.accessible) {
+        g.rect(0, 0.1, 0.04, 0.8);
+        g.circle(0.02, 0.12, 0.025);
+        g.circle(0.02, 0.88, 0.025);
+        g.rect(0.96, 0.1, 0.04, 0.8);
+        g.circle(0.98, 0.12, 0.025);
+        g.circle(0.98, 0.88, 0.025);
+      }
+    }
+    return g.entities;
+  },
+
+  basin: o => {
+    const g = objectDrawing();
+    if (o.shampoo) {
+      // Hair salon backwash shampoo unit: ceramic tilting basin with neck curve + attached shampoo recliner
+      g.roundRect(0, 0, 1, 1, 0.04);
+      // Tilting ceramic basin
+      g.roundRect(0.14, 0.02, 0.72, 0.38, 0.08);
+      g.arc(0.5, 0.38, 0.16, 0.06, Math.PI, 2 * Math.PI, 20);
+      g.circle(0.5, 0.18, 0.045);
+      g.circle(0.5, 0.18, 0.015);
+      g.circle(0.74, 0.12, 0.03);
+      g.line(0.74, 0.12, 0.64, 0.22);
+      g.rect(0.2, 0.04, 0.6, 0.05);
+      // Client reclined chair
+      g.roundRect(0.2, 0.42, 0.6, 0.56, 0.06);
+      g.roundRect(0.24, 0.44, 0.52, 0.18, 0.04);
+      g.roundRect(0.08, 0.46, 0.1, 0.48, 0.03);
+      g.roundRect(0.82, 0.46, 0.1, 0.48, 0.03);
+      g.roundRect(0.26, 0.88, 0.48, 0.09, 0.02);
+    } else {
+      g.rect(0, 0, 1, 1);
+      g.line(0, 0.04, 1, 0.04);
+      const count = o.double ? 2 : 1;
+      for (let i = 0; i < count; i++) {
+        const cx = (i + 0.5) / count;
+        const bw = 0.78 / count, bh = 0.7;
+        g.roundRect(cx - bw / 2, 0.18, bw, bh, 0.08);
+        g.roundRect(cx - bw / 2 + 0.03, 0.21, bw - 0.06, bh - 0.06, 0.06);
+        g.circle(cx, 0.58, 0.035);
+        g.circle(cx, 0.58, 0.015);
+        g.roundRect(cx - 0.02, 0.06, 0.04, 0.16, 0.01);
+        g.line(cx - 0.08, 0.12, cx + 0.08, 0.12);
+        g.circle(cx - 0.08, 0.12, 0.015);
+        g.circle(cx + 0.08, 0.12, 0.015);
+      }
+    }
+    return g.entities;
+  },
+
+  bath: o => {
+    const g = objectDrawing();
+    if (o.corner) {
+      g.path([[0, 0], [1, 0], ...Array.from({ length: 33 }, (_, i) => {
+        const a = i * Math.PI / 64;
+        return [Math.cos(a), Math.sin(a)];
+      }), [0, 1]], true);
+      g.arc(0.12, 0.12, 0.76, 0.76, 0, Math.PI / 2, 24);
+      g.ellipse(0.5, 0.5, 0.42, 0.42);
+      g.ellipse(0.5, 0.5, 0.35, 0.35);
+      g.circle(0.5, 0.5, 0.03);
+      if (o.jets) {
+        for (let n = 0; n < 8; n++) {
+          const t = n * Math.PI / 4;
+          g.circle(0.5 + 0.32 * Math.cos(t), 0.5 + 0.32 * Math.sin(t), 0.02);
+        }
+      }
+      g.circle(0.14, 0.14, 0.035);
+      g.circle(0.2, 0.14, 0.02);
+    } else {
+      g.roundRect(0, 0, 1, 1, 0.02);
+      g.roundRect(0.06, 0.06, 0.88, 0.88, 0.14);
+      g.arc(0.5, 0.24, 0.34, 0.14, 0, Math.PI, 20);
+      g.rect(0.47, 0.88, 0.06, 0.08);
+      g.circle(0.42, 0.92, 0.02);
+      g.circle(0.58, 0.92, 0.02);
+      g.circle(0.5, 0.8, 0.035);
+    }
+    return g.entities;
+  },
+
+  shower: o => {
+    const g = objectDrawing();
+    if (o.corner) {
+      g.path([[0, 0], [1, 0], [1, 0.55], [0.55, 1], [0, 1]], true);
+      g.circle(0.48, 0.48, 0.045);
+      g.circle(0.48, 0.48, 0.02);
+      for (const [x, y] of [[0, 0], [1, 0], [1, 0.55], [0.55, 1], [0, 1]]) g.line(x, y, 0.48, 0.48);
+      g.line(0.08, 0.25, 0.08, 0.35);
+    } else {
+      g.rect(0, 0, 1, 1);
+      g.circle(0.5, 0.5, 0.045);
+      g.circle(0.5, 0.5, 0.02);
+      for (const [x, y] of [[0, 0], [1, 0], [1, 1], [0, 1]]) g.line(x, y, 0.5, 0.5);
+      g.roundRect(0.42, 0.02, 0.16, 0.04, 0.01);
+      g.circle(0.5, 0.22, 0.08);
+      g.circle(0.5, 0.22, 0.02);
+      if (o.accessible) {
+        g.rect(0.04, 0.05, 0.3, 0.28);
+        for (let y = 0.1; y < 0.32; y += 0.06) g.line(0.04, y, 0.34, y);
+        g.line(0.05, 0.38, 0.05, 0.9);
+      }
+    }
+    return g.entities;
+  }
 };
 
 
@@ -3214,12 +4068,111 @@ const RESIDENTIAL_GEOMETRY = {
   // =========================================================================
 
 
+
 const LUXURY_GEOMETRY = {
-  piano: ()=>{const g=objectDrawing();g.path([[0,0],[1,0],...Array.from({length:32},(_,i)=>{const t=i/31;return [1-.18*t-.22*Math.sin(t*Math.PI/2),t];}),[0,1]],true);g.rect(.02,.05,.17,.9);for(let y=.08;y<.95;y+=.065){g.line(.02,y,.19,y);g.rect(.02,y,.08,.023);}g.line(.2,.07,.7,.7);return g.entities;},
-  poolTable: ()=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.08,.08,.84,.84);for(const x of [.08,.92])for(const y of [.08,.5,.92])g.ellipse(x,y,.035);g.line(.25,.5,.75,.5);for(let i=0;i<5;i++)g.ellipse(.48+i*.015,.3+i*.03,.018);return g.entities;},
-  fireplace: ()=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.15,0,.7,.65);for(let x=.2;x<.85;x+=.1)g.line(x,.2,x,.55);g.path([[.45,.5],[.4,.35],[.5,.15],[.55,.38],[.6,.48]],true);g.line(0,.8,1,.8);return g.entities;},
-  wine: o=>{const g=objectDrawing();g.rect(0,0,1,1);for(let i=0;i<o.bays;i++)for(let j=0;j<3;j++){const x=(i+.5)/o.bays,y=(j+.5)/3;g.ellipse(x,y,.3/o.bays,.1);}return g.entities;},
-  cinemaRow: o=>{const g=objectDrawing();for(let i=0;i<o.seats;i++){const x=i/o.seats;g.seat(x,0,.96/o.seats,.82);g.rect(x+.15/o.seats,.82,.67/o.seats,.18);g.ellipse(x+.08/o.seats,.3,.02/o.seats,.025);}return g.entities;}
+  piano: () => {
+    const g = objectDrawing();
+    g.path([[0, 0], [1, 0], ...Array.from({ length: 32 }, (_, i) => {
+      const t = i / 31;
+      return [1 - 0.18 * t - 0.22 * Math.sin(t * Math.PI / 2), t];
+    }), [0, 1]], true);
+    g.path([[0.04, 0.04], [0.96, 0.04], ...Array.from({ length: 32 }, (_, i) => {
+      const t = i / 31;
+      return [0.96 - 0.18 * t - 0.22 * Math.sin(t * Math.PI / 2), 0.04 + 0.92 * t];
+    }), [0.04, 0.96]], true);
+    for (let y = 0.15; y < 0.9; y += 0.1) g.line(0.2, y, 0.7 - 0.2 * y, y);
+    g.rect(0.04, 0.06, 0.16, 0.88);
+    for (let y = 0.08; y < 0.93; y += 0.035) {
+      g.line(0.04, y, 0.2, y);
+      g.rect(0.04, y, 0.09, 0.018);
+    }
+    g.line(0.24, 0.2, 0.24, 0.8);
+    g.line(0.26, 0.1, 0.75, 0.65);
+    return g.entities;
+  },
+
+  poolTable: () => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    g.rect(0.08, 0.08, 0.84, 0.84);
+    g.rect(0.11, 0.11, 0.78, 0.78);
+    for (const x of [0.08, 0.92]) {
+      for (const y of [0.08, 0.5, 0.92]) g.circle(x, y, 0.035);
+    }
+    for (const x of [0.25, 0.5, 0.75]) {
+      g.circle(x, 0.04, 0.008);
+      g.circle(x, 0.96, 0.008);
+    }
+    for (const y of [0.25, 0.75]) {
+      g.circle(0.04, y, 0.008);
+      g.circle(0.96, y, 0.008);
+    }
+    g.line(0.25, 0.11, 0.25, 0.89);
+    g.circle(0.25, 0.5, 0.02);
+    g.circle(0.7, 0.5, 0.018);
+    g.path([[0.66, 0.5], [0.8, 0.4], [0.8, 0.6]], true);
+    for (let row = 0; row < 5; row++) {
+      for (let col = 0; col <= row; col++) {
+        g.circle(0.68 + row * 0.024, 0.5 + (col - row / 2) * 0.026, 0.012);
+      }
+    }
+    g.line(0.14, 0.2, 0.86, 0.8);
+    g.line(0.14, 0.8, 0.86, 0.2);
+    return g.entities;
+  },
+
+  fireplace: () => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    g.rect(0, 0.84, 1, 0.16);
+    g.rect(0.08, 0, 0.84, 0.84);
+    g.rect(0.16, 0.12, 0.68, 0.56);
+    for (let x = 0.2; x < 0.82; x += 0.07) {
+      g.line(x, 0.14, x + 0.04, 0.28);
+      g.line(x + 0.04, 0.28, x, 0.42);
+      g.line(x, 0.42, x + 0.04, 0.56);
+    }
+    g.rect(0.24, 0.32, 0.52, 0.28);
+    g.roundRect(0.28, 0.38, 0.44, 0.08, 0.03);
+    g.roundRect(0.32, 0.46, 0.36, 0.07, 0.025);
+    g.path([[0.45, 0.52], [0.4, 0.38], [0.5, 0.18], [0.55, 0.4], [0.6, 0.5]], true);
+    return g.entities;
+  },
+
+  wine: o => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    const bays = o.bays || 4;
+    for (let i = 0; i < bays; i++) {
+      const x1 = i / bays, x2 = (i + 1) / bays;
+      g.rect(x1, 0, 1 / bays, 1);
+      g.line(x1, 0, x2, 1);
+      g.line(x1, 1, x2, 0);
+      for (let j = 0; j < 3; j++) {
+        const y = (j + 0.5) / 3;
+        g.circle((x1 + x2) / 2, y, 0.18 / bays);
+        g.circle((x1 + x2) / 2, y, 0.07 / bays);
+      }
+    }
+    return g.entities;
+  },
+
+  cinemaRow: o => {
+    const g = objectDrawing();
+    const seats = o.seats || 4;
+    for (let i = 0; i < seats; i++) {
+      const sw = 1 / seats, sx = i * sw;
+      g.roundRect(sx, 0, sw * 0.96, 0.82, sw * 0.08);
+      g.roundRect(sx + sw * 0.12, 0.2, sw * 0.72, 0.44, sw * 0.06);
+      g.roundRect(sx + sw * 0.15, 0.04, sw * 0.66, 0.16, sw * 0.04);
+      g.roundRect(sx + sw * 0.15, 0.64, sw * 0.66, 0.34, sw * 0.04);
+      g.circle(sx + sw * 0.07, 0.35, sw * 0.035);
+      g.circle(sx + sw * 0.07, 0.35, sw * 0.015);
+      g.circle(sx + sw * 0.89, 0.35, sw * 0.035);
+      g.circle(sx + sw * 0.89, 0.35, sw * 0.015);
+    }
+    return g.entities;
+  }
 };
 
 
@@ -3228,17 +4181,293 @@ const LUXURY_GEOMETRY = {
   // =========================================================================
 
 
+
 const HEALTHCARE_GEOMETRY = {
-  medicalBed: o=>{const g=objectDrawing();g.rect(.05,.02,.9,.96);g.rect(.12,.1,.76,.78);g.rect(.23,.13,.54,.15);for(const y of [.36,.63,.78])g.line(.12,y,.88,y);g.rect(0,.3,.05,.5);g.rect(.95,.3,.05,.5);g.wheels(.075,.075,.85,.85);if(o.icu){g.rect(.2,0,.6,.06);g.rect(.88,.15,.09,.12);}if(o.stretcher){g.line(.05,0,.95,0);g.line(.05,1,.95,1);}return g.entities;},
-  medicalTable: o=>{const g=objectDrawing();g.rect(.05,.05,.9,.9);g.rect(.1,.1,.8,.75);g.line(.1,.3,.9,.3);g.line(.1,.7,.9,.7);g.rect(.27,.88,.46,.12);if(o.operating){g.rect(0,.4,.1,.25);g.rect(.9,.4,.1,.25);}return g.entities;},
-  dental: ()=>{const g=objectDrawing();g.seat(.08,.03,.47,.72);g.rect(.15,.75,.32,.2);g.ellipse(.33,.04,.12,.04);g.rect(.65,.38,.35,.27);g.line(.55,.3,.82,.25);g.ellipse(.82,.25,.1,.07);g.line(.45,.55,.68,.55);return g.entities;},
-  wheelchair: o=>{const g=objectDrawing();g.seat(.18,.12,.64,.63,false);g.rect(0,.2,.12,.6);g.rect(.88,.2,.12,.6);g.rect(.15,.79,.25,.16);g.rect(.6,.79,.25,.16);g.ellipse(.12,.87,.035);g.ellipse(.88,.87,.035);if(o.sports){g.line(0,.12,.2,.83);g.line(1,.12,.8,.83);}return g.entities;},
-  cart: o=>{const g=objectDrawing();g.rect(.04,.08,.92,.84);g.wheels(.05,.1,.9,.8);g.rect(.13,.17,.74,.66);if(o.monitor){g.rect(.18,.12,.64,.24);g.line(.5,.36,.5,.55);}else{for(let y=.3;y<.8;y+=.15)g.line(.15,y,.85,y);}g.line(.1,0,.9,0);return g.entities;},
-  lift: ()=>{const g=objectDrawing();g.path([[.1,1],[.1,.15],[.9,.15],[.9,1]]);g.rect(.36,0,.28,.3);g.line(.5,.2,.5,.8);g.ellipse(.5,.8,.1,.09);g.wheels(.1,.2,.8,.75);return g.entities;},
-  scanner: o=>{const g=objectDrawing();g.rect(.08,0,.84,.4);g.ellipse(.5,.2,.25,.18);g.ellipse(.5,.2,.12,.09);g.rect(.33,.22,.34,.78);g.line(.33,.65,.67,.65);if(o.mri)g.rect(.02,0,.96,.45);return g.entities;},
-  pole: ()=>{const g=objectDrawing();g.ellipse(.5,.5,.06);for(let n=0;n<5;n++){const a=n*Math.PI*.4,x=.5+.43*Math.cos(a),y=.5+.43*Math.sin(a);g.line(.5,.5,x,y);g.ellipse(x,y,.035);}return g.entities;},
-  walker: ()=>{const g=objectDrawing();g.path([[.05,.9],[.05,.1],[.95,.1],[.95,.9]]);g.rect(.15,.35,.7,.3);g.wheels(.08,.08,.84,.84);g.line(.05,.1,.25,0);g.line(.95,.1,.75,0);return g.entities;},
-  device: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.1,.12,.8,.5);g.rect(.15,.75,.35,.08);for(let x=.62;x<.9;x+=.1)g.ellipse(x,.8,.025);if(o.pump)for(let x=.15;x<.9;x+=.25)g.rect(x,.15,.17,.65);return g.entities;}
+  medicalBed: o => {
+    const g = objectDrawing();
+    g.roundRect(0.04, 0.02, 0.92, 0.96, 0.04);
+    for (const x of [0.05, 0.95]) {
+      for (const y of [0.04, 0.96]) g.circle(x, y, 0.035);
+    }
+    g.roundRect(0.12, 0.08, 0.76, 0.26, 0.02);
+    g.pillow(0.24, 0.12, 0.52, 0.16);
+    g.roundRect(0.12, 0.36, 0.76, 0.22, 0.02);
+    g.roundRect(0.12, 0.6, 0.76, 0.18, 0.02);
+    g.roundRect(0.12, 0.8, 0.76, 0.14, 0.02);
+    g.rect(0.01, 0.15, 0.06, 0.32);
+    g.rect(0.93, 0.15, 0.06, 0.32);
+    g.rect(0.01, 0.54, 0.06, 0.32);
+    g.rect(0.93, 0.54, 0.06, 0.32);
+    for (let y = 0.18; y < 0.45; y += 0.06) {
+      g.line(0.01, y, 0.07, y);
+      g.line(0.93, y, 0.99, y);
+    }
+    for (let y = 0.57; y < 0.84; y += 0.06) {
+      g.line(0.01, y, 0.07, y);
+      g.line(0.93, y, 0.99, y);
+    }
+    g.wheels(0.06, 0.06, 0.88, 0.88);
+    g.circle(0.12, 0.04, 0.02);
+    g.circle(0.88, 0.04, 0.02);
+    if (o.icu) {
+      g.rect(0.86, 0.12, 0.12, 0.22);
+      g.line(0.86, 0.18, 0.76, 0.18);
+      g.circle(0.92, 0.23, 0.02);
+      g.rect(0.15, 0, 0.7, 0.04);
+      for (let x = 0.25; x < 0.8; x += 0.12) g.circle(x, 0.02, 0.01);
+    }
+    if (o.stretcher) {
+      g.roundRect(0.2, 0, 0.6, 0.03, 0.01);
+      g.roundRect(0.2, 0.97, 0.6, 0.03, 0.01);
+      g.line(0.12, 0.38, 0.88, 0.38);
+      g.rect(0.46, 0.36, 0.08, 0.04);
+      g.line(0.12, 0.68, 0.88, 0.68);
+      g.rect(0.46, 0.66, 0.08, 0.04);
+    }
+    return g.entities;
+  },
+
+  medicalTable: o => {
+    const g = objectDrawing();
+    g.roundRect(0.05, 0.02, 0.9, 0.96, 0.04);
+    g.roundRect(0.1, 0.06, 0.8, 0.88, 0.03);
+    g.line(0.1, 0.35, 0.9, 0.35);
+    g.pillow(0.25, 0.1, 0.5, 0.18);
+    g.roundRect(0.2, 0.01, 0.6, 0.03, 0.01);
+    g.line(0.1, 0.88, 0.02, 0.96);
+    g.line(0.9, 0.88, 0.98, 0.96);
+    g.circle(0.02, 0.96, 0.015);
+    g.circle(0.98, 0.96, 0.015);
+    if (o.operating) {
+      g.roundRect(0, 0.35, 0.09, 0.3, 0.02);
+      g.roundRect(0.91, 0.35, 0.09, 0.3, 0.02);
+      g.line(0, 0.5, 0.09, 0.5);
+      g.line(0.91, 0.5, 1, 0.5);
+      g.circle(0.3, 0.45, 0.12);
+      g.circle(0.3, 0.45, 0.04);
+      g.circle(0.7, 0.45, 0.12);
+      g.circle(0.7, 0.45, 0.04);
+    }
+    return g.entities;
+  },
+
+  dental: () => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    g.roundRect(0.22, 0.02, 0.22, 0.14, 0.04);
+    g.roundRect(0.15, 0.18, 0.36, 0.32, 0.06);
+    g.roundRect(0.16, 0.52, 0.34, 0.26, 0.04);
+    g.roundRect(0.18, 0.8, 0.3, 0.18, 0.03);
+    g.roundRect(0.08, 0.32, 0.06, 0.32, 0.02);
+    g.roundRect(0.52, 0.32, 0.06, 0.32, 0.02);
+    g.line(0.54, 0.38, 0.72, 0.28);
+    g.line(0.72, 0.28, 0.82, 0.38);
+    g.roundRect(0.68, 0.38, 0.3, 0.24, 0.02);
+    for (let i = 0; i < 4; i++) g.line(0.72 + i * 0.06, 0.38, 0.72 + i * 0.06, 0.48);
+    g.circle(0.68, 0.7, 0.07);
+    g.circle(0.68, 0.7, 0.02);
+    g.ellipse(0.78, 0.18, 0.12, 0.07);
+    g.line(0.66, 0.18, 0.64, 0.22);
+    g.line(0.9, 0.18, 0.92, 0.22);
+    return g.entities;
+  },
+
+  wheelchair: o => {
+    const g = objectDrawing();
+    g.rect(0, 0.15, 0.09, 0.7);
+    g.ellipse(0.045, 0.5, 0.035, 0.33);
+    g.rect(0.91, 0.15, 0.09, 0.7);
+    g.ellipse(0.955, 0.5, 0.035, 0.33);
+    g.line(0, 0.5, 0.09, 0.5);
+    g.line(0.91, 0.5, 1, 0.5);
+    g.roundRect(0.15, 0.26, 0.7, 0.46, 0.04);
+    g.roundRect(0.18, 0.12, 0.64, 0.14, 0.03);
+    g.roundRect(0.11, 0.28, 0.06, 0.35, 0.02);
+    g.roundRect(0.83, 0.28, 0.06, 0.35, 0.02);
+    g.roundRect(0.18, 0.82, 0.26, 0.16, 0.02);
+    g.roundRect(0.56, 0.82, 0.26, 0.16, 0.02);
+    g.ellipse(0.14, 0.76, 0.03, 0.05);
+    g.ellipse(0.86, 0.76, 0.03, 0.05);
+    g.roundRect(0.18, 0.02, 0.05, 0.1, 0.015);
+    g.roundRect(0.77, 0.02, 0.05, 0.1, 0.015);
+    if (o.sports) {
+      g.line(0, 0.12, 0.2, 0.83);
+      g.line(1, 0.12, 0.8, 0.83);
+    }
+    return g.entities;
+  },
+
+  cart: o => {
+    const g = objectDrawing();
+    if (o.crash) {
+      // Emergency Crash Cart with defibrillator, oxygen tank, CPR board, drawers & IV pole
+      g.roundRect(0.04, 0.08, 0.92, 0.84, 0.04);
+      // Protective corner bumpers
+      g.circle(0.05, 0.09, 0.04);
+      g.circle(0.95, 0.09, 0.04);
+      g.circle(0.05, 0.91, 0.04);
+      g.circle(0.95, 0.91, 0.04);
+      g.wheels(0.08, 0.12, 0.84, 0.76);
+      // Ergonomic steering push handle
+      g.roundRect(0.01, 0.28, 0.04, 0.44, 0.02);
+      // Defibrillator unit on upper top shelf
+      g.roundRect(0.52, 0.14, 0.38, 0.36, 0.02);
+      g.rect(0.56, 0.18, 0.2, 0.14);
+      g.circle(0.82, 0.24, 0.035);
+      g.roundRect(0.56, 0.36, 0.12, 0.1, 0.02);
+      g.roundRect(0.72, 0.36, 0.12, 0.1, 0.02);
+      // Oxygen cylinder tank in rear cradle
+      g.circle(0.24, 0.24, 0.11);
+      g.circle(0.24, 0.24, 0.09);
+      g.rect(0.22, 0.22, 0.04, 0.04);
+      // IV pole bracket mount
+      g.circle(0.12, 0.14, 0.035);
+      g.circle(0.12, 0.14, 0.015);
+      // Medication / airway drawers with pulls
+      g.line(0.12, 0.58, 0.88, 0.58);
+      g.roundRect(0.38, 0.6, 0.24, 0.04, 0.01);
+      g.line(0.12, 0.72, 0.88, 0.72);
+      g.roundRect(0.38, 0.74, 0.24, 0.04, 0.01);
+      g.line(0.12, 0.84, 0.88, 0.84);
+      g.roundRect(0.38, 0.86, 0.24, 0.03, 0.01);
+      // CPR cardiac board on rear flank
+      g.rect(0.15, 0.02, 0.7, 0.04);
+      return g.entities;
+    }
+    g.roundRect(0.04, 0.06, 0.92, 0.88, 0.04);
+    for (const x of [0.05, 0.95]) {
+      for (const y of [0.07, 0.93]) g.circle(x, y, 0.03);
+    }
+    g.roundRect(0.2, 0, 0.6, 0.04, 0.01);
+    for (let y = 0.24; y < 0.85; y += 0.16) {
+      g.line(0.12, y, 0.88, y);
+      g.rect(0.35, y - 0.03, 0.3, 0.03);
+    }
+    g.wheels(0.06, 0.08, 0.88, 0.84);
+    if (o.monitor) {
+      g.rect(0.2, 0.12, 0.6, 0.28);
+      g.line(0.5, 0.4, 0.5, 0.58);
+    }
+    return g.entities;
+  },
+
+  lift: () => {
+    const g = objectDrawing();
+    g.path([[0.12, 1], [0.12, 0.35], [0.35, 0.18], [0.65, 0.18], [0.88, 0.35], [0.88, 1]]);
+    g.rect(0.42, 0.06, 0.16, 0.2);
+    g.line(0.5, 0.18, 0.5, 0.72);
+    g.roundRect(0.25, 0.7, 0.5, 0.06, 0.02);
+    g.circle(0.28, 0.73, 0.02);
+    g.circle(0.72, 0.73, 0.02);
+    g.circle(0.12, 0.95, 0.035);
+    g.circle(0.88, 0.95, 0.035);
+    g.circle(0.35, 0.2, 0.035);
+    g.circle(0.65, 0.2, 0.035);
+    return g.entities;
+  },
+
+  scanner: o => {
+    const g = objectDrawing();
+    if (o.ct) {
+      // CT Scanner with angled gantry bore, emergency stops, displays & patient couch
+      g.roundRect(0.04, 0, 0.92, 0.44, 0.06);
+      g.circle(0.12, 0.08, 0.025);
+      g.circle(0.88, 0.08, 0.025);
+      g.roundRect(0.16, 0.04, 0.14, 0.05, 0.01);
+      g.roundRect(0.7, 0.04, 0.14, 0.05, 0.01);
+      g.circle(0.5, 0.22, 0.2);
+      g.circle(0.5, 0.22, 0.15);
+      g.line(0.5, 0.08, 0.5, 0.36);
+      g.line(0.36, 0.22, 0.64, 0.22);
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        g.line(0.5 + 0.16 * Math.cos(a), 0.22 + 0.16 * Math.sin(a), 0.5 + 0.19 * Math.cos(a), 0.22 + 0.19 * Math.sin(a));
+      }
+      g.roundRect(0.28, 0.18, 0.44, 0.82, 0.03);
+      g.roundRect(0.35, 0.2, 0.3, 0.12, 0.03);
+      g.line(0.31, 0.34, 0.31, 0.96);
+      g.line(0.69, 0.34, 0.69, 0.96);
+      g.line(0.28, 0.58, 0.72, 0.58);
+      g.line(0.28, 0.8, 0.72, 0.8);
+      return g.entities;
+    }
+    g.roundRect(0.04, 0, 0.92, 0.46, 0.08);
+    g.circle(0.5, 0.23, 0.22);
+    g.circle(0.5, 0.23, 0.16);
+    g.circle(0.5, 0.23, 0.19);
+    g.roundRect(0.28, 0.18, 0.44, 0.82, 0.04);
+    g.roundRect(0.36, 0.2, 0.28, 0.14, 0.03);
+    g.line(0.28, 0.5, 0.72, 0.5);
+    g.line(0.28, 0.75, 0.72, 0.75);
+    if (o.mri) {
+      g.rect(0.02, 0, 0.96, 0.48);
+    }
+    return g.entities;
+  },
+
+  carm: () => {
+    const g = objectDrawing();
+    // Mobile Surgical C-Arm System with generator chassis, C-gantry, X-ray tube & detector
+    g.roundRect(0.2, 0.64, 0.6, 0.32, 0.04);
+    g.roundRect(0.25, 0.94, 0.5, 0.03, 0.01);
+    g.wheels(0.24, 0.66, 0.52, 0.26);
+    g.roundRect(0.32, 0.68, 0.36, 0.14, 0.02);
+    g.circle(0.5, 0.55, 0.08);
+    g.circle(0.5, 0.55, 0.03);
+    g.rect(0.46, 0.32, 0.08, 0.23);
+    // Outer and inner C-shaped arc
+    g.arc(0.5, 0.32, 0.44, 0.44, 0.85 * Math.PI, 2.15 * Math.PI, 32);
+    g.arc(0.5, 0.32, 0.36, 0.36, 0.85 * Math.PI, 2.15 * Math.PI, 32);
+    // X-Ray Tube Assembly at left arm
+    g.roundRect(0.04, 0.1, 0.2, 0.22, 0.03);
+    g.path([[0.24, 0.14], [0.3, 0.18], [0.3, 0.24], [0.24, 0.28]]);
+    g.line(0.04, 0.21, 0.24, 0.21);
+    // Flat Panel Detector / Image Intensifier at right arm
+    g.circle(0.82, 0.21, 0.12);
+    g.circle(0.82, 0.21, 0.03);
+    g.line(0.76, 0.21, 0.88, 0.21);
+    g.line(0.82, 0.15, 0.82, 0.27);
+    // Central imaging axis line
+    g.line(0.3, 0.21, 0.7, 0.21);
+    return g.entities;
+  },
+
+  pole: () => {
+    const g = objectDrawing();
+    g.starBase(0.5, 0.5, 0.46, 5);
+    g.circle(0.5, 0.5, 0.06);
+    g.circle(0.5, 0.5, 0.02);
+    for (let i = 0; i < 4; i++) {
+      const a = i * Math.PI / 2;
+      g.line(0.5, 0.5, 0.5 + 0.18 * Math.cos(a), 0.5 + 0.18 * Math.sin(a));
+      g.circle(0.5 + 0.2 * Math.cos(a), 0.5 + 0.2 * Math.sin(a), 0.02);
+    }
+    return g.entities;
+  },
+
+  walker: () => {
+    const g = objectDrawing();
+    g.path([[0.08, 0.95], [0.08, 0.15], [0.92, 0.15], [0.92, 0.95]]);
+    g.roundRect(0.04, 0.02, 0.08, 0.16, 0.02);
+    g.roundRect(0.88, 0.02, 0.08, 0.16, 0.02);
+    g.roundRect(0.18, 0.32, 0.64, 0.32, 0.04);
+    g.rect(0.22, 0.15, 0.56, 0.16);
+    for (let x = 0.28; x < 0.75; x += 0.08) g.line(x, 0.15, x, 0.31);
+    g.wheels(0.08, 0.12, 0.84, 0.8);
+    return g.entities;
+  },
+
+  device: o => {
+    const g = objectDrawing();
+    g.roundRect(0.08, 0.06, 0.84, 0.88, 0.04);
+    g.rect(0.14, 0.12, 0.72, 0.48);
+    g.path([[0.18, 0.26], [0.3, 0.26], [0.34, 0.2], [0.38, 0.34], [0.42, 0.26], [0.6, 0.26], [0.64, 0.2], [0.68, 0.34], [0.72, 0.26], [0.82, 0.26]]);
+    for (let x = 0.2; x < 0.85; x += 0.15) g.circle(x, 0.74, 0.035);
+    if (o.pump) {
+      for (let x = 0.18; x < 0.85; x += 0.24) g.rect(x, 0.15, 0.16, 0.65);
+    }
+    return g.entities;
+  }
 };
 
 
@@ -3247,25 +4476,348 @@ const HEALTHCARE_GEOMETRY = {
   // =========================================================================
 
 
+
 const LANDSCAPE_GEOMETRY = {
-  climbingPlant: ()=>{const g=objectDrawing('A-VEGETATION');g.rect(0,0,1,1);for(let x=.1;x<1;x+=.2)g.line(x,0,x,1);g.path(Array.from({length:64},(_,i)=>{const y=i/63;return [.5+.23*Math.sin(y*Math.PI*5),y];}));for(let y=.1;y<.95;y+=.1){const x=.5+.23*Math.sin(y*Math.PI*5);g.ellipse(x+.08,y,.1,.035);}return g.entities;},
-  bollard: ()=>{const g=objectDrawing('A-SITE');g.ellipse(.5,.5,.5);g.ellipse(.5,.5,.32);g.line(.35,.5,.65,.5);g.line(.5,.35,.5,.65);return g.entities;},
-  tree: o=>{const g=objectDrawing('A-VEGETATION');const lobes=o.species==='olive'?9: o.species==='ornamental'?7:12;
-    if(o.species==='palm'){for(let i=0;i<10;i++){const a=i*Math.PI/5,dx=Math.cos(a),dy=Math.sin(a);g.path([[.5,.5],[.5+.5*dx,.5+.5*dy],[.5+.26*dx-.08*dy,.5+.26*dy+.08*dx]],true);}}
-    else if(o.species==='conifer'){for(let i=0;i<12;i++){const a=i*Math.PI/6;g.path([[.5,.5],[.5+.5*Math.cos(a),.5+.5*Math.sin(a)],[.5+.18*Math.cos(a+.22),.5+.18*Math.sin(a+.22)]]);}}
-    else{g.path(Array.from({length:96},(_,i)=>{const a=i*Math.PI/48,r=.43+.065*Math.cos(lobes*a);return [.5+r*Math.cos(a),.5+r*Math.sin(a)];}),true);for(let i=0;i<lobes;i++){const a=i*2*Math.PI/lobes;g.line(.5,.5,.5+.3*Math.cos(a),.5+.3*Math.sin(a));}}
-    g.ellipse(.5,.5,.045);return g.entities;},
-  hedge: o=>{const g=objectDrawing('A-VEGETATION');for(let i=0;i<o.bays;i++){g.ellipse((i+.5)/o.bays,.5,.55/o.bays,.48);g.ellipse((i+.5)/o.bays,.5,.28/o.bays,.24);}return g.entities;},
-  groundcover: o=>{const g=objectDrawing('A-VEGETATION');g.rect(0,0,1,1);for(let x=.08;x<.95;x+=.15)for(let y=.1;y<.95;y+=.17){if(o.flower){g.ellipse(x,y,.026);for(let n=0;n<5;n++)g.ellipse(x+.04*Math.cos(n*1.257),y+.04*Math.sin(n*1.257),.022);}else if(o.grass){g.path([[x-.03,y+.05],[x,y],[x+.03,y+.05]]);g.line(x,y,x,y+.06);}else{g.ellipse(x,y,.03,.024);g.line(x-.02,y,x+.02,y);}}return g.entities;},
-  planter: o=>{const g=objectDrawing('A-SITE');if(o.round){g.ellipse(.5,.5,.5);g.ellipse(.5,.5,.4);}else{g.rect(0,0,1,1);g.rect(.06,.08,.88,.84);}g.path(Array.from({length:32},(_,i)=>{const a=i*Math.PI/16,r=.23+.07*Math.cos(6*a);return [.5+r*Math.cos(a),.5+r*Math.sin(a)];}),true);return g.entities;},
-  bench: o=>{const g=objectDrawing('A-SITE');g.rect(0,.12,1,.72);for(let y=.2;y<.8;y+=.14)g.line(0,y,1,y);g.rect(.06,0,.88,.1);if(o.arms){g.rect(0,0,.06,.95);g.rect(.94,0,.06,.95);}return g.entities;},
-  picnic: ()=>{const g=objectDrawing('A-SITE');g.rect(.12,.3,.76,.4);g.rect(0,0,1,.17);g.rect(0,.83,1,.17);for(let y=.35;y<.7;y+=.1)g.line(.12,y,.88,y);g.line(.15,.17,.15,.83);g.line(.85,.17,.85,.83);return g.entities;},
-  pergola: o=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);for(const x of [.04,.96])for(const y of [.04,.96])g.rect(x-.03,y-.03,.06,.06);for(let x=.1;x<1;x+=.1)g.line(x,0,x,1);if(o.seating)g.seat(.2,.3,.6,.35);return g.entities;},
-  fountain: ()=>{const g=objectDrawing('A-SITE');g.ellipse(.5,.5,.5);g.ellipse(.5,.5,.4);g.ellipse(.5,.5,.2);g.ellipse(.5,.5,.06);for(let n=0;n<8;n++){const t=n*Math.PI/4;g.line(.5+.2*Math.cos(t),.5+.2*Math.sin(t),.5+.35*Math.cos(t),.5+.35*Math.sin(t));}return g.entities;},
-  swing: ()=>{const g=objectDrawing('A-SITE');g.rect(0,.07,1,.06);for(const x of [0,.96])g.rect(x,0,.04,1);for(const x of [.2,.65]){g.rect(x,.43,.15,.14);g.line(x,.1,x,.57);g.line(x+.15,.1,x+.15,.57);}return g.entities;},
-  slide: ()=>{const g=objectDrawing('A-SITE');g.rect(.25,0,.5,.2);g.path([[.25,.2],[.25,.65],[0,1],[1,1],[.75,.65],[.75,.2]]);for(let y=.03;y<.2;y+=.04)g.line(.25,y,.75,y);g.line(.35,.2,.35,.65);g.line(.65,.2,.65,.65);return g.entities;},
-  bin: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.rect(.08,.12,.84,.76);g.ellipse(.5,.5,.23);g.line(.15,.05,.85,.05);return g.entities;},
-  rock: ()=>{const g=objectDrawing('A-SITE');g.path([[0,.3],[.15,0],[.7,.04],[1,.4],[.82,.92],[.38,1],[.1,.75]],true);g.path([[.15,0],[.38,.3],[.7,.04]]);g.path([[.38,.3],[.82,.92],[.38,1]],true);return g.entities;}
+  climbingPlant: () => {
+    const g = objectDrawing('A-VEGETATION');
+    g.rect(0, 0, 1, 1);
+    for (let x = 0.1; x < 1; x += 0.2) g.line(x, 0, x, 1);
+    g.path(Array.from({ length: 64 }, (_, i) => {
+      const y = i / 63;
+      return [0.5 + 0.23 * Math.sin(y * Math.PI * 5), y];
+    }));
+    for (let y = 0.1; y < 0.95; y += 0.1) {
+      const x = 0.5 + 0.23 * Math.sin(y * Math.PI * 5);
+      g.ellipse(x + 0.08, y, 0.1, 0.035);
+      g.ellipse(x - 0.08, y, 0.1, 0.035);
+    }
+    return g.entities;
+  },
+
+  bollard: () => {
+    const g = objectDrawing('A-SITE');
+    g.circle(0.5, 0.5, 0.49);
+    g.circle(0.5, 0.5, 0.38);
+    g.circle(0.5, 0.5, 0.12);
+    g.line(0.2, 0.5, 0.8, 0.5);
+    g.line(0.5, 0.2, 0.5, 0.8);
+    return g.entities;
+  },
+
+  tree: o => {
+    const g = objectDrawing('A-VEGETATION');
+    if (o.species === 'palm') {
+      g.circle(0.5, 0.5, 0.08);
+      g.circle(0.5, 0.5, 0.03);
+      for (let i = 0; i < 10; i++) {
+        const a = i * Math.PI / 5;
+        const dx = Math.cos(a), dy = Math.sin(a);
+        const ex = 0.5 + 0.49 * dx, ey = 0.5 + 0.49 * dy;
+        g.line(0.5, 0.5, ex, ey);
+        for (let s = 0.3; s < 0.95; s += 0.14) {
+          const px = 0.5 + s * 0.49 * dx, py = 0.5 + s * 0.49 * dy;
+          const lx = -dy * 0.07, ly = dx * 0.07;
+          g.line(px, py, px + lx + dx * 0.03, py + ly + dy * 0.03);
+          g.line(px, py, px - lx + dx * 0.03, py - ly + dy * 0.03);
+        }
+      }
+    } else if (o.species === 'cypress') {
+      // Columnar / Fastigiate Mediterranean Cypress with tight needle rings
+      g.circle(0.5, 0.5, 0.48);
+      g.circle(0.5, 0.5, 0.38);
+      g.circle(0.5, 0.5, 0.28);
+      g.circle(0.5, 0.5, 0.18);
+      g.circle(0.5, 0.5, 0.08);
+      g.circle(0.5, 0.5, 0.03);
+      for (let i = 0; i < 20; i++) {
+        const a = i * Math.PI / 10;
+        const r1 = (i % 2 === 0) ? 0.46 : 0.36;
+        g.line(0.5 + 0.08 * Math.cos(a), 0.5 + 0.08 * Math.sin(a), 0.5 + r1 * Math.cos(a), 0.5 + r1 * Math.sin(a));
+      }
+    } else if (o.species === 'japanese_maple') {
+      // Japanese Maple (Acer palmatum) with 7 distinct spreading foliage lobes & branching
+      g.circle(0.5, 0.5, 0.07);
+      g.circle(0.5, 0.5, 0.025);
+      const lobes = 7;
+      for (let i = 0; i < lobes; i++) {
+        const a = i * 2 * Math.PI / lobes - Math.PI / 2;
+        const cx = 0.5 + 0.32 * Math.cos(a);
+        const cy = 0.5 + 0.32 * Math.sin(a);
+        g.line(0.5 + 0.07 * Math.cos(a), 0.5 + 0.07 * Math.sin(a), cx, cy);
+        g.ellipse(cx, cy, 0.14, 0.09);
+        g.line(cx, cy, 0.5 + 0.47 * Math.cos(a), 0.5 + 0.47 * Math.sin(a));
+        g.line(cx, cy, 0.5 + 0.43 * Math.cos(a - 0.2), 0.5 + 0.43 * Math.sin(a - 0.2));
+        g.line(cx, cy, 0.5 + 0.43 * Math.cos(a + 0.2), 0.5 + 0.43 * Math.sin(a + 0.2));
+      }
+    } else if (o.species === 'weeping_willow') {
+      // Weeping Willow with cascading radial tendril arcs
+      g.circle(0.5, 0.5, 0.09);
+      g.circle(0.5, 0.5, 0.03);
+      g.circle(0.5, 0.5, 0.48);
+      for (let i = 0; i < 16; i++) {
+        const a = i * Math.PI / 8;
+        const mx = 0.5 + 0.26 * Math.cos(a);
+        const my = 0.5 + 0.26 * Math.sin(a);
+        const ex = 0.5 + 0.47 * Math.cos(a + 0.3);
+        const ey = 0.5 + 0.47 * Math.sin(a + 0.3);
+        g.path([[0.5 + 0.09 * Math.cos(a), 0.5 + 0.09 * Math.sin(a)], [mx, my], [ex, ey]]);
+      }
+    } else if (o.species === 'conifer') {
+      g.circle(0.5, 0.5, 0.06);
+      g.circle(0.5, 0.5, 0.02);
+      for (const [r, count] of [[0.49, 16], [0.35, 12], [0.2, 8]]) {
+        const pts = [];
+        for (let i = 0; i < count; i++) {
+          const a1 = i * 2 * Math.PI / count;
+          const a2 = (i + 0.5) * 2 * Math.PI / count;
+          pts.push([0.5 + r * Math.cos(a1), 0.5 + r * Math.sin(a1)]);
+          pts.push([0.5 + r * 0.65 * Math.cos(a2), 0.5 + r * 0.65 * Math.sin(a2)]);
+        }
+        g.path(pts, true);
+      }
+      for (let i = 0; i < 12; i++) {
+        const a = i * Math.PI / 6;
+        g.line(0.5, 0.5, 0.5 + 0.48 * Math.cos(a), 0.5 + 0.48 * Math.sin(a));
+      }
+    } else {
+      const lobes = o.species === 'olive' ? 9 : o.species === 'ornamental' ? 7 : 14;
+      g.path(Array.from({ length: 96 }, (_, i) => {
+        const a = i * Math.PI / 48;
+        const r = 0.43 + 0.065 * Math.cos(lobes * a);
+        return [0.5 + r * Math.cos(a), 0.5 + r * Math.sin(a)];
+      }), true);
+      g.circle(0.5, 0.5, 0.06);
+      g.circle(0.5, 0.5, 0.02);
+      g.line(0.42, 0.5, 0.58, 0.5);
+      g.line(0.5, 0.42, 0.5, 0.58);
+      for (let i = 0; i < lobes; i++) {
+        const a = i * 2 * Math.PI / lobes;
+        g.line(0.5 + 0.06 * Math.cos(a), 0.5 + 0.06 * Math.sin(a), 0.5 + 0.36 * Math.cos(a), 0.5 + 0.36 * Math.sin(a));
+        g.line(0.5 + 0.22 * Math.cos(a), 0.5 + 0.22 * Math.sin(a), 0.5 + 0.38 * Math.cos(a + 0.18), 0.5 + 0.38 * Math.sin(a + 0.18));
+      }
+    }
+    return g.entities;
+  },
+
+  hedge: o => {
+    const g = objectDrawing('A-VEGETATION');
+    const bays = o.bays || 4;
+    for (let i = 0; i < bays; i++) {
+      const cx = (i + 0.5) / bays;
+      g.ellipse(cx, 0.5, 0.5 / bays, 0.5);
+      g.ellipse(cx, 0.5, 0.35 / bays, 0.32);
+      g.line(cx, 0.15, cx, 0.85);
+      g.line(cx - 0.2 / bays, 0.5, cx + 0.2 / bays, 0.5);
+    }
+    g.line(0, 0.5, 1, 0.5);
+    return g.entities;
+  },
+
+  groundcover: o => {
+    const g = objectDrawing('A-VEGETATION');
+    g.rect(0, 0, 1, 1);
+    for (let x = 0.1; x < 0.95; x += 0.18) {
+      for (let y = 0.1; y < 0.95; y += 0.18) {
+        if (o.flower) {
+          g.circle(x, y, 0.03);
+          for (let n = 0; n < 5; n++) {
+            g.circle(x + 0.045 * Math.cos(n * 1.257), y + 0.045 * Math.sin(n * 1.257), 0.022);
+          }
+        } else if (o.grass) {
+          g.path([[x - 0.04, y + 0.06], [x, y], [x + 0.04, y + 0.06]]);
+          g.line(x, y, x, y + 0.08);
+          g.line(x - 0.02, y, x - 0.05, y + 0.07);
+          g.line(x + 0.02, y, x + 0.05, y + 0.07);
+        } else {
+          g.ellipse(x, y, 0.04, 0.025);
+          g.line(x - 0.03, y, x + 0.03, y);
+        }
+      }
+    }
+    return g.entities;
+  },
+
+  planter: o => {
+    const g = objectDrawing('A-SITE');
+    if (o.round) {
+      g.circle(0.5, 0.5, 0.49);
+      g.circle(0.5, 0.5, 0.42);
+      for (let a = 0; a < 8; a++) {
+        const ang = a * Math.PI / 4;
+        g.ellipse(0.5 + 0.22 * Math.cos(ang), 0.5 + 0.22 * Math.sin(ang), 0.14, 0.08);
+      }
+      g.circle(0.5, 0.5, 0.08);
+    } else {
+      g.roundRect(0, 0, 1, 1, 0.04);
+      g.roundRect(0.06, 0.06, 0.88, 0.88, 0.03);
+      for (let x = 0.2; x < 0.85; x += 0.25) {
+        for (let y = 0.2; y < 0.85; y += 0.25) {
+          g.circle(x, y, 0.08);
+          g.line(x - 0.05, y, x + 0.05, y);
+        }
+      }
+    }
+    return g.entities;
+  },
+
+  bench: o => {
+    const g = objectDrawing('A-SITE');
+    g.roundRect(0, 0.08, 1, 0.84, 0.03);
+    for (let y = 0.32; y < 0.88; y += 0.12) g.roundRect(0.08, y, 0.84, 0.08, 0.015);
+    for (let y = 0.12; y < 0.3; y += 0.08) g.roundRect(0.08, y, 0.84, 0.06, 0.01);
+    if (o.arms) {
+      g.roundRect(0, 0.04, 0.08, 0.92, 0.03);
+      g.roundRect(0.92, 0.04, 0.08, 0.92, 0.03);
+    }
+    return g.entities;
+  },
+
+  picnic: () => {
+    const g = objectDrawing('A-SITE');
+    for (let y = 0.28; y < 0.68; y += 0.1) g.roundRect(0.1, y, 0.8, 0.08, 0.01);
+    g.roundRect(0, 0.04, 1, 0.16, 0.02);
+    g.roundRect(0, 0.8, 1, 0.16, 0.02);
+    g.line(0.18, 0.2, 0.18, 0.8);
+    g.line(0.82, 0.2, 0.82, 0.8);
+    g.line(0.18, 0.2, 0.82, 0.8);
+    g.line(0.18, 0.8, 0.82, 0.2);
+    return g.entities;
+  },
+
+  pergola: o => {
+    const g = objectDrawing('A-SITE');
+    g.rect(0, 0, 1, 1);
+    for (const x of [0.03, 0.91]) {
+      for (const y of [0.03, 0.91]) {
+        g.rect(x, y, 0.06, 0.06);
+        g.circle(x + 0.03, y + 0.03, 0.015);
+      }
+    }
+    g.rect(0, 0.04, 1, 0.05);
+    g.rect(0, 0.91, 1, 0.05);
+    for (let x = 0.08; x < 0.95; x += 0.12) g.rect(x, 0, 0.04, 1);
+    if (o.seating) g.seat(0.2, 0.3, 0.6, 0.4);
+    return g.entities;
+  },
+
+  fountain: () => {
+    const g = objectDrawing('A-SITE');
+    g.circle(0.5, 0.5, 0.49);
+    g.circle(0.5, 0.5, 0.42);
+    g.circle(0.5, 0.5, 0.26);
+    g.circle(0.5, 0.5, 0.22);
+    g.circle(0.5, 0.5, 0.07);
+    g.circle(0.5, 0.5, 0.025);
+    for (let n = 0; n < 8; n++) {
+      const t = n * Math.PI / 4;
+      g.line(0.5 + 0.24 * Math.cos(t), 0.5 + 0.24 * Math.sin(t), 0.5 + 0.4 * Math.cos(t), 0.5 + 0.4 * Math.sin(t));
+    }
+    return g.entities;
+  },
+
+  swing: () => {
+    const g = objectDrawing('A-SITE');
+    g.path([[0, 0], [0.06, 0.5], [0, 1]]);
+    g.path([[1, 0], [0.94, 0.5], [1, 1]]);
+    g.roundRect(0.04, 0.47, 0.92, 0.06, 0.02);
+    for (const sx of [0.22, 0.64]) {
+      g.line(sx, 0.5, sx, 0.22);
+      g.line(sx + 0.14, 0.5, sx + 0.14, 0.22);
+      g.roundRect(sx, 0.16, 0.14, 0.08, 0.02);
+    }
+    return g.entities;
+  },
+
+  slide: () => {
+    const g = objectDrawing('A-SITE');
+    g.rect(0.28, 0, 0.44, 0.2);
+    for (let y = 0.04; y < 0.18; y += 0.04) g.line(0.28, y, 0.72, y);
+    g.line(0.28, 0, 0.28, 0.25);
+    g.line(0.72, 0, 0.72, 0.25);
+    g.path([[0.28, 0.2], [0.22, 0.7], [0.1, 1], [0.9, 1], [0.78, 0.7], [0.72, 0.2]]);
+    g.line(0.38, 0.2, 0.32, 1);
+    g.line(0.62, 0.2, 0.68, 1);
+    return g.entities;
+  },
+
+  bin: () => {
+    const g = objectDrawing('A-SITE');
+    g.roundRect(0, 0, 1, 1, 0.06);
+    g.roundRect(0.08, 0.08, 0.84, 0.84, 0.04);
+    g.circle(0.5, 0.5, 0.26);
+    g.circle(0.5, 0.5, 0.18);
+    g.line(0.18, 0.06, 0.82, 0.06);
+    return g.entities;
+  },
+
+  rock: () => {
+    const g = objectDrawing('A-SITE');
+    g.path([[0, 0.3], [0.15, 0], [0.7, 0.04], [1, 0.4], [0.82, 0.92], [0.38, 1], [0.1, 0.75]], true);
+    g.path([[0.15, 0], [0.38, 0.3], [0.7, 0.04]]);
+    g.path([[0.38, 0.3], [0.82, 0.92], [0.38, 1]], true);
+    g.line(0.1, 0.75, 0.38, 0.3);
+    return g.entities;
+  },
+
+  hydrant: () => {
+    const g = objectDrawing('A-SITE');
+    // Fire Hydrant with 3-ft clear ring, 6-bolt base flange, 4.5" pumper & dual 2.5" side ports
+    g.circle(0.5, 0.5, 0.48);
+    g.circle(0.5, 0.5, 0.34);
+    for (let i = 0; i < 6; i++) {
+      const a = i * Math.PI / 3;
+      g.circle(0.5 + 0.28 * Math.cos(a), 0.5 + 0.28 * Math.sin(a), 0.025);
+    }
+    // Main barrel
+    g.circle(0.5, 0.5, 0.2);
+    // Bonnet dome
+    g.circle(0.5, 0.5, 0.12);
+    // Operating nut
+    g.path(Array.from({ length: 5 }, (_, i) => [
+      0.5 + 0.05 * Math.cos(i * 2 * Math.PI / 5 - Math.PI / 2),
+      0.5 + 0.05 * Math.sin(i * 2 * Math.PI / 5 - Math.PI / 2)
+    ]), true);
+    // 4.5" Pumper nozzle (facing front/down)
+    g.roundRect(0.4, 0.7, 0.2, 0.16, 0.02);
+    g.circle(0.5, 0.82, 0.025);
+    // Dual 2.5" hose ports (left & right)
+    g.roundRect(0.14, 0.42, 0.16, 0.16, 0.02);
+    g.circle(0.18, 0.5, 0.02);
+    g.roundRect(0.7, 0.42, 0.16, 0.16, 0.02);
+    g.circle(0.82, 0.5, 0.02);
+    return g.entities;
+  },
+
+  turnstile: () => {
+    const g = objectDrawing('A-SITE');
+    // Optical Security Speed Gates / Turnstiles with RFID readers, tempered glass barrier wings & sensors
+    // Left & right pedestal housings
+    g.roundRect(0.04, 0.06, 0.2, 0.88, 0.04);
+    g.roundRect(0.76, 0.06, 0.2, 0.88, 0.04);
+    // Card reader / display top zones
+    g.roundRect(0.08, 0.12, 0.12, 0.18, 0.02);
+    g.circle(0.14, 0.21, 0.03);
+    g.roundRect(0.8, 0.12, 0.12, 0.18, 0.02);
+    g.circle(0.86, 0.21, 0.03);
+    // Directional indicator LED arrows
+    g.path([[0.14, 0.72], [0.14, 0.82], [0.11, 0.77], [0.14, 0.82], [0.17, 0.77]]);
+    g.path([[0.86, 0.72], [0.86, 0.82], [0.83, 0.77], [0.86, 0.82], [0.89, 0.77]]);
+    // Glass wing pivot spindles
+    g.circle(0.24, 0.5, 0.035);
+    g.circle(0.76, 0.5, 0.035);
+    // Glass barrier wings meeting at center
+    g.roundRect(0.25, 0.485, 0.24, 0.03, 0.008);
+    g.roundRect(0.51, 0.485, 0.24, 0.03, 0.008);
+    // Wing swing clearance arcs
+    g.arc(0.24, 0.5, 0.24, 0.24, -Math.PI / 3, 0, 16);
+    g.arc(0.76, 0.5, 0.24, 0.24, Math.PI, 4 * Math.PI / 3, 16);
+    // Photocell safety beam sensor dots along inner faces
+    for (let y = 0.3; y <= 0.7; y += 0.13) {
+      g.circle(0.24, y, 0.012);
+      g.circle(0.76, y, 0.012);
+    }
+    return g.entities;
+  }
 };
 
 
@@ -3274,16 +4826,366 @@ const LANDSCAPE_GEOMETRY = {
   // =========================================================================
 
 
+
 const STREETS_GEOMETRY = {
-  vehicle: o=>{const g=objectDrawing('A-VEHICLE');g.path([[.15,0],[.85,0],[1,.12],[1,.86],[.85,1],[.15,1],[0,.86],[0,.12]],true);g.rect(.13,.12,.74,.7);g.path([[.13,.24],[.24,.32],[.76,.32],[.87,.24]],true);g.path([[.13,.72],[.24,.65],[.76,.65],[.87,.72]],true);for(const x of [0,.92])for(const y of [.2,.72])g.rect(x,y,.08,.15);if(o.truck){g.rect(.12,.43,.76,.48);for(let y=.5;y<.9;y+=.07)g.line(.12,y,.88,y);g.rect(.32,.37,.36,.04);}if(o.bus)for(let y=.3;y<.85;y+=.085){g.rect(.05,y,.1,.06);g.rect(.85,y,.1,.06);}if(o.emergency){g.rect(.25,.32,.5,.05);g.line(.5,.48,.5,.62);g.line(.4,.55,.6,.55);}return g.entities;},
-  bicycle: o=>{const g=objectDrawing('A-VEHICLE');g.ellipse(.5,.15,.12,.15);g.ellipse(.5,.85,.12,.15);g.path([[.5,.15],[.35,.5],[.5,.75],[.65,.5],[.5,.15]]);g.line(.35,.5,.65,.5);g.line(.25,.22,.75,.22);g.rect(.4,.55,.2,.14);if(o.motorcycle){g.rect(.22,.28,.56,.35);g.rect(.3,.65,.4,.17);}return g.entities;},
-  parking: o=>{const g=objectDrawing('A-SITE');g.path([[0,0],[0,1],[1,1],[1,0]]);g.line(.4,.65,.4,.35);g.path([[.4,.35],[.64,.35],[.64,.5],[.4,.5]]);if(o.accessible){g.line(.7,0,.7,1);for(let y=.1;y<.9;y+=.1)g.line(.7,y,1,y+.1);g.ellipse(.32,.4,.07,.09);}if(o.ev){g.path([[.6,.15],[.45,.4],[.58,.4],[.42,.65]]);}return g.entities;},
-  crossing: ()=>{const g=objectDrawing('A-SITE');for(let y=0;y<1;y+=.16)g.rect(0,y,1,.08);return g.entities;},
-  shelter: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.rect(.1,.6,.8,.22);g.line(.1,.06,.9,.06);for(const x of [.06,.94])g.rect(x-.03,.1,.06,.8);return g.entities;},
-  bikeRack: o=>{const g=objectDrawing('A-SITE');for(let i=0;i<o.bays;i++){const x=(i+.5)/o.bays;g.path([[x-.3/o.bays,1],[x-.3/o.bays,.2],[x,.05],[x+.3/o.bays,.2],[x+.3/o.bays,1]]);}return g.entities;},
-  light: o=>{const g=objectDrawing('A-SITE');g.ellipse(.5,.5,.15);g.line(.5,.5,.5,.05);g.rect(.3,0,.4,.1);if(o.signal){for(let y=.12;y<.6;y+=.16)g.ellipse(.5,y,.06);g.rect(.36,0,.28,.63);}return g.entities;},
-  gate: ()=>{const g=objectDrawing('A-SITE');g.rect(0,.25,.1,.5);g.rect(.1,.43,.9,.13);for(let x=.2;x<1;x+=.14)g.line(x,.43,x+.08,.56);g.arc(.1,.5,.88,.5,-Math.PI/2,0);return g.entities;},
-  charger: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.rect(.15,.12,.7,.25);g.path([[.5,.43],[.34,.65],[.53,.65],[.42,.87]]);g.path([[.92,.22],[1,.3],[1,.85],[.8,.85]]);return g.entities;}
+  vehicle: o => {
+    const g = objectDrawing('A-VEHICLE');
+    if (o.caravan) {
+      // Travel Trailer / Caravan with A-frame hitch, pop-top vents & panoramic window
+      g.rect(0, 0, 1, 1);
+      // A-frame towing hitch at front
+      g.path([[0.34, 0.16], [0.5, 0.01], [0.66, 0.16]]);
+      g.circle(0.5, 0.02, 0.03);
+      g.circle(0.44, 0.09, 0.02);
+      // Caravan insulated body shell
+      g.roundRect(0.04, 0.16, 0.92, 0.82, 0.08);
+      // Front panoramic window
+      g.roundRect(0.12, 0.18, 0.76, 0.08, 0.03);
+      // Side door and step on right
+      g.rect(0.92, 0.48, 0.06, 0.26);
+      g.line(0.92, 0.61, 0.98, 0.61);
+      // Double-glazed side windows
+      g.roundRect(0.04, 0.32, 0.04, 0.22, 0.01);
+      g.roundRect(0.04, 0.64, 0.04, 0.22, 0.01);
+      g.roundRect(0.92, 0.24, 0.04, 0.18, 0.01);
+      // Pop-top roof hatches / vent grilles
+      g.roundRect(0.34, 0.35, 0.32, 0.16, 0.02);
+      g.line(0.34, 0.43, 0.66, 0.43);
+      g.roundRect(0.34, 0.62, 0.32, 0.16, 0.02);
+      g.line(0.34, 0.7, 0.66, 0.7);
+      // Rear window & taillight bumper bar
+      g.roundRect(0.12, 0.92, 0.76, 0.04, 0.01);
+      g.roundRect(0.06, 0.96, 0.14, 0.02, 0.005);
+      g.roundRect(0.8, 0.96, 0.14, 0.02, 0.005);
+    } else if (o.camper) {
+      // Camper Van Conversion with pop-top roof tent & side awning
+      g.roundRect(0, 0, 1, 1, 0.1);
+      g.path([[0.14, 0.2], [0.86, 0.2], [0.8, 0.32], [0.2, 0.32]], true);
+      g.roundRect(0.18, 0.36, 0.26, 0.2, 0.04);
+      g.roundRect(0.56, 0.36, 0.26, 0.2, 0.04);
+      g.rect(0.94, 0.35, 0.06, 0.42);
+      g.roundRect(0.18, 0.4, 0.64, 0.46, 0.04);
+      g.line(0.5, 0.88, 0.5, 1);
+      g.line(0.16, 0.9, 0.84, 0.9);
+    } else if (o.suv) {
+      // SUV: Bold stance, flared wheel arches, roof rack rails, rear spoiler
+      g.roundRect(0, 0, 1, 1, 0.12);
+      g.roundRect(0.02, 0.12, 0.06, 0.22, 0.02);
+      g.roundRect(0.92, 0.12, 0.06, 0.22, 0.02);
+      g.roundRect(0.02, 0.66, 0.06, 0.22, 0.02);
+      g.roundRect(0.92, 0.66, 0.06, 0.22, 0.02);
+      g.line(0.24, 0.02, 0.24, 0.2);
+      g.line(0.76, 0.02, 0.76, 0.2);
+      g.path([[0.16, 0.22], [0.84, 0.22], [0.78, 0.36], [0.22, 0.36]], true);
+      g.roundRect(0.18, 0.38, 0.06, 0.46, 0.02);
+      g.roundRect(0.76, 0.38, 0.06, 0.46, 0.02);
+      g.roundRect(0.3, 0.4, 0.4, 0.22, 0.02);
+      g.path([[0.2, 0.84], [0.8, 0.84], [0.84, 0.94], [0.16, 0.94]], true);
+      g.line(0.15, 0.96, 0.85, 0.96);
+    } else if (o.van) {
+      // Delivery / Cargo Van with bulkhead and sliding door
+      g.roundRect(0, 0, 1, 1, 0.08);
+      g.path([[0.16, 0.18], [0.84, 0.18], [0.78, 0.3], [0.22, 0.3]], true);
+      g.rect(0.04, 0.42, 0.92, 0.03);
+      g.rect(0.92, 0.46, 0.08, 0.36);
+      g.line(0.5, 0.86, 0.5, 1);
+      g.line(0.24, 0.5, 0.24, 0.92);
+      g.line(0.76, 0.5, 0.76, 0.92);
+    } else if (o.train) {
+      // Passenger Train Rail Carriage with couplers, bogies & gangway vestibules
+      g.roundRect(0, 0, 1, 1, 0.04);
+      g.rect(0.25, 0, 0.5, 0.04);
+      g.rect(0.25, 0.96, 0.5, 0.04);
+      g.rect(0.44, 0, 0.12, 0.02);
+      g.rect(0.44, 0.98, 0.12, 0.02);
+      g.rect(0.06, 0.08, 0.88, 0.14);
+      g.rect(0.06, 0.78, 0.88, 0.14);
+      g.rect(0, 0.28, 0.04, 0.16);
+      g.rect(0.96, 0.28, 0.04, 0.16);
+      g.rect(0, 0.56, 0.04, 0.16);
+      g.rect(0.96, 0.56, 0.04, 0.16);
+      g.line(0.5, 0.22, 0.5, 0.78);
+    } else if (o.tram) {
+      // Light Rail Transit / Tram Module with Roof Pantograph Assembly
+      g.roundRect(0, 0, 1, 1, 0.05);
+      g.rect(0, 0.25, 0.04, 0.2);
+      g.rect(0.96, 0.25, 0.04, 0.2);
+      g.rect(0, 0.6, 0.04, 0.2);
+      g.rect(0.96, 0.6, 0.04, 0.2);
+      g.path([[0.15, 0.04], [0.85, 0.04], [0.8, 0.12], [0.2, 0.12]], true);
+      g.path([[0.15, 0.96], [0.85, 0.96], [0.8, 0.88], [0.2, 0.88]], true);
+      g.rect(0.35, 0.42, 0.3, 0.16);
+      g.line(0.35, 0.42, 0.65, 0.58);
+      g.line(0.35, 0.58, 0.65, 0.42);
+      g.line(0.25, 0.5, 0.75, 0.5);
+    } else if (o.bus) {
+      if (o.articulated) {
+        // 18m Articulated City Bus with Accordion Turntable Bellows Joint
+        g.roundRect(0, 0, 1, 0.52, 0.06);
+        g.circle(0.26, 0.12, 0.045);
+        g.line(0.26, 0.12, 0.26, 0.16);
+        g.rect(0.88, 0.06, 0.12, 0.12);
+        g.rect(0.88, 0.36, 0.12, 0.12);
+        // Articulation pleated bellow joint
+        g.rect(0.04, 0.52, 0.92, 0.08);
+        for (let y = 0.52; y <= 0.6; y += 0.016) g.line(0.04, y, 0.96, y);
+        g.circle(0.5, 0.56, 0.18);
+        // Rear trailer car
+        g.roundRect(0, 0.6, 1, 0.4, 0.06);
+        g.rect(0.88, 0.72, 0.12, 0.12);
+        g.roundRect(0.25, 0.7, 0.5, 0.2, 0.02);
+      } else {
+        // Standard Transit Bus (12m)
+        g.roundRect(0, 0, 1, 1, 0.08);
+        g.arc(0.5, 0.06, 0.42, 0.06, 0, Math.PI, 16);
+        g.circle(0.26, 0.14, 0.045);
+        g.line(0.26, 0.14, 0.26, 0.18);
+        g.rect(0.85, 0.08, 0.15, 0.12);
+        g.line(0.85, 0.14, 1, 0.14);
+        g.rect(0.85, 0.52, 0.15, 0.12);
+        g.line(0.85, 0.58, 1, 0.58);
+        for (let y = 0.22; y < 0.88; y += 0.08) {
+          g.roundRect(0.08, y, 0.32, 0.06, 0.015);
+          g.roundRect(0.6, y, 0.32, 0.06, 0.015);
+        }
+        g.rect(0.15, 0.92, 0.7, 0.05);
+        for (let x = 0.2; x < 0.8; x += 0.06) g.line(x, 0.92, x, 0.97);
+      }
+    } else if (o.truck) {
+      g.rect(0, 0, 1, 1);
+      g.roundRect(0.06, 0.02, 0.88, 0.44, 0.08);
+      g.path([[0.16, 0.14], [0.84, 0.14], [0.8, 0.26], [0.2, 0.26]], true);
+      g.rect(0, 0.2, 0.06, 0.05);
+      g.rect(0.94, 0.2, 0.06, 0.05);
+      g.circle(0.32, 0.2, 0.04);
+      g.rect(0.06, 0.48, 0.88, 0.5);
+      g.rect(0.06, 0.95, 0.88, 0.03);
+      for (let x = 0.16; x < 0.85; x += 0.08) g.line(x, 0.5, x, 0.94);
+      if (o.emergency) {
+        g.roundRect(0.25, 0.06, 0.5, 0.06, 0.02);
+        g.circle(0.32, 0.09, 0.02);
+        g.circle(0.68, 0.09, 0.02);
+      }
+    } else if (o.emergency) {
+      g.roundRect(0, 0, 1, 1, 0.1);
+      g.path([[0.18, 0.22], [0.82, 0.22], [0.76, 0.34], [0.24, 0.34]], true);
+      g.rect(0, 0.25, 0.06, 0.05);
+      g.rect(0.94, 0.25, 0.06, 0.05);
+      g.roundRect(0.24, 0.28, 0.52, 0.08, 0.03);
+      g.circle(0.32, 0.32, 0.025);
+      g.circle(0.68, 0.32, 0.025);
+      g.path([[0.45, 0.55], [0.55, 0.55], [0.55, 0.62], [0.62, 0.62], [0.62, 0.72], [0.55, 0.72], [0.55, 0.79], [0.45, 0.79], [0.45, 0.72], [0.38, 0.72], [0.38, 0.62], [0.45, 0.62]], true);
+      g.line(0.18, 0.84, 0.82, 0.84);
+      g.line(0.5, 0.44, 0.5, 0.92);
+    } else {
+      // Passenger Sedan Car
+      g.roundRect(0, 0, 1, 1, 0.12);
+      g.arc(0.5, 0.04, 0.38, 0.04, 0, Math.PI, 16);
+      g.roundRect(0.12, 0.04, 0.14, 0.04, 0.02);
+      g.roundRect(0.74, 0.04, 0.14, 0.04, 0.02);
+      g.line(0.24, 0.06, 0.22, 0.22);
+      g.line(0.76, 0.06, 0.78, 0.22);
+      g.path([[0.18, 0.24], [0.82, 0.24], [0.76, 0.36], [0.24, 0.36]], true);
+      g.line(0.32, 0.33, 0.44, 0.26);
+      g.line(0.58, 0.33, 0.7, 0.26);
+      g.roundRect(0, 0.26, 0.06, 0.05, 0.02);
+      g.roundRect(0.94, 0.26, 0.06, 0.05, 0.02);
+      g.roundRect(0.22, 0.36, 0.56, 0.34, 0.04);
+      g.roundRect(0.32, 0.4, 0.36, 0.18, 0.02);
+      g.circle(0.34, 0.32, 0.045);
+      g.line(0.34, 0.32, 0.34, 0.36);
+      g.path([[0.24, 0.7], [0.76, 0.7], [0.82, 0.8], [0.18, 0.8]], true);
+      g.line(0.2, 0.86, 0.8, 0.86);
+      g.roundRect(0.12, 0.92, 0.14, 0.04, 0.02);
+      g.roundRect(0.74, 0.92, 0.14, 0.04, 0.02);
+    }
+    return g.entities;
+  },
+
+  bicycle: o => {
+    const g = objectDrawing('A-VEHICLE');
+    if (o.motorcycle) {
+      // Motorcycle / Police Motorcycle
+      g.rect(0, 0, 1, 1);
+      g.roundRect(0.44, 0, 0.12, 0.24, 0.05);
+      g.line(0.42, 0.1, 0.42, 0.3);
+      g.line(0.58, 0.1, 0.58, 0.3);
+      g.roundRect(0, 0.24, 1, 0.05, 0.02);
+      g.circle(0.04, 0.22, 0.03);
+      g.circle(0.96, 0.22, 0.03);
+      g.roundRect(0.32, 0.3, 0.36, 0.22, 0.08);
+      g.roundRect(0.34, 0.52, 0.32, 0.24, 0.06);
+      g.line(0.34, 0.64, 0.66, 0.64);
+      for (let y = 0.38; y < 0.52; y += 0.04) g.line(0.34, y, 0.66, y);
+      g.line(0.66, 0.52, 0.76, 0.88);
+      g.roundRect(0.72, 0.82, 0.08, 0.16, 0.02);
+      g.roundRect(0.42, 0.72, 0.16, 0.28, 0.06);
+      if (o.police) {
+        g.circle(0.5, 0.94, 0.04);
+        g.roundRect(0.18, 0.68, 0.14, 0.24, 0.02);
+        g.roundRect(0.68, 0.68, 0.14, 0.24, 0.02);
+      }
+    } else if (o.cargo) {
+      // Delivery Cargo Bike
+      g.rect(0, 0, 1, 1);
+      g.roundRect(0.16, 0, 0.68, 0.36, 0.04);
+      g.roundRect(0.08, 0.04, 0.07, 0.24, 0.02);
+      g.roundRect(0.85, 0.04, 0.07, 0.24, 0.02);
+      g.roundRect(0.18, 0.38, 0.64, 0.04, 0.02);
+      g.line(0.5, 0.4, 0.5, 0.7);
+      g.circle(0.5, 0.64, 0.04);
+      g.rect(0.34, 0.62, 0.05, 0.04);
+      g.rect(0.61, 0.62, 0.05, 0.04);
+      g.roundRect(0.38, 0.68, 0.24, 0.12, 0.04);
+      g.roundRect(0.45, 0.76, 0.1, 0.24, 0.04);
+    } else {
+      // Standard Bicycle
+      g.rect(0, 0, 1, 1);
+      g.roundRect(0.45, 0, 0.1, 0.28, 0.04);
+      g.line(0.5, 0, 0.5, 0.3);
+      g.roundRect(0, 0.24, 1, 0.04, 0.02);
+      g.roundRect(0.04, 0.22, 0.04, 0.08, 0.015);
+      g.roundRect(0.92, 0.22, 0.04, 0.08, 0.015);
+      g.line(0.5, 0.26, 0.5, 0.6);
+      g.line(0.36, 0.6, 0.64, 0.6);
+      g.rect(0.34, 0.58, 0.04, 0.04);
+      g.rect(0.62, 0.58, 0.04, 0.04);
+      g.circle(0.5, 0.6, 0.035);
+      g.path([[0.5, 0.48], [0.42, 0.62], [0.58, 0.62]], true);
+      g.roundRect(0.45, 0.7, 0.1, 0.3, 0.04);
+      g.line(0.5, 0.7, 0.5, 1);
+    }
+    return g.entities;
+  },
+
+  parking: o => {
+    const g = objectDrawing('A-SITE');
+    g.path([[0, 0], [0, 1], [1, 1], [1, 0]]);
+    g.roundRect(0.15, 0.88, 0.7, 0.05, 0.015);
+    if (o.accessible) {
+      g.line(0.75, 0, 0.75, 1);
+      for (let y = 0.08; y < 0.95; y += 0.1) g.line(0.75, y, 1, y + 0.1);
+      g.circle(0.38, 0.5, 0.12);
+      g.circle(0.44, 0.3, 0.04);
+      g.line(0.38, 0.5, 0.44, 0.38);
+      g.line(0.44, 0.38, 0.32, 0.38);
+      g.line(0.38, 0.5, 0.52, 0.5);
+      g.line(0.52, 0.5, 0.52, 0.58);
+    } else if (o.ev) {
+      g.path([[0.52, 0.2], [0.44, 0.38], [0.52, 0.38], [0.46, 0.58]]);
+      g.roundRect(0.38, 0.62, 0.24, 0.22, 0.03);
+      g.circle(0.5, 0.73, 0.03);
+    } else {
+      g.line(0.4, 0.65, 0.4, 0.35);
+      g.path([[0.4, 0.35], [0.64, 0.35], [0.64, 0.5], [0.4, 0.5]]);
+    }
+    return g.entities;
+  },
+
+  crossing: () => {
+    const g = objectDrawing('A-SITE');
+    g.line(0, 0, 1, 0);
+    g.line(0, 1, 1, 1);
+    for (let y = 0.04; y < 0.95; y += 0.16) g.rect(0, y, 1, 0.08);
+    return g.entities;
+  },
+
+  shelter: () => {
+    const g = objectDrawing('A-SITE');
+    g.rect(0, 0, 1, 1);
+    g.roundRect(0.08, 0.62, 0.84, 0.22, 0.02);
+    g.line(0.08, 0.08, 0.92, 0.08);
+    for (const x of [0.06, 0.94]) g.rect(x - 0.03, 0.08, 0.06, 0.82);
+    g.line(0.1, 0.9, 0.9, 0.9);
+    return g.entities;
+  },
+
+  bikeRack: o => {
+    const g = objectDrawing('A-SITE');
+    const bays = o.bays || 4;
+    for (let i = 0; i < bays; i++) {
+      const x = (i + 0.5) / bays;
+      g.path([[x - 0.25 / bays, 0.98], [x - 0.25 / bays, 0.2], [x, 0.04], [x + 0.25 / bays, 0.2], [x + 0.25 / bays, 0.98]]);
+      g.line(x - 0.25 / bays, 0.5, x + 0.25 / bays, 0.5);
+    }
+    return g.entities;
+  },
+
+  light: o => {
+    const g = objectDrawing('A-SITE');
+    if (o.signal) {
+      // Traffic Signal Post with Cantilever Mast Arm & 3-aspect Signal Head
+      g.rect(0, 0, 1, 1);
+      g.circle(0.5, 0.78, 0.2);
+      g.circle(0.5, 0.78, 0.08);
+      for (const [x, y] of [[0.36, 0.64], [0.64, 0.64], [0.36, 0.92], [0.64, 0.92]]) g.circle(x, y, 0.025);
+      g.roundRect(0.44, 0, 0.12, 0.78, 0.02);
+      g.rect(0.32, 0, 0.36, 0.52);
+      g.circle(0.5, 0.1, 0.065);
+      g.circle(0.5, 0.26, 0.065);
+      g.circle(0.5, 0.42, 0.065);
+      g.rect(0.22, 0.7, 0.14, 0.16);
+      g.circle(0.29, 0.78, 0.025);
+    } else {
+      // Complete Street Light Luminaire with Foundation Base Plate & Anchor Bolts
+      g.rect(0, 0, 1, 1);
+      g.circle(0.5, 0.5, 0.38);
+      g.circle(0.5, 0.5, 0.18);
+      g.circle(0.5, 0.5, 0.06);
+      for (const [x, y] of [[0.18, 0.18], [0.82, 0.18], [0.18, 0.82], [0.82, 0.82]]) g.circle(x, y, 0.035);
+      g.roundRect(0.44, 0, 0.12, 0.5, 0.02);
+      g.roundRect(0.34, 0, 0.32, 0.24, 0.06);
+      g.roundRect(0.38, 0.03, 0.24, 0.14, 0.02);
+      for (let ly = 0.05; ly <= 0.15; ly += 0.04) g.line(0.38, ly, 0.62, ly);
+    }
+    return g.entities;
+  },
+
+  gate: () => {
+    const g = objectDrawing('A-SITE');
+    g.roundRect(0, 0.25, 0.12, 0.5, 0.02);
+    g.circle(0.06, 0.5, 0.03);
+    g.rect(0.12, 0.44, 0.88, 0.12);
+    for (let x = 0.2; x < 1; x += 0.12) g.line(x, 0.44, x + 0.08, 0.56);
+    g.arc(0.12, 0.5, 0.88, 0.5, -Math.PI / 2, 0, 24);
+    return g.entities;
+  },
+
+  charger: o => {
+    const g = objectDrawing('A-SITE');
+    if (o && o.fast) {
+      // Level 3 DC Fast Charger / Supercharger (Dual CCS2 / NACS holstered cables & touch kiosk)
+      g.rect(0.02, 0.02, 0.96, 0.96);
+      g.roundRect(0.1, 0.08, 0.8, 0.84, 0.05);
+      // Status light halo top
+      g.roundRect(0.2, 0.1, 0.6, 0.05, 0.01);
+      // Dual side cable holsters & retractor housings
+      g.roundRect(0.03, 0.28, 0.08, 0.36, 0.02);
+      g.roundRect(0.89, 0.28, 0.08, 0.36, 0.02);
+      // Heavy liquid-cooled cables
+      g.path([[0.1, 0.32], [0.04, 0.48], [0.04, 0.74], [0.1, 0.82]]);
+      g.path([[0.9, 0.32], [0.96, 0.48], [0.96, 0.74], [0.9, 0.82]]);
+      // Plug handles parked in ports
+      g.rect(0.04, 0.38, 0.06, 0.16);
+      g.rect(0.9, 0.38, 0.06, 0.16);
+      // Central high-brightness touch display
+      g.roundRect(0.24, 0.2, 0.52, 0.26, 0.02);
+      g.circle(0.5, 0.33, 0.05);
+      g.circle(0.5, 0.33, 0.02);
+      // Electric lightning bolt insignia
+      g.path([[0.52, 0.5], [0.44, 0.64], [0.52, 0.64], [0.46, 0.76]]);
+      // Louvered cooling vent slats at bottom
+      for (let y = 0.8; y <= 0.88; y += 0.04) g.line(0.24, y, 0.76, y);
+      return g.entities;
+    }
+    g.roundRect(0, 0, 1, 1, 0.05);
+    g.rect(0.15, 0.12, 0.7, 0.24);
+    g.circle(0.5, 0.24, 0.04);
+    g.path([[0.5, 0.42], [0.36, 0.62], [0.52, 0.62], [0.42, 0.86]]);
+    g.path([[0.9, 0.22], [0.98, 0.3], [0.98, 0.85], [0.8, 0.85]]);
+    g.roundRect(0.76, 0.82, 0.12, 0.08, 0.02);
+    return g.entities;
+  }
 };
 
 
@@ -3292,21 +5194,325 @@ const STREETS_GEOMETRY = {
   // =========================================================================
 
 
+
 const INSTITUTIONAL_GEOMETRY = {
-  easel: ()=>{const g=objectDrawing();g.rect(0,.05,1,.1);g.path([[.15,0],[.5,1],[.85,0]]);g.line(.08,.65,.92,.65);g.rect(.12,.2,.76,.35);return g.entities;},
-  locker: o=>{const g=objectDrawing();g.rect(0,0,1,1);for(let i=0;i<o.bays;i++){const x=i/o.bays;g.rect(x+.03/o.bays,.06,.94/o.bays,.88);g.rect(x+.7/o.bays,.42,.07/o.bays,.16);for(let y=.12;y<.3;y+=.07)g.line(x+.15/o.bays,y,x+.85/o.bays,y);if(o.gear){g.ellipse(x+.5/o.bays,.3,.18/o.bays,.12);g.line(x+.3/o.bays,.65,x+.7/o.bays,.65);}}return g.entities;},
-  hose: ()=>{const g=objectDrawing();g.rect(0,0,1,1);for(let y=.2;y<1;y+=.22){g.ellipse(.5,y,.4,.08);g.line(.1,y,.9,y);}return g.entities;},
-  scba: ()=>{const g=objectDrawing();g.rect(0,0,1,1);for(let x=.15;x<1;x+=.23){g.rect(x-.065,.15,.13,.7);g.ellipse(x,.2,.065,.04);g.line(x,.03,x,.15);}return g.entities;},
-  screen: o=>{const g=objectDrawing();const bays=o.bays||3;for(let i=0;i<bays;i++){const x=i/bays;g.rect(x,0,1/bays,.28);g.line(x+.1/bays,.28,x+.1/bays,1);g.line((i+1)/bays-.1/bays,.28,(i+1)/bays-.1/bays,1);}return g.entities;},
-  portal: o=>{const g=objectDrawing();g.rect(0,0,.17,1);g.rect(.83,0,.17,1);g.line(.17,.1,.83,.1);if(o.scanner){g.rect(.25,.15,.5,.7);g.line(.25,.6,.75,.6);}return g.entities;},
-  room: o=>{const g=objectDrawing('A-SITE');g.path([[0,1],[0,0],[1,0],[1,1],[.3,1]]);g.line(0,1,0,.7);g.arc(0,1,.3,.3,-Math.PI/2,0);g.rect(.1,.15,.3,.6);if(o.cell){for(let x=.45;x<.95;x+=.08)g.line(x,0,x,1);g.ellipse(.75,.85,.1,.1);}else if(o.booth){g.rect(.1,.08,.8,.15);g.rect(.6,.4,.22,.3);}else{g.rect(.06,.07,.88,.2);g.rect(.06,.73,.88,.2);}return g.entities;},
-  stairs: o=>{const g=objectDrawing('A-SITE');if(o.spiral){g.ellipse(.5,.5,.5);g.ellipse(.5,.5,.07);for(let i=0;i<12;i++){const a=i*Math.PI/6;g.line(.5,.5,.5+.5*Math.cos(a),.5+.5*Math.sin(a));}}else{g.rect(0,0,1,1);for(let y=.08;y<1;y+=.08)g.line(0,y,1,y);g.path([[.4,.3],[.5,.15],[.6,.3]]);g.line(.5,.15,.5,.85);if(o.l)g.rect(.5,.5,.5,.5);}return g.entities;},
-  door: o=>{const g=objectDrawing('A-DOOR');const bays=o.double?2:1;g.line(0,0,1,0);for(let i=0;i<bays;i++){const x=i?1:0,r=1/bays;g.line(x,0,x,1);g.arc(x,0,r,1,i?Math.PI/2:0,i?Math.PI:Math.PI/2);}return g.entities;},
-  sliding: o=>{const g=objectDrawing('A-DOOR');g.rect(0,.25,1,.5);const bays=o.bays||2;for(let i=0;i<bays;i++)g.rect(i/bays,.25,1/bays,.2);g.line(.1,.9,.9,.9);g.path([[.75,.8],[.9,.9],[.75,1]]);return g.entities;},
-  window: ()=>{const g=objectDrawing('A-DOOR');g.rect(0,0,1,1);g.line(0,.3,1,.3);g.line(0,.7,1,.7);g.line(.5,0,.5,1);return g.entities;},
-  lab: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.05,.05,.9,.9);g.ellipse(.25,.5,.16,.28);g.rect(.53,.2,.35,.58);if(o.hood){g.line(0,.25,1,.25);g.line(.08,.4,.92,.4);}return g.entities;},
-  ramp: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.line(.05,0,.05,1);g.line(.95,0,.95,1);g.line(.5,.85,.5,.15);g.path([[.35,.35],[.5,.15],[.65,.35]]);return g.entities;},
-  clearance: ()=>{const g=objectDrawing('A-CLEARANCE');g.ellipse(.5,.5,.5,.5);g.line(.15,.5,.85,.5);g.path([[.25,.4],[.15,.5],[.25,.6]]);g.path([[.75,.4],[.85,.5],[.75,.6]]);return g.entities;}
+  easel: () => {
+    const g = objectDrawing();
+    g.roundRect(0, 0.05, 1, 0.1, 0.02);
+    g.path([[0.15, 0], [0.5, 1], [0.85, 0]]);
+    g.line(0.08, 0.65, 0.92, 0.65);
+    g.roundRect(0.12, 0.2, 0.76, 0.35, 0.02);
+    g.rect(0.2, 0.24, 0.6, 0.26);
+    return g.entities;
+  },
+
+  locker: o => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    const bays = o.bays || 2;
+    for (let i = 0; i < bays; i++) {
+      const x = i / bays;
+      g.roundRect(x + 0.03 / bays, 0.04, 0.94 / bays, 0.92, 0.01);
+      if (o.fire || o.gear) {
+        // Fire station turnout gear locker
+        g.circle(x + 0.5 / bays, 0.18, 0.14 / bays);
+        g.circle(x + 0.5 / bays, 0.18, 0.05 / bays);
+        g.line(x + 0.08 / bays, 0.32, x + 0.92 / bays, 0.32);
+        g.path([[x + 0.2 / bays, 0.52], [x + 0.5 / bays, 0.38], [x + 0.8 / bays, 0.52], [x + 0.75 / bays, 0.75], [x + 0.25 / bays, 0.75]], true);
+        g.rect(x + 0.15 / bays, 0.8, 0.7 / bays, 0.14);
+        g.roundRect(x + 0.2 / bays, 0.82, 0.26 / bays, 0.1, 0.02);
+        g.roundRect(x + 0.54 / bays, 0.82, 0.26 / bays, 0.1, 0.02);
+      } else if (o.cubby) {
+        // Childcare / school cubby
+        g.line(x + 0.05 / bays, 0.3, x + 0.95 / bays, 0.3);
+        g.line(x + 0.05 / bays, 0.75, x + 0.95 / bays, 0.75);
+        g.circle(x + 0.35 / bays, 0.42, 0.03 / bays);
+        g.circle(x + 0.65 / bays, 0.42, 0.03 / bays);
+      } else {
+        // Commercial steel locker
+        g.rect(x + 0.68 / bays, 0.44, 0.08 / bays, 0.12);
+        g.rect(x + 0.35 / bays, 0.08, 0.3 / bays, 0.06);
+        for (let y = 0.16; y < 0.28; y += 0.04) g.line(x + 0.15 / bays, y, x + 0.85 / bays, y);
+        for (let y = 0.72; y < 0.86; y += 0.04) g.line(x + 0.15 / bays, y, x + 0.85 / bays, y);
+        g.circle(x + 0.5 / bays, 0.35, 0.02 / bays);
+      }
+    }
+    return g.entities;
+  },
+
+  hose: () => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    g.rect(0.08, 0.08, 0.84, 0.84);
+    g.circle(0.5, 0.5, 0.38);
+    g.circle(0.5, 0.5, 0.28);
+    g.circle(0.5, 0.5, 0.18);
+    g.circle(0.5, 0.5, 0.08);
+    g.line(0.5, 0.12, 0.88, 0.5);
+    g.rect(0.82, 0.44, 0.1, 0.12);
+    return g.entities;
+  },
+
+  scba: () => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    for (let x = 0.2; x < 0.95; x += 0.3) {
+      g.roundRect(x - 0.1, 0.12, 0.2, 0.74, 0.05);
+      g.circle(x, 0.18, 0.06);
+      g.circle(x, 0.18, 0.02);
+      g.line(x, 0.04, x, 0.12);
+      g.line(x - 0.08, 0.5, x + 0.08, 0.5);
+    }
+    return g.entities;
+  },
+
+  screen: o => {
+    const g = objectDrawing();
+    const bays = o.bays || 3;
+    for (let i = 0; i < bays; i++) {
+      const x = i / bays;
+      g.roundRect(x + 0.02 / bays, 0.04, 0.96 / bays, 0.92, 0.02);
+      g.roundRect(x + 0.06 / bays, 0.08, 0.88 / bays, 0.84, 0.01);
+      g.circle(x + 0.02 / bays, 0.5, 0.015);
+      g.circle(x + 0.98 / bays, 0.5, 0.015);
+    }
+    return g.entities;
+  },
+
+  portal: o => {
+    const g = objectDrawing();
+    if (o.scanner) {
+      g.rect(0, 0, 1, 1);
+      g.roundRect(0.18, 0.08, 0.64, 0.84, 0.04);
+      g.line(0.18, 0.28, 0.82, 0.28);
+      g.line(0.18, 0.72, 0.72, 0.72);
+      for (let y = 0.32; y < 0.7; y += 0.06) g.line(0.24, y, 0.76, y);
+      g.rect(0.04, 0.2, 0.14, 0.6);
+      g.rect(0.82, 0.2, 0.14, 0.6);
+    } else {
+      g.rect(0, 0, 0.18, 1);
+      g.rect(0.82, 0, 0.18, 1);
+      g.line(0.18, 0.08, 0.82, 0.08);
+      g.line(0.18, 0.92, 0.82, 0.92);
+      g.line(0.18, 0.5, 0.82, 0.5);
+      g.circle(0.09, 0.3, 0.03);
+      g.circle(0.91, 0.3, 0.03);
+    }
+    return g.entities;
+  },
+
+  room: o => {
+    const g = objectDrawing('A-SITE');
+    g.path([[0, 1], [0, 0], [1, 0], [1, 1], [0.35, 1]]);
+    g.line(0, 1, 0, 0.65);
+    g.arc(0, 1, 0.35, 0.35, -Math.PI / 2, 0, 16);
+    if (o.cell) {
+      for (let x = 0.4; x < 0.98; x += 0.08) g.line(x, 0, x, 1);
+      g.rect(0.1, 0.1, 0.25, 0.6);
+      g.circle(0.78, 0.85, 0.09);
+    } else if (o.booth) {
+      g.roundRect(0.1, 0.08, 0.8, 0.2, 0.02);
+      g.roundRect(0.55, 0.38, 0.3, 0.32, 0.04);
+      g.starBase(0.7, 0.54, 0.15, 5);
+    } else {
+      g.rect(0.06, 0.07, 0.88, 0.2);
+      g.rect(0.06, 0.73, 0.88, 0.2);
+    }
+    return g.entities;
+  },
+
+  stairs: o => {
+    const g = objectDrawing('A-SITE');
+    if (o.spiral) {
+      g.circle(0.5, 0.5, 0.49);
+      g.circle(0.5, 0.5, 0.08);
+      g.circle(0.5, 0.5, 0.04);
+      for (let i = 0; i < 16; i++) {
+        const a = i * Math.PI / 8;
+        g.line(0.5 + 0.08 * Math.cos(a), 0.5 + 0.08 * Math.sin(a), 0.5 + 0.49 * Math.cos(a), 0.5 + 0.49 * Math.sin(a));
+      }
+      g.arc(0.5, 0.5, 0.3, 0.3, 0, 1.7 * Math.PI, 24);
+      g.circle(0.8, 0.5, 0.02);
+      g.path([[0.48, 0.2], [0.55, 0.18], [0.51, 0.25]]);
+    } else {
+      g.line(0, 0, 0, 1);
+      g.line(1, 0, 1, 1);
+      g.line(0.05, 0, 0.05, 1);
+      g.line(0.95, 0, 0.95, 1);
+      for (let y = 0.08; y < 0.95; y += 0.075) {
+        g.line(0, y, 1, y);
+        g.line(0, y + 0.015, 1, y + 0.015);
+      }
+      g.circle(0.5, 0.88, 0.025);
+      g.line(0.5, 0.88, 0.5, 0.16);
+      g.path([[0.44, 0.24], [0.5, 0.16], [0.56, 0.24]]);
+      if (o.l) g.rect(0.5, 0.5, 0.5, 0.5);
+    }
+    return g.entities;
+  },
+
+  door: o => {
+    const g = objectDrawing('A-DOOR');
+    const bays = o.double ? 2 : 1;
+    g.rect(0, 0, 0.05, 0.1);
+    g.rect(0.95, 0, 0.05, 0.1);
+    g.line(0.05, 0.05, 0.95, 0.05);
+    if (bays === 1) {
+      g.rect(0.05, 0, 0.04, 0.9);
+      g.rect(0.07, 0.76, 0.04, 0.02);
+      g.arc(0.05, 0, 0.9, 0.9, 0, Math.PI / 2, 24);
+    } else {
+      g.rect(0.05, 0, 0.04, 0.45);
+      g.rect(0.91, 0, 0.04, 0.45);
+      g.arc(0.05, 0, 0.45, 0.45, 0, Math.PI / 2, 16);
+      g.arc(0.95, 0, 0.45, 0.45, Math.PI / 2, Math.PI, 16);
+    }
+    return g.entities;
+  },
+
+  sliding: o => {
+    const g = objectDrawing('A-DOOR');
+    g.rect(0, 0.2, 0.06, 0.6);
+    g.rect(0.94, 0.2, 0.06, 0.6);
+    g.line(0.06, 0.3, 0.94, 0.3);
+    g.line(0.06, 0.7, 0.94, 0.7);
+    const bays = o.bays || 2;
+    for (let i = 0; i < bays; i++) {
+      g.roundRect(i * (0.86 / bays) + 0.06, 0.32 + i * 0.12, 0.88 / bays + 0.04, 0.18, 0.015);
+    }
+    g.line(0.2, 0.88, 0.8, 0.88);
+    g.path([[0.72, 0.82], [0.8, 0.88], [0.72, 0.94]]);
+    return g.entities;
+  },
+
+  window: () => {
+    const g = objectDrawing('A-DOOR');
+    g.rect(0, 0.15, 1, 0.7);
+    g.rect(0.06, 0.2, 0.88, 0.6);
+    g.rect(0.47, 0.2, 0.06, 0.6);
+    g.line(0.06, 0.45, 0.94, 0.45);
+    g.line(0.06, 0.55, 0.94, 0.55);
+    g.roundRect(0, 0.82, 1, 0.08, 0.02);
+    return g.entities;
+  },
+
+  lab: o => {
+    const g = objectDrawing();
+    g.roundRect(0, 0, 1, 1, 0.02);
+    if (o.hood) {
+      g.line(0.08, 0.25, 0.92, 0.25);
+      g.line(0.08, 0.28, 0.92, 0.28);
+      for (let y = 0.4; y < 0.9; y += 0.15) g.line(0.12, y, 0.88, y);
+      g.roundRect(0.35, 0.08, 0.3, 0.06, 0.02);
+      g.circle(0.04, 0.4, 0.02);
+      g.circle(0.96, 0.4, 0.02);
+    } else {
+      g.roundRect(0.14, 0.28, 0.28, 0.44, 0.04);
+      g.circle(0.28, 0.55, 0.035);
+      g.rect(0.26, 0.18, 0.04, 0.1);
+      g.circle(0.28, 0.18, 0.02);
+      g.circle(0.6, 0.22, 0.03);
+      g.circle(0.8, 0.22, 0.03);
+      g.line(0.5, 0.05, 0.5, 0.95);
+      g.line(0.5, 0.5, 0.95, 0.5);
+    }
+    return g.entities;
+  },
+
+  ramp: () => {
+    const g = objectDrawing('A-SITE');
+    g.rect(0, 0, 1, 1);
+    g.line(0.06, 0, 0.06, 1);
+    g.line(0.94, 0, 0.94, 1);
+    for (let y = 0.15; y < 0.9; y += 0.15) g.line(0.06, y, 0.94, y);
+    g.line(0.5, 0.88, 0.5, 0.12);
+    g.path([[0.42, 0.22], [0.5, 0.12], [0.58, 0.22]]);
+    return g.entities;
+  },
+
+  clearance: () => {
+    const g = objectDrawing('A-CLEARANCE');
+    g.circle(0.5, 0.5, 0.49);
+    g.line(0.12, 0.5, 0.88, 0.5);
+    g.path([[0.22, 0.42], [0.12, 0.5], [0.22, 0.58]]);
+    g.path([[0.78, 0.42], [0.88, 0.5], [0.78, 0.58]]);
+    return g.entities;
+  },
+
+  acousticPod: o => {
+    const g = objectDrawing();
+    if (o && (o.meeting || (o.bays && o.bays >= 4))) {
+      // 4-Person Acoustic Collaborative Pod with conference table & facing banquettes
+      g.roundRect(0.02, 0.02, 0.96, 0.96, 0.06);
+      g.roundRect(0.06, 0.06, 0.88, 0.88, 0.04);
+      // Glass front entrance wall and door
+      g.line(0.06, 0.94, 0.94, 0.94);
+      g.roundRect(0.35, 0.93, 0.3, 0.02, 0.005);
+      g.arc(0.35, 0.94, 0.3, 0.3, -Math.PI / 2, 0, 16);
+      // Central conference table
+      g.roundRect(0.32, 0.18, 0.36, 0.62, 0.04);
+      g.circle(0.5, 0.49, 0.04);
+      g.rect(0.46, 0.47, 0.08, 0.04);
+      // Left banquette sofa
+      g.roundRect(0.1, 0.2, 0.18, 0.58, 0.03);
+      g.roundRect(0.06, 0.16, 0.05, 0.66, 0.02);
+      // Right banquette sofa
+      g.roundRect(0.72, 0.2, 0.18, 0.58, 0.03);
+      g.roundRect(0.89, 0.16, 0.05, 0.66, 0.02);
+      // Ceiling ventilation plenum & lighting
+      g.rect(0.42, 0.08, 0.16, 0.06);
+      g.circle(0.5, 0.28, 0.03);
+      g.circle(0.5, 0.7, 0.03);
+      return g.entities;
+    }
+    // 1-Person Acoustic Privacy Phone Booth with sound-dampening felt, desk shelf & stool
+    g.roundRect(0.04, 0.04, 0.92, 0.92, 0.08);
+    g.roundRect(0.1, 0.1, 0.8, 0.8, 0.04);
+    // Glass front door with handle and swing arc
+    g.line(0.1, 0.9, 0.9, 0.9);
+    g.roundRect(0.2, 0.88, 0.08, 0.03, 0.01);
+    g.arc(0.1, 0.9, 0.6, 0.6, -Math.PI / 2, -Math.PI / 6, 16);
+    // Work shelf / laptop desk
+    g.roundRect(0.14, 0.14, 0.72, 0.3, 0.02);
+    // Power module & USB ports
+    g.rect(0.68, 0.18, 0.14, 0.06);
+    g.circle(0.72, 0.21, 0.015);
+    g.circle(0.78, 0.21, 0.015);
+    // Ergonomic round stool
+    g.circle(0.5, 0.62, 0.16);
+    g.circle(0.5, 0.62, 0.06);
+    // Ceiling ventilation fan grille & LED downlight
+    g.circle(0.5, 0.29, 0.07);
+    g.circle(0.5, 0.29, 0.02);
+    return g.entities;
+  },
+
+  mobileWhiteboard: () => {
+    const g = objectDrawing();
+    // Rolling Mobile Magnetic Whiteboard with H-base, locking casters & marker tray
+    g.rect(0.14, 0.47, 0.72, 0.06);
+    // Left & right outrigger base feet
+    g.roundRect(0.08, 0.2, 0.08, 0.6, 0.03);
+    g.roundRect(0.84, 0.2, 0.08, 0.6, 0.03);
+    // 4 locking swivel casters
+    g.circle(0.12, 0.24, 0.035);
+    g.circle(0.12, 0.76, 0.035);
+    g.circle(0.88, 0.24, 0.035);
+    g.circle(0.88, 0.76, 0.035);
+    // Double-sided magnetic whiteboard panel with aluminum trim
+    g.roundRect(0.04, 0.46, 0.92, 0.08, 0.01);
+    g.line(0.06, 0.48, 0.94, 0.48);
+    g.line(0.06, 0.52, 0.94, 0.52);
+    // Marker & eraser tray along front
+    g.rect(0.2, 0.54, 0.6, 0.06);
+    g.rect(0.24, 0.55, 0.14, 0.03);
+    g.rect(0.42, 0.55, 0.14, 0.03);
+    g.roundRect(0.62, 0.55, 0.1, 0.03, 0.01);
+    // Vertical frame upright stanchions
+    g.rect(0.1, 0.42, 0.04, 0.16);
+    g.rect(0.86, 0.42, 0.04, 0.16);
+    return g.entities;
+  }
 };
 
 
@@ -3315,17 +5521,288 @@ const INSTITUTIONAL_GEOMETRY = {
   // =========================================================================
 
 
+
 const SPORTS_GEOMETRY = {
-  parallelBars: ()=>{const g=objectDrawing();for(const x of [.15,.85]){g.rect(x-.03,0,.06,1);g.rect(x-.13,.12,.26,.09);g.rect(x-.13,.79,.26,.09);}return g.entities;},
-  dartboard: ()=>{const g=objectDrawing();g.rect(0,0,1,1);for(const r of [.05,.12,.22])g.ellipse(.5,.18,r,r*.6);g.line(.1,.8,.9,.8);g.line(.5,.3,.5,.8);return g.entities;},
-  vrZone: ()=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.1,.1,.8,.8);g.rect(.3,.35,.4,.22);g.ellipse(.41,.46,.06,.07);g.ellipse(.59,.46,.06,.07);g.line(.3,.35,.18,.3);g.line(.7,.35,.82,.3);return g.entities;},
-  treadmill: ()=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.18,.24,.64,.7);g.rect(.1,.03,.8,.16);g.line(.1,.12,.1,.65);g.line(.9,.12,.9,.65);g.rect(.3,.07,.4,.06);return g.entities;},
-  bike: ()=>{const g=objectDrawing();g.rect(.05,0,.9,.06);g.rect(.05,.94,.9,.06);g.ellipse(.5,.58,.18,.25);g.rect(.32,.25,.36,.12);g.line(.5,.25,.5,.08);g.path([[.16,.22],[.2,.08],[.8,.08],[.84,.22]]);g.line(.15,.65,.85,.65);return g.entities;},
-  benchPress: o=>{const g=objectDrawing();g.rect(.32,.15,.36,.75);g.line(0,.2,1,.2);for(const x of [.08,.82]){g.rect(x,.1,.1,.2);g.rect(x,.12,.05,.16);}g.rect(.25,0,.07,.06);g.rect(.68,0,.07,.06);if(o.machine){g.path([[.05,1],[.05,0],[.95,0],[.95,1]]);g.line(.1,.1,.5,.7);g.line(.9,.1,.5,.7);}return g.entities;},
-  court: o=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.rect(.04,.03,.92,.94);g.line(0,.5,1,.5);if(o.pool){for(let x=.08;x<1;x+=.1)g.line(x,.03,x,.97);g.line(0,.12,1,.12);g.line(0,.88,1,.88);}else if(o.tennis){g.line(.15,0,.15,1);g.line(.85,0,.85,1);g.line(.15,.27,.85,.27);g.line(.15,.73,.85,.73);g.line(.5,.27,.5,.73);}else if(o.field){g.ellipse(.5,.5,.12,.08);for(const y of [0,.82]){g.rect(.18,y,.64,.18);g.rect(.35,y===0?0:.93,.3,.07);}g.rect(.4,-.025,.2,.025);g.rect(.4,1,.2,.025);}else{g.ellipse(.5,.5,.14,.1);g.rect(.32,0,.36,.19);g.rect(.32,.81,.36,.19);g.arc(.5,.19,.23,.14,0,Math.PI);g.arc(.5,.81,.23,.14,Math.PI,2*Math.PI);}return g.entities;},
-  net: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);for(let x=.05;x<1;x+=.1)g.line(x,0,x,1);for(let y=.05;y<1;y+=.1)g.line(0,y,1,y);g.rect(0,0,.04,1);g.rect(.96,0,.04,1);return g.entities;},
-  arcade: o=>{const g=objectDrawing();g.path([[0,0],[1,0],[1,.6],[.88,1],[.12,1],[0,.6]],true);g.rect(.08,.1,.84,.34);g.rect(.12,.6,.76,.2);g.ellipse(.25,.69,.035);for(let x=.5;x<.8;x+=.1)g.ellipse(x,.69,.02);if(o.racing)g.ellipse(.5,.6,.14,.12);return g.entities;},
-  mat: ()=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.025,.025,.95,.95);g.line(.1,.08,.9,.08);return g.entities;}
+  parallelBars: () => {
+    const g = objectDrawing();
+    for (const x of [0.15, 0.85]) {
+      g.roundRect(x - 0.04, 0, 0.08, 1, 0.02);
+      g.roundRect(x - 0.14, 0.1, 0.28, 0.1, 0.02);
+      g.roundRect(x - 0.14, 0.8, 0.28, 0.1, 0.02);
+      g.circle(x, 0.15, 0.02);
+      g.circle(x, 0.85, 0.02);
+    }
+    return g.entities;
+  },
+
+  dartboard: () => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    for (const r of [0.04, 0.08, 0.16, 0.24]) g.ellipse(0.5, 0.2, r, r * 0.6);
+    for (let a = 0; a < 8; a++) {
+      const ang = a * Math.PI / 4;
+      g.line(0.5 + 0.08 * Math.cos(ang), 0.2 + 0.08 * 0.6 * Math.sin(ang), 0.5 + 0.24 * Math.cos(ang), 0.2 + 0.24 * 0.6 * Math.sin(ang));
+    }
+    g.line(0.1, 0.85, 0.9, 0.85);
+    g.line(0.5, 0.35, 0.5, 0.85);
+    return g.entities;
+  },
+
+  vrZone: () => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    g.roundRect(0.08, 0.08, 0.84, 0.84, 0.08);
+    g.circle(0.5, 0.5, 0.22);
+    g.circle(0.5, 0.5, 0.04);
+    g.roundRect(0.32, 0.38, 0.36, 0.2, 0.04);
+    g.circle(0.42, 0.48, 0.05);
+    g.circle(0.58, 0.48, 0.05);
+    for (const [cx, cy] of [[0.12, 0.12], [0.88, 0.12], [0.12, 0.88], [0.88, 0.88]]) {
+      g.circle(cx, cy, 0.035);
+      g.line(cx, cy, 0.5, 0.5);
+    }
+    return g.entities;
+  },
+
+  treadmill: () => {
+    const g = objectDrawing();
+    g.roundRect(0, 0, 1, 1, 0.04);
+    g.roundRect(0.16, 0.22, 0.68, 0.74, 0.04);
+    g.rect(0.16, 0.22, 0.07, 0.74);
+    g.rect(0.77, 0.22, 0.07, 0.74);
+    g.roundRect(0.12, 0.04, 0.76, 0.18, 0.04);
+    g.roundRect(0.22, 0.06, 0.56, 0.12, 0.02);
+    g.circle(0.3, 0.14, 0.02);
+    g.circle(0.7, 0.14, 0.02);
+    g.rect(0.48, 0.12, 0.04, 0.03);
+    g.line(0.14, 0.12, 0.14, 0.65);
+    g.line(0.86, 0.12, 0.86, 0.65);
+    g.rect(0.12, 0.35, 0.04, 0.12);
+    g.rect(0.84, 0.35, 0.04, 0.12);
+    return g.entities;
+  },
+
+  bike: () => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    g.roundRect(0, 0, 1, 0.08, 0.02);
+    g.roundRect(0, 0.92, 1, 0.08, 0.02);
+    g.circle(0.5, 0.58, 0.18);
+    g.circle(0.5, 0.58, 0.06);
+    g.line(0.34, 0.58, 0.66, 0.58);
+    g.rect(0.32, 0.56, 0.05, 0.05);
+    g.rect(0.63, 0.56, 0.05, 0.05);
+    g.path([[0.5, 0.24], [0.42, 0.38], [0.58, 0.38]], true);
+    g.line(0.5, 0.38, 0.5, 0.12);
+    g.roundRect(0.24, 0.08, 0.52, 0.05, 0.02);
+    g.roundRect(0.4, 0.05, 0.2, 0.08, 0.02);
+    return g.entities;
+  },
+
+  benchPress: o => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    g.roundRect(0.34, 0.15, 0.32, 0.76, 0.04);
+    g.pillow(0.37, 0.18, 0.26, 0.14);
+    g.rect(0.18, 0.22, 0.08, 0.08);
+    g.rect(0.74, 0.22, 0.08, 0.08);
+    g.line(0, 0.26, 1, 0.26);
+    g.rect(0.05, 0.16, 0.08, 0.2);
+    g.rect(0.87, 0.16, 0.08, 0.2);
+    g.rect(0.13, 0.23, 0.03, 0.06);
+    g.rect(0.84, 0.23, 0.03, 0.06);
+    if (o.machine) {
+      g.path([[0.04, 1], [0.04, 0.04], [0.96, 0.04], [0.96, 1]]);
+      g.line(0.04, 0.5, 0.96, 0.5);
+      for (const [x, y] of [[0.04, 0.04], [0.96, 0.04], [0.04, 0.96], [0.96, 0.96]]) g.circle(x, y, 0.03);
+    }
+    return g.entities;
+  },
+
+  court: o => {
+    const g = objectDrawing('A-SITE');
+    g.rect(0, 0, 1, 1);
+    if (o.pool) {
+      g.roundRect(0.04, 0.02, 0.92, 0.96, 0.02);
+      for (let x = 0.15; x < 0.9; x += 0.14) {
+        g.line(x, 0.02, x, 0.98);
+        for (let y = 0.1; y < 0.95; y += 0.1) g.circle(x, y, 0.012);
+      }
+      for (const lx of [0.08, 0.88]) {
+        for (const ly of [0.06, 0.9]) {
+          g.circle(lx - 0.02, ly, 0.015);
+          g.circle(lx + 0.02, ly, 0.015);
+          g.line(lx - 0.02, ly, lx + 0.02, ly);
+        }
+      }
+    } else if (o.tennis) {
+      g.line(0.06, 0.06, 0.94, 0.06);
+      g.line(0.06, 0.94, 0.94, 0.94);
+      g.line(0.06, 0.06, 0.06, 0.94);
+      g.line(0.94, 0.06, 0.94, 0.94);
+      g.line(0.18, 0.06, 0.18, 0.94);
+      g.line(0.82, 0.06, 0.82, 0.94);
+      g.line(0.18, 0.27, 0.82, 0.27);
+      g.line(0.18, 0.73, 0.82, 0.73);
+      g.line(0.5, 0.27, 0.5, 0.73);
+      g.line(0.5, 0.06, 0.5, 0.1);
+      g.line(0.5, 0.94, 0.5, 0.9);
+      g.line(0.02, 0.5, 0.98, 0.5);
+      g.circle(0.02, 0.5, 0.015);
+      g.circle(0.98, 0.5, 0.015);
+      g.rect(0.48, 0.49, 0.04, 0.02);
+    } else if (o.field) {
+      g.line(0, 0.5, 1, 0.5);
+      g.circle(0.5, 0.5, 0.12);
+      g.circle(0.5, 0.5, 0.015);
+      g.rect(0.2, 0, 0.6, 0.18);
+      g.rect(0.2, 0.82, 0.6, 0.18);
+      g.rect(0.35, 0, 0.3, 0.07);
+      g.rect(0.35, 0.93, 0.3, 0.07);
+      g.circle(0.5, 0.12, 0.015);
+      g.arc(0.5, 0.12, 0.09, 0.09, 0.2 * Math.PI, 0.8 * Math.PI, 16);
+      g.circle(0.5, 0.88, 0.015);
+      g.arc(0.5, 0.88, 0.09, 0.09, 1.2 * Math.PI, 1.8 * Math.PI, 16);
+      g.rect(0.4, 0, 0.2, 0.025);
+      g.rect(0.4, 0.975, 0.2, 0.025);
+    } else {
+      g.line(0, 0.5, 1, 0.5);
+      g.circle(0.5, 0.5, 0.14);
+      g.rect(0.32, 0, 0.36, 0.22);
+      g.rect(0.32, 0.78, 0.36, 0.22);
+      g.arc(0.5, 0.22, 0.18, 0.18, 0, Math.PI, 20);
+      g.arc(0.5, 0.78, 0.18, 0.18, Math.PI, 2 * Math.PI, 20);
+      g.arc(0.5, 0.06, 0.42, 0.32, 0.15 * Math.PI, 0.85 * Math.PI, 24);
+      g.arc(0.5, 0.94, 0.42, 0.32, 1.15 * Math.PI, 1.85 * Math.PI, 24);
+      g.line(0.38, 0.05, 0.62, 0.05);
+      g.circle(0.5, 0.08, 0.03);
+      g.line(0.38, 0.95, 0.62, 0.95);
+      g.circle(0.5, 0.92, 0.03);
+    }
+    return g.entities;
+  },
+
+  net: () => {
+    const g = objectDrawing('A-SITE');
+    g.rect(0, 0, 1, 1);
+    for (let x = 0.05; x < 1; x += 0.08) g.line(x, 0, x, 1);
+    for (let y = 0.05; y < 1; y += 0.08) g.line(0, y, 1, y);
+    g.rect(0, 0, 0.05, 1);
+    g.rect(0.95, 0, 0.05, 1);
+    return g.entities;
+  },
+
+  arcade: o => {
+    const g = objectDrawing();
+    g.path([[0, 0], [1, 0], [1, 0.6], [0.88, 1], [0.12, 1], [0, 0.6]], true);
+    g.rect(0.08, 0.08, 0.84, 0.34);
+    g.rect(0.12, 0.58, 0.76, 0.22);
+    if (o.racing) {
+      g.circle(0.5, 0.68, 0.12);
+      g.circle(0.5, 0.68, 0.04);
+      g.line(0.38, 0.68, 0.62, 0.68);
+    } else {
+      g.circle(0.28, 0.68, 0.035);
+      for (let x = 0.48; x < 0.82; x += 0.09) {
+        g.circle(x, 0.65, 0.022);
+        g.circle(x, 0.72, 0.022);
+      }
+    }
+    g.rect(0.38, 0.86, 0.24, 0.08);
+    return g.entities;
+  },
+
+  mat: () => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    g.roundRect(0.03, 0.03, 0.94, 0.94, 0.04);
+    g.circle(0.5, 0.5, 0.24);
+    g.circle(0.5, 0.5, 0.12);
+    g.line(0.1, 0.5, 0.9, 0.5);
+    return g.entities;
+  },
+
+  squatRack: () => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    for (const x of [0.12, 0.88]) {
+      for (const y of [0.16, 0.84]) {
+        g.rect(x - 0.04, y - 0.04, 0.08, 0.08);
+        g.circle(x, y, 0.02);
+      }
+      g.line(x, 0.16, x, 0.84);
+    }
+    g.line(0.12, 0.16, 0.88, 0.16);
+    g.line(0.12, 0.84, 0.88, 0.84);
+    g.line(0.12, 0.86, 0.88, 0.86);
+    g.line(0, 0.5, 1, 0.5);
+    g.line(0, 0.51, 1, 0.51);
+    for (const sx of [0.03, 0.06, 0.09, 0.91, 0.94, 0.97]) {
+      g.rect(sx - 0.015, 0.32, 0.03, 0.36);
+    }
+    g.circle(0.15, 0.5, 0.03);
+    g.circle(0.85, 0.5, 0.03);
+    return g.entities;
+  },
+
+  cableCrossover: () => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    for (const tx of [0.02, 0.82]) {
+      g.roundRect(tx, 0.1, 0.16, 0.8, 0.03);
+      g.rect(tx + 0.02, 0.2, 0.12, 0.6);
+      for (let y = 0.24; y < 0.78; y += 0.05) g.line(tx + 0.02, y, tx + 0.14, y);
+      g.circle(tx + 0.08, 0.5, 0.02);
+    }
+    g.rect(0.18, 0.46, 0.64, 0.08);
+    g.line(0.42, 0.42, 0.58, 0.42);
+    g.line(0.42, 0.58, 0.58, 0.58);
+    g.line(0.46, 0.42, 0.46, 0.58);
+    g.line(0.54, 0.42, 0.54, 0.58);
+    g.line(0.18, 0.5, 0.28, 0.62);
+    g.roundRect(0.26, 0.6, 0.05, 0.08, 0.01);
+    g.line(0.82, 0.5, 0.72, 0.62);
+    g.roundRect(0.69, 0.6, 0.05, 0.08, 0.01);
+    return g.entities;
+  },
+
+  dumbbellRack: () => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    g.line(0.04, 0.12, 0.96, 0.12);
+    g.line(0.04, 0.88, 0.96, 0.88);
+    g.rect(0, 0.06, 0.04, 0.88);
+    g.rect(0.96, 0.06, 0.04, 0.88);
+    const count = 5;
+    for (let i = 0; i < count; i++) {
+      const cx = 0.1 + i * 0.19;
+      g.roundRect(cx - 0.05, 0.68, 0.1, 0.22, 0.02);
+      g.rect(cx - 0.04, 0.7, 0.025, 0.18);
+      g.rect(cx + 0.015, 0.7, 0.025, 0.18);
+      g.line(cx - 0.015, 0.79, cx + 0.015, 0.79);
+      g.roundRect(cx - 0.06, 0.18, 0.12, 0.24, 0.02);
+      g.rect(cx - 0.05, 0.2, 0.03, 0.2);
+      g.rect(cx + 0.02, 0.2, 0.03, 0.2);
+      g.line(cx - 0.02, 0.3, cx + 0.02, 0.3);
+    }
+    return g.entities;
+  },
+
+  kettlebellRack: () => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    g.line(0.04, 0.15, 0.96, 0.15);
+    g.line(0.04, 0.85, 0.96, 0.85);
+    const count = 5;
+    for (let i = 0; i < count; i++) {
+      const cx = 0.1 + i * 0.19;
+      g.circle(cx, 0.5, 0.075);
+      g.circle(cx, 0.5, 0.02);
+      g.path([[cx - 0.045, 0.44], [cx - 0.04, 0.36], [cx + 0.04, 0.36], [cx + 0.045, 0.44]]);
+      g.line(cx - 0.035, 0.38, cx + 0.035, 0.38);
+    }
+    return g.entities;
+  }
 };
 
 
@@ -3337,28 +5814,479 @@ const SPORTS_GEOMETRY = {
 
 /** Equipment and civic/service symbols whose plan compositions cannot use furniture templates. */
 const SPECIALIST_GEOMETRY = {
-  firePole: ()=>{const g=objectDrawing('A-SITE');g.ellipse(.5,.5,.5);g.ellipse(.5,.5,.06);g.line(.25,.5,.42,.5);g.line(.58,.5,.75,.5);g.line(.5,.25,.5,.42);g.line(.5,.58,.5,.75);return g.entities;},
-  ottoman: o=>{const g=objectDrawing();if(o.round){g.ellipse(.5,.5,.5);g.ellipse(.5,.5,.43);}else{g.rect(0,0,1,1);g.rect(.06,.06,.88,.88);}for(const x of [.3,.7])for(const y of [.3,.7])g.ellipse(x,y,.018);return g.entities;},
-  cabinet: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.04,.04,.92,.92);for(let i=0;i<(o.drawers||3);i++){const y=(i+.5)/(o.drawers||3);g.line(.04,y+.1,.96,y+.1);g.rect(.38,y-.025,.24,.04);}return g.entities;},
-  checkout: ()=>{const g=objectDrawing();g.path([[0,0],[.72,0],[.72,.2],[1,.2],[1,.8],[.72,.8],[.72,1],[0,1]],true);g.rect(.06,.05,.6,.52);for(let y=.1;y<.57;y+=.08)g.line(.06,y,.66,y);g.rect(.08,.65,.25,.17);g.line(.2,.82,.2,.92);g.rect(.42,.63,.22,.2);g.rect(.78,.3,.16,.4);return g.entities;},
-  deskLayout: o=>{const g=objectDrawing();if(o.u){g.path([[0,0],[1,0],[1,1],[.72,1],[.72,.3],[.28,.3],[.28,1],[0,1]],true);}else{g.path([[0,0],[1,0],[1,.35],[.35,.35],[.35,1],[0,1]],true);}g.rect(.4,.04,.3,.15);g.line(.55,.19,.55,.25);g.rect(.06,.6,.2,.28);return g.entities;},
-  reception: o=>{const g=objectDrawing();g.path([[0,1],[0,0],[1,0],[1,1],[.8,1],[.8,.25],[.2,.25],[.2,1]],true);g.line(.05,.08,.95,.08);g.rect(.32,.07,.28,.14);g.line(.46,.21,.46,.3);if(o.fingerprint){g.rect(.63,.05,.25,.14);for(let r=.015;r<.08;r+=.015)g.arc(.76,.13,r,r*.7,0,Math.PI);}return g.entities;},
-  roundShade: o=>{const g=objectDrawing('A-SITE');g.ellipse(.5,.5,.5);for(let i=0;i<8;i++){const a=i*Math.PI/4;g.line(.5,.5,.5+.5*Math.cos(a),.5+.5*Math.sin(a));}g.ellipse(.5,.5,.025);if(o.gazebo)g.ellipse(.5,.5,.4);return g.entities;},
-  drinkingFountain: ()=>{const g=objectDrawing('A-SITE');g.rect(.06,.08,.88,.84);g.ellipse(.5,.5,.35,.3);g.ellipse(.5,.5,.035);g.rect(.15,0,.18,.17);g.line(.24,.17,.38,.25);return g.entities;},
-  firepit: ()=>{const g=objectDrawing('A-SITE');g.ellipse(.5,.5,.5);g.ellipse(.5,.5,.4);g.line(.25,.35,.75,.65);g.line(.25,.65,.75,.35);g.path([[.4,.6],[.33,.45],[.5,.18],[.53,.43],[.68,.55],[.6,.65]],true);return g.entities;},
-  pressureAppliance: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.08,.1,.84,.8);g.ellipse(.5,.55,.32,.29);g.ellipse(.5,.55,.25,.22);g.line(.5,.3,.5,.8);g.line(.24,.55,.76,.55);for(let x=.2;x<.85;x+=.2)g.ellipse(x,.15,.025);if(o.kiln)for(let x=.2;x<1;x+=.2)g.line(x,.85,x,.95);return g.entities;},
-  oven: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.08,.25,.84,.65);g.rect(.12,.31,.76,.5);for(let x=.15;x<.9;x+=.17)g.ellipse(x,.12,.03);g.line(.22,.26,.78,.26);if(o.hood)for(let x=.15;x<.9;x+=.12)g.line(x,.35,x,.75);return g.entities;},
-  pallet: o=>{const g=objectDrawing();g.rect(0,0,1,1);for(let x=0;x<1;x+=.2)g.rect(x,0,.12,1);for(const y of [.06,.82])g.rect(0,y,1,.12);if(o.rack){g.rect(0,0,.04,1);g.rect(.96,0,.04,1);g.line(0,.5,1,.5);}return g.entities;},
-  boothSeating: o=>{const g=objectDrawing();g.seat(0,.05,.25,.9,false);g.seat(.75,.05,.25,.9,false);g.rect(.32,.08,.36,.84);for(let i=1;i<(o.seats||2);i++){const y=.05+i*.9/(o.seats||2);g.line(0,y,.25,y);g.line(.75,y,1,y);}return g.entities;},
-  sportsTable: o=>{const g=objectDrawing();g.rect(0,0,1,1);g.rect(.04,.04,.92,.92);g.line(0,.5,1,.5);if(o.foosball){for(let y=.15;y<1;y+=.14){g.line(-.05,y,1.05,y);for(let x=.22;x<.9;x+=.27)g.rect(x-.035,y-.035,.07,.07);}}else if(o.hockey){g.ellipse(.5,.5,.16,.1);g.rect(.28,0,.44,.025);g.rect(.28,.975,.44,.025);g.ellipse(.5,.18,.04);}else{g.line(.5,0,.5,1);g.line(0,.48,1,.48);g.line(0,.52,1,.52);}return g.entities;},
-  elliptical: ()=>{const g=objectDrawing();g.rect(.05,0,.9,.07);g.rect(.05,.93,.9,.07);for(const x of [.3,.7]){g.ellipse(x,.63,.13,.23);g.line(x,.4,x,.08);g.rect(x-.05,.15,.1,.07);}g.rect(.35,.04,.3,.12);g.line(.15,.38,.85,.38);return g.entities;},
-  rower: ()=>{const g=objectDrawing();g.rect(.1,0,.8,.16);g.ellipse(.5,.08,.22,.07);g.rect(.44,.16,.12,.84);g.rect(.25,.58,.5,.12);g.rect(.17,.23,.2,.1);g.rect(.63,.23,.2,.1);g.line(.2,.2,.8,.2);return g.entities;},
-  rig: o=>{const g=objectDrawing();g.rect(0,0,1,1);for(const x of [0,.96])for(const y of [0,.96])g.rect(x,y,.04,.04);g.line(.04,.15,.96,.15);g.line(.04,.85,.96,.85);g.rect(.12,.35,.18,.3);g.rect(.7,.35,.18,.3);if(o.cable){g.line(.2,.5,.5,.68);g.line(.8,.5,.5,.68);}else{for(let x=.15;x<.9;x+=.17)g.line(x,0,x,1);}return g.entities;},
-  seesaw: o=>{const g=objectDrawing('A-SITE');g.rect(.4,.4,.2,.2);g.path([[0,.4],[1,.4],[1,.6],[0,.6]],true);for(const x of [.08,.92]){g.rect(x-.07,.3,.14,.4);g.line(x,.24,x,.76);}if(o.rocker)g.ellipse(.5,.5,.32,.45);return g.entities;},
-  climbingFrame: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);for(let x=0;x<=1;x+=.2)g.line(x,0,x,1);for(let y=0;y<=1;y+=.2)g.line(0,y,1,y);g.rect(.3,.3,.4,.4);return g.entities;},
-  helipad: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.ellipse(.5,.5,.45);g.path([[.3,.25],[.3,.75],[.4,.75],[.4,.55],[.6,.55],[.6,.75],[.7,.75],[.7,.25],[.6,.25],[.6,.45],[.4,.45],[.4,.25]],true);return g.entities;},
-  track: ()=>{const g=objectDrawing('A-SITE');for(let i=0;i<6;i++){const r=.5-i*.035;g.path([[.5-r,.3],...Array.from({length:25},(_,n)=>{const a=Math.PI+n*Math.PI/24;return [.5+r*Math.cos(a),.3+.3*r/.5*Math.sin(a)];}),[.5+r,.7],...Array.from({length:25},(_,n)=>{const a=n*Math.PI/24;return [.5+r*Math.cos(a),.7+.3*r/.5*Math.sin(a)];})],true);}g.line(.6,.02,.6,.3);return g.entities;},
-  trampoline: ()=>{const g=objectDrawing('A-SITE');g.rect(0,0,1,1);g.rect(.1,.1,.8,.8);for(let x=.1;x<.9;x+=.08){g.line(x,0,x,.1);g.line(x,.9,x,1);}for(let y=.1;y<.9;y+=.08){g.line(0,y,.1,y);g.line(.9,y,1,y);}return g.entities;}
+  firePole: () => {
+    const g = objectDrawing('A-SITE');
+    g.circle(0.5, 0.5, 0.49);
+    g.circle(0.5, 0.5, 0.42);
+    g.circle(0.5, 0.5, 0.08);
+    g.circle(0.5, 0.5, 0.03);
+    g.arc(0.5, 0.5, 0.46, 0.46, 0.25 * Math.PI, 1.75 * Math.PI, 24);
+    g.line(0.5 + 0.46 * Math.cos(0.25 * Math.PI), 0.5 + 0.46 * Math.sin(0.25 * Math.PI), 0.5 + 0.46 * Math.cos(1.75 * Math.PI), 0.5 + 0.46 * Math.sin(1.75 * Math.PI));
+    return g.entities;
+  },
+
+  ottoman: o => {
+    const g = objectDrawing();
+    if (o.round) {
+      g.circle(0.5, 0.5, 0.49);
+      g.circle(0.5, 0.5, 0.42);
+      g.circle(0.5, 0.5, 0.03);
+      for (let n = 0; n < 8; n++) {
+        const a = n * Math.PI / 4;
+        g.line(0.5, 0.5, 0.5 + 0.42 * Math.cos(a), 0.5 + 0.42 * Math.sin(a));
+        g.circle(0.5 + 0.24 * Math.cos(a), 0.5 + 0.24 * Math.sin(a), 0.018);
+      }
+    } else {
+      g.roundRect(0, 0, 1, 1, 0.06);
+      g.roundRect(0.06, 0.06, 0.88, 0.88, 0.04);
+      g.line(0.06, 0.5, 0.94, 0.5);
+      g.line(0.5, 0.06, 0.5, 0.94);
+      for (const x of [0.28, 0.72]) {
+        for (const y of [0.28, 0.72]) g.circle(x, y, 0.02);
+      }
+    }
+    return g.entities;
+  },
+
+  cabinet: o => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    g.rect(0.04, 0.04, 0.92, 0.92);
+    const drawers = o.drawers || 4;
+    for (let i = 0; i < drawers; i++) {
+      const y1 = i / drawers;
+      const y2 = (i + 1) / drawers;
+      g.line(0.04, y2, 0.96, y2);
+      g.roundRect(0.35, y1 + 0.03 / drawers, 0.3, 0.04 / drawers + 0.03, 0.01);
+    }
+    return g.entities;
+  },
+
+  checkout: () => {
+    const g = objectDrawing();
+    g.path([[0, 0], [0.72, 0], [0.72, 0.2], [1, 0.2], [1, 0.8], [0.72, 0.8], [0.72, 1], [0, 1]], true);
+    g.roundRect(0.06, 0.04, 0.58, 0.48, 0.02);
+    for (let y = 0.1; y < 0.5; y += 0.08) g.line(0.06, y, 0.64, y);
+    g.roundRect(0.12, 0.55, 0.28, 0.18, 0.02);
+    g.circle(0.26, 0.64, 0.04);
+    g.rect(0.44, 0.56, 0.18, 0.16);
+    g.line(0.44, 0.64, 0.38, 0.64);
+    g.roundRect(0.08, 0.75, 0.54, 0.22, 0.03);
+    g.circle(0.35, 0.86, 0.06);
+    g.roundRect(0.76, 0.1, 0.18, 0.8, 0.04);
+    g.line(0.85, 0.1, 0.85, 0.9);
+    return g.entities;
+  },
+
+  deskLayout: o => {
+    const g = objectDrawing();
+    if (o.u) {
+      g.path([[0, 0], [1, 0], [1, 1], [0.72, 1], [0.72, 0.3], [0.28, 0.3], [0.28, 1], [0, 1]], true);
+      g.line(0, 0.05, 1, 0.05);
+      g.roundRect(0.35, 0.08, 0.3, 0.04, 0.01);
+      g.starBase(0.5, 0.65, 0.2, 5);
+      g.roundRect(0.36, 0.54, 0.28, 0.22, 0.04);
+    } else {
+      g.path([[0, 0], [1, 0], [1, 0.36], [0.36, 0.36], [0.36, 1], [0, 1]], true);
+      g.line(0, 0.05, 1, 0.05);
+      g.roundRect(0.44, 0.08, 0.3, 0.04, 0.01);
+      g.starBase(0.65, 0.65, 0.2, 5);
+      g.roundRect(0.52, 0.54, 0.26, 0.22, 0.04);
+    }
+    return g.entities;
+  },
+
+  reception: o => {
+    const g = objectDrawing();
+    const type = o.type || 'corporate';
+    if (type === 'hotel') {
+      // Hotel Concierge / Bell Captain Desk
+      g.roundRect(0, 0, 1, 1, 0.02);
+      g.rect(0, 0, 1, 0.24);
+      // Traditional brass concierge call bell
+      g.circle(0.82, 0.12, 0.04);
+      g.circle(0.82, 0.12, 0.015);
+      // Leather guest register ledger
+      g.rect(0.46, 0.05, 0.18, 0.14);
+      g.line(0.55, 0.05, 0.55, 0.19);
+      for (let y = 0.07; y < 0.18; y += 0.025) {
+        g.line(0.48, y, 0.53, y);
+        g.line(0.57, y, 0.62, y);
+      }
+      // Pen stand
+      g.circle(0.68, 0.1, 0.02);
+      // Staff computer terminal & keyboard
+      g.roundRect(0.16, 0.35, 0.3, 0.04, 0.01);
+      g.roundRect(0.2, 0.44, 0.22, 0.1, 0.01);
+      g.starBase(0.5, 0.72, 0.18, 5);
+      g.roundRect(0.38, 0.6, 0.24, 0.24, 0.04);
+    } else if (type === 'security') {
+      // Security Command / Guard Reception Console
+      g.rect(0, 0, 1, 1);
+      g.arc(0.5, 0.1, 0.48, 0.1, 0, Math.PI, 20);
+      // CCTV monitors
+      g.roundRect(0.12, 0.14, 0.22, 0.04, 0.01);
+      g.roundRect(0.39, 0.12, 0.22, 0.04, 0.01);
+      g.roundRect(0.66, 0.14, 0.22, 0.04, 0.01);
+      // Badge reader / intercom
+      g.rect(0.06, 0.26, 0.12, 0.1);
+      g.rect(0.82, 0.26, 0.12, 0.1);
+      g.circle(0.88, 0.31, 0.025);
+      g.starBase(0.5, 0.68, 0.2, 5);
+      g.roundRect(0.36, 0.56, 0.28, 0.26, 0.04);
+    } else if (type === 'counter') {
+      // Commercial Concession / Checkout Transaction Counter
+      g.rect(0, 0, 1, 1);
+      g.rect(0, 0, 1, 0.2);
+      g.line(0.02, 0.2, 0.98, 0.2);
+      g.roundRect(0.54, 0.28, 0.24, 0.16, 0.02);
+      g.roundRect(0.8, 0.3, 0.12, 0.14, 0.02);
+      g.rect(0.38, 0.28, 0.12, 0.12);
+      g.rect(0.52, 0.5, 0.4, 0.44);
+      g.starBase(0.24, 0.68, 0.16, 5);
+      g.roundRect(0.15, 0.58, 0.18, 0.2, 0.03);
+    } else if (type === 'podium') {
+      // Presentation Lectern / Speaker Podium
+      g.roundRect(0, 0, 1, 1, 0.04);
+      g.rect(0.08, 0.9, 0.84, 0.04);
+      g.circle(0.24, 0.14, 0.02);
+      g.line(0.24, 0.14, 0.28, 0.04);
+      g.circle(0.76, 0.14, 0.02);
+      g.line(0.76, 0.14, 0.72, 0.04);
+      g.rect(0.4, 0.06, 0.2, 0.05);
+      g.circle(0.84, 0.68, 0.04);
+    } else {
+      // Corporate Dual-Height Reception Desk with ADA Lowered Counter
+      g.path([[0, 1], [0, 0], [1, 0], [1, 1], [0.78, 1], [0.78, 0.28], [0.22, 0.28], [0.22, 1]], true);
+      g.line(0.04, 0.1, 0.96, 0.1);
+      // High visitor transaction ledge
+      g.rect(0, 0, 0.7, 0.26);
+      // ADA lowered counter section
+      g.rect(0.7, 0, 0.3, 0.26);
+      g.circle(0.85, 0.13, 0.035);
+      // Staff work surface
+      g.rect(0.24, 0.28, 0.52, 0.7);
+      g.roundRect(0.36, 0.34, 0.28, 0.04, 0.01);
+      g.roundRect(0.38, 0.42, 0.24, 0.08, 0.015);
+      g.starBase(0.5, 0.7, 0.18, 5);
+      g.roundRect(0.38, 0.6, 0.24, 0.22, 0.04);
+      if (o.fingerprint) {
+        g.rect(0.62, 0.1, 0.18, 0.1);
+        g.circle(0.71, 0.15, 0.03);
+      }
+    }
+    return g.entities;
+  },
+
+  roundShade: o => {
+    const g = objectDrawing('A-SITE');
+    g.circle(0.5, 0.5, 0.49);
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      g.line(0.5, 0.5, 0.5 + 0.49 * Math.cos(a), 0.5 + 0.49 * Math.sin(a));
+    }
+    g.circle(0.5, 0.5, 0.05);
+    g.circle(0.5, 0.5, 0.02);
+    if (o.gazebo) {
+      g.circle(0.5, 0.5, 0.42);
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        g.rect(0.5 + 0.42 * Math.cos(a) - 0.025, 0.5 + 0.42 * Math.sin(a) - 0.025, 0.05, 0.05);
+      }
+    }
+    return g.entities;
+  },
+
+  drinkingFountain: () => {
+    const g = objectDrawing('A-SITE');
+    g.roundRect(0.08, 0.06, 0.84, 0.88, 0.04);
+    g.roundRect(0.16, 0.32, 0.68, 0.54, 0.08);
+    g.circle(0.5, 0.62, 0.04);
+    g.circle(0.5, 0.62, 0.015);
+    g.rect(0.24, 0.36, 0.06, 0.08);
+    g.circle(0.27, 0.36, 0.02);
+    g.line(0.12, 0.92, 0.88, 0.92);
+    g.line(0.06, 0.45, 0.06, 0.75);
+    g.line(0.94, 0.45, 0.94, 0.75);
+    g.roundRect(0.25, 0.08, 0.5, 0.2, 0.02);
+    g.circle(0.5, 0.18, 0.025);
+    return g.entities;
+  },
+
+  firepit: () => {
+    const g = objectDrawing('A-SITE');
+    g.circle(0.5, 0.5, 0.49);
+    g.circle(0.5, 0.5, 0.38);
+    g.circle(0.5, 0.5, 0.22);
+    g.line(0.25, 0.35, 0.75, 0.65);
+    g.line(0.25, 0.65, 0.75, 0.35);
+    g.path([[0.4, 0.6], [0.33, 0.45], [0.5, 0.18], [0.53, 0.43], [0.68, 0.55], [0.6, 0.65]], true);
+    return g.entities;
+  },
+
+  pressureAppliance: o => {
+    const g = objectDrawing();
+    g.roundRect(0, 0, 1, 1, 0.03);
+    g.rect(0.08, 0.1, 0.84, 0.8);
+    g.circle(0.5, 0.55, 0.32);
+    g.circle(0.5, 0.55, 0.25);
+    g.line(0.5, 0.3, 0.5, 0.8);
+    g.line(0.25, 0.55, 0.75, 0.55);
+    for (let x = 0.2; x < 0.85; x += 0.2) g.circle(x, 0.15, 0.025);
+    if (o.kiln) {
+      for (let x = 0.2; x < 1; x += 0.2) g.line(x, 0.85, x, 0.95);
+    }
+    return g.entities;
+  },
+
+  oven: o => {
+    const g = objectDrawing();
+    g.roundRect(0, 0, 1, 1, 0.02);
+    g.roundRect(0.08, 0.24, 0.84, 0.68, 0.04);
+    g.roundRect(0.14, 0.32, 0.72, 0.52, 0.02);
+    for (let x = 0.18; x < 0.9; x += 0.18) g.circle(x, 0.12, 0.03);
+    g.line(0.2, 0.26, 0.8, 0.26);
+    if (o.hood) {
+      for (let x = 0.18; x < 0.9; x += 0.12) g.line(x, 0.36, x, 0.78);
+    }
+    return g.entities;
+  },
+
+  pallet: o => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    for (let x = 0; x < 1; x += 0.2) g.rect(x, 0, 0.12, 1);
+    for (const y of [0.06, 0.82]) g.rect(0, y, 1, 0.12);
+    if (o.rack) {
+      g.rect(0, 0, 0.04, 1);
+      g.rect(0.96, 0, 0.04, 1);
+      g.line(0, 0.5, 1, 0.5);
+    }
+    return g.entities;
+  },
+
+  boothSeating: o => {
+    const g = objectDrawing();
+    g.seat(0, 0.05, 0.25, 0.9, false);
+    g.seat(0.75, 0.05, 0.25, 0.9, false);
+    g.roundRect(0.3, 0.08, 0.4, 0.84, 0.03);
+    g.roundRect(0.34, 0.12, 0.32, 0.76, 0.02);
+    const seats = o.seats || 2;
+    for (let i = 1; i < seats; i++) {
+      const y = 0.05 + i * 0.9 / seats;
+      g.line(0, y, 0.25, y);
+      g.line(0.75, y, 1, y);
+    }
+    return g.entities;
+  },
+
+  sportsTable: o => {
+    const g = objectDrawing();
+    if (o.poker) {
+      // 10-Player Casino / Home Oval Poker Table
+      g.roundRect(0, 0, 1, 1, 0.45);
+      g.roundRect(0.04, 0.05, 0.92, 0.9, 0.4);
+      for (const [cx, cy] of [[0.24, 0.12], [0.41, 0.11], [0.59, 0.11], [0.76, 0.12], [0.24, 0.88], [0.41, 0.89], [0.59, 0.89], [0.76, 0.88], [0.1, 0.5], [0.9, 0.5]]) {
+        g.circle(cx, cy, 0.024);
+        g.circle(cx, cy, 0.014);
+      }
+      g.roundRect(0.14, 0.18, 0.72, 0.64, 0.3);
+      g.roundRect(0.2, 0.26, 0.6, 0.48, 0.24);
+      g.roundRect(0.4, 0.18, 0.2, 0.08, 0.015);
+      for (let x = 0.43; x <= 0.57; x += 0.028) g.line(x, 0.18, x, 0.26);
+    } else if (o.pingpong) {
+      // ITTF Regulation Table Tennis Table (9x5 ft)
+      g.rect(0, 0, 1, 1);
+      g.rect(0.02, 0.02, 0.96, 0.96);
+      g.line(0.02, 0.5, 0.98, 0.5);
+      g.line(0.5, 0, 0.5, 1);
+      g.line(0.495, 0, 0.495, 1);
+      g.line(0.505, 0, 0.505, 1);
+      g.rect(0.48, 0, 0.04, 0.03);
+      g.rect(0.48, 0.97, 0.04, 0.03);
+      g.circle(0.25, 0.32, 0.055);
+      g.line(0.25, 0.375, 0.25, 0.45);
+      g.roundRect(0.235, 0.39, 0.03, 0.06, 0.01);
+      g.circle(0.75, 0.68, 0.055);
+      g.line(0.75, 0.625, 0.75, 0.55);
+      g.roundRect(0.735, 0.55, 0.03, 0.06, 0.01);
+      g.circle(0.38, 0.65, 0.02);
+    } else if (o.foosball) {
+      // Table Soccer / Foosball Table
+      g.rect(0, 0, 1, 1);
+      g.roundRect(0.08, 0.04, 0.84, 0.92, 0.03);
+      g.rect(0.12, 0.08, 0.76, 0.84);
+      g.line(0.12, 0.5, 0.88, 0.5);
+      g.circle(0.5, 0.5, 0.1);
+      g.circle(0.5, 0.5, 0.02);
+      g.rect(0.35, 0.04, 0.3, 0.04);
+      g.rect(0.35, 0.92, 0.3, 0.04);
+      g.rect(0.3, 0.08, 0.4, 0.12);
+      g.rect(0.3, 0.8, 0.4, 0.12);
+      for (let i = 0; i < 8; i++) {
+        const y = 0.14 + i * 0.103;
+        g.line(0.08, y, 0.92, y);
+        if (i % 2 === 0) {
+          g.roundRect(0, y - 0.015, 0.08, 0.03, 0.01);
+          g.rect(0.92, y - 0.015, 0.04, 0.03);
+        } else {
+          g.roundRect(0.92, y - 0.015, 0.08, 0.03, 0.01);
+          g.rect(0.04, y - 0.015, 0.04, 0.03);
+        }
+        for (let x = 0.22; x < 0.85; x += 0.24) g.roundRect(x - 0.025, y - 0.03, 0.05, 0.06, 0.01);
+      }
+    } else if (o.hockey) {
+      // Commercial Air Hockey Table
+      g.roundRect(0, 0, 1, 1, 0.06);
+      g.roundRect(0.05, 0.04, 0.9, 0.92, 0.04);
+      g.roundRect(0.08, 0.07, 0.84, 0.86, 0.02);
+      g.line(0.08, 0.5, 0.92, 0.5);
+      g.circle(0.5, 0.5, 0.14);
+      g.circle(0.5, 0.5, 0.02);
+      g.circle(0.5, 0.22, 0.1);
+      g.circle(0.5, 0.78, 0.1);
+      g.roundRect(0.34, 0.04, 0.32, 0.03, 0.01);
+      g.roundRect(0.34, 0.93, 0.32, 0.03, 0.01);
+      g.circle(0.5, 0.24, 0.045);
+      g.circle(0.5, 0.24, 0.02);
+      g.circle(0.5, 0.76, 0.045);
+      g.circle(0.5, 0.76, 0.02);
+      g.circle(0.44, 0.42, 0.035);
+      g.line(0.36, 0.02, 0.64, 0.02);
+      g.line(0.36, 0.98, 0.64, 0.98);
+    } else {
+      g.rect(0, 0, 1, 1);
+      g.rect(0.04, 0.04, 0.92, 0.92);
+      g.line(0.5, 0, 0.5, 1);
+      g.line(0, 0.48, 1, 0.48);
+      g.line(0, 0.52, 1, 0.52);
+    }
+    return g.entities;
+  },
+
+  elliptical: () => {
+    const g = objectDrawing();
+    g.roundRect(0.08, 0, 0.84, 0.08, 0.02);
+    g.roundRect(0.08, 0.92, 0.84, 0.08, 0.02);
+    for (const x of [0.3, 0.7]) {
+      g.ellipse(x, 0.65, 0.12, 0.22);
+      g.line(x, 0.45, x, 0.08);
+      g.roundRect(x - 0.06, 0.14, 0.12, 0.08, 0.02);
+    }
+    g.roundRect(0.32, 0.04, 0.36, 0.14, 0.02);
+    g.line(0.16, 0.38, 0.84, 0.38);
+    return g.entities;
+  },
+
+  rower: () => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    g.roundRect(0.12, 0, 0.76, 0.06, 0.02);
+    g.circle(0.5, 0.17, 0.14);
+    g.circle(0.5, 0.17, 0.05);
+    g.roundRect(0.44, 0.2, 0.12, 0.76, 0.02);
+    g.roundRect(0.24, 0.56, 0.52, 0.14, 0.04);
+    g.roundRect(0.18, 0.26, 0.18, 0.12, 0.02);
+    g.roundRect(0.64, 0.26, 0.18, 0.12, 0.02);
+    g.line(0.2, 0.24, 0.8, 0.24);
+    g.roundRect(0.2, 0.94, 0.6, 0.06, 0.02);
+    return g.entities;
+  },
+
+  rig: o => {
+    const g = objectDrawing();
+    g.rect(0, 0, 1, 1);
+    for (const x of [0, 0.94]) {
+      for (const y of [0, 0.94]) {
+        g.rect(x, y, 0.06, 0.06);
+        g.circle(x + 0.03, y + 0.03, 0.015);
+      }
+    }
+    g.line(0.06, 0.15, 0.94, 0.15);
+    g.line(0.06, 0.85, 0.94, 0.85);
+    g.roundRect(0.12, 0.35, 0.18, 0.3, 0.02);
+    g.roundRect(0.7, 0.35, 0.18, 0.3, 0.02);
+    if (o.cable) {
+      g.line(0.2, 0.5, 0.5, 0.68);
+      g.line(0.8, 0.5, 0.5, 0.68);
+    } else {
+      for (let x = 0.15; x < 0.9; x += 0.16) g.line(x, 0, x, 1);
+    }
+    return g.entities;
+  },
+
+  seesaw: o => {
+    const g = objectDrawing('A-SITE');
+    g.roundRect(0, 0, 1, 1, 0.08);
+    g.roundRect(0.4, 0.4, 0.2, 0.2, 0.04);
+    g.circle(0.5, 0.5, 0.05);
+    g.path([[0.04, 0.44], [0.96, 0.44], [0.96, 0.56], [0.04, 0.56]], true);
+    for (const x of [0.12, 0.88]) {
+      g.roundRect(x - 0.06, 0.36, 0.12, 0.28, 0.03);
+      g.line(x, 0.3, x, 0.7);
+    }
+    if (o.rocker) g.ellipse(0.5, 0.5, 0.32, 0.45);
+    return g.entities;
+  },
+
+  climbingFrame: () => {
+    const g = objectDrawing('A-SITE');
+    g.rect(0, 0, 1, 1);
+    for (let x = 0; x <= 1; x += 0.2) g.line(x, 0, x, 1);
+    for (let y = 0; y <= 1; y += 0.2) g.line(0, y, 1, y);
+    g.roundRect(0.28, 0.28, 0.44, 0.44, 0.04);
+    g.circle(0.5, 0.5, 0.12);
+    return g.entities;
+  },
+
+  helipad: () => {
+    const g = objectDrawing('A-SITE');
+    g.rect(0, 0, 1, 1);
+    g.line(0, 0, 0.15, 0.15);
+    g.line(1, 0, 0.85, 0.15);
+    g.line(0, 1, 0.15, 0.85);
+    g.line(1, 1, 0.85, 0.85);
+    g.circle(0.5, 0.5, 0.44);
+    g.circle(0.5, 0.5, 0.42);
+    g.path([[0.32, 0.24], [0.42, 0.24], [0.42, 0.45], [0.58, 0.45], [0.58, 0.24], [0.68, 0.24], [0.68, 0.76], [0.58, 0.76], [0.58, 0.55], [0.42, 0.55], [0.42, 0.76], [0.32, 0.76]], true);
+    for (let n = 0; n < 12; n++) {
+      const a = n * Math.PI / 6;
+      g.circle(0.5 + 0.43 * Math.cos(a), 0.5 + 0.43 * Math.sin(a), 0.015);
+    }
+    return g.entities;
+  },
+
+  track: () => {
+    const g = objectDrawing('A-SITE');
+    for (let i = 0; i < 6; i++) {
+      const r = 0.5 - i * 0.035;
+      g.path([[0.5 - r, 0.3], ...Array.from({ length: 25 }, (_, n) => {
+        const a = Math.PI + n * Math.PI / 24;
+        return [0.5 + r * Math.cos(a), 0.3 + 0.3 * r / 0.5 * Math.sin(a)];
+      }), [0.5 + r, 0.7], ...Array.from({ length: 25 }, (_, n) => {
+        const a = n * Math.PI / 24;
+        return [0.5 + r * Math.cos(a), 0.7 + 0.3 * r / 0.5 * Math.sin(a)];
+      })], true);
+    }
+    g.line(0.6, 0.02, 0.6, 0.3);
+    return g.entities;
+  },
+
+  trampoline: () => {
+    const g = objectDrawing('A-SITE');
+    g.rect(0, 0, 1, 1);
+    g.roundRect(0.08, 0.08, 0.84, 0.84, 0.04);
+    g.circle(0.5, 0.5, 0.34);
+    for (let x = 0.1; x < 0.9; x += 0.08) {
+      g.line(x, 0, x, 0.08);
+      g.line(x, 0.92, x, 1);
+    }
+    for (let y = 0.1; y < 0.9; y += 0.08) {
+      g.line(0, y, 0.08, y);
+      g.line(0.92, y, 1, y);
+    }
+    return g.entities;
+  }
 };
 
 
@@ -3392,7 +6320,7 @@ function getObjectGeometryDefinition(geometryId) {
 }
 
 function geometryCoordinates(entities) {
-  return entities.flatMap(e=>e.type==='polyline'?e.points:[[e.x1,e.y1],[e.x2,e.y2]]);
+  return entities.flatMap(e => e.type === 'polyline' ? e.points : e.type === 'circle' ? [[e.x - e.r, e.y - e.r], [e.x + e.r, e.y + e.r]] : [[e.x1, e.y1], [e.x2, e.y2]]);
 }
 
 function objectGeometryBounds(entities) {
@@ -3433,6 +6361,227 @@ function resolveObjectDimensions(item,options={}) {
 function objectPaperDimensions(dimensions,scale=50) {
   if(!Number.isFinite(scale)||scale<=0)throw new Error('Drawing scale must be positive.');
   return {widthMm:dimensions.widthMm/scale,depthMm:dimensions.depthMm/scale};
+}
+
+
+  // =========================================================================
+  // MODULE: ObjectProjections
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - 2D CAD Multi-View Projections
+ * Generates Front Elevation and Side Elevation CAD geometries
+ * in real-world meters matching standard architectural detailing conventions.
+ */
+
+function makeLine(x1, y1, x2, y2, layer = 'A-FURN') {
+  return { type: 'line', x1: Number(x1.toFixed(4)), y1: Number(y1.toFixed(4)), x2: Number(x2.toFixed(4)), y2: Number(y2.toFixed(4)), layer };
+}
+
+function makePolyline(points, closed = false, layer = 'A-FURN') {
+  return { type: 'polyline', points: points.map(([x, y]) => [Number(x.toFixed(4)), Number(y.toFixed(4))]), closed: !!closed, layer };
+}
+
+function makeRect(x, y, w, h, layer = 'A-FURN') {
+  return makePolyline([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], true, layer);
+}
+
+function makeCircle(x, y, r, layer = 'A-FURN') {
+  return { type: 'circle', x: Number(x.toFixed(4)), y: Number(y.toFixed(4)), r: Number(r.toFixed(4)), layer };
+}
+
+function makeRoundRect(x, y, w, h, r, layer = 'A-FURN') {
+  const rad = Math.min(r, w / 2, h / 2);
+  if (rad <= 0.005) return makeRect(x, y, w, h, layer);
+  const steps = 4;
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const a = Math.PI + (i * Math.PI) / (2 * steps);
+    pts.push([x + rad + rad * Math.cos(a), y + rad + rad * Math.sin(a)]);
+  }
+  for (let i = 0; i <= steps; i++) {
+    const a = 1.5 * Math.PI + (i * Math.PI) / (2 * steps);
+    pts.push([x + w - rad + rad * Math.cos(a), y + rad + rad * Math.sin(a)]);
+  }
+  for (let i = 0; i <= steps; i++) {
+    const a = 0 + (i * Math.PI) / (2 * steps);
+    pts.push([x + w - rad + rad * Math.cos(a), y + h - rad + rad * Math.sin(a)]);
+  }
+  for (let i = 0; i <= steps; i++) {
+    const a = 0.5 * Math.PI + (i * Math.PI) / (2 * steps);
+    pts.push([x + rad + rad * Math.cos(a), y + h - rad + rad * Math.sin(a)]);
+  }
+  return makePolyline(pts, true, layer);
+}
+
+/**
+ * Builds Front Elevation CAD entities (x: width 0..w, y: height 0..h).
+ */
+function buildFrontElevation(item, w, d, rawH) {
+  const h = Number.isFinite(rawH) && rawH > 0 ? rawH : 0.85;
+  const id = String(item.id || '').toLowerCase();
+  const sub = String(item.subcategory || '').toLowerCase();
+  const cat = String(item.category || '').toLowerCase();
+  const lyr = 'A-FURN';
+  const list = [makeLine(0, 0, w, 0, lyr)]; // Ground baseline
+
+  if (id.includes('desk') || (cat === 'workplace' && id.includes('table')) || id.includes('bench-desk')) {
+    // Front Elevation: Tabletop slab, modesty panel, legs, drawer pedestal
+    list.push(makeRoundRect(0, h - 0.04, w, 0.04, 0.005, lyr));
+    list.push(makeRect(0.04, 0, 0.05, h - 0.04, lyr));
+    if (w >= 1.2) {
+      list.push(makeRect(0.09, h * 0.35, w - 0.54, h * 0.55, lyr)); // Modesty panel
+      list.push(makeRect(w - 0.45, 0.06, 0.4, h - 0.1, lyr)); // Pedestal unit
+      list.push(makeLine(w - 0.45, 0.36 * h, w - 0.05, 0.36 * h, lyr));
+      list.push(makeLine(w - 0.45, 0.64 * h, w - 0.05, 0.64 * h, lyr));
+      list.push(makeRect(w - 0.28, 0.22 * h, 0.08, 0.02, lyr));
+      list.push(makeRect(w - 0.28, 0.50 * h, 0.08, 0.02, lyr));
+      list.push(makeRect(w - 0.28, 0.78 * h, 0.08, 0.02, lyr));
+      list.push(makeRect(w - 0.09, 0, 0.05, h - 0.04, lyr));
+    } else {
+      list.push(makeRect(0.09, h * 0.4, w - 0.18, h * 0.5, lyr));
+      list.push(makeRect(w - 0.09, 0, 0.05, h - 0.04, lyr));
+    }
+  } else if (id.includes('locker') || sub.includes('storage') || id.includes('wardrobe') || id.includes('cabinet')) {
+    // Front Elevation: Plinth, louver doors, handles, cornice
+    list.push(makeRect(0, 0, w, 0.08 * h, lyr));
+    list.push(makeRect(0, 0, w, h, lyr));
+    const bays = w > 1.2 ? 3 : w > 0.6 ? 2 : 1;
+    for (let b = 0; b < bays; b++) {
+      const bx = (b / bays) * w + 0.01;
+      const bw = w / bays - 0.02;
+      list.push(makeRect(bx, 0.08 * h, bw, 0.88 * h, lyr));
+      // Top louvers
+      for (let y = 0.84 * h; y <= 0.90 * h; y += 0.02 * h) list.push(makeLine(bx + 0.04, y, bx + bw - 0.04, y, lyr));
+      // Bottom louvers
+      for (let y = 0.14 * h; y <= 0.20 * h; y += 0.02 * h) list.push(makeLine(bx + 0.04, y, bx + bw - 0.04, y, lyr));
+      // Pull handle & lock cylinder
+      list.push(makeRect(bx + bw - 0.06, 0.52 * h, 0.03, 0.1 * h, lyr));
+      list.push(makeCircle(bx + bw - 0.045, 0.66 * h, 0.012, lyr));
+    }
+    list.push(makeRect(0, h - 0.04 * h, w, 0.04 * h, lyr));
+  } else if (cat === 'kitchen' || id.includes('range') || id.includes('cooker') || id.includes('oven') || id.includes('fryer')) {
+    // Front Elevation: Bullet feet, main chassis, oven door with window & handle, burner dials
+    list.push(makeRect(0.05, 0, 0.04, 0.08 * h, lyr));
+    list.push(makeRect(w - 0.09, 0, 0.04, 0.08 * h, lyr));
+    list.push(makeRect(0, 0.08 * h, w, 0.92 * h, lyr));
+    list.push(makeRoundRect(0.06 * w, 0.12 * h, 0.88 * w, 0.68 * h, 0.02, lyr)); // Oven door
+    list.push(makeRoundRect(0.16 * w, 0.22 * h, 0.68 * w, 0.46 * h, 0.015, lyr)); // Window
+    list.push(makeRoundRect(0.12 * w, 0.72 * h, 0.76 * w, 0.025, 0.005, lyr)); // Handle bar
+    list.push(makeRect(0, h - 0.14 * h, w, 0.12 * h, lyr)); // Control panel
+    const dials = w > 0.8 ? 6 : 4;
+    for (let i = 0; i < dials; i++) {
+      const cx = ((i + 0.5) / dials) * w;
+      list.push(makeCircle(cx, h - 0.08 * h, 0.022, lyr));
+      list.push(makeLine(cx, h - 0.08 * h, cx, h - 0.065 * h, lyr));
+    }
+    list.push(makeRect(0, h, w, 0.04, lyr)); // Top grates
+  } else if (id.includes('stall') || id.includes('toilet') && id.includes('ada')) {
+    // Front Elevation: Commercial Toilet Stall (pilasters, door with undercut, headrail, latch)
+    list.push(makeRect(0, 0, 0.08 * w, 0.08, lyr)); // Left shoe
+    list.push(makeRect(w - 0.08 * w, 0, 0.08 * w, 0.08, lyr)); // Right shoe
+    list.push(makeRect(0, 0, 0.08 * w, h, lyr)); // Left pilaster
+    list.push(makeRect(w - 0.08 * w, 0, 0.08 * w, h, lyr)); // Right pilaster
+    list.push(makeRect(0.09 * w, 0.15, 0.82 * w, h - 0.2, lyr)); // Door leaf (150mm gap)
+    list.push(makeRect(w - 0.15 * w, 0.95, 0.04, 0.07, lyr)); // Latch / occupancy indicator
+    list.push(makeRect(0, h - 0.05, w, 0.05, lyr)); // Overhead headrail
+  } else if (id.includes('sofa') || id.includes('chair') || id.includes('recliner') || id.includes('lounge')) {
+    // Front Elevation: Legs, thick seat cushion, contoured backrest, armrests
+    list.push(makeRect(0.06 * w, 0, 0.04 * w, 0.38 * h, lyr));
+    list.push(makeRect(0.9 * w, 0, 0.04 * w, 0.38 * h, lyr));
+    list.push(makeRoundRect(0.02 * w, 0.34 * h, 0.96 * w, 0.18 * h, 0.03, lyr));
+    list.push(makeRoundRect(0.05 * w, 0.48 * h, 0.9 * w, 0.50 * h, 0.04, lyr));
+    list.push(makeRoundRect(0, 0.42 * h, 0.1 * w, 0.32 * h, 0.02, lyr));
+    list.push(makeRoundRect(0.9 * w, 0.42 * h, 0.1 * w, 0.32 * h, 0.02, lyr));
+  } else if (id.startsWith('door-') || sub.includes('doors')) {
+    // Front Elevation: Frame jambs, header, door panel, lever handle
+    list.push(makeRect(0, 0, 0.06, h, lyr));
+    list.push(makeRect(w - 0.06, 0, 0.06, h, lyr));
+    list.push(makeRect(0, h - 0.06, w, 0.06, lyr));
+    list.push(makeRect(0.06, 0, w - 0.12, h - 0.06, lyr));
+    list.push(makeCircle(w - 0.14, 1.0, 0.03, lyr));
+    list.push(makeRect(w - 0.22, 0.985, 0.1, 0.025, lyr));
+  } else if (id.includes('rack') || id.includes('squat') || id.includes('crossover')) {
+    // Front Elevation: Olympic power cage uprights, pin holes, pull-up bar, barbell
+    list.push(makeRect(0.04, 0, 0.12, 0.05, lyr));
+    list.push(makeRect(w - 0.16, 0, 0.12, 0.05, lyr));
+    list.push(makeRect(0.06, 0.05, 0.08, h - 0.1, lyr));
+    list.push(makeRect(w - 0.14, 0.05, 0.08, h - 0.1, lyr));
+    for (let y = 0.4; y < h - 0.2; y += 0.12) {
+      list.push(makeCircle(0.1, y, 0.012, lyr));
+      list.push(makeCircle(w - 0.1, y, 0.012, lyr));
+    }
+    list.push(makeLine(0.14, h - 0.08, w - 0.14, h - 0.08, lyr));
+    list.push(makeRect(0, 1.15, w, 0.035, lyr)); // Barbell
+  } else {
+    // Generic Architectural Elevation
+    list.push(makeRect(0, 0, w, 0.08 * h, lyr));
+    list.push(makeRoundRect(0, 0.08 * h, w, 0.92 * h, 0.02, lyr));
+    list.push(makeRect(0, h - 0.04, w, 0.04, lyr));
+    list.push(makeLine(w / 2, 0.08 * h, w / 2, h - 0.04, lyr));
+  }
+
+  return list;
+}
+
+/**
+ * Builds Side Elevation CAD entities (x: depth 0..d, y: height 0..h).
+ */
+function buildSideElevation(item, w, d, rawH) {
+  const h = Number.isFinite(rawH) && rawH > 0 ? rawH : 0.85;
+  const id = String(item.id || '').toLowerCase();
+  const sub = String(item.subcategory || '').toLowerCase();
+  const cat = String(item.category || '').toLowerCase();
+  const lyr = 'A-FURN';
+  const list = [makeLine(0, 0, d, 0, lyr)]; // Ground baseline
+
+  if (id.includes('desk') || (cat === 'workplace' && id.includes('table')) || id.includes('bench-desk')) {
+    // Side Elevation: Top slab, front/rear legs, stretcher bar, modesty profile
+    list.push(makeRoundRect(0, h - 0.04, d, 0.04, 0.005, lyr));
+    list.push(makeRect(0.06, 0, 0.05, h - 0.04, lyr));
+    list.push(makeRect(d - 0.11, 0, 0.05, h - 0.04, lyr));
+    list.push(makeRect(0.06, 0.18 * h, d - 0.12, 0.04, lyr));
+    list.push(makeRect(d - 0.11, 0.38 * h, 0.025, 0.52 * h, lyr));
+  } else if (id.includes('locker') || sub.includes('storage') || id.includes('wardrobe') || id.includes('cabinet')) {
+    // Side Elevation: Side casing panel, plinth, top cornice
+    list.push(makeRect(0, 0, d, 0.08 * h, lyr));
+    list.push(makeRoundRect(0, 0.08 * h, d, 0.92 * h, 0.015, lyr));
+    list.push(makeRect(0, h - 0.04 * h, d, 0.04 * h, lyr));
+  } else if (cat === 'kitchen' || id.includes('range') || id.includes('cooker') || id.includes('oven') || id.includes('fryer')) {
+    // Side Elevation: Toe-kick recess, door profile, handle protrusion, rear backsplash
+    list.push(makeRect(0.08, 0, d - 0.08, 0.08 * h, lyr));
+    list.push(makeRect(0.04, 0.08 * h, d - 0.04, 0.92 * h, lyr));
+    list.push(makeRect(0, 0.12 * h, 0.04, 0.72 * h, lyr)); // Front door
+    list.push(makeRect(-0.03, 0.72 * h, 0.03, 0.025, lyr)); // Protruding handle
+    list.push(makeRect(0, h - 0.04, d, 0.04, lyr)); // Counter rim
+    list.push(makeRect(d - 0.03, h, 0.03, 0.08, lyr)); // Backsplash
+  } else if (id.includes('stall') || id.includes('toilet') && id.includes('ada')) {
+    // Side Elevation: Divider partition, wall brackets, pedestal shoe
+    list.push(makeRect(0.06, 0.15, d - 0.06, h - 0.2, lyr));
+    list.push(makeRect(d - 0.03, 0.4 * h, 0.03, 0.08, lyr)); // Wall bracket
+    list.push(makeRect(d - 0.03, 0.8 * h, 0.03, 0.08, lyr)); // Wall bracket
+    list.push(makeRect(0.08, 0, 0.06, 0.15, lyr)); // Front shoe
+  } else if (id.includes('sofa') || id.includes('chair') || id.includes('recliner') || id.includes('lounge')) {
+    // Side Elevation: Front leg, angled rear leg, inclined seat, reclining backrest, armrest
+    list.push(makeRect(0.08 * d, 0, 0.05 * d, 0.38 * h, lyr));
+    list.push(makePolyline([[0.82 * d, 0.38 * h], [0.94 * d, 0], [0.89 * d, 0], [0.77 * d, 0.38 * h]], true, lyr));
+    list.push(makePolyline([[0.02 * d, 0.42 * h], [0.84 * d, 0.36 * h], [0.84 * d, 0.48 * h], [0.02 * d, 0.54 * h]], true, lyr));
+    list.push(makePolyline([[0.72 * d, 0.44 * h], [0.94 * d, h], [0.84 * d, h], [0.64 * d, 0.46 * h]], true, lyr));
+    list.push(makeRoundRect(0.05 * d, 0.42 * h, 0.74 * d, 0.22 * h, 0.03, lyr));
+  } else if (id.startsWith('door-') || sub.includes('doors')) {
+    // Side Elevation: Wall jamb thickness, door stop, door leaf, handle projection
+    list.push(makeRect(0, 0, d, h, lyr));
+    list.push(makeRect(0.03, 0, 0.02, h, lyr));
+    list.push(makeRect(0.03, 0, 0.045, h, lyr));
+    list.push(makeRect(-0.05, 1.0, 0.05, 0.025, lyr));
+  } else {
+    // Generic Architectural Side Elevation
+    list.push(makeRect(0, 0, d, 0.08 * h, lyr));
+    list.push(makeRoundRect(0, 0.08 * h, d, 0.92 * h, 0.02, lyr));
+    list.push(makeRect(0, h - 0.04, d, 0.04, lyr));
+  }
+
+  return list;
 }
 
 
@@ -4013,7 +7162,7 @@ const WORKSPACES = [
       {
         "toolId": "sun_path",
         "label": "Sun Path & Shadow",
-        "desc": "Sunrise, sunset, solar position, and shadow lengths — computed live",
+        "desc": "Sunrise, sunset, solar position, shadow lengths & solar shading overhangs — computed live",
         "keywords": [
           "sun",
           "solar",
@@ -4021,6 +7170,15 @@ const WORKSPACES = [
           "sunpath",
           "shadow",
           "shadows",
+          "overhang",
+          "shading",
+          "brise soleil",
+          "brise-soleil",
+          "louver",
+          "louvers",
+          "vsa",
+          "profile angle",
+          "passive solar",
           "sunrise",
           "sunset",
           "azimuth",
@@ -4032,7 +7190,10 @@ const WORKSPACES = [
           "solar analysis",
           "shadow calculator",
           "sun study",
-          "solar position"
+          "solar position",
+          "solar shading",
+          "overhang calculator",
+          "brise soleil calculator"
         ]
       },
       {
@@ -4366,6 +7527,31 @@ const WORKSPACES = [
         "aliases": [
           "import file",
           "import schedule"
+        ]
+      },
+      {
+        "toolId": "cad_automation",
+        "label": "AutoCAD & BIM Automation",
+        "desc": "AutoLISP setup, Tool Palettes (.atc), DXF hygiene, Revit Shared Parameters & BIM schedules",
+        "keywords": [
+          "automation",
+          "autolisp",
+          "lisp",
+          "bim",
+          "revit",
+          "dynamo",
+          "tool palette",
+          "atc",
+          "layers",
+          "purger",
+          "dxf hygiene",
+          "schedule"
+        ],
+        "aliases": [
+          "bim automation",
+          "cad automation",
+          "autolisp generator",
+          "revit tools"
         ]
       }
     ],
@@ -28064,6 +31250,3104 @@ function shadowSummaryForDay({ latitudeDeg, longitudeDeg, date, timezoneOffsetHo
 
 
   // =========================================================================
+  // MODULE: ExportModel
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand - Universal Export Model
+ * Phase: Universal Export Center.
+ *
+ * One normalized export architecture for the whole application. Tools
+ * produce (or already hold) project data; this module shapes it into a
+ * provenance-stamped export document and provides PURE serializers for
+ * every supported format. Side effects (download/clipboard/print) live in
+ * services/export.js — nothing here touches the DOM.
+ *
+ * Formats: JSON (round-trip), TXT (human-readable), CSV, TSV, SVG (vector),
+ * DXF (conservative 2D subset). PDF is handled by the print stylesheet +
+ * window.print() (services), not by a heavy library.
+ *
+ * Every export carries provenance: source, format, timestamp, projectId.
+ */
+
+
+
+
+/** Format identifiers. */
+const EXPORT_FORMATS = Object.freeze({
+  JSON: 'json',
+  TXT: 'txt',
+  CSV: 'csv',
+  TSV: 'tsv',
+  SVG: 'svg',
+  DXF: 'dxf'
+});
+
+/** Content-type mapping for downloads. */
+const EXPORT_CONTENT_TYPES = Object.freeze({
+  json: 'application/json',
+  txt: 'text/plain',
+  csv: 'text/csv',
+  tsv: 'text/tab-separated-values',
+  svg: 'image/svg+xml',
+  dxf: 'application/dxf',
+  zip: 'application/zip',
+  lsp: 'text/plain',
+  scr: 'text/plain'
+});
+
+/** Human-readable format descriptions for the export UI. */
+const EXPORT_FORMAT_INFO = Object.freeze({
+  json: 'Full structured export — round-trips back into the project system.',
+  txt: 'Human-readable report of the exported data.',
+  csv: 'Comma-separated schedule (RFC-4180 escaping).',
+  tsv: 'Tab-separated schedule — CAD/spreadsheet friendly.',
+  svg: 'Vector drawing of geometry (chains, plans, diagrams).',
+  dxf: 'AutoCAD DXF (ASCII R12 subset: LINE, POLYLINE, TEXT). Conservative 2D only.'
+});
+
+/** Provenance stamp embedded in every export document. */
+function createExportProvenance(source, format, projectId = null, extra = {}) {
+  return {
+    application: 'Architecture Helping Hand',
+    source,
+    format,
+    projectId,
+    exportedAt: new Date().toISOString(),
+    ...extra
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Data collection: normalized table shape used by tabular serializers
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalizes arbitrary exportable content into a table description:
+ * { title, columns: [{key,label}], rows: [{...}] } — consumed by CSV/TSV/TXT.
+ *
+ * @param {string} title
+ * @param {Array<{key:string,label:string}>} columns
+ * @param {Array<Object>} rows
+ */
+function createExportTable(title, columns, rows) {
+  return { title, columns, rows };
+}
+
+/** Collects the workspace (dimensions) as a normalized table. */
+function workspaceToTable(workspace) {
+  if (!workspace || !Array.isArray(workspace.entries)) return null;
+  return createExportTable(
+    'Dimension Schedule',
+    [
+      { key: 'name', label: 'Name' },
+      { key: 'rawInput', label: 'Input' },
+      { key: 'type', label: 'Type' },
+      { key: 'realMeters', label: 'Real (m)' },
+      { key: 'drawingMeters', label: 'Drawing (m)' },
+      { key: 'notes', label: 'Notes' }
+    ],
+    workspace.entries.map(e => ({
+      name: e.name || 'Dimension',
+      rawInput: e.rawInput || '',
+      type: (e.dimensionType || 'segment').toUpperCase(),
+      realMeters: typeof e.realMeters === 'number' ? e.realMeters : '',
+      drawingMeters: typeof e.realMeters === 'number' && workspace.scaleRatio ? e.realMeters / workspace.scaleRatio : '',
+      notes: e.notes || ''
+    }))
+  );
+}
+
+/** Collects chain segments as a normalized table. */
+function chainToTable(calculatedChain) {
+  if (!calculatedChain || !Array.isArray(calculatedChain.segments)) return null;
+  return createExportTable(
+    `Dimension Chain — ${calculatedChain.name || 'Chain'}`,
+    [
+      { key: 'index', label: '#' },
+      { key: 'name', label: 'Segment' },
+      { key: 'startMeters', label: 'Start (m)' },
+      { key: 'endMeters', label: 'End (m)' },
+      { key: 'lengthMeters', label: 'Length (m)' },
+      { key: 'type', label: 'Type' }
+    ],
+    calculatedChain.segments
+      .filter(s => s.enabled !== false && s.isValid !== false)
+      .map((s, idx) => ({
+        index: idx + 1,
+        name: s.name || `Segment ${idx + 1}`,
+        startMeters: s.startMeters,
+        endMeters: s.endMeters,
+        lengthMeters: typeof s.lengthMeters === 'number' ? s.lengthMeters : (typeof s.realMeters === 'number' ? s.realMeters : 0),
+        type: (s.dimensionType || 'segment').toUpperCase()
+      }))
+  );
+}
+
+/** Collects a stair result as a normalized single-row table. */
+function stairToTable(stairResult) {
+  if (!stairResult || !stairResult.valid) return null;
+  const g = stairResult.geometry;
+  return createExportTable(
+    'Stair Calculation',
+    [
+      { key: 'risers', label: 'Risers' },
+      { key: 'goings', label: 'Goings' },
+      { key: 'riserHeight', label: 'Riser (m)' },
+      { key: 'treadDepth', label: 'Going (m)' },
+      { key: 'totalRise', label: 'Total Rise (m)' },
+      { key: 'totalRun', label: 'Total Run (m)' },
+      { key: 'angle', label: 'Angle (°)' },
+      { key: 'twoRPlusT', label: '2R+T (m)' }
+    ],
+    [{
+      risers: stairResult.risers.count,
+      goings: stairResult.treads.count,
+      riserHeight: stairResult.risers.heightMeters,
+      treadDepth: stairResult.treads.depthMeters,
+      totalRise: stairResult.input.totalRiseMeters,
+      totalRun: g.totalRunMeters,
+      angle: g.angleDegrees,
+      twoRPlusT: stairResult.proportion.twoRPlusTMeters
+    }]
+  );
+}
+
+/** Collects a ramp/slope result (shared geometry shape) as a table. */
+function slopeToTable(geometryResult, kindLabel) {
+  if (!geometryResult || !geometryResult.valid || !geometryResult.geometry) return null;
+  const g = geometryResult.geometry;
+  return createExportTable(
+    kindLabel || 'Slope Calculation',
+    [
+      { key: 'rise', label: 'Rise (m)' },
+      { key: 'run', label: 'Run (m)' },
+      { key: 'slopePercent', label: 'Slope (%)' },
+      { key: 'ratio', label: 'Ratio (1:X)' },
+      { key: 'angle', label: 'Angle (°)' },
+      { key: 'flight', label: 'Flight Length (m)' }
+    ],
+    [{
+      rise: g.riseMeters,
+      run: g.runMeters,
+      slopePercent: g.slopePercent,
+      ratio: g.ratioValue,
+      angle: g.angleDegrees,
+      flight: g.flightLengthMeters !== undefined ? g.flightLengthMeters : (g.slopedLengthMeters !== undefined ? g.slopedLengthMeters : '')
+    }]
+  );
+}
+
+/** Collects project decisions as a normalized table. */
+function decisionsToTable(project) {
+  if (!project || !Array.isArray(project.decisions)) return null;
+  return createExportTable(
+    'Design Decisions',
+    [
+      { key: 'id', label: 'ID' },
+      { key: 'kind', label: 'Kind' },
+      { key: 'name', label: 'Name' },
+      { key: 'createdAt', label: 'Created' },
+      { key: 'data', label: 'Result Data (JSON)' }
+    ],
+    project.decisions.map(d => ({
+      id: d.id || '',
+      kind: d.kind || '',
+      name: d.name || '',
+      createdAt: d.createdAt || '',
+      data: d.result ? JSON.stringify(d.result) : ''
+    }))
+  );
+}
+
+/** Collects project notes as a normalized table. */
+function notesToTable(project) {
+  if (!project || !Array.isArray(project.notes)) return null;
+  return createExportTable(
+    'Project Notes',
+    [
+      { key: 'id', label: 'ID' },
+      { key: 'title', label: 'Title' },
+      { key: 'body', label: 'Note' },
+      { key: 'createdAt', label: 'Created' }
+    ],
+    project.notes.map(n => ({
+      id: n.id || '',
+      title: n.title || 'Note',
+      body: n.body || n.text || '',
+      createdAt: n.createdAt || ''
+    }))
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pure serializers
+// ---------------------------------------------------------------------------
+
+/** Serializes a table to TSV (with header). Reuses CAD-safe escaping. */
+function tableToTSV(table) {
+  if (!table) return '';
+  const header = table.columns.map(c => escapeTSV(c.label)).join('\t');
+  const rows = table.rows.map(row => table.columns.map(c => escapeTSV(row[c.key])).join('\t'));
+  return [table.title, header, ...rows].join('\n');
+}
+
+/** Serializes a table to CSV (with header). Reuses RFC-4180 escaping. */
+function tableToCSV(table) {
+  if (!table) return '';
+  const header = table.columns.map(c => escapeCSV(c.label)).join(',');
+  const rows = table.rows.map(row => table.columns.map(c => escapeCSV(row[c.key])).join(','));
+  return [escapeCSV(table.title), header, ...rows].join('\n');
+}
+
+/** Serializes a table to human-readable TXT. */
+function tableToTXT(table) {
+  if (!table) return '';
+  const lines = [table.title.toUpperCase(), '='.repeat(Math.max(table.title.length, 8)), ''];
+  for (const row of table.rows) {
+    for (const col of table.columns) {
+      const val = row[col.key];
+      lines.push(`${col.label}: ${val === '' ? '—' : val}`);
+    }
+    lines.push('');
+  }
+  return lines.join('\n').trimEnd() + '\n';
+}
+
+/**
+ * Full JSON export of a project document (round-trip capable).
+ * Provenance lives in a sibling envelope, never inside the project itself,
+ * so the project part re-imports cleanly.
+ */
+function serializeProjectJSON(project, provenance) {
+  const check = validateProject(project);
+  if (!check.ok) {
+    throw new Error(`Cannot export invalid project: ${check.errors[0]}`);
+  }
+  return JSON.stringify({
+    _provenance: provenance || createExportProvenance('project', EXPORT_FORMATS.JSON, project.id),
+    project
+  }, null, 2);
+}
+
+/**
+ * Parses a JSON export back into a validated project document.
+ * Throws on malformed input; callers decide recovery policy.
+ */
+function deserializeProjectJSON(json) {
+  const parsed = JSON.parse(json);
+  const project = parsed && typeof parsed === 'object' && parsed.project ? parsed.project : parsed;
+  const check = validateProject(project);
+  if (!check.ok) {
+    throw new Error(`Imported document is not a valid project: ${check.errors[0]}`);
+  }
+  return project;
+}
+
+// ---------------------------------------------------------------------------
+// DXF writer — conservative ASCII R12 subset
+// ---------------------------------------------------------------------------
+
+/**
+ * DXF scope (documented limitation): ASCII R12, ENTITIES section only with
+ * LINE, POLYLINE (as LWPOLLINE-free classic VERTEX chain), TEXT, and CIRCLE.
+ * Coordinates are plain 2D (X, Y); no layers beyond '0', no blocks, no dims,
+ * no 3D. Units are interpreted by the recipient — exported values are the
+ * canonical meters multiplied by the caller's scale (mm by default).
+ */
+
+function dxfPair(code, value) {
+  return `${code}\n${value}`;
+}
+
+function dxfLine(x1, y1, x2, y2, layer = '0') {
+  return [
+    dxfPair(0, 'LINE'),
+    dxfPair(8, layer),
+    dxfPair(10, x1), dxfPair(20, y1),
+    dxfPair(11, x2), dxfPair(21, y2)
+  ].join('\n');
+}
+
+function dxfPolyline(points, layer = '0', closed = false) {
+  const parts = [
+    dxfPair(0, 'POLYLINE'),
+    dxfPair(8, layer),
+    dxfPair(66, 1),
+    dxfPair(70, closed ? 1 : 0)
+  ];
+  for (const [x, y] of points) {
+    parts.push(dxfPair(0, 'VERTEX'));
+    parts.push(dxfPair(8, layer));
+    parts.push(dxfPair(10, x));
+    parts.push(dxfPair(20, y));
+  }
+  parts.push(dxfPair(0, 'SEQEND'));
+  return parts.join('\n');
+}
+
+function dxfText(x, y, text, height = 0.2, layer = '0') {
+  const safe = String(text).replace(/[\r\n]+/g, ' ');
+  return [
+    dxfPair(0, 'TEXT'),
+    dxfPair(8, layer),
+    dxfPair(10, x), dxfPair(20, y),
+    dxfPair(40, height),
+    dxfPair(1, safe)
+  ].join('\n');
+}
+
+function dxfInsert(name, x, y, layer = '0', scale = 1, rotation = 0) {
+  const S = v => (typeof v === 'number' ? v.toFixed(4) : String(v));
+  return [
+    dxfPair(0, 'INSERT'),
+    dxfPair(8, layer),
+    dxfPair(2, name),
+    dxfPair(10, S(x)), dxfPair(20, S(y)), dxfPair(30, '0.0000'),
+    dxfPair(41, S(scale)), dxfPair(42, S(scale)), dxfPair(43, S(scale)),
+    dxfPair(50, S(rotation))
+  ].join('\n');
+}
+
+/**
+ * Builds a DXF document from a normalized entity list.
+ * Supports standard AutoCAD AC1009/R12 specifications, true named BLOCK definitions,
+ * AIA CAD layer standards, and millimeters insertion units ($INSUNITS = 4).
+ *
+ * @param {Array<Object>} entities - { type: 'line'|'polyline'|'text'|'circle', ... }
+ * @param {Object} [options] - { scale (default 1000), blockName, asBlock, basePoint }
+ * @returns {string} DXF text
+ */
+function buildDXF(entities, options = {}) {
+  const scale = typeof options.scale === 'number' && options.scale > 0 ? options.scale : 1000;
+  const list = Array.isArray(entities) ? entities : [];
+  const S = v => (v * scale).toFixed(4);
+
+  const body = [];
+  for (const e of list) {
+    if (!e || typeof e !== 'object') continue;
+    if (e.type === 'line') {
+      body.push(dxfLine(S(e.x1), S(e.y1), S(e.x2), S(e.y2), e.layer || '0'));
+    } else if (e.type === 'polyline' && Array.isArray(e.points) && e.points.length >= 2) {
+      body.push(dxfPolyline(e.points.map(p => [S(p[0]), S(p[1])]), e.layer || '0', !!e.closed));
+    } else if (e.type === 'text') {
+      body.push(dxfText(S(e.x), S(e.y), e.text || '', (e.height || 0.2) * scale, e.layer || '0'));
+    } else if (e.type === 'circle') {
+      body.push([
+        dxfPair(0, 'CIRCLE'),
+        dxfPair(8, e.layer || '0'),
+        dxfPair(10, S(e.x)), dxfPair(20, S(e.y)),
+        dxfPair(40, S(e.r || 0))
+      ].join('\n'));
+    }
+  }
+
+  const usedLayers = new Set(['0']);
+  for (const e of list) {
+    if (e && e.layer) usedLayers.add(String(e.layer));
+  }
+  const sortedLayers = Array.from(usedLayers).sort();
+
+  const LAYER_COLOR_MAP = {
+    '0': 7,
+    'A-WALL': 4,
+    'A-DOOR': 2,
+    'A-GLAZ': 4,
+    'A-AREA': 3,
+    'A-FLOR-STRS': 6,
+    'A-FURN': 5,
+    'A-DIMS': 1,
+    'A-ANNO-TEXT': 7,
+    'A-ANNO-TAGS': 2,
+    'A-GRID': 8,
+    'A-CLEARANCE': 8,
+    'A-SITE': 3,
+    'A-VEHICLE': 6,
+    'A-VEGETATION': 3,
+    'REF': 1,
+    'CHAIN': 4,
+    'ROOM': 3,
+    'PLAN': 7
+  };
+
+  const LAYER_LTYPE_MAP = {
+    'A-CLEARANCE': 'DASHED',
+    'A-GRID': 'CENTER'
+  };
+
+  const tableParts = [
+    dxfPair(0, 'SECTION'),
+    dxfPair(2, 'TABLES'),
+    dxfPair(0, 'TABLE'),
+    dxfPair(2, 'LTYPE'),
+    dxfPair(70, 2),
+    dxfPair(0, 'LTYPE'),
+    dxfPair(2, 'CONTINUOUS'),
+    dxfPair(70, 64),
+    dxfPair(3, 'Solid line'),
+    dxfPair(72, 65),
+    dxfPair(73, 0),
+    dxfPair(40, '0.0'),
+    dxfPair(0, 'LTYPE'),
+    dxfPair(2, 'DASHED'),
+    dxfPair(70, 64),
+    dxfPair(3, '__ __ __ __ __ __ __ __'),
+    dxfPair(72, 65),
+    dxfPair(73, 2),
+    dxfPair(40, '12.0'),
+    dxfPair(49, '9.0'),
+    dxfPair(49, '-3.0'),
+    dxfPair(0, 'ENDTAB'),
+    dxfPair(0, 'TABLE'),
+    dxfPair(2, 'LAYER'),
+    dxfPair(70, sortedLayers.length)
+  ];
+
+  for (const lyr of sortedLayers) {
+    const col = LAYER_COLOR_MAP[lyr] || 7;
+    const lt = LAYER_LTYPE_MAP[lyr] || 'CONTINUOUS';
+    tableParts.push(
+      dxfPair(0, 'LAYER'),
+      dxfPair(2, lyr),
+      dxfPair(70, 0),
+      dxfPair(62, col),
+      dxfPair(6, lt)
+    );
+  }
+  tableParts.push(dxfPair(0, 'ENDTAB'), dxfPair(0, 'ENDSEC'));
+
+  let blocksSection = '';
+  let entitiesBody = body.join('\n');
+
+  if (options.blockName || options.asBlock) {
+    const rawName = options.blockName || 'AHH_BLOCK';
+    const blockName = String(rawName).replace(/[^A-Za-z0-9_]/g, '_');
+    const basePoint = options.basePoint || [0, 0];
+    const bx = S(basePoint[0]), by = S(basePoint[1]);
+    const blockLayer = sortedLayers.find(l => l !== '0' && l !== 'A-CLEARANCE') || 'A-FURN';
+
+    blocksSection = [
+      dxfPair(0, 'SECTION'),
+      dxfPair(2, 'BLOCKS'),
+      dxfPair(0, 'BLOCK'),
+      dxfPair(8, '0'),
+      dxfPair(2, blockName),
+      dxfPair(70, 0),
+      dxfPair(10, bx), dxfPair(20, by), dxfPair(30, '0.0000'),
+      dxfPair(3, blockName),
+      body.join('\n'),
+      dxfPair(0, 'ENDBLK'),
+      dxfPair(0, 'ENDSEC')
+    ].join('\n');
+
+    entitiesBody = dxfInsert(blockName, 0, 0, blockLayer);
+  }
+
+  return [
+    dxfPair(0, 'SECTION'),
+    dxfPair(2, 'HEADER'),
+    dxfPair(9, '$ACADVER'), dxfPair(1, 'AC1009'),
+    dxfPair(9, '$INSUNITS'), dxfPair(70, 4), // 4 = millimeters
+    dxfPair(0, 'ENDSEC'),
+    tableParts.join('\n'),
+    ...(blocksSection ? [blocksSection] : []),
+    dxfPair(0, 'SECTION'),
+    dxfPair(2, 'ENTITIES'),
+    entitiesBody,
+    dxfPair(0, 'ENDSEC'),
+    dxfPair(0, 'EOF')
+  ].join('\n');
+}
+
+/**
+ * Builds a multi-block AutoCAD Tool Palette drawing (.dxf).
+ * Lays out multiple block definitions in an organized grid with text labels in Model Space.
+ *
+ * @param {Array<{id: string, name: string, dimensions: {widthMm: number, depthMm: number}, entities: Array<Object>, basePoint?: [number, number]}>} items
+ * @param {Object} [options] - { columns: number, gapMm: number, scale: number }
+ * @returns {string} DXF text
+ */
+function buildMultiBlockDXF(items, options = {}) {
+  const scale = 1; // items already in mm or scaled
+  const cols = options.columns || 4;
+  const gap = options.gapMm || 800; // 800mm margin between blocks
+
+  const S = v => (Number(v) || 0).toFixed(4);
+  const usedLayers = new Set(['0', 'A-ANNO-TEXT', 'A-ANNO-TAGS', 'A-CLEARANCE', 'A-FURN', 'A-DOOR', 'A-VEHICLE', 'A-SITE', 'A-VEGETATION']);
+
+  const blocksBody = [];
+  const entitiesBody = [];
+
+  let curCol = 0;
+  let curRow = 0;
+  let curX = 0;
+  let curY = 0;
+  let rowMaxHeight = 0;
+
+  for (let idx = 0; idx < items.length; idx++) {
+    const item = items[idx];
+    const rawName = 'AHH_' + (item.id || `ITEM_${idx}`).toUpperCase().replace(/[^A-Za-z0-9_]/g, '_');
+    const w = (item.dimensions?.widthMm) || 1000;
+    const d = (item.dimensions?.depthMm) || 1000;
+    const basePoint = item.basePoint || [0, 0];
+
+    const blockEntities = [];
+    for (const e of (item.entities || [])) {
+      if (!e) continue;
+      const lyr = e.layer || '0';
+      usedLayers.add(lyr);
+      if (e.type === 'line') {
+        blockEntities.push(dxfLine(S(e.x1 * 1000), S(e.y1 * 1000), S(e.x2 * 1000), S(e.y2 * 1000), lyr));
+      } else if (e.type === 'polyline' && Array.isArray(e.points) && e.points.length >= 2) {
+        blockEntities.push(dxfPolyline(e.points.map(p => [S(p[0] * 1000), S(p[1] * 1000)]), lyr, !!e.closed));
+      } else if (e.type === 'circle') {
+        blockEntities.push([
+          dxfPair(0, 'CIRCLE'),
+          dxfPair(8, lyr),
+          dxfPair(10, S(e.x * 1000)), dxfPair(20, S(e.y * 1000)),
+          dxfPair(40, S(e.r * 1000))
+        ].join('\n'));
+      }
+    }
+
+    blocksBody.push([
+      dxfPair(0, 'BLOCK'),
+      dxfPair(8, '0'),
+      dxfPair(2, rawName),
+      dxfPair(70, 0),
+      dxfPair(10, S(basePoint[0] * 1000)), dxfPair(20, S(basePoint[1] * 1000)), dxfPair(30, '0.0000'),
+      dxfPair(3, rawName),
+      blockEntities.join('\n'),
+      dxfPair(0, 'ENDBLK')
+    ].join('\n'));
+
+    // Place instance in grid
+    const mainLayer = (item.entities || []).find(e => e.layer && e.layer !== 'A-CLEARANCE')?.layer || 'A-FURN';
+    entitiesBody.push(dxfInsert(rawName, curX, curY, mainLayer));
+
+    // Place annotation label under block
+    const labelText = `${item.name || rawName} (${Math.round(w)}x${Math.round(d)}mm)`;
+    entitiesBody.push(dxfText(S(curX), S(curY - 180), labelText, 90, 'A-ANNO-TEXT'));
+
+    rowMaxHeight = Math.max(rowMaxHeight, d);
+    curCol++;
+    if (curCol >= cols) {
+      curCol = 0;
+      curRow++;
+      curX = 0;
+      curY -= (rowMaxHeight + gap + 300);
+      rowMaxHeight = 0;
+    } else {
+      curX += (w + gap);
+    }
+  }
+
+  const sortedLayers = Array.from(usedLayers).sort();
+  const LAYER_COLOR_MAP = {
+    '0': 7, 'A-WALL': 4, 'A-DOOR': 2, 'A-GLAZ': 4, 'A-AREA': 3, 'A-FLOR-STRS': 6,
+    'A-FURN': 5, 'A-DIMS': 1, 'A-ANNO-TEXT': 7, 'A-ANNO-TAGS': 2, 'A-GRID': 8,
+    'A-CLEARANCE': 8, 'A-SITE': 3, 'A-VEHICLE': 6, 'A-VEGETATION': 3, 'REF': 1, 'CHAIN': 4
+  };
+
+  const tableParts = [
+    dxfPair(0, 'SECTION'),
+    dxfPair(2, 'TABLES'),
+    dxfPair(0, 'TABLE'),
+    dxfPair(2, 'LTYPE'),
+    dxfPair(70, 2),
+    dxfPair(0, 'LTYPE'), dxfPair(2, 'CONTINUOUS'), dxfPair(70, 64), dxfPair(3, 'Solid line'), dxfPair(72, 65), dxfPair(73, 0), dxfPair(40, '0.0'),
+    dxfPair(0, 'LTYPE'), dxfPair(2, 'DASHED'), dxfPair(70, 64), dxfPair(3, '__ __ __ __'), dxfPair(72, 65), dxfPair(73, 2), dxfPair(40, '12.0'), dxfPair(49, '9.0'), dxfPair(49, '-3.0'),
+    dxfPair(0, 'ENDTAB'),
+    dxfPair(0, 'TABLE'),
+    dxfPair(2, 'LAYER'),
+    dxfPair(70, sortedLayers.length)
+  ];
+
+  for (const lyr of sortedLayers) {
+    const col = LAYER_COLOR_MAP[lyr] || 7;
+    const lt = lyr === 'A-CLEARANCE' ? 'DASHED' : 'CONTINUOUS';
+    tableParts.push(
+      dxfPair(0, 'LAYER'),
+      dxfPair(2, lyr),
+      dxfPair(70, 0),
+      dxfPair(62, col),
+      dxfPair(6, lt)
+    );
+  }
+  tableParts.push(dxfPair(0, 'ENDTAB'), dxfPair(0, 'ENDSEC'));
+
+  return [
+    dxfPair(0, 'SECTION'),
+    dxfPair(2, 'HEADER'),
+    dxfPair(9, '$ACADVER'), dxfPair(1, 'AC1009'),
+    dxfPair(9, '$INSUNITS'), dxfPair(70, 4), // 4 = millimeters
+    dxfPair(0, 'ENDSEC'),
+    tableParts.join('\n'),
+    dxfPair(0, 'SECTION'),
+    dxfPair(2, 'BLOCKS'),
+    blocksBody.join('\n'),
+    dxfPair(0, 'ENDSEC'),
+    dxfPair(0, 'SECTION'),
+    dxfPair(2, 'ENTITIES'),
+    entitiesBody.join('\n'),
+    dxfPair(0, 'ENDSEC'),
+    dxfPair(0, 'EOF')
+  ].join('\n');
+}
+
+/** Chain geometry → DXF entities (closed room-style outline of cumulative points). */
+function chainToDXFEntities(calculatedChain) {
+  if (!calculatedChain || !Array.isArray(calculatedChain.segments)) return [];
+  const entities = [];
+  for (const s of calculatedChain.segments) {
+    if (s.enabled === false || s.isValid === false) continue;
+    entities.push({
+      type: 'line',
+      x1: s.startMeters, y1: 0,
+      x2: s.endMeters, y2: 0,
+      layer: (s.dimensionType || 'segment') === 'reference' ? 'REF' : 'CHAIN'
+    });
+  }
+  return entities;
+}
+
+/** Room rectangles → DXF entities (initial rectilinear scope). */
+function roomsToDXFEntities(rooms) {
+  if (!Array.isArray(rooms)) return [];
+  const entities = [];
+  for (const room of rooms) {
+    if (!room || typeof room.x !== 'number' || typeof room.y !== 'number') continue;
+    const w = room.widthMeters ?? room.width ?? 0;
+    const h = room.depthMeters ?? room.depth ?? 0;
+    if (w <= 0 || h <= 0) continue;
+    entities.push({
+      type: 'polyline',
+      closed: true,
+      layer: 'ROOM',
+      points: [
+        [room.x, room.y],
+        [room.x + w, room.y],
+        [room.x + w, room.y + h],
+        [room.x, room.y + h]
+      ]
+    });
+    if (room.name) {
+      entities.push({ type: 'text', x: room.x + w / 2 - 0.4, y: room.y + h / 2, text: room.name, height: 0.2 });
+    }
+  }
+  return entities;
+}
+
+// ---------------------------------------------------------------------------
+// SVG export (wraps existing diagram generators' output into a standalone file)
+// ---------------------------------------------------------------------------
+
+/**
+ * Wraps SVG markup (from generateChainSVG / generateStairSVG / generateRampSVG
+ * / generateSlopeSVG / the plan canvas) into a standalone, namespaced SVG
+ * document with provenance metadata.
+ */
+function wrapSVGDocument(svgMarkup, provenance) {
+  if (typeof svgMarkup !== 'string' || !svgMarkup.includes('<svg')) {
+    throw new Error('wrapSVGDocument requires valid SVG markup containing an <svg> element.');
+  }
+  const meta = provenance || createExportProvenance('diagram', EXPORT_FORMATS.SVG);
+  const comment = `<!-- ${meta.application} | source: ${meta.source} | exported: ${meta.exportedAt} -->`;
+  // Ensure xmlns exists on the root element
+  const withNs = svgMarkup.includes('xmlns=')
+    ? svgMarkup
+    : svgMarkup.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${comment}\n${withNs}\n`;
+}
+
+/**
+ * Master entry: serializes any supported export request.
+ *
+ * @param {Object} request
+ * @param {string} request.format - one of EXPORT_FORMATS
+ * @param {string} request.source - provenance label (e.g. 'dimension-workspace')
+ * @param {Object} [request.project] - project document (JSON format / provenance)
+ * @param {Array<Object>} [request.tables] - normalized tables (CSV/TSV/TXT)
+ * @param {string} [request.svgMarkup] - SVG markup (SVG format)
+ * @param {Array<Object>} [request.dxfEntities] - DXF entities (DXF format)
+ * @param {string} [request.projectId]
+ * @returns {{ content: string, contentType: string, fileName: string, provenance: Object }}
+ */
+function buildExport(request) {
+  const format = request && request.format;
+  if (!Object.values(EXPORT_FORMATS).includes(format)) {
+    throw new Error(`Unknown export format: "${format}". Supported: ${Object.values(EXPORT_FORMATS).join(', ')}`);
+  }
+  const provenance = createExportProvenance(request.source || 'unknown', format, request.projectId || null);
+  const stamp = provenance.exportedAt.replace(/[:.]/g, '-').slice(0, 19);
+  const baseName = (request.source || 'export').replace(/[^a-z0-9_-]+/gi, '-').toLowerCase();
+
+  switch (format) {
+    case EXPORT_FORMATS.JSON: {
+      if (!request.project) throw new Error('JSON export requires a project document.');
+      const content = serializeProjectJSON(request.project, provenance);
+      return { content, contentType: EXPORT_CONTENT_TYPES.json, fileName: `${baseName}-${stamp}.json`, provenance };
+    }
+    case EXPORT_FORMATS.TXT: {
+      const tables = (request.tables || []).filter(Boolean);
+      if (tables.length === 0) throw new Error('TXT export requires at least one table.');
+      return { content: tables.map(tableToTXT).join('\n'), contentType: EXPORT_CONTENT_TYPES.txt, fileName: `${baseName}-${stamp}.txt`, provenance };
+    }
+    case EXPORT_FORMATS.CSV: {
+      const tables = (request.tables || []).filter(Boolean);
+      if (tables.length === 0) throw new Error('CSV export requires at least one table.');
+      return { content: tables.map(tableToCSV).join('\n'), contentType: EXPORT_CONTENT_TYPES.csv, fileName: `${baseName}-${stamp}.csv`, provenance };
+    }
+    case EXPORT_FORMATS.TSV: {
+      const tables = (request.tables || []).filter(Boolean);
+      if (tables.length === 0) throw new Error('TSV export requires at least one table.');
+      return { content: tables.map(tableToTSV).join('\n'), contentType: EXPORT_CONTENT_TYPES.tsv, fileName: `${baseName}-${stamp}.tsv`, provenance };
+    }
+    case EXPORT_FORMATS.SVG: {
+      if (!request.svgMarkup) throw new Error('SVG export requires svgMarkup.');
+      return { content: wrapSVGDocument(request.svgMarkup, provenance), contentType: EXPORT_CONTENT_TYPES.svg, fileName: `${baseName}-${stamp}.svg`, provenance };
+    }
+    case EXPORT_FORMATS.DXF: {
+      const entities = request.dxfEntities || [];
+      const content = buildDXF(entities, { scale: request.dxfScale || 1000 });
+      return { content, contentType: EXPORT_CONTENT_TYPES.dxf, fileName: `${baseName}-${stamp}.dxf`, provenance };
+    }
+    default:
+      throw new Error('Unhandled export format.');
+  }
+}
+
+
+  // =========================================================================
+  // MODULE: AutoCadScripts
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — AutoCAD Script & AutoLISP Generator
+ *
+ * Provides native AutoCAD automation files:
+ *   - AutoLISP (.lsp): Drag-and-drop directly into any open .dwg drawing
+ *     to instantly define and insert 1:1 CAD blocks without opening separate files.
+ *   - AutoCAD Script (.scr): 1-click batch conversion script to convert
+ *     exported DXF sheets into native AutoCAD binary DWG drawings.
+ *   - Windows Batch (.bat): Shell script automating AutoCAD Core Console (accoreconsole.exe)
+ *     for headless DXF -> DWG compilation.
+ */
+
+/**
+ * Generates an AutoLISP (.lsp) routine to insert a furniture asset directly into an active DWG.
+ *
+ * @param {object} asset
+ * @param {object} [options]
+ * @param {string} [options.view='plan'] 'plan', 'front', or 'side'
+ * @returns {string} AutoLISP code
+ */
+function generateAutoLispBlock(asset, options = {}) {
+  const view = options.view || 'plan';
+  const suffix = view === 'front' ? '_FRONT' : view === 'side' ? '_SIDE' : '';
+  const blockName = 'AHH_' + String(asset.id || 'OBJECT').toUpperCase().replace(/[^A-Za-z0-9_]/g, '_') + suffix;
+  const rawBase = view === 'front' ? (asset.frontGeometry || asset.planGeometry)
+                : view === 'side'  ? (asset.sideGeometry  || asset.planGeometry)
+                : asset.planGeometry;
+  const baseEntities = Array.isArray(rawBase) ? rawBase
+                     : Array.isArray(asset?.geometry?.primitives) ? asset.geometry.primitives
+                     : [];
+  const clr = (options.includeClearance && view === 'plan') ? (asset.clearanceGeometry || []) : [];
+  const entities = [...baseEntities, ...(Array.isArray(clr) ? clr : [])];
+
+  const lispLines = [
+    `;; =========================================================================`,
+    `;; Architecture Helping Hand — AutoLISP Block Inserter`,
+    `;; Block: ${blockName} (${view.toUpperCase()} VIEW)`,
+    `;; Real Size: ${asset.dimensions?.widthMm || 1000} x ${asset.dimensions?.depthMm || 1000} mm`,
+    `;; Instructions: Drag & drop this file into any AutoCAD .dwg drawing window.`,
+    `;; =========================================================================`,
+    `(vl-load-com)`,
+    `(defun c:${blockName} ()`,
+    `  (setvar "CMDECHO" 0)`,
+    `  (setvar "EXPERT" 1)`,
+    `  ;; 1. Ensure Standard AIA Layers exist`,
+    `  (command "_.-LAYER" "_M" "A-FURN" "_C" "5" "A-FURN" "")`,
+    `  (command "_.-LAYER" "_M" "A-DOOR" "_C" "2" "A-DOOR" "")`,
+    `  (command "_.-LAYER" "_M" "A-CLEARANCE" "_C" "8" "A-CLEARANCE" "_LT" "DASHED" "A-CLEARANCE" "")`,
+    `  (command "_.-LAYER" "_M" "A-SITE" "_C" "3" "A-SITE" "")`,
+    `  (command "_.-LAYER" "_M" "A-ANNO-TEXT" "_C" "7" "A-ANNO-TEXT" "")`,
+    `  ;; 2. Begin Block Definition`,
+    `  (if (tblsearch "BLOCK" "${blockName}")`,
+    `    (princ (strcat "\\nBlock " "${blockName}" " already exists in this DWG. Inserting..."))`,
+    `    (progn`,
+    `      (entmake '((0 . "BLOCK") (2 . "${blockName}") (70 . 0) (10 0.0 0.0 0.0)))`
+  ];
+
+  // Convert entities to entmake calls
+  for (const e of entities) {
+    if (!e) continue;
+    const lyr = e.layer || 'A-FURN';
+    if (e.type === 'line') {
+      const x1 = (e.x1 * 1000).toFixed(4);
+      const y1 = (e.y1 * 1000).toFixed(4);
+      const x2 = (e.x2 * 1000).toFixed(4);
+      const y2 = (e.y2 * 1000).toFixed(4);
+      lispLines.push(`      (entmake (list '(0 . "LINE") '(8 . "${lyr}") (list 10 ${x1} ${y1} 0.0) (list 11 ${x2} ${y2} 0.0)))`);
+    } else if (e.type === 'circle') {
+      const cx = (e.x * 1000).toFixed(4);
+      const cy = (e.y * 1000).toFixed(4);
+      const r = (e.r * 1000).toFixed(4);
+      lispLines.push(`      (entmake (list '(0 . "CIRCLE") '(8 . "${lyr}") (list 10 ${cx} ${cy} 0.0) '(40 . ${r})))`);
+    } else if (e.type === 'polyline' && Array.isArray(e.points) && e.points.length >= 2) {
+      lispLines.push(`      (entmake (list '(0 . "POLYLINE") '(8 . "${lyr}") '(66 . 1) '(70 . ${e.closed ? 1 : 0})))`);
+      for (const pt of e.points) {
+        const px = (pt[0] * 1000).toFixed(4);
+        const py = (pt[1] * 1000).toFixed(4);
+        lispLines.push(`      (entmake (list '(0 . "VERTEX") '(8 . "${lyr}") (list 10 ${px} ${py} 0.0)))`);
+      }
+      lispLines.push(`      (entmake '((0 . "SEQEND")))`);
+    } else if (e.type === 'rect') {
+      const x = ((e.x || 0) * 1000).toFixed(4);
+      const y = ((e.y || 0) * 1000).toFixed(4);
+      const x2 = (((e.x || 0) + (e.w || 0)) * 1000).toFixed(4);
+      const y2 = (((e.y || 0) + (e.d || 0)) * 1000).toFixed(4);
+      lispLines.push(`      (entmake (list '(0 . "POLYLINE") '(8 . "${lyr}") '(66 . 1) '(70 . 1)))`);
+      lispLines.push(`      (entmake (list '(0 . "VERTEX") '(8 . "${lyr}") (list 10 ${x} ${y} 0.0)))`);
+      lispLines.push(`      (entmake (list '(0 . "VERTEX") '(8 . "${lyr}") (list 10 ${x2} ${y} 0.0)))`);
+      lispLines.push(`      (entmake (list '(0 . "VERTEX") '(8 . "${lyr}") (list 10 ${x2} ${y2} 0.0)))`);
+      lispLines.push(`      (entmake (list '(0 . "VERTEX") '(8 . "${lyr}") (list 10 ${x} ${y2} 0.0)))`);
+      lispLines.push(`      (entmake '((0 . "SEQEND")))`);
+    }
+  }
+
+  lispLines.push(
+    `      (entmake '((0 . "ENDBLK")))`,
+    `      (princ (strcat "\\nBlock " "${blockName}" " created successfully."))`,
+    `    )`,
+    `  )`,
+    `  ;; 3. Insert Block at user-selected point (or 0,0)`,
+    `  (setq insPt (getpoint "\\nSpecify insertion point <0,0,0>: "))`,
+    `  (if (null insPt) (setq insPt '(0.0 0.0 0.0)))`,
+    `  (command "_.-INSERT" "${blockName}" insPt 1.0 1.0 0.0)`,
+    `  (setvar "CMDECHO" 1)`,
+    `  (setvar "EXPERT" 0)`,
+    `  (princ (strcat "\\nInserted " "${blockName}" " in active DWG at 1:1 scale (mm).\\n"))`,
+    `  (princ)`,
+    `)`,
+    `;; Automatically run insertion command on load`,
+    `(c:${blockName})`
+  );
+
+  return lispLines.join('\n') + '\n';
+}
+
+/**
+ * Generates an AutoCAD command script (.scr) to batch-convert DXF files to native DWG drawings.
+ *
+ * @param {string[]} dxfFileNames List of DXF file names to convert
+ * @returns {string} AutoCAD script text
+ */
+function generateAutoCadBatchDwgScript(dxfFileNames = []) {
+  const files = dxfFileNames.length > 0 ? dxfFileNames : ['catalog-palette.dxf'];
+  const lines = [
+    `;; =========================================================================`,
+    `;; Architecture Helping Hand — AutoCAD Batch DXF to DWG Converter Script`,
+    `;; Run in AutoCAD by typing: SCRIPT -> select this file`,
+    `;; =========================================================================`,
+    `FILEDIA 0`,
+    `CMDECHO 0`
+  ];
+
+  for (const f of files) {
+    const baseName = f.replace(/\.dxf$/i, '');
+    lines.push(
+      `DXFIN "${f}"`,
+      `ZOOM EXTENTS`,
+      `SAVEAS 2018 "${baseName}.dwg"`,
+      `CLOSE`
+    );
+  }
+
+  lines.push(
+    `FILEDIA 1`,
+    `CMDECHO 1`,
+    `;; Conversion complete!`
+  );
+
+  return lines.join('\n') + '\n';
+}
+
+/**
+ * Generates a Windows Batch (.bat) file to run AutoCAD Core Console for automated DXF->DWG conversion.
+ */
+function generateWindowsDwgBatchBat() {
+  return [
+    `@echo off`,
+    `echo =====================================================================`,
+    `echo Architecture Helping Hand - Automated DXF to DWG Batch Converter`,
+    `echo =====================================================================`,
+    `echo Checking for AutoCAD Core Console (accoreconsole.exe)...`,
+    ``,
+    `set ACAD_PATH=`,
+    `for /d %%p in ("C:\\Program Files\\Autodesk\\AutoCAD*") do (`,
+    `  if exist "%%p\\accoreconsole.exe" set ACAD_PATH=%%p\\accoreconsole.exe`,
+    `)`,
+    ``,
+    `if "%ACAD_PATH%"=="" (`,
+    `  echo AutoCAD was not found in Program Files.`,
+    `  echo To convert to DWG: Open AutoCAD, type SCRIPT, and run 'convert_to_dwg.scr'.`,
+    `  pause`,
+    `  exit /b`,
+    `)`,
+    ``,
+    `echo Found AutoCAD at: %ACAD_PATH%`,
+    `for %%f in (*.dxf) do (`,
+    `  echo Converting %%f to native DWG...`,
+    `  "%ACAD_PATH%" /i "%%f" /s "convert_to_dwg.scr"`,
+    `)`,
+    `echo =====================================================================`,
+    `echo All DXF files converted to native DWG drawings successfully!`,
+    `echo =====================================================================`,
+    `pause`
+  ].join('\r\n') + '\r\n';
+}
+
+
+  // =========================================================================
+  // MODULE: CadBimAutomation
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — AutoCAD & BIM Workflow Automation Engine
+ *
+ * Comprehensive CAD & BIM automation hub providing:
+ *   1. AIA & ISO 13567 Standard Layer Generator (AutoLISP .lsp & AutoCAD .scr)
+ *   2. Autodesk Tool Palette Generator (.atc XML)
+ *   3. CAD Layer Standardizer & DXF Sanitizer (Purger, Remapper, BYLAYER normalizer)
+ *   4. Autodesk Revit Shared Parameters File Generator (Revit_Shared_Parameters.txt)
+ *   5. Revit / Dynamo Python Automation Batch Instance Placer
+ *   6. BIM Schedules & Specification Takeoffs (CSV & 1:1 DXF Table)
+ */
+
+
+
+/**
+ * Standard AIA National CAD Standard (NCS) / ISO 13567 Layer Catalog.
+ * Each entry defines layer name, standard ACI color, hex preview, linetype, lineweight, and description.
+ */
+const AIA_STANDARD_LAYERS = [
+  { name: 'A-WALL-FULL', colorIndex: 3, colorHex: '#22c55e', linetype: 'CONTINUOUS', lineweightMm: 0.50, description: 'Full-height exterior and interior structural/bearing walls' },
+  { name: 'A-WALL-PRTN', colorIndex: 2, colorHex: '#eab308', linetype: 'CONTINUOUS', lineweightMm: 0.35, description: 'Partial-height interior partitions and demising screens' },
+  { name: 'A-DOOR',      colorIndex: 2, colorHex: '#eab308', linetype: 'CONTINUOUS', lineweightMm: 0.25, description: 'Doors, frames, door swings, and hardware' },
+  { name: 'A-GLAZ',      colorIndex: 4, colorHex: '#06b6d4', linetype: 'CONTINUOUS', lineweightMm: 0.25, description: 'Windows, glazed storefronts, curtain walls, and glass' },
+  { name: 'A-FURN',      colorIndex: 5, colorHex: '#3b82f6', linetype: 'CONTINUOUS', lineweightMm: 0.25, description: 'Furniture, casework, workstations, and movable fixtures' },
+  { name: 'A-FLOR',      colorIndex: 1, colorHex: '#ef4444', linetype: 'CONTINUOUS', lineweightMm: 0.25, description: 'Floor finishes, stairs, ramps, thresholds, and level changes' },
+  { name: 'A-CLNG',      colorIndex: 8, colorHex: '#64748b', linetype: 'CONTINUOUS', lineweightMm: 0.18, description: 'Reflected ceiling plans, acoustic grid, ceiling heights' },
+  { name: 'A-ROOF',      colorIndex: 6, colorHex: '#d946ef', linetype: 'CONTINUOUS', lineweightMm: 0.35, description: 'Roof outline, overhangs, eaves, parapets, and louvers' },
+  { name: 'A-SITE',      colorIndex: 3, colorHex: '#22c55e', linetype: 'CONTINUOUS', lineweightMm: 0.50, description: 'Site boundary, property lines, curbs, walks, paving' },
+  { name: 'A-VEGE',      colorIndex: 3, colorHex: '#16a34a', linetype: 'CONTINUOUS', lineweightMm: 0.25, description: 'Trees, hedges, planting beds, landscape elements' },
+  { name: 'A-CLEARANCE', colorIndex: 8, colorHex: '#94a3b8', linetype: 'DASHED',     lineweightMm: 0.18, description: 'ADA wheelchair turning clearances, door rollouts, egress' },
+  { name: 'A-ANNO-DIMS', colorIndex: 7, colorHex: '#f8fafc', linetype: 'CONTINUOUS', lineweightMm: 0.25, description: 'Dimension lines, tick marks, and dimension text' },
+  { name: 'A-ANNO-TEXT', colorIndex: 7, colorHex: '#f8fafc', linetype: 'CONTINUOUS', lineweightMm: 0.25, description: 'Room tags, drawing titles, general notes, callouts' },
+  { name: 'A-ANNO-TABL', colorIndex: 7, colorHex: '#f8fafc', linetype: 'CONTINUOUS', lineweightMm: 0.35, description: 'Schedules, legend grids, title block sheet tables' },
+  { name: 'A-ANNO-SYMB', colorIndex: 1, colorHex: '#ef4444', linetype: 'CONTINUOUS', lineweightMm: 0.25, description: 'Section marks, elevation tags, grid bubbles, detail keys' },
+  { name: 'M-HVAC',      colorIndex: 4, colorHex: '#06b6d4', linetype: 'CONTINUOUS', lineweightMm: 0.35, description: 'HVAC ducts, diffusers, returns, and mechanical units' },
+  { name: 'P-FIXT',      colorIndex: 5, colorHex: '#3b82f6', linetype: 'CONTINUOUS', lineweightMm: 0.35, description: 'Plumbing fixtures, toilets, sinks, floor drains, piping' },
+  { name: 'E-LITE',      colorIndex: 2, colorHex: '#eab308', linetype: 'CONTINUOUS', lineweightMm: 0.25, description: 'Lighting fixtures, switches, daylight sensors' },
+  { name: 'E-POWR',      colorIndex: 1, colorHex: '#ef4444', linetype: 'CONTINUOUS', lineweightMm: 0.25, description: 'Power receptacles, panels, data outlets, floor boxes' },
+  { name: 'F-PROT',      colorIndex: 1, colorHex: '#ef4444', linetype: 'CONTINUOUS', lineweightMm: 0.35, description: 'Fire alarm, sprinkler heads, extinguishers, hose cabinets' },
+  { name: 'S-COLS',      colorIndex: 6, colorHex: '#c026d3', linetype: 'CONTINUOUS', lineweightMm: 0.50, description: 'Structural concrete/steel columns and pilasters' },
+  { name: 'S-BEAM',      colorIndex: 6, colorHex: '#c026d3', linetype: 'HIDDEN',     lineweightMm: 0.35, description: 'Structural beams and overhead transfer framing' },
+  { name: 'C-PROP',      colorIndex: 1, colorHex: '#ef4444', linetype: 'PHANTOM',    lineweightMm: 0.70, description: 'Civil boundary and legal property lines' },
+  { name: 'C-ROAD',      colorIndex: 9, colorHex: '#71717a', linetype: 'CONTINUOUS', lineweightMm: 0.35, description: 'Roadways, asphalt centerlines, vehicular access' }
+];
+
+/**
+ * Common non-standard CAD layer name dictionary mapped to official AIA NCS layers.
+ */
+const CAD_LAYER_REMAP_DICTIONARY = {
+  '0': 'A-FURN',
+  'default': 'A-FURN',
+  'defpoints': 'A-ANNO-TEXT',
+  'layer1': 'A-FURN',
+  'layer 1': 'A-FURN',
+  'temp': 'A-ANNO-TEXT',
+  'scratch': 'A-ANNO-TEXT',
+  // Walls
+  'wall': 'A-WALL-FULL',
+  'walls': 'A-WALL-FULL',
+  'wall_ext': 'A-WALL-FULL',
+  'wall_int': 'A-WALL-FULL',
+  'ext_wall': 'A-WALL-FULL',
+  'int_wall': 'A-WALL-FULL',
+  'mauer': 'A-WALL-FULL',
+  'mur': 'A-WALL-FULL',
+  'partition': 'A-WALL-PRTN',
+  'partitions': 'A-WALL-PRTN',
+  'part': 'A-WALL-PRTN',
+  // Openings
+  'door': 'A-DOOR',
+  'doors': 'A-DOOR',
+  'tuer': 'A-DOOR',
+  'porte': 'A-DOOR',
+  'puerta': 'A-DOOR',
+  'window': 'A-GLAZ',
+  'windows': 'A-GLAZ',
+  'glazing': 'A-GLAZ',
+  'glass': 'A-GLAZ',
+  'fenster': 'A-GLAZ',
+  'fenetre': 'A-GLAZ',
+  'curtain_wall': 'A-GLAZ',
+  // Furniture
+  'furniture': 'A-FURN',
+  'furn': 'A-FURN',
+  'furnitures': 'A-FURN',
+  'meubles': 'A-FURN',
+  'mobiliar': 'A-FURN',
+  'fixtures': 'A-FURN',
+  'desks': 'A-FURN',
+  'chairs': 'A-FURN',
+  // Floors / Ceilings / Roofs
+  'floor': 'A-FLOR',
+  'floors': 'A-FLOR',
+  'finish': 'A-FLOR',
+  'stairs': 'A-FLOR',
+  'steps': 'A-FLOR',
+  'ceiling': 'A-CLNG',
+  'ceilings': 'A-CLNG',
+  'rcp': 'A-CLNG',
+  'roof': 'A-ROOF',
+  'roofs': 'A-ROOF',
+  'overhang': 'A-ROOF',
+  // Annotations
+  'dim': 'A-ANNO-DIMS',
+  'dims': 'A-ANNO-DIMS',
+  'dimension': 'A-ANNO-DIMS',
+  'dimensions': 'A-ANNO-DIMS',
+  'cotation': 'A-ANNO-DIMS',
+  'text': 'A-ANNO-TEXT',
+  'txt': 'A-ANNO-TEXT',
+  'notes': 'A-ANNO-TEXT',
+  'labels': 'A-ANNO-TEXT',
+  'table': 'A-ANNO-TABL',
+  'schedule': 'A-ANNO-TABL',
+  // Clearances & Site
+  'clearance': 'A-CLEARANCE',
+  'clearances': 'A-CLEARANCE',
+  'ada': 'A-CLEARANCE',
+  'accessible': 'A-CLEARANCE',
+  'turning': 'A-CLEARANCE',
+  'site': 'A-SITE',
+  'landscape': 'A-SITE',
+  'trees': 'A-VEGE',
+  'planting': 'A-VEGE',
+  'plants': 'A-VEGE'
+};
+
+/**
+ * Generates an AutoLISP (.lsp) command to create all 24 AIA standard layers in any active DWG.
+ *
+ * @param {object} [options]
+ * @param {string} [options.commandName='AHH_SETUP_LAYERS'] Command name
+ * @param {number} [options.units=4] $INSUNITS: 4=Millimeters, 1=Inches, 6=Meters
+ * @returns {string} Executable AutoLISP code
+ */
+function generateAiaLayersAutoLisp(options = {}) {
+  const cmd = options.commandName || 'AHH_SETUP_LAYERS';
+  const units = Number.isFinite(options.units) ? options.units : 4;
+  const unitName = units === 4 ? 'Millimeters (1:1)' : units === 1 ? 'Inches' : 'Meters';
+
+  const lines = [
+    `;; =========================================================================`,
+    `;; Architecture Helping Hand — AIA / ISO 13567 Standard Layer Generator`,
+    `;; Command: ${cmd}`,
+    `;; Standard: AIA National CAD Standard (NCS) / ISO 13567`,
+    `;; Units: ${unitName}`,
+    `;; Drag & drop this file into any AutoCAD .dwg window or type (load "...")`,
+    `;; =========================================================================`,
+    `(vl-load-com)`,
+    `(defun c:${cmd} (/ doc ltypes ltName)`,
+    `  (setvar "CMDECHO" 0)`,
+    `  (setvar "EXPERT" 1)`,
+    `  (setq doc (vla-get-ActiveDocument (vlax-get-acad-object)))`,
+    `  (setq ltypes (vla-get-Linetypes doc))`,
+    ``,
+    `  ;; Helper to load linetype safely`,
+    `  (defun load-lt (ltName)`,
+    `    (if (not (tblsearch "LTYPE" ltName))`,
+    `      (vl-catch-all-apply 'vla-load (list ltypes ltName "acad.lin"))`,
+    `    )`,
+    `  )`,
+    `  (load-lt "DASHED")`,
+    `  (load-lt "HIDDEN")`,
+    `  (load-lt "CENTER")`,
+    `  (load-lt "PHANTOM")`,
+    ``,
+    `  ;; Ensure Drawing System Units ($INSUNITS)`,
+    `  (setvar "INSUNITS" ${units})`,
+    `  (setvar "LUNITS" 2)`,
+    `  (setvar "LUPREC" 2)`,
+    `  (setvar "CELWEIGHT" -1)`, // ByLayer lineweight
+    `  (setvar "CECOLOR" "BYLAYER")`,
+    `  (setvar "CELTYPE" "BYLAYER")`,
+    ``,
+    `  ;; Define 24 Standard AIA CAD Layers`
+  ];
+
+  for (const lyr of AIA_STANDARD_LAYERS) {
+    const lwHundredths = Math.round(lyr.lineweightMm * 100);
+    lines.push(
+      `  ;; ${lyr.description}`,
+      `  (command "_.-LAYER" "_M" "${lyr.name}" "_C" "${lyr.colorIndex}" "${lyr.name}" "_LT" "${lyr.linetype}" "${lyr.name}" "_LW" "${lwHundredths}" "${lyr.name}" "")`
+    );
+  }
+
+  lines.push(
+    ``,
+    `  ;; Set active drawing layer to A-WALL-FULL`,
+    `  (setvar "CLAYER" "A-WALL-FULL")`,
+    `  (setvar "CMDECHO" 1)`,
+    `  (setvar "EXPERT" 0)`,
+    `  (princ "\\n========================================================")`,
+    `  (princ "\\n✅ Architecture Helping Hand: 24 AIA CAD Layers Created!")`,
+    `  (princ "\\nDrawing Units set to: ${unitName}")`,
+    `  (princ "\\nActive Layer set to: A-WALL-FULL")`,
+    `  (princ "\\n========================================================\\n")`,
+    `  (princ)`,
+    `)`,
+    `;; Automatically run setup when loaded`,
+    `(c:${cmd})`
+  );
+
+  return lines.join('\n') + '\n';
+}
+
+/**
+ * Generates an AutoCAD Script (.scr) to set up all AIA standard layers.
+ */
+function generateAiaLayersScript() {
+  const lines = [
+    `;; Architecture Helping Hand — AIA Layer Setup Script`,
+    `CMDECHO 0`,
+    `EXPERT 1`,
+    `-LINETYPE LOAD DASHED acad.lin `,
+    `-LINETYPE LOAD HIDDEN acad.lin `,
+    `-LINETYPE LOAD PHANTOM acad.lin `,
+    `-LINETYPE LOAD CENTER acad.lin `
+  ];
+
+  for (const lyr of AIA_STANDARD_LAYERS) {
+    const lwHundredths = Math.round(lyr.lineweightMm * 100);
+    lines.push(
+      `-LAYER MAKE ${lyr.name} COLOR ${lyr.colorIndex} ${lyr.name} LTYPE ${lyr.linetype} ${lyr.name} LWEIGHT ${lwHundredths} ${lyr.name} `
+    );
+  }
+
+  lines.push(
+    `CLAYER A-WALL-FULL`,
+    `INSUNITS 4`,
+    `CMDECHO 1`,
+    `EXPERT 0`,
+    `REGEN`
+  );
+
+  return lines.join('\n') + '\n';
+}
+
+/**
+ * Generates an official Autodesk Tool Palette XML catalog (.atc file).
+ * Draftsmen can drag this palette directly into AutoCAD's Tool Palette window (Ctrl+3).
+ *
+ * @param {string} paletteName Display name of the tool palette
+ * @param {string} categoryKey Category slug
+ * @param {Array<object>} assets Furniture / fixture library assets
+ * @returns {string} XML content for .atc file
+ */
+function generateAutoCadToolPaletteAtc(paletteName, categoryKey, assets = []) {
+  const pName = paletteName || 'AHH Architectural Palette';
+  const guid = 'AHH-' + (categoryKey || 'CAT').toUpperCase() + '-' + Date.now().toString(36).toUpperCase();
+
+  const toolElements = assets.map((a, idx) => {
+    const id = String(a.id || 'ITEM_' + idx).toUpperCase().replace(/[^A-Za-z0-9_]/g, '_');
+    const name = (a.name || id).replace(/[<>&'"]/g, '');
+    const desc = (a.description || `${a.dimensions?.widthMm || 1000}x${a.dimensions?.depthMm || 1000}mm CAD Block`).replace(/[<>&'"]/g, '');
+    const layer = (a.cadStandard?.layer || a.planGeometry?.[0]?.layer || 'A-FURN');
+    const blockFileName = `${a.id || id}.dxf`;
+
+    return `    <Tool>
+      <ID>{${guid}-${idx}}</ID>
+      <Name>${name}</Name>
+      <Description>${desc}</Description>
+      <ToolTip>${name} (${a.dimensions?.widthMm || 1000}x${a.dimensions?.depthMm || 1000}mm)</ToolTip>
+      <Properties>
+        <Property name="SourceFile">${blockFileName}</Property>
+        <Property name="BlockName">AHH_${id}</Property>
+        <Property name="Layer">${layer}</Property>
+        <Property name="Color">256</Property>
+        <Property name="Scale">1.0</Property>
+        <Property name="Explode">0</Property>
+      </Properties>
+      <Command>_.-INSERT "AHH_${id}" \\ 1.0 1.0 0.0</Command>
+    </Tool>`;
+  }).join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!-- Architecture Helping Hand - AutoCAD Native Tool Palette Catalog -->
+<!-- Autodesk ToolPalette Schema compliant for AutoCAD 2018-2026+ -->
+<Palette xmlns="http://www.autodesk.com/shapes/toolpalette">
+  <Version>2.0</Version>
+  <ID>{${guid}}</ID>
+  <Name>${pName.replace(/[<>&'"]/g, '')}</Name>
+  <Description>Architectural blocks library calibrated at 1:1 millimeters for AutoCAD.</Description>
+  <CreatedBy>Architecture Helping Hand (AHH)</CreatedBy>
+  <Tools>
+${toolElements}
+  </Tools>
+</Palette>
+`;
+}
+
+/**
+ * Sanitizes and standardizes messy third-party DXF text:
+ *   1. Remaps arbitrary/consultant layer names to standard AIA NCS layers
+ *   2. Purges zero-length degenerate lines (Δx=0, Δy=0)
+ *   3. Purges exact duplicate collinear lines
+ *   4. Normalizes entity colors to 256 (BYLAYER)
+ *
+ * @param {string} rawDxfText ASCII DXF content
+ * @param {object} [options]
+ * @param {boolean} [options.remapLayers=true]
+ * @param {boolean} [options.purgeZeroLength=true]
+ * @param {boolean} [options.purgeDuplicates=true]
+ * @param {boolean} [options.normalizeColorByLayer=true]
+ * @param {string} [options.fallbackLayer='A-FURN']
+ * @returns {object} { sanitizedDxf, stats }
+ */
+function sanitizeAndStandardizeDxf(rawDxfText, options = {}) {
+  const remap = options.remapLayers !== false;
+  const purgeZero = options.purgeZeroLength !== false;
+  const purgeDups = options.purgeDuplicates !== false;
+  const byLayerColor = options.normalizeColorByLayer !== false;
+  const fallback = options.fallbackLayer || 'A-FURN';
+
+  if (typeof rawDxfText !== 'string' || !rawDxfText.includes('ENTITIES')) {
+    return {
+      sanitizedDxf: rawDxfText,
+      stats: { totalEntities: 0, purgedZeroLength: 0, purgedDuplicates: 0, remappedLayers: 0, originalLayers: [], standardizedLayers: [] }
+    };
+  }
+
+  const lines = rawDxfText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const outLines = [];
+  const seenCollinearLines = new Set();
+  const originalLayerSet = new Set();
+  const standardizedLayerSet = new Set();
+
+  let inEntities = false;
+  let purgedZeroCount = 0;
+  let purgedDupCount = 0;
+  let remappedCount = 0;
+  let entityCount = 0;
+
+  let i = 0;
+  while (i < lines.length) {
+    const code = lines[i]?.trim();
+    const val = lines[i + 1]?.trim();
+
+    if (code === '2' && val === 'ENTITIES') {
+      inEntities = true;
+      outLines.push(lines[i], lines[i + 1]);
+      i += 2;
+      continue;
+    }
+    if (inEntities && code === '0' && val === 'ENDSEC') {
+      inEntities = false;
+      outLines.push(lines[i], lines[i + 1]);
+      i += 2;
+      continue;
+    }
+
+    if (!inEntities) {
+      outLines.push(lines[i]);
+      if (i + 1 < lines.length) outLines.push(lines[i + 1]);
+      i += 2;
+      continue;
+    }
+
+    // Inside ENTITIES section: inspect each entity record
+    if (code === '0') {
+      entityCount++;
+      const entityType = val;
+      const entityBlock = [lines[i], lines[i + 1]];
+      i += 2;
+
+      let layerName = '';
+      let x1 = null, y1 = null, x2 = null, y2 = null;
+      let hasColorCode = false;
+
+      // Scan entity fields until next entity code 0
+      while (i < lines.length && lines[i]?.trim() !== '0') {
+        const eCode = lines[i]?.trim();
+        const eVal = lines[i + 1]?.trim();
+
+        if (eCode === '8') {
+          layerName = eVal;
+          originalLayerSet.add(eVal);
+        } else if (eCode === '10') {
+          x1 = Number(eVal);
+        } else if (eCode === '20') {
+          y1 = Number(eVal);
+        } else if (eCode === '11') {
+          x2 = Number(eVal);
+        } else if (eCode === '21') {
+          y2 = Number(eVal);
+        } else if (eCode === '62') {
+          hasColorCode = true;
+        }
+
+        entityBlock.push(lines[i], lines[i + 1]);
+        i += 2;
+      }
+
+      // Check zero length line purge
+      if (purgeZero && entityType === 'LINE' && x1 !== null && y1 !== null && x2 !== null && y2 !== null) {
+        const distSq = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+        if (distSq < 1e-6) {
+          purgedZeroCount++;
+          continue; // Skip outputting degenerate zero-length line
+        }
+      }
+
+      // Check duplicate collinear line purge
+      if (purgeDups && entityType === 'LINE' && x1 !== null && y1 !== null && x2 !== null && y2 !== null) {
+        // Canonical coordinate order
+        const [cx1, cy1, cx2, cy2] = (x1 < x2 || (x1 === x2 && y1 < y2))
+          ? [x1.toFixed(3), y1.toFixed(3), x2.toFixed(3), y2.toFixed(3)]
+          : [x2.toFixed(3), y2.toFixed(3), x1.toFixed(3), y1.toFixed(3)];
+        const key = `${cx1},${cy1}-${cx2},${cy2}`;
+        if (seenCollinearLines.has(key)) {
+          purgedDupCount++;
+          continue; // Skip duplicate entity
+        }
+        seenCollinearLines.add(key);
+      }
+
+      // Remap Layer
+      let targetLayer = layerName;
+      if (remap && layerName) {
+        const lower = layerName.toLowerCase().trim();
+        if (CAD_LAYER_REMAP_DICTIONARY[lower]) {
+          targetLayer = CAD_LAYER_REMAP_DICTIONARY[lower];
+          remappedCount++;
+        } else if (!AIA_STANDARD_LAYERS.some(l => l.name === layerName)) {
+          targetLayer = fallback;
+          remappedCount++;
+        }
+      }
+      standardizedLayerSet.add(targetLayer || fallback);
+
+      // Reconstruct entity block with standardized layer & color
+      for (let j = 0; j < entityBlock.length; j += 2) {
+        const fCode = entityBlock[j]?.trim();
+        const fVal = entityBlock[j + 1]?.trim();
+
+        if (fCode === '8' && targetLayer) {
+          outLines.push('  8', targetLayer);
+        } else if (fCode === '62' && byLayerColor) {
+          outLines.push(' 62', '256'); // 256 = BYLAYER
+        } else {
+          outLines.push(entityBlock[j], entityBlock[j + 1]);
+        }
+      }
+      continue;
+    }
+
+    outLines.push(lines[i]);
+    if (i + 1 < lines.length) outLines.push(lines[i + 1]);
+    i += 2;
+  }
+
+  return {
+    sanitizedDxf: outLines.join('\n'),
+    stats: {
+      totalEntities: entityCount,
+      purgedZeroLength: purgedZeroCount,
+      purgedDuplicates: purgedDupCount,
+      remappedLayers: remappedCount,
+      originalLayers: Array.from(originalLayerSet),
+      standardizedLayers: Array.from(standardizedLayerSet)
+    }
+  };
+}
+
+/**
+ * Generates an official Autodesk Revit Shared Parameters File (Revit_Shared_Parameters.txt).
+ * Imports custom architectural, code compliance, and COBie parameters into Revit families and schedules.
+ */
+function generateRevitSharedParametersFile() {
+  const header = [
+    `# This is a Revit shared parameter file.`,
+    `# Do not edit manually.`,
+    `*META\tVERSION\tMINVERSION`,
+    `META\t2\t1`,
+    `*GROUP\tID\tNAME`,
+    `GROUP\t1\tAHH - Dimensions & Clearances`,
+    `GROUP\t2\tAHH - Performance & Building Codes`,
+    `GROUP\t3\tAHH - Specifications & COBie`,
+    `GROUP\t4\tAHH - Identity & Classification`,
+    `*PARAM\tGUID\tNAME\tDATATYPE\tDATACATEGORY\tGROUP\tVISIBLE\tDESCRIPTION\tUSERMODIFIABLE`
+  ];
+
+  const parameters = [
+    // Group 1: Dimensions & Clearances
+    `PARAM\t01a11111-0001-4000-8000-000000000001\tAHH_ClearanceWidth\tLENGTH\t\t1\t1\tMandatory ADA or accessibility clearance width in millimeters\t1`,
+    `PARAM\t01a11111-0001-4000-8000-000000000002\tAHH_ClearanceDepth\tLENGTH\t\t1\t1\tMandatory ADA or accessibility clearance depth in millimeters\t1`,
+    `PARAM\t01a11111-0001-4000-8000-000000000003\tAHH_MountingHeight\tLENGTH\t\t1\t1\tFinished floor mounting rough-in height\t1`,
+    `PARAM\t01a11111-0001-4000-8000-000000000004\tAHH_WheelchairTurningClearance\tYESNO\t\t1\t1\tComplies with 1500mm (60-inch) wheelchair turning circle\t1`,
+    // Group 2: Performance & Codes
+    `PARAM\t02b22222-0002-4000-8000-000000000001\tAHH_FireRatingHours\tNUMBER\t\t2\t1\tFire resistance rating in hours (0.33, 0.75, 1.0, 2.0)\t1`,
+    `PARAM\t02b22222-0002-4000-8000-000000000002\tAHH_AcousticSTC\tINTEGER\t\t2\t1\tSound Transmission Class acoustic rating (STC)\t1`,
+    `PARAM\t02b22222-0002-4000-8000-000000000003\tAHH_EgressClearWidthMm\tLENGTH\t\t2\t1\tIBC compliant clear unobstructed egress passage width\t1`,
+    `PARAM\t02b22222-0002-4000-8000-000000000004\tAHH_OccupancyLoadFactor\tNUMBER\t\t2\t1\tOccupant load factor (m2 per person) for egress calculations\t1`,
+    // Group 3: Specifications & COBie
+    `PARAM\t03c33333-0003-4000-8000-000000000001\tCOBie_Component_Name\tTEXT\t\t3\t1\tCOBie unique component asset identifier\t1`,
+    `PARAM\t03c33333-0003-4000-8000-000000000002\tCOBie_Component_Space\tTEXT\t\t3\t1\tCOBie spatial room reference tag\t1`,
+    `PARAM\t03c33333-0003-4000-8000-000000000003\tCOBie_Type_Manufacturer\tTEXT\t\t3\t1\tProduct manufacturer or fabricator\t1`,
+    `PARAM\t03c33333-0003-4000-8000-000000000004\tCOBie_Type_ModelNumber\tTEXT\t\t3\t1\tManufacturer model or catalog number\t1`,
+    `PARAM\t03c33333-0003-4000-8000-000000000005\tCOBie_Type_WarrantyDuration\tTEXT\t\t3\t1\tWarranty duration period in years\t1`,
+    // Group 4: Identity & Classification
+    `PARAM\t04d44444-0004-4000-8000-000000000001\tAHH_OmniClassNumber\tTEXT\t\t4\t1\tOmniClass Table 23 Product Classification Number\t1`,
+    `PARAM\t04d44444-0004-4000-8000-000000000002\tAHH_OmniClassTitle\tTEXT\t\t4\t1\tOmniClass Table 23 Classification Title\t1`,
+    `PARAM\t04d44444-0004-4000-8000-000000000003\tAHH_UniFormatCode\tTEXT\t\t4\t1\tUniFormat II Element Classification Code\t1`
+  ];
+
+  return header.concat(parameters).join('\n') + '\n';
+}
+
+/**
+ * Generates an automated Dynamo Python Script to batch place Family Instances in Autodesk Revit.
+ */
+function generateDynamoPythonBatchPlacer() {
+  return [
+    `# =========================================================================`,
+    `# Architecture Helping Hand — Dynamo Python Batch Instance Placer`,
+    `# Autodesk Revit API: Autodesk.Revit.DB`,
+    `# Usage: Paste into a Dynamo "Python Script" node.`,
+    `# Inputs:`,
+    `#   IN[0]: List of coordinate points [[x1, y1, z1], [x2, y2, z2], ...]`,
+    `#   IN[1]: Family Name string (e.g. "AHH_Executive_Desk")`,
+    `#   IN[2]: Target Level element from active project`,
+    `# =========================================================================`,
+    `import clr`,
+    `clr.AddReference('RevitServices')`,
+    `from RevitServices.Persistence import DocumentManager`,
+    `from RevitServices.Transactions import TransactionManager`,
+    ``,
+    `clr.AddReference('RevitAPI')`,
+    `import Autodesk`,
+    `from Autodesk.Revit.DB import *`,
+    `from Autodesk.Revit.DB.Structure import StructuralType`,
+    ``,
+    `doc = DocumentManager.Instance.CurrentDBDocument`,
+    ``,
+    `points_in = IN[0] if IN[0] else [[0, 0, 0]]`,
+    `family_name = str(IN[1]) if IN[1] else "AHH_Desk"`,
+    `target_level = UnwrapElement(IN[2]) if IN[2] else None`,
+    ``,
+    `# 1. Find matching FamilySymbol in project`,
+    `collector = FilteredElementCollector(doc).OfClass(FamilySymbol)`,
+    `matched_symbol = None`,
+    `for sym in collector:`,
+    `    if sym.FamilyName == family_name or sym.Name == family_name:`,
+    `        matched_symbol = sym`,
+    `        break`,
+    ``,
+    `output_instances = []`,
+    `if matched_symbol:`,
+    `    TransactionManager.Instance.EnsureInTransaction(doc)`,
+    `    # Activate symbol if unplaced`,
+    `    if not matched_symbol.IsActive:`,
+    `        matched_symbol.Activate()`,
+    `        doc.Regenerate()`,
+    ``,
+    `    # If no level provided, pick first active floor level`,
+    `    if not target_level:`,
+    `        target_level = FilteredElementCollector(doc).OfClass(Level).FirstElement()`,
+    ``,
+    `    # 2. Batch place instances at coordinates`,
+    `    for pt in points_in:`,
+    `        # Convert millimeters to internal Revit decimal feet`,
+    `        x_ft = float(pt[0]) / 304.8`,
+    `        y_ft = float(pt[1]) / 304.8`,
+    `        z_ft = float(pt[2]) / 304.8 if len(pt) > 2 else 0.0`,
+    `        xyz = XYZ(x_ft, y_ft, z_ft)`,
+    `        inst = doc.Create.NewFamilyInstance(xyz, matched_symbol, target_level, StructuralType.NonStructural)`,
+    `        output_instances.append(inst)`,
+    ``,
+    `    TransactionManager.Instance.TransactionTaskDone()`,
+    `    OUT = f"Success: Placed {len(output_instances)} instances of {family_name}"`,
+    `else:`,
+    `    OUT = f"Error: FamilySymbol '{family_name}' not found in active Revit project. Please load family first."`
+  ].join('\n') + '\n';
+}
+
+/**
+ * Generates standardized BIM Schedules & Specification Takeoffs.
+ * Produces both RFC 4180 CSV (for Revit/Excel) and 1:1 DXF Table (for AutoCAD Paper Space).
+ *
+ * @param {'doors'|'rooms'|'ffe'} type Schedule typology
+ * @param {Array<object>} [customRows] Optional custom row items
+ * @returns {object} { csv, dxfTable, columns, rows }
+ */
+function generateBimSchedule(type = 'doors', customRows = null) {
+  let columns = [];
+  let rows = [];
+  let title = '';
+
+  if (type === 'doors') {
+    title = 'ARCHITECTURAL DOOR SCHEDULE';
+    columns = ['Mark', 'Location', 'Type', 'Width (mm)', 'Height (mm)', 'Thick (mm)', 'Fire Rating', 'Acoustic (STC)', 'Frame', 'Hardware'];
+    rows = customRows || [
+      ['D-101', 'Entry Vestibule', 'Glazed Aluminum Double', '1800', '2150', '50', 'Non-Rated', 'STC 32', 'Thermal Aluminum', 'Panic Hardware / Closer'],
+      ['D-102', 'Corridor Egress', 'Solid Core Flush Wood', '1000', '2100', '45', 'FD30 (30 min)', 'STC 35', 'Hollow Metal', 'Mortise Lever / Closer'],
+      ['D-103', 'Stairway Enclosure', 'Insulated Steel Door', '1000', '2100', '50', 'FD90 (90 min)', 'STC 40', 'Welded Steel 16ga', 'Fire Exit Bar / Auto-Close'],
+      ['D-104', 'Conference Room', 'Acoustic Frameless Glass', '950', '2400', '12', 'Non-Rated', 'STC 38', 'Concealed Track', 'Stainless Pull Handle'],
+      ['D-105', 'ADA Restroom', 'Solid Flush Wood', '950', '2100', '45', 'Non-Rated', 'STC 30', 'Knock-Down Steel', 'Barrier-Free Privacy Lever'],
+      ['D-106', 'Electrical Room', 'Louvered Hollow Metal', '900', '2100', '45', 'FD60 (60 min)', 'STC 28', 'Welded Steel 14ga', 'Storeroom Lockset']
+    ];
+  } else if (type === 'rooms') {
+    title = 'ROOM FINISH & OCCUPANCY SCHEDULE';
+    columns = ['Room No.', 'Room Name', 'Area (m²)', 'Occupancy Factor', 'Floor Finish', 'Baseboard', 'Wall Finish', 'Ceiling Finish', 'Height (m)'];
+    rows = customRows || [
+      ['101', 'Reception Lobby', '48.5', '1.4 m²/person (Assembly)', 'Polished Terrazzo', 'Recessed Metal', 'Acoustic Wood Paneling', 'Painted Gypsum Board', '3.60'],
+      ['102', 'Executive Boardroom', '32.0', '1.9 m²/person (Business)', 'Commercial Carpet Tile', '100mm Hardwood', 'Type II Vinyl / Acoustic Felt', 'Suspended Wood Slat Ceiling', '3.20'],
+      ['103', 'Open Workspace', '120.0', '4.6 m²/person (Office)', 'Low-VOC Carpet Plank', 'Rubber Base 100mm', 'Eggshell Low-VOC Paint', 'Acoustic Mineral Tile (600x600)', '3.00'],
+      ['104', 'ADA Restroom', '7.5', 'Single Occupant', 'Non-Slip Porcelain Tile', 'Matching Tile Base', 'Glazed Ceramic Tile to 2.1m', 'Moisture-Resistant Gypsum', '2.70'],
+      ['105', 'Breakroom & Pantry', '22.0', '1.9 m²/person', 'Luxury Vinyl Tile (LVT)', 'Porcelain Base', 'Scrubbable Semi-Gloss Paint', 'Washable Lay-in Tile', '2.85']
+    ];
+  } else {
+    // FF&E Schedule
+    title = 'FURNITURE, FIXTURES & EQUIPMENT (FF&E) SCHEDULE';
+    columns = ['Tag', 'Description', 'Category', 'Width (mm)', 'Depth (mm)', 'Height (mm)', 'Mounting', 'AIA Layer', 'ADA Compliant'];
+    rows = customRows || [
+      ['DSK-01', 'Executive L-Desk & Credenza', 'Desks', '2200', '1800', '750', 'Freestanding', 'A-FURN', 'Yes (Knee clearance >685mm)'],
+      ['CHR-01', 'Ergonomic Task Chair (5-Star)', 'Seating', '680', '680', '1050', 'Freestanding', 'A-FURN', 'Yes'],
+      ['TBL-01', 'Boardroom Conference Table (10p)', 'Tables', '3200', '1200', '750', 'Freestanding / Floor Core', 'A-FURN', 'Yes (Wheelchair accessible head)'],
+      ['SAN-01', 'Wall-Hung Accessible Water Closet', 'Plumbing', '400', '700', '450', 'Wall Carrier Mounted', 'P-FIXT', 'Yes (Seat height 430-480mm)'],
+      ['SAN-02', 'ADA Wheelchair Lavatory & Trap Wrap', 'Plumbing', '550', '500', '860', 'Wall Hung / Concealed Arms', 'P-FIXT', 'Yes (Knee clearance compliant)'],
+      ['REC-01', 'Curved Modular Reception Counter', 'Casework', '2400', '900', '1050', 'Floor Anchored', 'A-FURN', 'Yes (Low transaction counter 860mm)']
+    ];
+  }
+
+  // 1. Build RFC 4180 CSV
+  const csvLines = [
+    `# ${title}`,
+    columns.map(c => `"${c.replace(/"/g, '""')}"`).join(',')
+  ];
+  for (const r of rows) {
+    csvLines.push(r.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(','));
+  }
+  const csv = csvLines.join('\r\n') + '\r\n';
+
+  // 2. Build 1:1 DXF Architectural Table (A-ANNO-TABL and A-ANNO-TEXT)
+  const cellHeightM = 0.010; // 10mm text cell height in drawing units (meters)
+  const colWidthsM = columns.map(c => Math.max(0.035, (c.length * 0.0025) + 0.010));
+  const totalWidthM = colWidthsM.reduce((sum, w) => sum + w, 0);
+  const totalHeightM = (rows.length + 2) * cellHeightM; // Header + Columns + Rows
+
+  const entities = [];
+  const line = (x1, y1, x2, y2, lyr = 'A-ANNO-TABL') => entities.push({ type: 'line', x1, y1, x2, y2, layer: lyr });
+  const text = (x, y, content, h = 0.003, lyr = 'A-ANNO-TEXT') => entities.push({ type: 'text', x, y, text: content, height: h, layer: lyr });
+
+  // Outer border
+  line(0, 0, totalWidthM, 0);
+  line(totalWidthM, 0, totalWidthM, -totalHeightM);
+  line(totalWidthM, -totalHeightM, 0, -totalHeightM);
+  line(0, -totalHeightM, 0, 0);
+
+  // Title Box
+  text(0.005, -cellHeightM * 0.65, title, 0.004, 'A-ANNO-TEXT');
+  line(0, -cellHeightM, totalWidthM, -cellHeightM);
+
+  // Column Headers
+  let curX = 0;
+  for (let c = 0; c < columns.length; c++) {
+    text(curX + 0.002, -cellHeightM * 1.65, columns[c], 0.0025, 'A-ANNO-TEXT');
+    if (c > 0) line(curX, -cellHeightM, curX, -totalHeightM);
+    curX += colWidthsM[c];
+  }
+  line(0, -cellHeightM * 2, totalWidthM, -cellHeightM * 2);
+
+  // Row Grid & Data
+  for (let r = 0; r < rows.length; r++) {
+    const yTop = -cellHeightM * (r + 2);
+    const yBot = -cellHeightM * (r + 3);
+    line(0, yBot, totalWidthM, yBot);
+
+    let cellX = 0;
+    for (let c = 0; c < columns.length; c++) {
+      const val = rows[r][c] || '';
+      text(cellX + 0.002, yTop - cellHeightM * 0.65, String(val), 0.0022, 'A-ANNO-TEXT');
+      cellX += colWidthsM[c];
+    }
+  }
+
+  const dxfTable = buildDXF(entities, {
+    scale: 1000, // Export at 1:1 scale (mm)
+    blockName: 'BIM_SCHEDULE_TABLE',
+    asBlock: false
+  });
+
+  return {
+    title,
+    csv,
+    dxfTable,
+    columns,
+    rows
+  };
+}
+
+
+  // =========================================================================
+  // MODULE: CadGenerators
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — Specialized CAD Generators Engine
+ *
+ * Professional 1:1 Millimeter CAD Generators:
+ *   1. Stair & Ramp CAD Detail Generator (Cross-section, stringers, landings, handrails, dimensions)
+ *   2. Parking Lot & ADA Stall Bay Layout Generator (Stalls, drive aisles, ADA access aisles, ISA symbols)
+ *   3. Graphical Door & Window Elevation Schedule (CAD sheet with elevations, frames, swings, tags)
+ *   4. AutoCAD Plot Style Table (CTB) & Pen Weight Manager (AIA standard pen weights, scripts, guides)
+ */
+
+
+
+// =============================================================================
+// 1. STAIR & RAMP CAD DETAIL GENERATOR
+// =============================================================================
+
+/**
+ * Generates a 1:1 millimeter AutoCAD 2D section drawing for a straight-flight stair.
+ *
+ * @param {object} options
+ * @param {number} [options.totalRiseMm=2700] Total rise in mm
+ * @param {number} [options.riserCount=15] Total number of risers
+ * @param {number} [options.treadDepthMm=280] Going / tread depth in mm
+ * @param {number} [options.nosingMm=25] Tread nosing projection in mm
+ * @param {number} [options.slabThicknessMm=150] Waist / concrete carriage slab thickness in mm
+ * @param {number} [options.handrailHeightMm=900] Handrail height above pitch line in mm
+ * @param {boolean} [options.includeHandrail=true] Include handrail, balusters, and newel posts
+ * @param {boolean} [options.includeDimensions=true] Include CAD dimension callouts
+ * @returns {object} { entities, dxf, svg, lisp, specs }
+ */
+function generateStairCadDetail(options = {}) {
+  const totalRise = Math.max(500, Number(options.totalRiseMm) || 2700);
+  const riserCount = Math.max(2, Math.round(Number(options.riserCount) || 15));
+  const riserHeight = totalRise / riserCount;
+  const treadDepth = Math.max(200, Number(options.treadDepthMm) || 280);
+  const nosing = options.includeNosing !== false ? Math.max(0, Number(options.nosingMm) || 25) : 0;
+  const slabThick = Math.max(100, Number(options.slabThicknessMm) || 150);
+  const handrailH = Math.max(800, Number(options.handrailHeightMm) || 900);
+  const includeHandrail = options.includeHandrail !== false;
+  const includeDimensions = options.includeDimensions !== false;
+
+  const goingCount = riserCount - 1;
+  const totalRun = goingCount * treadDepth;
+  const landingRun = 1000; // 1 meter landing at top and bottom
+
+  const entities = [];
+
+  // 1. Lower Floor Slab (x: -landingRun to 0, y: 0)
+  entities.push({ type: 'line', layer: 'A-FLOR-STRS', x1: -landingRun / 1000, y1: 0, x2: 0, y2: 0 });
+  entities.push({ type: 'line', layer: 'A-FLOR-STRS', x1: -landingRun / 1000, y1: -0.2, x2: -landingRun / 1000, y2: 0 });
+
+  // 2. Step Profile (Treads and Risers)
+  const stepPoints = [];
+  stepPoints.push([0, 0]);
+
+  for (let i = 0; i < riserCount; i++) {
+    const x = i * treadDepth;
+    const y = i * riserHeight;
+    const nextY = (i + 1) * riserHeight;
+
+    // Riser vertical
+    entities.push({
+      type: 'line',
+      layer: 'A-FLOR-STRS',
+      x1: x / 1000,
+      y1: y / 1000,
+      x2: x / 1000,
+      y2: nextY / 1000
+    });
+
+    // Tread horizontal (plus nosing overhang if applicable)
+    if (i < goingCount) {
+      const nextX = (i + 1) * treadDepth;
+      entities.push({
+        type: 'line',
+        layer: 'A-FLOR-STRS',
+        x1: (x - nosing) / 1000,
+        y1: nextY / 1000,
+        x2: nextX / 1000,
+        y2: nextY / 1000
+      });
+
+      if (nosing > 0) {
+        // Nosing lip
+        entities.push({
+          type: 'line',
+          layer: 'A-FLOR-STRS',
+          x1: (x - nosing) / 1000,
+          y1: (nextY - 20) / 1000,
+          x2: (x - nosing) / 1000,
+          y2: nextY / 1000
+        });
+      }
+    }
+  }
+
+  // 3. Upper Floor Slab Landing (from totalRun to totalRun + landingRun at totalRise)
+  entities.push({
+    type: 'line',
+    layer: 'A-FLOR-STRS',
+    x1: totalRun / 1000,
+    y1: totalRise / 1000,
+    x2: (totalRun + landingRun) / 1000,
+    y2: totalRise / 1000
+  });
+
+  // 4. Soffit / Concrete Waist Carried Underneath
+  // Pitch slope
+  const angle = Math.atan2(totalRise, totalRun);
+  const perpOffset = slabThick / Math.cos(angle);
+  const soffitStartX = 0;
+  const soffitStartY = -perpOffset;
+  const soffitEndX = totalRun;
+  const soffitEndY = totalRise - perpOffset;
+
+  entities.push({
+    type: 'line',
+    layer: 'A-FLOR-STRS',
+    x1: soffitStartX / 1000,
+    y1: soffitStartY / 1000,
+    x2: soffitEndX / 1000,
+    y2: soffitEndY / 1000
+  });
+  // Ground connection
+  entities.push({
+    type: 'line',
+    layer: 'A-FLOR-STRS',
+    x1: soffitStartX / 1000,
+    y1: soffitStartY / 1000,
+    x2: 0,
+    y2: 0
+  });
+  // Top landing connection
+  entities.push({
+    type: 'line',
+    layer: 'A-FLOR-STRS',
+    x1: soffitEndX / 1000,
+    y1: soffitEndY / 1000,
+    x2: (totalRun + landingRun) / 1000,
+    y2: (totalRise - 0.2) / 1000
+  });
+
+  // 5. Handrail & Balustrade (A-FLOR-HRAL)
+  if (includeHandrail) {
+    const hrOffsetY = handrailH;
+    // Lower post
+    entities.push({
+      type: 'line',
+      layer: 'A-FLOR-HRAL',
+      x1: -0.15,
+      y1: 0,
+      x2: -0.15,
+      y2: (hrOffsetY) / 1000
+    });
+    // Lower horizontal 300mm extension
+    entities.push({
+      type: 'line',
+      layer: 'A-FLOR-HRAL',
+      x1: -0.3,
+      y1: hrOffsetY / 1000,
+      x2: 0,
+      y2: hrOffsetY / 1000
+    });
+    // Sloped rail along flight
+    entities.push({
+      type: 'line',
+      layer: 'A-FLOR-HRAL',
+      x1: 0,
+      y1: (riserHeight + hrOffsetY) / 1000,
+      x2: totalRun / 1000,
+      y2: (totalRise + hrOffsetY) / 1000
+    });
+    // Upper horizontal 300mm extension
+    entities.push({
+      type: 'line',
+      layer: 'A-FLOR-HRAL',
+      x1: totalRun / 1000,
+      y1: (totalRise + hrOffsetY) / 1000,
+      x2: (totalRun + 0.3) / 1000,
+      y2: (totalRise + hrOffsetY) / 1000
+    });
+    // Upper post
+    entities.push({
+      type: 'line',
+      layer: 'A-FLOR-HRAL',
+      x1: (totalRun + 0.3) / 1000,
+      y1: totalRise / 1000,
+      x2: (totalRun + 0.3) / 1000,
+      y2: (totalRise + hrOffsetY) / 1000
+    });
+
+    // Balusters every 2 treads
+    for (let i = 2; i < riserCount - 1; i += 2) {
+      const bx = i * treadDepth;
+      const by = (i + 1) * riserHeight;
+      const rTop = by + hrOffsetY;
+      entities.push({
+        type: 'line',
+        layer: 'A-FLOR-HRAL',
+        x1: bx / 1000,
+        y1: by / 1000,
+        x2: bx / 1000,
+        y2: rTop / 1000
+      });
+    }
+  }
+
+  // 6. Dimensions and Callout Text (A-ANNO-DIMS & A-ANNO-TEXT)
+  if (includeDimensions) {
+    // Total Rise vertical dimension
+    const dimX = (totalRun + landingRun + 200) / 1000;
+    entities.push({ type: 'line', layer: 'A-ANNO-DIMS', x1: dimX, y1: 0, x2: dimX, y2: totalRise / 1000 });
+    entities.push({ type: 'line', layer: 'A-ANNO-DIMS', x1: dimX - 0.08, y1: 0, x2: dimX + 0.08, y2: 0 });
+    entities.push({ type: 'line', layer: 'A-ANNO-DIMS', x1: dimX - 0.08, y1: totalRise / 1000, x2: dimX + 0.08, y2: totalRise / 1000 });
+    entities.push({
+      type: 'text',
+      layer: 'A-ANNO-TEXT',
+      x: dimX + 0.1,
+      y: (totalRise / 2) / 1000,
+      text: `TOTAL RISE: ${Math.round(totalRise)} mm`,
+      height: 0.15
+    });
+
+    // Total Run horizontal dimension
+    const dimY = (-perpOffset - 250) / 1000;
+    entities.push({ type: 'line', layer: 'A-ANNO-DIMS', x1: 0, y1: dimY, x2: totalRun / 1000, y2: dimY });
+    entities.push({ type: 'line', layer: 'A-ANNO-DIMS', x1: 0, y1: dimY - 0.08, x2: 0, y2: dimY + 0.08 });
+    entities.push({ type: 'line', layer: 'A-ANNO-DIMS', x1: totalRun / 1000, y1: dimY - 0.08, x2: totalRun / 1000, y2: dimY + 0.08 });
+    entities.push({
+      type: 'text',
+      layer: 'A-ANNO-TEXT',
+      x: (totalRun / 2) / 1000 - 0.4,
+      y: dimY - 0.18,
+      text: `TOTAL RUN: ${Math.round(totalRun)} mm (${goingCount} GOINGS @ ${Math.round(treadDepth)} mm)`,
+      height: 0.15
+    });
+
+    // Specification callout block
+    const blondel = (2 * riserHeight) + treadDepth;
+    const pitchDeg = (angle * 180 / Math.PI).toFixed(1);
+    const specLines = [
+      `STAIR DETAIL: ${riserCount} RISERS @ ${riserHeight.toFixed(1)} mm`,
+      `${goingCount} TREADS @ ${treadDepth} mm (NOSING: ${nosing} mm)`,
+      `PITCH: ${pitchDeg}deg | 2R+G: ${blondel.toFixed(1)} mm (BLONDEL)`
+    ];
+    specLines.forEach((t, idx) => {
+      entities.push({
+        type: 'text',
+        layer: 'A-ANNO-TEXT',
+        x: -0.8,
+        y: (totalRise * 0.7 - idx * 220) / 1000,
+        text: t,
+        height: 0.15
+      });
+    });
+  }
+
+  const dxf = buildDXF(entities, { scale: 1000 });
+
+  // Generate SVG for interactive live UI preview
+  const svgW = 680;
+  const svgH = 340;
+  const padding = 45;
+  const minX = -landingRun;
+  const maxX = totalRun + landingRun + 400;
+  const minY = -perpOffset - 400;
+  const maxY = totalRise + (includeHandrail ? handrailH : 0) + 300;
+  const rangeX = maxX - minX;
+  const rangeY = maxY - minY;
+  const scaleX = (svgW - 2 * padding) / rangeX;
+  const scaleY = (svgH - 2 * padding) / rangeY;
+  const sc = Math.min(scaleX, scaleY);
+
+  const toSvgX = x => padding + (x - minX) * sc;
+  const toSvgY = y => svgH - padding - (y - minY) * sc;
+
+  const svgElements = entities.map(e => {
+    if (e.type === 'line') {
+      const col = e.layer === 'A-FLOR-STRS' ? '#38bdf8' : e.layer === 'A-FLOR-HRAL' ? '#f472b6' : '#94a3b8';
+      const sw = e.layer === 'A-FLOR-STRS' ? '2.5' : e.layer === 'A-FLOR-HRAL' ? '2.0' : '1.0';
+      return `<line x1="${toSvgX(e.x1 * 1000)}" y1="${toSvgY(e.y1 * 1000)}" x2="${toSvgX(e.x2 * 1000)}" y2="${toSvgY(e.y2 * 1000)}" stroke="${col}" stroke-width="${sw}" />`;
+    } else if (e.type === 'text') {
+      return `<text x="${toSvgX(e.x * 1000)}" y="${toSvgY(e.y * 1000)}" fill="#e2e8f0" font-size="11" font-family="sans-serif">${e.text}</text>`;
+    }
+    return '';
+  }).join('');
+
+  const svg = `<svg viewBox="0 0 ${svgW} ${svgH}" width="100%" height="100%" style="background:#0f172a; border-radius:8px;" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <pattern id="stairGrid" width="20" height="20" patternUnits="userSpaceOnUse">
+        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+      </pattern>
+    </defs>
+    <rect width="${svgW}" height="${svgH}" fill="url(#stairGrid)" />
+    ${svgElements}
+  </svg>`;
+
+  const lisp = [
+    `;; Architecture Helping Hand — AutoLISP Stair Section Generator`,
+    `(defun c:AHH_STAIR_SECTION ()`,
+    `  (setvar "CMDECHO" 0)`,
+    `  (command "_.-LAYER" "_M" "A-FLOR-STRS" "_C" "4" "A-FLOR-STRS" "")`,
+    `  (command "_.-LAYER" "_M" "A-FLOR-HRAL" "_C" "6" "A-FLOR-HRAL" "")`,
+    `  (command "_.-LAYER" "_M" "A-ANNO-DIMS" "_C" "3" "A-ANNO-DIMS" "")`,
+    `  (command "_.-LAYER" "_M" "A-ANNO-TEXT" "_C" "7" "A-ANNO-TEXT" "")`,
+    `  (princ "\\nInserting 1:1 Millimeter Stair Detail...")`,
+    `  (command "_.INSERT" "stair-section.dxf" pause "1" "1" "0")`,
+    `  (princ "\\nStair Section Placed Successfully.")`,
+    `  (princ)`,
+    `)`
+  ].join('\r\n');
+
+  return {
+    entities,
+    dxf,
+    svg,
+    lisp,
+    specs: {
+      totalRise,
+      totalRun,
+      riserCount,
+      riserHeight,
+      goingCount,
+      treadDepth,
+      blondel: (2 * riserHeight) + treadDepth,
+      pitchDegrees: Number((angle * 180 / Math.PI).toFixed(2))
+    }
+  };
+}
+
+/**
+ * Generates a 1:1 millimeter AutoCAD 2D section drawing for an accessible ADA ramp.
+ *
+ * @param {object} options
+ * @param {number} [options.totalRiseMm=600] Total rise in mm
+ * @param {number} [options.slopeRatio=12] Slope ratio (12 for 1:12 ADA standard)
+ * @param {number} [options.landingLengthMm=1500] Landing length in mm
+ * @param {number} [options.handrailHeightMm=900] Handrail height in mm
+ * @param {boolean} [options.includeHandrail=true]
+ * @returns {object} { entities, dxf, svg, specs }
+ */
+function generateRampCadDetail(options = {}) {
+  const totalRise = Math.max(100, Number(options.totalRiseMm) || 600);
+  const slopeRatio = Math.max(4, Number(options.slopeRatio) || 12);
+  const landingLen = Math.max(1200, Number(options.landingLengthMm) || 1500);
+  const handrailH = Math.max(800, Number(options.handrailHeightMm) || 900);
+  const includeHandrail = options.includeHandrail !== false;
+
+  const rampRun = totalRise * slopeRatio;
+  const curbH = 100; // 100mm ADA edge protection curb
+
+  const entities = [];
+
+  // Lower Landing (Horizontal at 0.00)
+  entities.push({ type: 'line', layer: 'A-FLOR-RAMP', x1: -landingLen / 1000, y1: 0, x2: 0, y2: 0 });
+  entities.push({ type: 'line', layer: 'A-FLOR-RAMP', x1: -landingLen / 1000, y1: -0.15, x2: -landingLen / 1000, y2: 0 });
+
+  // Ramp Slope
+  entities.push({ type: 'line', layer: 'A-FLOR-RAMP', x1: 0, y1: 0, x2: rampRun / 1000, y2: totalRise / 1000 });
+
+  // Upper Landing (Horizontal at totalRise)
+  entities.push({
+    type: 'line',
+    layer: 'A-FLOR-RAMP',
+    x1: rampRun / 1000,
+    y1: totalRise / 1000,
+    x2: (rampRun + landingLen) / 1000,
+    y2: totalRise / 1000
+  });
+
+  // Slab base / Ground structure
+  entities.push({ type: 'line', layer: 'A-FLOR-RAMP', x1: -landingLen / 1000, y1: -0.15, x2: (rampRun + landingLen) / 1000, y2: -0.15 });
+  entities.push({
+    type: 'line',
+    layer: 'A-FLOR-RAMP',
+    x1: (rampRun + landingLen) / 1000,
+    y1: -0.15,
+    x2: (rampRun + landingLen) / 1000,
+    y2: totalRise / 1000
+  });
+
+  // ADA 100mm Curb / Edge Protection Line
+  entities.push({
+    type: 'line',
+    layer: 'A-FLOR-RAMP',
+    x1: 0,
+    y1: curbH / 1000,
+    x2: rampRun / 1000,
+    y2: (totalRise + curbH) / 1000
+  });
+
+  // Handrail with ADA 300mm level extensions (A-FLOR-HRAL)
+  if (includeHandrail) {
+    const ext = 0.3; // 300 mm extension
+    // Lower extension & post
+    entities.push({ type: 'line', layer: 'A-FLOR-HRAL', x1: -ext, y1: 0, x2: -ext, y2: handrailH / 1000 });
+    entities.push({ type: 'line', layer: 'A-FLOR-HRAL', x1: -ext, y1: handrailH / 1000, x2: 0, y2: handrailH / 1000 });
+    // Sloped handrail
+    entities.push({ type: 'line', layer: 'A-FLOR-HRAL', x1: 0, y1: handrailH / 1000, x2: rampRun / 1000, y2: (totalRise + handrailH) / 1000 });
+    // Upper extension & post
+    entities.push({
+      type: 'line',
+      layer: 'A-FLOR-HRAL',
+      x1: rampRun / 1000,
+      y1: (totalRise + handrailH) / 1000,
+      x2: (rampRun + 300) / 1000,
+      y2: (totalRise + handrailH) / 1000
+    });
+    entities.push({
+      type: 'line',
+      layer: 'A-FLOR-HRAL',
+      x1: (rampRun + 300) / 1000,
+      y1: totalRise / 1000,
+      x2: (rampRun + 300) / 1000,
+      y2: (totalRise + handrailH) / 1000
+    });
+  }
+
+  // Dimension & Slope Callouts (A-ANNO-DIMS & A-ANNO-TEXT)
+  const slopePercent = (100 / slopeRatio).toFixed(2);
+  entities.push({
+    type: 'text',
+    layer: 'A-ANNO-TEXT',
+    x: (rampRun / 2 - 600) / 1000,
+    y: (totalRise / 2 + 350) / 1000,
+    text: `RAMP SLOPE: 1:${slopeRatio} (${slopePercent}%) — ADA COMPLIANT`,
+    height: 0.18
+  });
+  entities.push({
+    type: 'text',
+    layer: 'A-ANNO-TEXT',
+    x: -landingLen / 1000,
+    y: -0.35,
+    text: `LANDING: ${landingLen} mm | RAMP RUN: ${Math.round(rampRun)} mm | TOTAL RISE: ${Math.round(totalRise)} mm`,
+    height: 0.16
+  });
+
+  const dxf = buildDXF(entities, { scale: 1000 });
+
+  return {
+    entities,
+    dxf,
+    specs: {
+      totalRise,
+      slopeRatio,
+      slopePercent: Number(slopePercent),
+      rampRun,
+      landingLength: landingLen,
+      totalLength: rampRun + (2 * landingLen)
+    }
+  };
+}
+
+// =============================================================================
+// 2. PARKING LOT & ADA STALL BAY LAYOUT GENERATOR
+// =============================================================================
+
+/**
+ * Generates an AutoCAD 1:1 parking bay layout with angled stalls and ADA accessible bays.
+ *
+ * @param {object} options
+ * @param {number} [options.stallCount=12] Total standard parking stalls
+ * @param {number} [options.angle=90] 90, 60, or 45 degrees
+ * @param {number} [options.stallWidthMm=2700] Standard stall width (2700 mm / 9 ft)
+ * @param {number} [options.stallDepthMm=5500] Standard stall depth (5500 mm / 18 ft)
+ * @param {number} [options.aisleWidthMm=7300] Drive aisle width (7300 mm / 24 ft)
+ * @param {number} [options.adaCount=2] Number of standard ADA stalls
+ * @param {number} [options.vanAdaCount=1] Number of Van Accessible ADA stalls
+ * @param {boolean} [options.doubleBay=true] Parking on both sides of drive aisle
+ * @param {boolean} [options.includeTireStops=true] Include concrete wheel stops
+ * @returns {object} { entities, dxf, svg, specs }
+ */
+function generateParkingBayCadDetail(options = {}) {
+  const stallCount = Math.max(2, Math.min(60, Number(options.stallCount) || 12));
+  const angleDeg = [90, 60, 45].includes(Number(options.angle)) ? Number(options.angle) : 90;
+  const angleRad = angleDeg * Math.PI / 180;
+  const stallW = Math.max(2400, Number(options.stallWidthMm) || 2700);
+  const stallD = Math.max(4500, Number(options.stallDepthMm) || 5500);
+  const aisleW = Math.max(4000, Number(options.aisleWidthMm) || (angleDeg === 90 ? 7300 : 5000));
+  const adaCount = Math.max(0, Number(options.adaCount) ?? 2);
+  const vanAdaCount = Math.max(0, Number(options.vanAdaCount) ?? 1);
+  const doubleBay = options.doubleBay !== false;
+  const includeTireStops = options.includeTireStops !== false;
+
+  const curbWidth = stallW / Math.sin(angleRad);
+  const curbOffset = stallD * Math.cos(angleRad);
+  const perpDepth = stallD * Math.sin(angleRad);
+
+  const entities = [];
+
+  // Helper: Draw ISA Wheelchair Pavement Symbol at center of stall
+  function addIsaSymbol(cx, cy) {
+    // Wheel arc
+    entities.push({ type: 'circle', layer: 'C-ROAD-SYMB', x: cx, y: cy, r: 0.35 });
+    // Head circle
+    entities.push({ type: 'circle', layer: 'C-ROAD-SYMB', x: cx, y: cy + 0.55, r: 0.12 });
+    // Torso & leg
+    entities.push({ type: 'line', layer: 'C-ROAD-SYMB', x1: cx, y1: cy + 0.43, x2: cx, y2: cy + 0.1 });
+    entities.push({ type: 'line', layer: 'C-ROAD-SYMB', x1: cx, y1: cy + 0.1, x2: cx + 0.25, y2: cy + 0.1 });
+    entities.push({ type: 'line', layer: 'C-ROAD-SYMB', x1: cx + 0.25, y1: cy + 0.1, x2: cx + 0.25, y2: cy - 0.25 });
+  }
+
+  // Row 1 (Bottom side of drive aisle)
+  const totalStallsSide1 = Math.ceil(stallCount / (doubleBay ? 2 : 1));
+  let currentX = 0;
+
+  // Bottom curb line
+  entities.push({
+    type: 'line',
+    layer: 'C-ROAD-PARK',
+    x1: 0,
+    y1: 0,
+    x2: (totalStallsSide1 * curbWidth + curbOffset) / 1000,
+    y2: 0
+  });
+
+  // Aisle boundary line (Row 1 head)
+  entities.push({
+    type: 'line',
+    layer: 'C-ROAD-PARK',
+    x1: curbOffset / 1000,
+    y1: perpDepth / 1000,
+    x2: (totalStallsSide1 * curbWidth + curbOffset) / 1000,
+    y2: perpDepth / 1000
+  });
+
+  let adaPlaced = 0;
+  let vanPlaced = 0;
+
+  for (let i = 0; i <= totalStallsSide1; i++) {
+    const xBase = i * curbWidth;
+    const xHead = xBase + curbOffset;
+
+    // Stall divider stripe (C-ROAD-STRP)
+    entities.push({
+      type: 'line',
+      layer: 'C-ROAD-STRP',
+      x1: xBase / 1000,
+      y1: 0,
+      x2: xHead / 1000,
+      y2: perpDepth / 1000
+    });
+
+    if (i < totalStallsSide1) {
+      const stallCenterX = (xBase + curbWidth / 2 + curbOffset / 2) / 1000;
+      const stallCenterY = (perpDepth / 2) / 1000;
+
+      // Concrete wheel stop
+      if (includeTireStops) {
+        const stopY = (perpDepth - 800 * Math.sin(angleRad)) / 1000;
+        const stopX = (xBase + curbWidth / 2 + (perpDepth - 800) * Math.cos(angleRad) / Math.sin(angleRad)) / 1000;
+        entities.push({
+          type: 'line',
+          layer: 'C-ROAD-PARK',
+          x1: stopX - 0.9,
+          y1: stopY,
+          x2: stopX + 0.9,
+          y2: stopY
+        });
+      }
+
+      // Check if this stall is an ADA stall
+      if (vanPlaced < vanAdaCount) {
+        addIsaSymbol(stallCenterX, stallCenterY);
+        entities.push({
+          type: 'text',
+          layer: 'C-ROAD-ANNO',
+          x: stallCenterX - 0.5,
+          y: stallCenterY - 0.7,
+          text: 'VAN ACCESSIBLE',
+          height: 0.18
+        });
+        vanPlaced++;
+      } else if (adaPlaced < adaCount) {
+        addIsaSymbol(stallCenterX, stallCenterY);
+        entities.push({
+          type: 'text',
+          layer: 'C-ROAD-ANNO',
+          x: stallCenterX - 0.4,
+          y: stallCenterY - 0.7,
+          text: 'ADA PARKING',
+          height: 0.18
+        });
+        adaPlaced++;
+      }
+    }
+  }
+
+  // Row 2 (Top side across the drive aisle, if double bay)
+  if (doubleBay) {
+    const row2BaseY = perpDepth + aisleW;
+    const row2TopY = row2BaseY + perpDepth;
+
+    // Aisle boundary line (Row 2 head)
+    entities.push({
+      type: 'line',
+      layer: 'C-ROAD-PARK',
+      x1: 0,
+      y1: row2BaseY / 1000,
+      x2: (totalStallsSide1 * curbWidth + curbOffset) / 1000,
+      y2: row2BaseY / 1000
+    });
+
+    // Top curb line
+    entities.push({
+      type: 'line',
+      layer: 'C-ROAD-PARK',
+      x1: curbOffset / 1000,
+      y1: row2TopY / 1000,
+      x2: (totalStallsSide1 * curbWidth + curbOffset) / 1000,
+      y2: row2TopY / 1000
+    });
+
+    for (let i = 0; i <= totalStallsSide1; i++) {
+      const xBase = i * curbWidth;
+      const xHead = xBase + curbOffset;
+
+      entities.push({
+        type: 'line',
+        layer: 'C-ROAD-STRP',
+        x1: xBase / 1000,
+        y1: row2BaseY / 1000,
+        x2: xHead / 1000,
+        y2: row2TopY / 1000
+      });
+    }
+
+    // Drive aisle center line and directional arrows
+    const aisleMidY = (perpDepth + aisleW / 2) / 1000;
+    entities.push({
+      type: 'line',
+      layer: 'C-ROAD-STRP',
+      x1: 0,
+      y1: aisleMidY,
+      x2: (totalStallsSide1 * curbWidth + curbOffset) / 1000,
+      y2: aisleMidY
+    });
+
+    entities.push({
+      type: 'text',
+      layer: 'C-ROAD-ANNO',
+      x: ((totalStallsSide1 * curbWidth) / 2) / 1000 - 1.2,
+      y: aisleMidY + 0.3,
+      text: `TWO-WAY DRIVE AISLE (${Math.round(aisleW)} mm / ${(aisleW / 304.8).toFixed(1)} FT)`,
+      height: 0.22
+    });
+  }
+
+  // Dimension strings
+  const totalLength = totalStallsSide1 * curbWidth + curbOffset;
+  const totalWidth = doubleBay ? (2 * perpDepth + aisleW) : (perpDepth + aisleW);
+
+  entities.push({
+    type: 'text',
+    layer: 'C-ROAD-ANNO',
+    x: 0,
+    y: -0.6,
+    text: `PARKING BAY: ${stallCount} TOTAL STALLS (${angleDeg}deg ANGLE) | STALL: ${stallW}x${stallD} mm | DRIVE AISLE: ${aisleW} mm`,
+    height: 0.25
+  });
+
+  const dxf = buildDXF(entities, { scale: 1000 });
+
+  // Generate responsive SVG visualization
+  const svgW = 720;
+  const svgH = 340;
+  const pad = 40;
+  const scX = (svgW - 2 * pad) / (totalLength);
+  const scY = (svgH - 2 * pad) / (totalWidth);
+  const sc = Math.min(scX, scY);
+
+  const toSvgX = x => pad + x * sc;
+  const toSvgY = y => svgH - pad - y * sc;
+
+  const svgContent = entities.map(e => {
+    if (e.type === 'line') {
+      const col = e.layer === 'C-ROAD-STRP' ? '#facc15' : e.layer === 'C-ROAD-SYMB' ? '#38bdf8' : '#94a3b8';
+      const sw = e.layer === 'C-ROAD-STRP' ? '2.0' : '1.0';
+      return `<line x1="${toSvgX(e.x1 * 1000)}" y1="${toSvgY(e.y1 * 1000)}" x2="${toSvgX(e.x2 * 1000)}" y2="${toSvgY(e.y2 * 1000)}" stroke="${col}" stroke-width="${sw}" />`;
+    } else if (e.type === 'circle') {
+      return `<circle cx="${toSvgX(e.x * 1000)}" cy="${toSvgY(e.y * 1000)}" r="${Math.max(2, e.r * 1000 * sc)}" fill="none" stroke="#38bdf8" stroke-width="1.5" />`;
+    } else if (e.type === 'text') {
+      return `<text x="${toSvgX(e.x * 1000)}" y="${toSvgY(e.y * 1000)}" fill="#e2e8f0" font-size="10" font-family="sans-serif">${e.text}</text>`;
+    }
+    return '';
+  }).join('');
+
+  const svg = `<svg viewBox="0 0 ${svgW} ${svgH}" width="100%" height="100%" style="background:#0f172a; border-radius:8px;" xmlns="http://www.w3.org/2000/svg">
+    ${svgContent}
+  </svg>`;
+
+  return {
+    entities,
+    dxf,
+    svg,
+    specs: {
+      totalStalls: stallCount,
+      angle: angleDeg,
+      stallWidth: stallW,
+      stallDepth: stallD,
+      aisleWidth: aisleW,
+      adaStalls: adaCount,
+      vanAdaStalls: vanAdaCount,
+      totalLengthMm: Math.round(totalLength),
+      totalWidthMm: Math.round(totalWidth)
+    }
+  };
+}
+
+// =============================================================================
+// 3. GRAPHICAL DOOR & WINDOW ELEVATION SCHEDULE (CAD SHEET)
+// =============================================================================
+
+const STANDARD_DOOR_TYPES = [
+  { id: 'D01', name: 'Single Flush Solid Core', widthMm: 900, heightMm: 2100, frameMm: 50, type: 'single-flush', fireRating: '20 Min', material: 'Wood / Hollow Metal' },
+  { id: 'D02', name: 'Double Egress Fire Door', widthMm: 1800, heightMm: 2100, frameMm: 50, type: 'double-egress', fireRating: '90 Min', material: 'Hollow Metal' },
+  { id: 'D03', name: 'Storefront Glazed Entry', widthMm: 1000, heightMm: 2400, frameMm: 60, type: 'glazed-storefront', fireRating: 'Non-Rated', material: 'Anodized Aluminum' },
+  { id: 'D04', name: 'Pocket Sliding Interior Door', widthMm: 850, heightMm: 2100, frameMm: 45, type: 'pocket-sliding', fireRating: 'Non-Rated', material: 'Solid Core Wood' },
+  { id: 'D05', name: 'Bi-Fold Louvered Wardrobe', widthMm: 1200, heightMm: 2100, frameMm: 40, type: 'bi-fold-louver', fireRating: 'Non-Rated', material: 'Wood' },
+  { id: 'D06', name: 'Sectional Overhead Door', widthMm: 3000, heightMm: 2700, frameMm: 75, type: 'overhead-sectional', fireRating: 'Non-Rated', material: 'Insulated Steel' }
+];
+
+const STANDARD_WINDOW_TYPES = [
+  { id: 'W01', name: 'Fixed Picture Window', widthMm: 1200, heightMm: 1500, sillMm: 900, frameMm: 50, type: 'fixed', uValue: '0.28', glazing: 'Double Low-E' },
+  { id: 'W02', name: 'Double Casement Window', widthMm: 1500, heightMm: 1200, sillMm: 1000, frameMm: 50, type: 'casement', uValue: '0.26', glazing: 'Double Low-E Arg' },
+  { id: 'W03', name: 'Horizontal Slider Window', widthMm: 1800, heightMm: 1200, sillMm: 1000, frameMm: 50, type: 'slider', uValue: '0.30', glazing: 'Double Low-E' },
+  { id: 'W04', name: 'Top-Hinged Awning Window', widthMm: 900, heightMm: 600, sillMm: 1600, frameMm: 50, type: 'awning', uValue: '0.28', glazing: 'Double Low-E' },
+  { id: 'W05', name: 'Clerestory Ribbon Window', widthMm: 3000, heightMm: 600, sillMm: 2100, frameMm: 50, type: 'ribbon', uValue: '0.25', glazing: 'Triple Low-E' }
+];
+
+/**
+ * Generates an AutoCAD 1:1 Graphical Door & Window Elevation Schedule sheet.
+ *
+ * @param {object} [options]
+ * @param {Array} [options.doors]
+ * @param {Array} [options.windows]
+ * @param {number} [options.spacingMm=600]
+ * @returns {object} { entities, dxf, svg, specs }
+ */
+function generateDoorWindowElevationSchedule(options = {}) {
+  const doors = Array.isArray(options.doors) && options.doors.length > 0 ? options.doors : STANDARD_DOOR_TYPES;
+  const windows = Array.isArray(options.windows) && options.windows.length > 0 ? options.windows : STANDARD_WINDOW_TYPES;
+  const spacing = Math.max(400, Number(options.spacingMm) || 700);
+
+  const entities = [];
+
+  // Finished Floor Line (FFL) running across entire sheet
+  let totalSheetWidth = 0;
+  doors.forEach(d => totalSheetWidth += d.widthMm + spacing);
+  totalSheetWidth += 1000;
+
+  entities.push({
+    type: 'line',
+    layer: 'A-FLOR-LEVL',
+    x1: -0.5,
+    y1: 0,
+    x2: totalSheetWidth / 1000,
+    y2: 0
+  });
+
+  entities.push({
+    type: 'text',
+    layer: 'A-ANNO-TEXT',
+    x: -0.8,
+    y: 0.05,
+    text: 'FFL +/- 0.00',
+    height: 0.16
+  });
+
+  let currentX = 0;
+
+  // 1. Draw Door Elevations
+  doors.forEach((door, idx) => {
+    const x = currentX;
+    const w = door.widthMm;
+    const h = door.heightMm;
+    const f = door.frameMm || 50;
+
+    // Outer frame (A-DOOR)
+    entities.push({ type: 'line', layer: 'A-DOOR', x1: x / 1000, y1: 0, x2: x / 1000, y2: h / 1000 });
+    entities.push({ type: 'line', layer: 'A-DOOR', x1: (x + w) / 1000, y1: 0, x2: (x + w) / 1000, y2: h / 1000 });
+    entities.push({ type: 'line', layer: 'A-DOOR', x1: x / 1000, y1: h / 1000, x2: (x + w) / 1000, y2: h / 1000 });
+
+    // Inner door leaf line
+    entities.push({ type: 'line', layer: 'A-DOOR', x1: (x + f) / 1000, y1: 0, x2: (x + f) / 1000, y2: (h - f) / 1000 });
+    entities.push({ type: 'line', layer: 'A-DOOR', x1: (x + w - f) / 1000, y1: 0, x2: (x + w - f) / 1000, y2: (h - f) / 1000 });
+    entities.push({ type: 'line', layer: 'A-DOOR', x1: (x + f) / 1000, y1: (h - f) / 1000, x2: (x + w - f) / 1000, y2: (h - f) / 1000 });
+
+    // Handles & specific graphics
+    if (door.type === 'double-egress') {
+      const mid = x + w / 2;
+      entities.push({ type: 'line', layer: 'A-DOOR', x1: mid / 1000, y1: 0, x2: mid / 1000, y2: (h - f) / 1000 });
+      // Crash bars
+      entities.push({ type: 'line', layer: 'A-DOOR', x1: (x + f + 50) / 1000, y1: 1.0, x2: (mid - 50) / 1000, y2: 1.0 });
+      entities.push({ type: 'line', layer: 'A-DOOR', x1: (mid + 50) / 1000, y1: 1.0, x2: (x + w - f - 50) / 1000, y2: 1.0 });
+    } else if (door.type === 'glazed-storefront') {
+      // Glass pane inside leaf
+      const bottomRail = 250;
+      entities.push({ type: 'line', layer: 'A-GLAZ', x1: (x + f + 80) / 1000, y1: bottomRail / 1000, x2: (x + w - f - 80) / 1000, y2: bottomRail / 1000 });
+      entities.push({ type: 'line', layer: 'A-GLAZ', x1: (x + f + 80) / 1000, y1: (h - f - 80) / 1000, x2: (x + w - f - 80) / 1000, y2: (h - f - 80) / 1000 });
+      entities.push({ type: 'line', layer: 'A-GLAZ', x1: (x + f + 80) / 1000, y1: bottomRail / 1000, x2: (x + f + 80) / 1000, y2: (h - f - 80) / 1000 });
+      entities.push({ type: 'line', layer: 'A-GLAZ', x1: (x + w - f - 80) / 1000, y1: bottomRail / 1000, x2: (x + w - f - 80) / 1000, y2: (h - f - 80) / 1000 });
+    } else {
+      // Lever handle
+      entities.push({ type: 'circle', layer: 'A-DOOR', x: (x + w - f - 75) / 1000, y: 1.0, r: 0.03 });
+      entities.push({ type: 'line', layer: 'A-DOOR', x1: (x + w - f - 75) / 1000, y1: 1.0, x2: (x + w - f - 170) / 1000, y2: 1.0 });
+    }
+
+    // Door tag hexagon / symbol above door
+    const tagY = (h + 300) / 1000;
+    const tagX = (x + w / 2) / 1000;
+    entities.push({ type: 'circle', layer: 'A-ANNO-TEXT', x: tagX, y: tagY, r: 0.2 });
+    entities.push({ type: 'text', layer: 'A-ANNO-TEXT', x: tagX - 0.1, y: tagY - 0.06, text: door.id, height: 0.15 });
+
+    // Dimension callout below
+    entities.push({ type: 'text', layer: 'A-ANNO-DIMS', x: (x + 50) / 1000, y: -0.25, text: `${w} x ${h} mm`, height: 0.14 });
+    entities.push({ type: 'text', layer: 'A-ANNO-TEXT', x: (x + 50) / 1000, y: -0.45, text: `${door.material} (${door.fireRating})`, height: 0.12 });
+
+    currentX += w + spacing;
+  });
+
+  // 2. Draw Window Elevations in Row Above
+  const windowRowY = 3200; // Elevation baseline for windows
+  entities.push({
+    type: 'line',
+    layer: 'A-FLOR-LEVL',
+    x1: -0.5,
+    y1: windowRowY / 1000,
+    x2: totalSheetWidth / 1000,
+    y2: windowRowY / 1000
+  });
+  entities.push({
+    type: 'text',
+    layer: 'A-ANNO-TEXT',
+    x: -0.8,
+    y: (windowRowY + 50) / 1000,
+    text: 'WINDOW SILL LEVEL',
+    height: 0.16
+  });
+
+  let winX = 0;
+  windows.forEach((win) => {
+    const x = winX;
+    const y = (windowRowY + win.sillMm) / 1000;
+    const w = win.widthMm;
+    const h = win.heightMm;
+    const f = win.frameMm || 50;
+
+    // Outer frame (A-GLAZ)
+    entities.push({ type: 'line', layer: 'A-GLAZ', x1: x / 1000, y1: y, x2: (x + w) / 1000, y2: y });
+    entities.push({ type: 'line', layer: 'A-GLAZ', x1: x / 1000, y1: y + h / 1000, x2: (x + w) / 1000, y2: y + h / 1000 });
+    entities.push({ type: 'line', layer: 'A-GLAZ', x1: x / 1000, y1: y, x2: x / 1000, y2: y + h / 1000 });
+    entities.push({ type: 'line', layer: 'A-GLAZ', x1: (x + w) / 1000, y1: y, x2: (x + w) / 1000, y2: y + h / 1000 });
+
+    // Inner glass perimeter
+    entities.push({ type: 'line', layer: 'A-GLAZ', x1: (x + f) / 1000, y1: y + f / 1000, x2: (x + w - f) / 1000, y2: y + f / 1000 });
+    entities.push({ type: 'line', layer: 'A-GLAZ', x1: (x + f) / 1000, y1: y + (h - f) / 1000, x2: (x + w - f) / 1000, y2: y + (h - f) / 1000 });
+    entities.push({ type: 'line', layer: 'A-GLAZ', x1: (x + f) / 1000, y1: y + f / 1000, x2: (x + f) / 1000, y2: y + (h - f) / 1000 });
+    entities.push({ type: 'line', layer: 'A-GLAZ', x1: (x + w - f) / 1000, y1: y + f / 1000, x2: (x + w - f) / 1000, y2: y + (h - f) / 1000 });
+
+    // Window tag
+    const tagY = y + (h + 300) / 1000;
+    const tagX = (x + w / 2) / 1000;
+    entities.push({ type: 'circle', layer: 'A-ANNO-TEXT', x: tagX, y: tagY, r: 0.2 });
+    entities.push({ type: 'text', layer: 'A-ANNO-TEXT', x: tagX - 0.1, y: tagY - 0.06, text: win.id, height: 0.15 });
+
+    // Dimensions
+    entities.push({ type: 'text', layer: 'A-ANNO-DIMS', x: (x + 50) / 1000, y: y - 0.25, text: `${w} x ${h} mm (SILL: ${win.sillMm} mm)`, height: 0.14 });
+    entities.push({ type: 'text', layer: 'A-ANNO-TEXT', x: (x + 50) / 1000, y: y - 0.45, text: `${win.glazing} | U=${win.uValue}`, height: 0.12 });
+
+    winX += w + spacing;
+  });
+
+  const dxf = buildDXF(entities, { scale: 1000 });
+
+  return {
+    entities,
+    dxf,
+    specs: {
+      doorCount: doors.length,
+      windowCount: windows.length,
+      totalSheetWidthMm: totalSheetWidth
+    }
+  };
+}
+
+// =============================================================================
+// 4. AUTOCAD PLOT STYLE (CTB) & PEN WEIGHT MANAGER
+// =============================================================================
+
+const AIA_PLOT_STYLE_PENS = Object.freeze([
+  { colorIndex: 1, colorName: 'Red', hex: '#ef4444', mm: 0.18, screening: 100, use: 'Fine: Dimensions, patterns, hatching boundaries, door swings' },
+  { colorIndex: 2, colorName: 'Yellow', hex: '#eab308', mm: 0.35, screening: 100, use: 'Medium: Furniture, fixtures, casework, general linework' },
+  { colorIndex: 3, colorName: 'Green', hex: '#22c55e', mm: 0.50, screening: 100, use: 'Heavy: Doors, window frames, interior partitions cut' },
+  { colorIndex: 4, colorName: 'Cyan', hex: '#06b6d4', mm: 0.70, screening: 100, use: 'Extra Heavy: Primary structural walls cut, building envelope cut' },
+  { colorIndex: 5, colorName: 'Blue', hex: '#3b82f6', mm: 0.25, screening: 100, use: 'Medium-Light: Mechanical, electrical, plumbing, site details' },
+  { colorIndex: 6, colorName: 'Magenta', hex: '#d946ef', mm: 0.35, screening: 100, use: 'Medium: Railings, stairs, borders, title blocks' },
+  { colorIndex: 7, colorName: 'White / Black', hex: '#f8fafc', mm: 0.25, screening: 100, use: 'Standard: General text, annotations, callout leaders' },
+  { colorIndex: 8, colorName: 'Dark Gray', hex: '#64748b', mm: 0.09, screening: 50, use: 'Ultra-Fine Screened: Material hatch patterns, floor tile grid' },
+  { colorIndex: 9, colorName: 'Light Gray', hex: '#cbd5e1', mm: 0.05, screening: 30, use: 'Ghost Screened: Background consultant xrefs, site contours' }
+]);
+
+/**
+ * Generates an AutoCAD Script (.scr) that sets layer lineweights matching the AIA pen table.
+ *
+ * @returns {string} AutoCAD .scr script
+ */
+function generateLayerLineweightScript() {
+  const lines = [
+    `;; =========================================================================`,
+    `;; Architecture Helping Hand — AutoCAD Layer Lineweight & Pen Configurator`,
+    `;; Sets standard AIA NCS lineweights directly on active drawing layers.`,
+    `;; =========================================================================`,
+    `_.-LAYER`,
+    `_LWEIGHT 0.70 A-WALL-FULL`,
+    `_LWEIGHT 0.50 A-DOOR`,
+    `_LWEIGHT 0.50 A-GLAZ`,
+    `_LWEIGHT 0.35 A-FURN`,
+    `_LWEIGHT 0.35 A-FLOR-STRS`,
+    `_LWEIGHT 0.35 A-FLOR-HRAL`,
+    `_LWEIGHT 0.18 A-ANNO-DIMS`,
+    `_LWEIGHT 0.25 A-ANNO-TEXT`,
+    `_LWEIGHT 0.09 A-FLOR-PATT`,
+    `_LWEIGHT 0.25 C-ROAD-STRP`,
+    `_LWEIGHT 0.35 C-ROAD-PARK`,
+    ``,
+    `;; Enable on-screen Lineweight display`,
+    `LWDISPLAY 1`,
+    `REGEN`,
+    `;; Pen weights successfully calibrated.`
+  ];
+  return lines.join('\r\n');
+}
+
+/**
+ * Generates an AutoLISP command (c:AHH_SET_PEN_WEIGHTS) for instant 1-click execution.
+ *
+ * @returns {string} AutoLISP code
+ */
+function generatePlotStyleAutoLisp() {
+  return [
+    `;; =========================================================================`,
+    `;; Architecture Helping Hand — AutoLISP Pen Weight Setup`,
+    `;; Drag & drop into any DWG to calibrate AIA standard lineweights.`,
+    `;; =========================================================================`,
+    `(vl-load-com)`,
+    `(defun c:AHH_SET_PEN_WEIGHTS ()`,
+    `  (setvar "CMDECHO" 0)`,
+    `  (setvar "LWDISPLAY" 1)`,
+    `  (command "_.-LAYER" "_LW" "0.70" "A-WALL-FULL" "")`,
+    `  (command "_.-LAYER" "_LW" "0.50" "A-DOOR" "")`,
+    `  (command "_.-LAYER" "_LW" "0.50" "A-GLAZ" "")`,
+    `  (command "_.-LAYER" "_LW" "0.35" "A-FURN" "")`,
+    `  (command "_.-LAYER" "_LW" "0.35" "A-FLOR-STRS" "")`,
+    `  (command "_.-LAYER" "_LW" "0.35" "A-FLOR-HRAL" "")`,
+    `  (command "_.-LAYER" "_LW" "0.18" "A-ANNO-DIMS" "")`,
+    `  (command "_.-LAYER" "_LW" "0.25" "A-ANNO-TEXT" "")`,
+    `  (command "_.-LAYER" "_LW" "0.09" "A-FLOR-PATT" "")`,
+    `  (command "_.-LAYER" "_LW" "0.25" "C-ROAD-STRP" "")`,
+    `  (command "_.-LAYER" "_LW" "0.35" "C-ROAD-PARK" "")`,
+    `  (princ "\\nAll AIA NCS layer pen weights have been successfully applied.")`,
+    `  (princ "\\nLWDISPLAY turned ON.")`,
+    `  (princ)`,
+    `)`
+  ].join('\r\n');
+}
+
+/**
+ * Generates a human-readable CTB configuration guide and pen table documentation.
+ *
+ * @returns {string} Documentation text
+ */
+function generatePlotStyleReportText() {
+  const header = [
+    `================================================================================`,
+    `ARCHITECTURE HELPING HAND — AIA NCS / ISO 13567 PLOT STYLE (CTB) PEN GUIDE`,
+    `================================================================================`,
+    `STANDARD: National CAD Standard (NCS) Color-Dependent Plot Style Table (.ctb)`,
+    `HOW TO USE IN AUTOCAD:`,
+    `1. Type PLOTSTYLEMANAGER in AutoCAD command line (opens Plot Styles folder).`,
+    `2. Create a new Plot Style Table using the pen weights and screening below.`,
+    `3. Or drag setup_pen_weights.lsp directly into your drawing to apply lineweights.`,
+    `--------------------------------------------------------------------------------`,
+    `COLOR   NAME           LINEWEIGHT   SCREENING   TYPICAL CAD APPLICATION`,
+    `--------------------------------------------------------------------------------`
+  ];
+
+  const rows = AIA_PLOT_STYLE_PENS.map(p => {
+    const col = String(p.colorIndex).padEnd(7);
+    const name = p.colorName.padEnd(14);
+    const mm = `${p.mm.toFixed(2)} mm`.padEnd(12);
+    const scr = `${p.screening}%`.padEnd(11);
+    return `${col} ${name} ${mm} ${scr} ${p.use}`;
+  });
+
+  const footer = [
+    `--------------------------------------------------------------------------------`,
+    `GRAYSCALE TONES (Colors 250 - 255):`,
+    `Color 250: 80% Black (Heavy floor accent)`,
+    `Color 251: 60% Black (Medium shading / shadow lines)`,
+    `Color 252: 45% Black (Wall poché filling)`,
+    `Color 253: 30% Black (Light surface texture)`,
+    `Color 254: 15% Black (Glazing wash)`,
+    `Color 255: White / Masking background`,
+    `================================================================================`
+  ];
+
+  return [...header, ...rows, ...footer].join('\r\n');
+}
+
+
+  // =========================================================================
+  // MODULE: SolarShading
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — Solar Shading & Overhang Calculator
+ *
+ * Comprehensive passive solar design & shading calculation engine.
+ * Computes:
+ *   - Profile Angle (Vertical Shadow Angle / VSA, Ω)
+ *   - Horizontal Shadow Angle (HSA, Θ)
+ *   - Optimal overhang depth for 100% Summer Solstice cutoff
+ *   - Seasonal shading percentages (Summer, Winter, Equinox)
+ *   - Winter direct solar penetration depth into room
+ *   - Multi-blade brise-soleil louver spacing and blade depth
+ *   - Vertical side fin depths for East/West facades
+ *   - 1:1 2D architectural section DXF & SVG generation with standard AIA layers
+ */
+
+
+
+
+const SHADING_DEG = Math.PI / 180;
+const SHADING_RAD = 180 / Math.PI;
+
+function shadingToNum(v, fallback) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/**
+ * Calculates complete passive solar shading metrics for a window and facade.
+ *
+ * @param {object} params
+ * @param {number} params.latitudeDeg  -90..90 (North positive)
+ * @param {number} [params.longitudeDeg=0] -180..180
+ * @param {number} [params.timezoneOffsetHours=0]
+ * @param {number} [params.facadeAzimuthDeg=180] 0..360 (0=North, 90=East, 180=South, 270=West)
+ * @param {number} [params.windowHeightM=1.8] Window glazing height in meters
+ * @param {number} [params.windowWidthM=2.4] Window glazing width in meters
+ * @param {number} [params.sillHeightM=0.9] Window sill height from finished floor
+ * @param {number} [params.headToOverhangM=0.15] Distance from top of window to overhang soffit
+ * @param {number} [params.overhangDepthM] Optional specific depth; if omitted, calculates optimal depth
+ * @param {number} [params.louverCount=1] Number of blades for brise-soleil (1 = solid overhang)
+ * @param {number} [params.designHour=12] Hour for cutoff evaluation (default 12:00 solar noon)
+ */
+function calculateSolarShading(params = {}) {
+  const lat = shadingToNum(params.latitudeDeg, 32.0); // Default ~32° N
+  const lon = shadingToNum(params.longitudeDeg, 0);
+  const tz = shadingToNum(params.timezoneOffsetHours, 0);
+  const facadeAz = shadingToNum(params.facadeAzimuthDeg, lat >= 0 ? 180 : 0); // South in North, North in South
+  const winH = Math.max(0.2, shadingToNum(params.windowHeightM, 1.8));
+  const winW = Math.max(0.2, shadingToNum(params.windowWidthM, 2.4));
+  const sillH = Math.max(0, shadingToNum(params.sillHeightM, 0.9));
+  const gapH = Math.max(0, shadingToNum(params.headToOverhangM, 0.15));
+  const louvers = Math.max(1, Math.min(12, Math.round(shadingToNum(params.louverCount, 1))));
+  const hour = Math.max(0, Math.min(23, Math.round(shadingToNum(params.designHour, 12))));
+
+  const isNorthHemisphere = lat >= 0;
+  const year = new Date().getFullYear();
+  const summerDate = isNorthHemisphere ? `${year}-06-21` : `${year}-12-21`;
+  const winterDate = isNorthHemisphere ? `${year}-12-21` : `${year}-06-21`;
+  const equinoxDate = `${year}-03-21`;
+
+  // Solar position at Summer Solstice, Winter Solstice, and Equinox
+  const summerPos = solarPosition({ latitudeDeg: lat, longitudeDeg: lon, date: summerDate, hour, minute: 0, timezoneOffsetHours: tz });
+  const winterPos = solarPosition({ latitudeDeg: lat, longitudeDeg: lon, date: winterDate, hour, minute: 0, timezoneOffsetHours: tz });
+  const equinoxPos = solarPosition({ latitudeDeg: lat, longitudeDeg: lon, date: equinoxDate, hour, minute: 0, timezoneOffsetHours: tz });
+
+  function calcAngles(pos) {
+    if (!pos || !pos.ok || !pos.position || pos.position.altitudeDeg <= 0) {
+      return { altitudeDeg: 0, azimuthDeg: 0, vsaDeg: 0, hsaDeg: 0, inFrontOfFacade: false };
+    }
+    const alt = pos.position.altitudeDeg;
+    const az = pos.position.azimuthDeg;
+    // Surface solar azimuth: angle between sun azimuth and facade normal
+    let dAz = Math.abs(az - facadeAz);
+    if (dAz > 180) dAz = 360 - dAz;
+    const inFront = dAz < 89.9;
+
+    let vsa = 0;
+    if (inFront) {
+      const cosDAz = Math.cos(dAz * SHADING_DEG);
+      vsa = Math.atan(Math.tan(alt * SHADING_DEG) / Math.max(0.001, cosDAz)) * SHADING_RAD;
+    }
+    return {
+      altitudeDeg: Math.round(alt * 100) / 100,
+      azimuthDeg: Math.round(az * 100) / 100,
+      vsaDeg: Math.round(Math.min(89.9, Math.max(0, vsa)) * 100) / 100,
+      hsaDeg: Math.round(dAz * 100) / 100,
+      inFrontOfFacade: inFront
+    };
+  }
+
+  const summerAngles = calcAngles(summerPos);
+  const winterAngles = calcAngles(winterPos);
+  const equinoxAngles = calcAngles(equinoxPos);
+
+  const totalShadeH = winH + gapH;
+
+  // Optimal overhang depth for 100% summer window shading
+  let optimalSummerDepthM = 0.5;
+  if (summerAngles.vsaDeg > 5) {
+    optimalSummerDepthM = totalShadeH / Math.tan(summerAngles.vsaDeg * SHADING_DEG);
+  }
+  optimalSummerDepthM = Math.round(optimalSummerDepthM * 1000) / 1000;
+
+  // Actual overhang depth (either user specified or optimal)
+  const actualDepthM = (Number.isFinite(params.overhangDepthM) && params.overhangDepthM > 0)
+    ? Math.round(params.overhangDepthM * 1000) / 1000
+    : optimalSummerDepthM;
+
+  // Shading performance evaluation helper
+  function evaluateShading(angles, depth) {
+    if (!angles.inFrontOfFacade || angles.vsaDeg <= 0) {
+      return { shadedHeightM: 0, shadePercent: 0, sunPenetrationM: 0 };
+    }
+    const shadowDrop = depth * Math.tan(angles.vsaDeg * SHADING_DEG);
+    const shadedGlazing = Math.min(winH, Math.max(0, shadowDrop - gapH));
+    const percent = Math.min(100, Math.max(0, (shadedGlazing / winH) * 100));
+
+    // How far sun shines onto interior floor through window (if not shaded)
+    let penetration = 0;
+    if (percent < 100 && angles.vsaDeg > 2) {
+      penetration = (winH + sillH) / Math.tan(angles.vsaDeg * SHADING_DEG) - depth;
+      penetration = Math.max(0, penetration);
+    }
+    return {
+      shadedHeightM: Math.round(shadedGlazing * 1000) / 1000,
+      shadePercent: Math.round(percent * 10) / 10,
+      sunPenetrationM: Math.round(penetration * 100) / 100
+    };
+  }
+
+  const summerShading = evaluateShading(summerAngles, actualDepthM);
+  const winterShading = evaluateShading(winterAngles, actualDepthM);
+  const equinoxShading = evaluateShading(equinoxAngles, actualDepthM);
+
+  // Multi-blade brise-soleil metrics
+  const louverSpacingM = Math.round((totalShadeH / louvers) * 1000) / 1000;
+  let louverBladeDepthM = actualDepthM;
+  if (louvers > 1 && summerAngles.vsaDeg > 5) {
+    louverBladeDepthM = Math.round((louverSpacingM / Math.tan(summerAngles.vsaDeg * SHADING_DEG)) * 1000) / 1000;
+  }
+
+  // Vertical side fin metrics (for morning/afternoon low sun cutoff)
+  let verticalFinDepthM = 0.4;
+  if (summerAngles.hsaDeg > 10 && summerAngles.hsaDeg < 80) {
+    verticalFinDepthM = Math.round((winW * 0.4 / Math.tan(summerAngles.hsaDeg * SHADING_DEG)) * 1000) / 1000;
+  }
+
+  const isEquatorFacing = lat >= 0
+    ? (facadeAz >= 135 && facadeAz <= 225)
+    : (facadeAz <= 45 || facadeAz >= 315);
+
+  return {
+    inputs: {
+      latitudeDeg: lat,
+      longitudeDeg: lon,
+      timezoneOffsetHours: tz,
+      facadeAzimuthDeg: facadeAz,
+      windowHeightM: winH,
+      windowWidthM: winW,
+      sillHeightM: sillH,
+      headToOverhangM: gapH,
+      overhangDepthM: actualDepthM,
+      louverCount: louvers,
+      designHour: hour
+    },
+    isEquatorFacing,
+    summer: {
+      date: summerDate,
+      ...summerAngles,
+      ...summerShading
+    },
+    winter: {
+      date: winterDate,
+      ...winterAngles,
+      ...winterShading
+    },
+    equinox: {
+      date: equinoxDate,
+      ...equinoxAngles,
+      ...equinoxShading
+    },
+    optimalOverhangDepthM: optimalSummerDepthM,
+    actualOverhangDepthM: actualDepthM,
+    briseSoleil: {
+      louverCount: louvers,
+      louverSpacingM,
+      bladeDepthM: louverBladeDepthM
+    },
+    verticalFins: {
+      finDepthM: Math.max(0.15, Math.min(2.0, verticalFinDepthM))
+    }
+  };
+}
+
+/**
+ * Builds standard 2D CAD entities for the architectural wall & overhang section.
+ * Units: real-world meters.
+ */
+function generateShadingSectionEntities(shading) {
+  const inp = shading.inputs;
+  const wallThick = 0.30; // 300mm exterior wall
+  const floorThick = 0.25; // 250mm floor slab
+  const roomDepth = 3.5;  // 3.5m interior room space for sun ray visualization
+  const wallHeight = inp.sillHeightM + inp.windowHeightM + inp.headToOverhangM + 0.6;
+
+  const entities = [];
+
+  function line(x1, y1, x2, y2, layer) {
+    entities.push({ type: 'line', x1: Number(x1.toFixed(4)), y1: Number(y1.toFixed(4)), x2: Number(x2.toFixed(4)), y2: Number(y2.toFixed(4)), layer });
+  }
+
+  function polyline(pts, closed, layer) {
+    entities.push({ type: 'polyline', points: pts.map(([x, y]) => [Number(x.toFixed(4)), Number(y.toFixed(4))]), closed: !!closed, layer });
+  }
+
+  function text(x, y, content, height, layer) {
+    entities.push({ type: 'text', x: Number(x.toFixed(4)), y: Number(y.toFixed(4)), text: content, height: Number((height || 0.12).toFixed(4)), layer });
+  }
+
+  // 1. Finished Floor Slab (A-WALL)
+  polyline([[-1.0, -floorThick], [roomDepth, -floorThick], [roomDepth, 0], [-1.0, 0]], true, 'A-WALL');
+
+  // 2. Exterior Wall: Lower parapet/sill wall & Upper lintel wall (A-WALL)
+  // Lower wall below sill
+  polyline([[0, 0], [-wallThick, 0], [-wallThick, inp.sillHeightM], [0, inp.sillHeightM]], true, 'A-WALL');
+  // Upper wall above window head
+  const winTop = inp.sillHeightM + inp.windowHeightM;
+  polyline([[0, winTop], [-wallThick, winTop], [-wallThick, wallHeight], [0, wallHeight]], true, 'A-WALL');
+
+  // 3. Window Frame & Glazing (A-GLAZ)
+  // Frame perimeter
+  polyline([[0, inp.sillHeightM], [0.06, inp.sillHeightM], [0.06, winTop], [0, winTop]], true, 'A-GLAZ');
+  // Glass panes (double glazing lines)
+  line(0.03, inp.sillHeightM + 0.04, 0.03, winTop - 0.04, 'A-GLAZ');
+  line(0.045, inp.sillHeightM + 0.04, 0.045, winTop - 0.04, 'A-GLAZ');
+
+  // 4. Overhang Structure (A-ROOF or A-FURN)
+  const overhangY = winTop + inp.headToOverhangM;
+  const overhangThick = 0.12;
+  const depth = shading.actualOverhangDepthM;
+
+  if (inp.louverCount > 1) {
+    // Multi-blade brise-soleil louvers
+    const num = inp.louverCount;
+    const bladeW = shading.briseSoleil.bladeDepthM;
+    const spacing = shading.briseSoleil.louverSpacingM;
+    // Cantilever support bracket beam
+    line(0, overhangY + 0.05, -depth, overhangY + 0.05, 'A-ROOF');
+    for (let i = 0; i < num; i++) {
+      const ly = overhangY - (i * spacing);
+      polyline([[-depth + (i * bladeW * 0.8), ly], [-depth + (i * bladeW * 0.8) + bladeW, ly], [-depth + (i * bladeW * 0.8) + bladeW, ly + 0.025], [-depth + (i * bladeW * 0.8), ly + 0.025]], true, 'A-ROOF');
+    }
+  } else {
+    // Solid cantilevered overhang slab
+    polyline([[0, overhangY], [-depth, overhangY], [-depth, overhangY + overhangThick], [0, overhangY + overhangThick]], true, 'A-ROOF');
+    // Wall anchor bracket
+    line(0, overhangY + overhangThick, -wallThick, overhangY + overhangThick, 'A-WALL');
+  }
+
+  // 5. Sun Ray Vectors & Shading Angles (A-SITE-SUN & A-ANNO-TEXT)
+  const tipX = -depth;
+  const tipY = overhangY;
+
+  // Summer Solstice Sun Ray (Cutoff angle)
+  if (shading.summer.vsaDeg > 0) {
+    const vsaR = shading.summer.vsaDeg * SHADING_DEG;
+    // Ray extending backwards towards sun and down through window
+    const rayLen = 4.0;
+    const startX = tipX - Math.cos(vsaR) * 1.5;
+    const startY = tipY + Math.sin(vsaR) * 1.5;
+    const endX = tipX + (tipY / Math.tan(vsaR));
+    line(startX, startY, endX, 0, 'A-SITE');
+    text(startX - 0.1, startY + 0.1, `Summer VSA: ${shading.summer.vsaDeg}° (100% Shade)`, 0.10, 'A-ANNO-TEXT');
+  }
+
+  // Winter Solstice Sun Ray (Direct Solar Gain Penetration)
+  if (shading.winter.vsaDeg > 0) {
+    const vsaR = shading.winter.vsaDeg * SHADING_DEG;
+    const startX = tipX - Math.cos(vsaR) * 1.5;
+    const startY = tipY + Math.sin(vsaR) * 1.5;
+    const endX = tipX + (tipY / Math.tan(vsaR));
+    line(startX, startY, Math.min(roomDepth, endX), Math.max(0, tipY - ((Math.min(roomDepth, endX) - tipX) * Math.tan(vsaR))), 'A-SITE');
+    text(startX - 0.1, startY - 0.15, `Winter VSA: ${shading.winter.vsaDeg}° (Penetration: ${shading.winter.sunPenetrationM}m)`, 0.10, 'A-ANNO-TEXT');
+  }
+
+  // 6. Dimension Lines (A-ANNO-DIMS)
+  // Overhang projection dimension
+  line(0, overhangY + overhangThick + 0.15, -depth, overhangY + overhangThick + 0.15, 'A-ANNO-TEXT');
+  line(0, overhangY + overhangThick + 0.10, 0, overhangY + overhangThick + 0.20, 'A-ANNO-TEXT');
+  line(-depth, overhangY + overhangThick + 0.10, -depth, overhangY + overhangThick + 0.20, 'A-ANNO-TEXT');
+  text(-depth / 2 - 0.15, overhangY + overhangThick + 0.20, `Overhang: ${Math.round(depth * 1000)} mm`, 0.09, 'A-ANNO-TEXT');
+
+  // Window height dimension
+  line(-wallThick - 0.15, inp.sillHeightM, -wallThick - 0.15, winTop, 'A-ANNO-TEXT');
+  line(-wallThick - 0.10, inp.sillHeightM, -wallThick - 0.20, inp.sillHeightM, 'A-ANNO-TEXT');
+  line(-wallThick - 0.10, winTop, -wallThick - 0.20, winTop, 'A-ANNO-TEXT');
+  text(-wallThick - 0.55, inp.sillHeightM + inp.windowHeightM / 2, `Window: ${Math.round(inp.windowHeightM * 1000)} mm`, 0.09, 'A-ANNO-TEXT');
+
+  return entities;
+}
+
+/**
+ * Exports the calculated architectural shading section as 1:1 DXF text.
+ */
+function shadingSectionToDXF(shading) {
+  const entities = generateShadingSectionEntities(shading);
+  return buildDXF(entities, {
+    scale: 1000,
+    blockName: 'SOLAR_SHADING_SECTION',
+    asBlock: false
+  });
+}
+
+/**
+ * Renders the architectural shading section as clean, responsive SVG.
+ */
+function shadingSectionToSVG(shading) {
+  const inp = shading.inputs;
+  const W = 640;
+  const H = 440;
+  const originX = 220; // wall face inside room
+  const originY = 360; // finished floor line
+  const scale = 80;    // 80 pixels per meter
+
+  const toPxX = m => originX + m * scale;
+  const toPxY = m => originY - m * scale;
+
+  const wallThickPx = 0.3 * scale;
+  const floorThickPx = 0.25 * scale;
+  const sillHPx = inp.sillHeightM * scale;
+  const winHPx = inp.windowHeightM * scale;
+  const gapHPx = inp.headToOverhangM * scale;
+  const depthPx = shading.actualOverhangDepthM * scale;
+  const overYPx = toPxY(inp.sillHeightM + inp.windowHeightM + inp.headToOverhangM);
+
+  // Summer sun angle ray
+  const sumVsa = shading.summer.vsaDeg;
+  const winVsa = shading.winter.vsaDeg;
+
+  let raysSvg = '';
+  if (sumVsa > 0) {
+    const sumAngleRad = sumVsa * SHADING_DEG;
+    const rayTipX = originX - depthPx;
+    const rayTipY = overYPx;
+    const rayStartX = rayTipX - 120 * Math.cos(sumAngleRad);
+    const rayStartY = rayTipY - 120 * Math.sin(sumAngleRad);
+    const floorIntersectX = rayTipX + (rayTipY - originY) / (-Math.tan(sumAngleRad));
+    raysSvg += `
+      <line x1="${rayStartX.toFixed(1)}" y1="${rayStartY.toFixed(1)}" x2="${floorIntersectX.toFixed(1)}" y2="${originY}" stroke="#eab308" stroke-width="2.5" stroke-dasharray="6 3"/>
+      <circle cx="${rayStartX.toFixed(1)}" cy="${rayStartY.toFixed(1)}" r="7" fill="#facc15" filter="drop-shadow(0 0 6px rgba(250,204,21,0.8))"/>
+      <text x="${(rayStartX - 10).toFixed(1)}" y="${(rayStartY - 12).toFixed(1)}" fill="#facc15" font-size="11" font-weight="600">Summer Solstice (VSA ${sumVsa}°)</text>
+    `;
+  }
+
+  if (winVsa > 0) {
+    const winAngleRad = winVsa * SHADING_DEG;
+    const rayTipX = originX - depthPx;
+    const rayTipY = overYPx;
+    const rayStartX = rayTipX - 140 * Math.cos(winAngleRad);
+    const rayStartY = rayTipY - 140 * Math.sin(winAngleRad);
+    const penetrationX = originX + (shading.winter.sunPenetrationM * scale);
+    raysSvg += `
+      <line x1="${rayStartX.toFixed(1)}" y1="${rayStartY.toFixed(1)}" x2="${penetrationX.toFixed(1)}" y2="${originY}" stroke="#f97316" stroke-width="2" stroke-dasharray="4 2"/>
+      <circle cx="${rayStartX.toFixed(1)}" cy="${rayStartY.toFixed(1)}" r="6" fill="#fb923c"/>
+      <text x="${(rayStartX - 10).toFixed(1)}" y="${(rayStartY + 18).toFixed(1)}" fill="#fb923c" font-size="11" font-weight="600">Winter Solstice (VSA ${winVsa}°)</text>
+    `;
+  }
+
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" class="shading-section-svg" style="width: 100%; height: auto; max-height: 480px; background: var(--bg-surface-secondary, #0f172a); border-radius: 8px;" role="img" aria-label="Passive Solar Shading Architectural Section">
+      <defs>
+        <pattern id="wallHatch" width="8" height="8" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+          <line x1="0" y1="0" x2="0" y2="8" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+        </pattern>
+      </defs>
+
+      <!-- Grid lines -->
+      <line x1="20" y1="${originY}" x2="${W - 20}" y2="${originY}" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
+      <text x="${W - 120}" y="${originY - 8}" fill="rgba(255,255,255,0.4)" font-size="10">FINISHED FLOOR (0.00)</text>
+
+      <!-- Floor Slab -->
+      <rect x="${originX - wallThickPx - 80}" y="${originY}" width="${W - (originX - wallThickPx - 80) - 20}" height="${floorThickPx}" fill="url(#wallHatch)" stroke="var(--border-color, #475569)" stroke-width="1.5"/>
+
+      <!-- Lower Exterior Wall (below sill) -->
+      <rect x="${originX - wallThickPx}" y="${toPxY(inp.sillHeightM)}" width="${wallThickPx}" height="${sillHPx}" fill="url(#wallHatch)" stroke="var(--border-color, #475569)" stroke-width="2"/>
+
+      <!-- Upper Exterior Wall (above window head) -->
+      <rect x="${originX - wallThickPx}" y="20" width="${wallThickPx}" height="${toPxY(inp.sillHeightM + inp.windowHeightM) - 20}" fill="url(#wallHatch)" stroke="var(--border-color, #475569)" stroke-width="2"/>
+
+      <!-- Window Frame & Double Glazing -->
+      <rect x="${originX - 4}" y="${toPxY(inp.sillHeightM + inp.windowHeightM)}" width="10" height="${winHPx}" fill="rgba(56, 189, 248, 0.2)" stroke="#38bdf8" stroke-width="2"/>
+      <line x1="${originX}" y1="${toPxY(inp.sillHeightM + inp.windowHeightM) + 4}" x2="${originX}" y2="${toPxY(inp.sillHeightM) - 4}" stroke="#bae6fd" stroke-width="1.5"/>
+
+      <!-- Overhang / Louvers -->
+      ${inp.louverCount > 1
+        ? Array.from({ length: inp.louverCount }, (_, i) => {
+            const ly = overYPx + i * (shading.briseSoleil.louverSpacingM * scale);
+            const bx = originX - depthPx + (i * (depthPx / inp.louverCount));
+            return `<rect x="${bx.toFixed(1)}" y="${ly.toFixed(1)}" width="${(depthPx / inp.louverCount + 8).toFixed(1)}" height="6" fill="#f43f5e" rx="1.5" stroke="#fda4af" stroke-width="1"/>`;
+          }).join('')
+        : `<rect x="${originX - depthPx}" y="${overYPx - 10}" width="${depthPx}" height="10" fill="#f43f5e" rx="2" stroke="#fda4af" stroke-width="1.5"/>`
+      }
+
+      <!-- Solar Rays -->
+      ${raysSvg}
+
+      <!-- Dimension Overhang -->
+      <line x1="${originX - depthPx}" y1="${overYPx - 20}" x2="${originX}" y2="${overYPx - 20}" stroke="#94a3b8" stroke-width="1.2"/>
+      <line x1="${originX - depthPx}" y1="${overYPx - 25}" x2="${originX - depthPx}" y2="${overYPx - 15}" stroke="#94a3b8" stroke-width="1.2"/>
+      <line x1="${originX}" y1="${overYPx - 25}" x2="${originX}" y2="${overYPx - 15}" stroke="#94a3b8" stroke-width="1.2"/>
+      <text x="${originX - depthPx / 2 - 25}" y="${overYPx - 26}" fill="#cbd5e1" font-size="11" font-weight="600">${Math.round(shading.actualOverhangDepthM * 1000)} mm</text>
+
+      <!-- Shading Summary Badge -->
+      <g transform="translate(20, 20)">
+        <rect width="180" height="75" rx="6" fill="rgba(15,23,42,0.85)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+        <text x="12" y="22" fill="#38bdf8" font-size="11" font-weight="700">SOLAR SHADING PERFORMANCE</text>
+        <text x="12" y="42" fill="#e2e8f0" font-size="11">Summer Cutoff: <tspan fill="#4ade80" font-weight="700">${shading.summer.shadePercent}%</tspan></text>
+        <text x="12" y="60" fill="#e2e8f0" font-size="11">Winter Sun Gain: <tspan fill="#fb923c" font-weight="700">${(100 - shading.winter.shadePercent).toFixed(1)}%</tspan></text>
+      </g>
+    </svg>
+  `;
+}
+
+
+  // =========================================================================
   // MODULE: Site
   // =========================================================================
 
@@ -28847,568 +35131,6 @@ const ShortcutsManager = new ShortcutsManagerClass();
 
 
   // =========================================================================
-  // MODULE: ExportModel
-  // =========================================================================
-
-/**
- * Architecture Helping Hand - Universal Export Model
- * Phase: Universal Export Center.
- *
- * One normalized export architecture for the whole application. Tools
- * produce (or already hold) project data; this module shapes it into a
- * provenance-stamped export document and provides PURE serializers for
- * every supported format. Side effects (download/clipboard/print) live in
- * services/export.js — nothing here touches the DOM.
- *
- * Formats: JSON (round-trip), TXT (human-readable), CSV, TSV, SVG (vector),
- * DXF (conservative 2D subset). PDF is handled by the print stylesheet +
- * window.print() (services), not by a heavy library.
- *
- * Every export carries provenance: source, format, timestamp, projectId.
- */
-
-
-
-
-/** Format identifiers. */
-const EXPORT_FORMATS = Object.freeze({
-  JSON: 'json',
-  TXT: 'txt',
-  CSV: 'csv',
-  TSV: 'tsv',
-  SVG: 'svg',
-  DXF: 'dxf'
-});
-
-/** Content-type mapping for downloads. */
-const EXPORT_CONTENT_TYPES = Object.freeze({
-  json: 'application/json',
-  txt: 'text/plain',
-  csv: 'text/csv',
-  tsv: 'text/tab-separated-values',
-  svg: 'image/svg+xml',
-  dxf: 'application/dxf'
-});
-
-/** Human-readable format descriptions for the export UI. */
-const EXPORT_FORMAT_INFO = Object.freeze({
-  json: 'Full structured export — round-trips back into the project system.',
-  txt: 'Human-readable report of the exported data.',
-  csv: 'Comma-separated schedule (RFC-4180 escaping).',
-  tsv: 'Tab-separated schedule — CAD/spreadsheet friendly.',
-  svg: 'Vector drawing of geometry (chains, plans, diagrams).',
-  dxf: 'AutoCAD DXF (ASCII R12 subset: LINE, POLYLINE, TEXT). Conservative 2D only.'
-});
-
-/** Provenance stamp embedded in every export document. */
-function createExportProvenance(source, format, projectId = null, extra = {}) {
-  return {
-    application: 'Architecture Helping Hand',
-    source,
-    format,
-    projectId,
-    exportedAt: new Date().toISOString(),
-    ...extra
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Data collection: normalized table shape used by tabular serializers
-// ---------------------------------------------------------------------------
-
-/**
- * Normalizes arbitrary exportable content into a table description:
- * { title, columns: [{key,label}], rows: [{...}] } — consumed by CSV/TSV/TXT.
- *
- * @param {string} title
- * @param {Array<{key:string,label:string}>} columns
- * @param {Array<Object>} rows
- */
-function createExportTable(title, columns, rows) {
-  return { title, columns, rows };
-}
-
-/** Collects the workspace (dimensions) as a normalized table. */
-function workspaceToTable(workspace) {
-  if (!workspace || !Array.isArray(workspace.entries)) return null;
-  return createExportTable(
-    'Dimension Schedule',
-    [
-      { key: 'name', label: 'Name' },
-      { key: 'rawInput', label: 'Input' },
-      { key: 'type', label: 'Type' },
-      { key: 'realMeters', label: 'Real (m)' },
-      { key: 'drawingMeters', label: 'Drawing (m)' },
-      { key: 'notes', label: 'Notes' }
-    ],
-    workspace.entries.map(e => ({
-      name: e.name || 'Dimension',
-      rawInput: e.rawInput || '',
-      type: (e.dimensionType || 'segment').toUpperCase(),
-      realMeters: typeof e.realMeters === 'number' ? e.realMeters : '',
-      drawingMeters: typeof e.realMeters === 'number' && workspace.scaleRatio ? e.realMeters / workspace.scaleRatio : '',
-      notes: e.notes || ''
-    }))
-  );
-}
-
-/** Collects chain segments as a normalized table. */
-function chainToTable(calculatedChain) {
-  if (!calculatedChain || !Array.isArray(calculatedChain.segments)) return null;
-  return createExportTable(
-    `Dimension Chain — ${calculatedChain.name || 'Chain'}`,
-    [
-      { key: 'index', label: '#' },
-      { key: 'name', label: 'Segment' },
-      { key: 'startMeters', label: 'Start (m)' },
-      { key: 'endMeters', label: 'End (m)' },
-      { key: 'lengthMeters', label: 'Length (m)' },
-      { key: 'type', label: 'Type' }
-    ],
-    calculatedChain.segments
-      .filter(s => s.enabled !== false && s.isValid !== false)
-      .map((s, idx) => ({
-        index: idx + 1,
-        name: s.name || `Segment ${idx + 1}`,
-        startMeters: s.startMeters,
-        endMeters: s.endMeters,
-        lengthMeters: typeof s.lengthMeters === 'number' ? s.lengthMeters : (typeof s.realMeters === 'number' ? s.realMeters : 0),
-        type: (s.dimensionType || 'segment').toUpperCase()
-      }))
-  );
-}
-
-/** Collects a stair result as a normalized single-row table. */
-function stairToTable(stairResult) {
-  if (!stairResult || !stairResult.valid) return null;
-  const g = stairResult.geometry;
-  return createExportTable(
-    'Stair Calculation',
-    [
-      { key: 'risers', label: 'Risers' },
-      { key: 'goings', label: 'Goings' },
-      { key: 'riserHeight', label: 'Riser (m)' },
-      { key: 'treadDepth', label: 'Going (m)' },
-      { key: 'totalRise', label: 'Total Rise (m)' },
-      { key: 'totalRun', label: 'Total Run (m)' },
-      { key: 'angle', label: 'Angle (°)' },
-      { key: 'twoRPlusT', label: '2R+T (m)' }
-    ],
-    [{
-      risers: stairResult.risers.count,
-      goings: stairResult.treads.count,
-      riserHeight: stairResult.risers.heightMeters,
-      treadDepth: stairResult.treads.depthMeters,
-      totalRise: stairResult.input.totalRiseMeters,
-      totalRun: g.totalRunMeters,
-      angle: g.angleDegrees,
-      twoRPlusT: stairResult.proportion.twoRPlusTMeters
-    }]
-  );
-}
-
-/** Collects a ramp/slope result (shared geometry shape) as a table. */
-function slopeToTable(geometryResult, kindLabel) {
-  if (!geometryResult || !geometryResult.valid || !geometryResult.geometry) return null;
-  const g = geometryResult.geometry;
-  return createExportTable(
-    kindLabel || 'Slope Calculation',
-    [
-      { key: 'rise', label: 'Rise (m)' },
-      { key: 'run', label: 'Run (m)' },
-      { key: 'slopePercent', label: 'Slope (%)' },
-      { key: 'ratio', label: 'Ratio (1:X)' },
-      { key: 'angle', label: 'Angle (°)' },
-      { key: 'flight', label: 'Flight Length (m)' }
-    ],
-    [{
-      rise: g.riseMeters,
-      run: g.runMeters,
-      slopePercent: g.slopePercent,
-      ratio: g.ratioValue,
-      angle: g.angleDegrees,
-      flight: g.flightLengthMeters !== undefined ? g.flightLengthMeters : (g.slopedLengthMeters !== undefined ? g.slopedLengthMeters : '')
-    }]
-  );
-}
-
-/** Collects project decisions as a normalized table. */
-function decisionsToTable(project) {
-  if (!project || !Array.isArray(project.decisions)) return null;
-  return createExportTable(
-    'Design Decisions',
-    [
-      { key: 'id', label: 'ID' },
-      { key: 'kind', label: 'Kind' },
-      { key: 'name', label: 'Name' },
-      { key: 'createdAt', label: 'Created' },
-      { key: 'data', label: 'Result Data (JSON)' }
-    ],
-    project.decisions.map(d => ({
-      id: d.id || '',
-      kind: d.kind || '',
-      name: d.name || '',
-      createdAt: d.createdAt || '',
-      data: d.result ? JSON.stringify(d.result) : ''
-    }))
-  );
-}
-
-/** Collects project notes as a normalized table. */
-function notesToTable(project) {
-  if (!project || !Array.isArray(project.notes)) return null;
-  return createExportTable(
-    'Project Notes',
-    [
-      { key: 'id', label: 'ID' },
-      { key: 'title', label: 'Title' },
-      { key: 'body', label: 'Note' },
-      { key: 'createdAt', label: 'Created' }
-    ],
-    project.notes.map(n => ({
-      id: n.id || '',
-      title: n.title || 'Note',
-      body: n.body || n.text || '',
-      createdAt: n.createdAt || ''
-    }))
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Pure serializers
-// ---------------------------------------------------------------------------
-
-/** Serializes a table to TSV (with header). Reuses CAD-safe escaping. */
-function tableToTSV(table) {
-  if (!table) return '';
-  const header = table.columns.map(c => escapeTSV(c.label)).join('\t');
-  const rows = table.rows.map(row => table.columns.map(c => escapeTSV(row[c.key])).join('\t'));
-  return [table.title, header, ...rows].join('\n');
-}
-
-/** Serializes a table to CSV (with header). Reuses RFC-4180 escaping. */
-function tableToCSV(table) {
-  if (!table) return '';
-  const header = table.columns.map(c => escapeCSV(c.label)).join(',');
-  const rows = table.rows.map(row => table.columns.map(c => escapeCSV(row[c.key])).join(','));
-  return [escapeCSV(table.title), header, ...rows].join('\n');
-}
-
-/** Serializes a table to human-readable TXT. */
-function tableToTXT(table) {
-  if (!table) return '';
-  const lines = [table.title.toUpperCase(), '='.repeat(Math.max(table.title.length, 8)), ''];
-  for (const row of table.rows) {
-    for (const col of table.columns) {
-      const val = row[col.key];
-      lines.push(`${col.label}: ${val === '' ? '—' : val}`);
-    }
-    lines.push('');
-  }
-  return lines.join('\n').trimEnd() + '\n';
-}
-
-/**
- * Full JSON export of a project document (round-trip capable).
- * Provenance lives in a sibling envelope, never inside the project itself,
- * so the project part re-imports cleanly.
- */
-function serializeProjectJSON(project, provenance) {
-  const check = validateProject(project);
-  if (!check.ok) {
-    throw new Error(`Cannot export invalid project: ${check.errors[0]}`);
-  }
-  return JSON.stringify({
-    _provenance: provenance || createExportProvenance('project', EXPORT_FORMATS.JSON, project.id),
-    project
-  }, null, 2);
-}
-
-/**
- * Parses a JSON export back into a validated project document.
- * Throws on malformed input; callers decide recovery policy.
- */
-function deserializeProjectJSON(json) {
-  const parsed = JSON.parse(json);
-  const project = parsed && typeof parsed === 'object' && parsed.project ? parsed.project : parsed;
-  const check = validateProject(project);
-  if (!check.ok) {
-    throw new Error(`Imported document is not a valid project: ${check.errors[0]}`);
-  }
-  return project;
-}
-
-// ---------------------------------------------------------------------------
-// DXF writer — conservative ASCII R12 subset
-// ---------------------------------------------------------------------------
-
-/**
- * DXF scope (documented limitation): ASCII R12, ENTITIES section only with
- * LINE, POLYLINE (as LWPOLLINE-free classic VERTEX chain), TEXT, and CIRCLE.
- * Coordinates are plain 2D (X, Y); no layers beyond '0', no blocks, no dims,
- * no 3D. Units are interpreted by the recipient — exported values are the
- * canonical meters multiplied by the caller's scale (mm by default).
- */
-
-function dxfPair(code, value) {
-  return `${code}\n${value}`;
-}
-
-function dxfLine(x1, y1, x2, y2, layer = '0') {
-  return [
-    dxfPair(0, 'LINE'),
-    dxfPair(8, layer),
-    dxfPair(10, x1), dxfPair(20, y1),
-    dxfPair(11, x2), dxfPair(21, y2)
-  ].join('\n');
-}
-
-function dxfPolyline(points, layer = '0', closed = false) {
-  const parts = [
-    dxfPair(0, 'POLYLINE'),
-    dxfPair(8, layer),
-    dxfPair(66, 1),
-    dxfPair(70, closed ? 1 : 0)
-  ];
-  for (const [x, y] of points) {
-    parts.push(dxfPair(0, 'VERTEX'));
-    parts.push(dxfPair(8, layer));
-    parts.push(dxfPair(10, x));
-    parts.push(dxfPair(20, y));
-  }
-  parts.push(dxfPair(0, 'SEQEND'));
-  return parts.join('\n');
-}
-
-function dxfText(x, y, text, height = 0.2, layer = '0') {
-  const safe = String(text).replace(/[\r\n]+/g, ' ');
-  return [
-    dxfPair(0, 'TEXT'),
-    dxfPair(8, layer),
-    dxfPair(10, x), dxfPair(20, y),
-    dxfPair(40, height),
-    dxfPair(1, safe)
-  ].join('\n');
-}
-
-/**
- * Builds a DXF document from a normalized entity list.
- *
- * @param {Array<Object>} entities - { type: 'line'|'polyline'|'text'|'circle', ... }
- *   line: { x1, y1, x2, y2 }
- *   polyline: { points: [[x,y]...], closed }
- *   text: { x, y, text, height }
- *   circle: { x, y, r }
- * @param {Object} [options] - { scale (default 1000 → m to mm), header }
- * @returns {string} DXF text
- */
-function buildDXF(entities, options = {}) {
-  const scale = typeof options.scale === 'number' && options.scale > 0 ? options.scale : 1000;
-  const list = Array.isArray(entities) ? entities : [];
-  const S = v => (v * scale).toFixed(4);
-
-  const body = [];
-  for (const e of list) {
-    if (!e || typeof e !== 'object') continue;
-    if (e.type === 'line') {
-      body.push(dxfLine(S(e.x1), S(e.y1), S(e.x2), S(e.y2), e.layer || '0'));
-    } else if (e.type === 'polyline' && Array.isArray(e.points) && e.points.length >= 2) {
-      body.push(dxfPolyline(e.points.map(p => [S(p[0]), S(p[1])]), e.layer || '0', !!e.closed));
-    } else if (e.type === 'text') {
-      body.push(dxfText(S(e.x), S(e.y), e.text || '', (e.height || 0.2) * scale, e.layer || '0'));
-    } else if (e.type === 'circle') {
-      body.push([
-        dxfPair(0, 'CIRCLE'),
-        dxfPair(8, e.layer || '0'),
-        dxfPair(10, S(e.x)), dxfPair(20, S(e.y)),
-        dxfPair(40, S(e.r || 0))
-      ].join('\n'));
-    }
-  }
-
-  const usedLayers = new Set(['0']);
-  for (const e of list) {
-    if (e && e.layer) usedLayers.add(String(e.layer));
-  }
-  const sortedLayers = Array.from(usedLayers).sort();
-
-  const LAYER_COLOR_MAP = {
-    '0': 7,
-    'A-WALL': 4,
-    'A-DOOR': 2,
-    'A-GLAZ': 4,
-    'A-AREA': 3,
-    'A-FLOR-STRS': 6,
-    'A-FURN': 5,
-    'A-DIMS': 1,
-    'A-ANNO-TEXT': 7,
-    'A-ANNO-TAGS': 2,
-    'A-GRID': 8,
-    'REF': 1,
-    'CHAIN': 4,
-    'ROOM': 3,
-    'PLAN': 7
-  };
-
-  const tableParts = [
-    dxfPair(0, 'SECTION'),
-    dxfPair(2, 'TABLES'),
-    dxfPair(0, 'TABLE'),
-    dxfPair(2, 'LAYER'),
-    dxfPair(70, sortedLayers.length)
-  ];
-
-  for (const lyr of sortedLayers) {
-    const col = LAYER_COLOR_MAP[lyr] || 7;
-    tableParts.push(
-      dxfPair(0, 'LAYER'),
-      dxfPair(2, lyr),
-      dxfPair(70, 0),
-      dxfPair(62, col),
-      dxfPair(6, 'CONTINUOUS')
-    );
-  }
-  tableParts.push(dxfPair(0, 'ENDTAB'), dxfPair(0, 'ENDSEC'));
-
-  return [
-    dxfPair(0, 'SECTION'),
-    dxfPair(2, 'HEADER'),
-    dxfPair(9, '$ACADVER'), dxfPair(1, 'AC1009'),
-    dxfPair(9, '$INSUNITS'), dxfPair(70, 4), // 4 = millimeters
-    dxfPair(0, 'ENDSEC'),
-    tableParts.join('\n'),
-    dxfPair(0, 'SECTION'),
-    dxfPair(2, 'ENTITIES'),
-    body.join('\n'),
-    dxfPair(0, 'ENDSEC'),
-    dxfPair(0, 'EOF')
-  ].join('\n');
-}
-
-/** Chain geometry → DXF entities (closed room-style outline of cumulative points). */
-function chainToDXFEntities(calculatedChain) {
-  if (!calculatedChain || !Array.isArray(calculatedChain.segments)) return [];
-  const entities = [];
-  for (const s of calculatedChain.segments) {
-    if (s.enabled === false || s.isValid === false) continue;
-    entities.push({
-      type: 'line',
-      x1: s.startMeters, y1: 0,
-      x2: s.endMeters, y2: 0,
-      layer: (s.dimensionType || 'segment') === 'reference' ? 'REF' : 'CHAIN'
-    });
-  }
-  return entities;
-}
-
-/** Room rectangles → DXF entities (initial rectilinear scope). */
-function roomsToDXFEntities(rooms) {
-  if (!Array.isArray(rooms)) return [];
-  const entities = [];
-  for (const room of rooms) {
-    if (!room || typeof room.x !== 'number' || typeof room.y !== 'number') continue;
-    const w = room.widthMeters ?? room.width ?? 0;
-    const h = room.depthMeters ?? room.depth ?? 0;
-    if (w <= 0 || h <= 0) continue;
-    entities.push({
-      type: 'polyline',
-      closed: true,
-      layer: 'ROOM',
-      points: [
-        [room.x, room.y],
-        [room.x + w, room.y],
-        [room.x + w, room.y + h],
-        [room.x, room.y + h]
-      ]
-    });
-    if (room.name) {
-      entities.push({ type: 'text', x: room.x + w / 2 - 0.4, y: room.y + h / 2, text: room.name, height: 0.2 });
-    }
-  }
-  return entities;
-}
-
-// ---------------------------------------------------------------------------
-// SVG export (wraps existing diagram generators' output into a standalone file)
-// ---------------------------------------------------------------------------
-
-/**
- * Wraps SVG markup (from generateChainSVG / generateStairSVG / generateRampSVG
- * / generateSlopeSVG / the plan canvas) into a standalone, namespaced SVG
- * document with provenance metadata.
- */
-function wrapSVGDocument(svgMarkup, provenance) {
-  if (typeof svgMarkup !== 'string' || !svgMarkup.includes('<svg')) {
-    throw new Error('wrapSVGDocument requires valid SVG markup containing an <svg> element.');
-  }
-  const meta = provenance || createExportProvenance('diagram', EXPORT_FORMATS.SVG);
-  const comment = `<!-- ${meta.application} | source: ${meta.source} | exported: ${meta.exportedAt} -->`;
-  // Ensure xmlns exists on the root element
-  const withNs = svgMarkup.includes('xmlns=')
-    ? svgMarkup
-    : svgMarkup.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
-  return `<?xml version="1.0" encoding="UTF-8"?>\n${comment}\n${withNs}\n`;
-}
-
-/**
- * Master entry: serializes any supported export request.
- *
- * @param {Object} request
- * @param {string} request.format - one of EXPORT_FORMATS
- * @param {string} request.source - provenance label (e.g. 'dimension-workspace')
- * @param {Object} [request.project] - project document (JSON format / provenance)
- * @param {Array<Object>} [request.tables] - normalized tables (CSV/TSV/TXT)
- * @param {string} [request.svgMarkup] - SVG markup (SVG format)
- * @param {Array<Object>} [request.dxfEntities] - DXF entities (DXF format)
- * @param {string} [request.projectId]
- * @returns {{ content: string, contentType: string, fileName: string, provenance: Object }}
- */
-function buildExport(request) {
-  const format = request && request.format;
-  if (!Object.values(EXPORT_FORMATS).includes(format)) {
-    throw new Error(`Unknown export format: "${format}". Supported: ${Object.values(EXPORT_FORMATS).join(', ')}`);
-  }
-  const provenance = createExportProvenance(request.source || 'unknown', format, request.projectId || null);
-  const stamp = provenance.exportedAt.replace(/[:.]/g, '-').slice(0, 19);
-  const baseName = (request.source || 'export').replace(/[^a-z0-9_-]+/gi, '-').toLowerCase();
-
-  switch (format) {
-    case EXPORT_FORMATS.JSON: {
-      if (!request.project) throw new Error('JSON export requires a project document.');
-      const content = serializeProjectJSON(request.project, provenance);
-      return { content, contentType: EXPORT_CONTENT_TYPES.json, fileName: `${baseName}-${stamp}.json`, provenance };
-    }
-    case EXPORT_FORMATS.TXT: {
-      const tables = (request.tables || []).filter(Boolean);
-      if (tables.length === 0) throw new Error('TXT export requires at least one table.');
-      return { content: tables.map(tableToTXT).join('\n'), contentType: EXPORT_CONTENT_TYPES.txt, fileName: `${baseName}-${stamp}.txt`, provenance };
-    }
-    case EXPORT_FORMATS.CSV: {
-      const tables = (request.tables || []).filter(Boolean);
-      if (tables.length === 0) throw new Error('CSV export requires at least one table.');
-      return { content: tables.map(tableToCSV).join('\n'), contentType: EXPORT_CONTENT_TYPES.csv, fileName: `${baseName}-${stamp}.csv`, provenance };
-    }
-    case EXPORT_FORMATS.TSV: {
-      const tables = (request.tables || []).filter(Boolean);
-      if (tables.length === 0) throw new Error('TSV export requires at least one table.');
-      return { content: tables.map(tableToTSV).join('\n'), contentType: EXPORT_CONTENT_TYPES.tsv, fileName: `${baseName}-${stamp}.tsv`, provenance };
-    }
-    case EXPORT_FORMATS.SVG: {
-      if (!request.svgMarkup) throw new Error('SVG export requires svgMarkup.');
-      return { content: wrapSVGDocument(request.svgMarkup, provenance), contentType: EXPORT_CONTENT_TYPES.svg, fileName: `${baseName}-${stamp}.svg`, provenance };
-    }
-    case EXPORT_FORMATS.DXF: {
-      const entities = request.dxfEntities || [];
-      const content = buildDXF(entities, { scale: request.dxfScale || 1000 });
-      return { content, contentType: EXPORT_CONTENT_TYPES.dxf, fileName: `${baseName}-${stamp}.dxf`, provenance };
-    }
-    default:
-      throw new Error('Unhandled export format.');
-  }
-}
-
-
-  // =========================================================================
   // MODULE: FurnitureAssets
   // =========================================================================
 
@@ -29416,25 +35138,164 @@ function buildExport(request) {
 
 
 
+
+/** Standard CAD insertion basepoint by architectural mounting type. */
+function resolveCadBasePoint(item, w, d) {
+  const id = String(item.id || '').toLowerCase();
+  const sub = String(item.subcategory || '').toLowerCase();
+  // Wall-hosted fixtures: insertion basepoint on the wall face centerline
+  if (id.includes('wall') || id.includes('vanity') || id.includes('urinal') || id.includes('basin') || sub.includes('sanitary') || id.includes('cabinet') || id.includes('shelf')) {
+    return [w / 2, 0];
+  }
+  // Doors & windows: hinge/jamb corner insertion point (0, 0)
+  if (id.startsWith('door-') || id.startsWith('window-') || sub.includes('doors') || sub.includes('openings')) {
+    return [0, 0];
+  }
+  // Center-pivot elements: trees, circular shades, bollards, poles
+  if (id.startsWith('tree-') || id.includes('bollard') || id.includes('fountain') || id.includes('mast') || id.includes('round')) {
+    return [w / 2, d / 2];
+  }
+  // Standard freestanding CAD block origin (bottom-left)
+  return [0, 0];
+}
+
+/** Generate regulatory code & accessibility clearances on A-CLEARANCE layer. */
+function buildClearanceGeometry(item, w, d) {
+  const clearances = [];
+  const id = String(item.id || '').toLowerCase();
+  const sub = String(item.subcategory || '').toLowerCase();
+  const cat = String(item.category || '').toLowerCase();
+
+  // 1. Explicit user/item clearance attribute (converted from cm to meters)
+  const c = Number.isFinite(item.clearance) && item.clearance > 0 ? item.clearance / 100 : 0;
+  if (c > 0) {
+    clearances.push({
+      type: 'polyline',
+      closed: true,
+      layer: 'A-CLEARANCE',
+      points: [[-c, -c], [w + c, -c], [w + c, d + c], [-c, d + c]]
+    });
+  }
+
+  // 2. Restrooms, Stalls & ADA Accessible Fixtures
+  if (id.includes('toilet') || id.includes('stall') || id.includes('ada') || sub.includes('sanitary') || id.includes('shampoo')) {
+    if (id.includes('ada') || id.includes('accessible')) {
+      // ADA 304 60-inch (1500mm = 1.5m) turning radius clearance circle
+      clearances.push({
+        type: 'circle',
+        x: w / 2,
+        y: d / 2,
+        r: 0.75,
+        layer: 'A-CLEARANCE'
+      });
+      // ADA 604.2 Water Closet clear transfer floor space (1525mm W x 1420mm D)
+      clearances.push({
+        type: 'polyline',
+        closed: true,
+        layer: 'A-CLEARANCE',
+        points: [[0, 0], [1.525, 0], [1.525, 1.42], [0, 1.42]]
+      });
+    } else if (id.includes('toilet') || id.includes('stall')) {
+      // Standard commercial stall approach clearance: 760mm (0.76m) in front of fixture
+      clearances.push({
+        type: 'polyline',
+        closed: true,
+        layer: 'A-CLEARANCE',
+        points: [[0, d], [w, d], [w, d + 0.76], [0, d + 0.76]]
+      });
+    }
+  } else if (id.startsWith('door-') || sub.includes('doors') || sub.includes('openings')) {
+    // 3. Doors (ADA 404 Maneuvering Clearance boxes)
+    // Pull side approach box: (w + 0.45m latch clearance) x 1.50m perpendicular depth
+    clearances.push({
+      type: 'polyline',
+      closed: true,
+      layer: 'A-CLEARANCE',
+      points: [[0, 0], [w + 0.45, 0], [w + 0.45, 1.50], [0, 1.50]]
+    });
+    // Push side approach box: (w + 0.30m) x 1.20m perpendicular depth
+    clearances.push({
+      type: 'polyline',
+      closed: true,
+      layer: 'A-CLEARANCE',
+      points: [[0, 0], [w + 0.30, 0], [w + 0.30, -1.20], [0, -1.20]]
+    });
+  } else if (cat === 'workplace' || id.includes('desk') || id.includes('workstation')) {
+    // 4. Workplace Desks / Workstations: 1000mm (1.0m) chair roll-out and circulation aisle
+    clearances.push({
+      type: 'polyline',
+      closed: true,
+      layer: 'A-CLEARANCE',
+      points: [[0, d], [w, d], [w, d + 1.0], [0, d + 1.0]]
+    });
+  } else if (cat === 'kitchen' || id.includes('kitchen') || id.includes('range') || id.includes('cooktop') || id.includes('fryer') || id.includes('oven')) {
+    // 5. Commercial Kitchen & Cooking Appliances: 1050mm (1.05m) cook aisle clearance
+    clearances.push({
+      type: 'polyline',
+      closed: true,
+      layer: 'A-CLEARANCE',
+      points: [[0, d], [w, d], [w, d + 1.05], [0, d + 1.05]]
+    });
+  }
+
+  return clearances;
+}
+
 /** Recognizable, simplified top views. Coordinates are always real meters. */
 function createFurnitureAsset(item, options = {}) {
   if (!item || !Number.isFinite(item.wCm) || !Number.isFinite(item.dCm) || item.wCm<=0 || item.dCm<=0) throw new Error('Furniture needs positive, finite width and depth.');
   const dimensions=resolveObjectDimensions(item,options),w=dimensions.widthMm/1000,d=dimensions.depthMm/1000;
+  const h=dimensions.heightMm==null?null:dimensions.heightMm/1000;
   const geometry=buildObjectGeometry(item.geometryId || 'object:'+item.id,w,d);
-  const clearanceGeometry=[];
-  const c=Number.isFinite(item.clearance)&&item.clearance>0?item.clearance/100:0;
-  if(c)clearanceGeometry.push({type:'polyline',closed:true,layer:'A-CLEARANCE',points:[[-c,-c],[w+c,-c],[w+c,d+c],[-c,d+c]]});
+  const frontGeometry = buildFrontElevation(item, w, d, h);
+  const sideGeometry = buildSideElevation(item, w, d, h);
+  const clearanceGeometry = buildClearanceGeometry(item, w, d);
+  const basePoint = resolveCadBasePoint(item, w, d);
   return {id:item.id,name:item.name,category:item.category,subcategory:item.subcategory,tags:item.tags||[],geometryId:item.geometryId||'object:'+item.id,
-    width:w,depth:d,height:dimensions.heightMm==null?null:dimensions.heightMm/1000,dimensions,description:item.desc,dimensionSourceType:dimensions.modified?'user-defined':item.dimensionSourceType||'user-defined',planGeometry:geometry,clearanceGeometry,
-    cadMetadata:{units:'m',exportUnits:'mm',scale:1,origin:[0,0],clearanceNote:'Reference planning allowance, not a certified access zone.',resizeNote:dimensions.modified?'Edited schematic footprint; verify functional details.':''},includeClearance:!!options.includeClearance};
+    width:w,depth:d,height:h,dimensions,basePoint,description:item.desc,dimensionSourceType:dimensions.modified?'user-defined':item.dimensionSourceType||'user-defined',
+    planGeometry:geometry,frontGeometry,sideGeometry,clearanceGeometry,
+    cadMetadata:{units:'m',exportUnits:'mm',scale:1,origin:basePoint,basePoint,clearanceNote:'Reference planning allowance, not a certified access zone.',resizeNote:dimensions.modified?'Edited schematic footprint; verify functional details.':''},includeClearance:!!options.includeClearance};
 }
 
-function furnitureAssetDXF(asset, { includeClearance = asset.includeClearance } = {}) {
-  return buildDXF([...asset.planGeometry,...(includeClearance?asset.clearanceGeometry:[])],{scale:1000});
+function furnitureAssetDXF(asset, { includeClearance = asset.includeClearance, asBlock = false, view = 'plan' } = {}) {
+  const suffix = view === 'front' ? '_FRONT' : view === 'side' ? '_SIDE' : '';
+  const blockName = 'AHH_' + String(asset.id || 'OBJECT').toUpperCase().replace(/[^A-Za-z0-9_]/g, '_') + suffix;
+  const baseEntities = view === 'front' ? (asset.frontGeometry || asset.planGeometry)
+                     : view === 'side'  ? (asset.sideGeometry  || asset.planGeometry)
+                     : asset.planGeometry;
+  const clr = (includeClearance && view === 'plan') ? asset.clearanceGeometry : [];
+  return buildDXF([...baseEntities, ...clr], {
+    scale: 1000,
+    blockName,
+    asBlock,
+    basePoint: view === 'plan' ? (asset.basePoint || [0, 0]) : [0, 0]
+  });
 }
 
-function furnitureAssetSVG(asset, { includeClearance = asset.includeClearance } = {}) {
-  const entities=[...asset.planGeometry,...(includeClearance?asset.clearanceGeometry:[])];
+/**
+ * Exports multiple furniture assets as a unified AutoCAD Tool Palette sheet (.dxf).
+ * Organizes each block into a labeled grid in Model Space with true BLOCK definitions.
+ */
+function categoryToToolPaletteDXF(items, options = {}) {
+  const assets = items.map(item => {
+    const a = createFurnitureAsset(item, { includeClearance: options.includeClearance });
+    return {
+      id: a.id,
+      name: a.name,
+      dimensions: a.dimensions,
+      entities: [...a.planGeometry, ...(options.includeClearance ? a.clearanceGeometry : [])],
+      basePoint: a.basePoint
+    };
+  });
+  return buildMultiBlockDXF(assets, options);
+}
+
+function furnitureAssetSVG(asset, { includeClearance = asset.includeClearance, view = 'plan' } = {}) {
+  const baseEntities = view === 'front' ? (asset.frontGeometry || asset.planGeometry)
+                     : view === 'side'  ? (asset.sideGeometry  || asset.planGeometry)
+                     : asset.planGeometry;
+  const clr = (includeClearance && view === 'plan') ? asset.clearanceGeometry : [];
+  const entities = [...baseEntities, ...clr];
   const coords=entities.flatMap(e=>e.type==='polyline'?e.points:e.type==='line'?[[e.x1,e.y1],[e.x2,e.y2]]:[[e.x-e.r,e.y-e.r],[e.x+e.r,e.y+e.r]]);
   const xs=coords.map(p=>p[0]),ys=coords.map(p=>p[1]);
   const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
@@ -29447,7 +35308,8 @@ function furnitureAssetSVG(asset, { includeClearance = asset.includeClearance } 
     if(e.type==='line')return `<line x1="${n(e.x1)}" y1="${n(e.y1)}" x2="${n(e.x2)}" y2="${n(e.y2)}"/>`;
     return `<circle cx="${n(e.x)}" cy="${n(e.y)}" r="${n(e.r)}"/>`;
   }).join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="${n(minX)} ${-n(maxY)} ${W} ${H}" role="img" aria-label="${safe(asset.name)} top view"><title>${safe(asset.name)} — real size, millimeters</title><g transform="scale(1,-1)" fill="none" stroke="currentColor" stroke-width="${Math.max(2,Math.min(W,H)*.006)}">${marks}</g></svg>`;
+  const labelSuffix = view === 'front' ? ' front elevation' : view === 'side' ? ' side elevation' : ' top view';
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="${n(minX)} ${-n(maxY)} ${W} ${H}" role="img" aria-label="${safe(asset.name)}${labelSuffix}"><title>${safe(asset.name)} — real size, millimeters</title><g transform="scale(1,-1)" fill="none" stroke="currentColor" stroke-width="${Math.max(2,Math.min(W,H)*.006)}">${marks}</g></svg>`;
 }
 
 
@@ -29475,6 +35337,261 @@ function getObjectBrowseCatalog() {
       tags:[...new Set(group.flatMap(i=>i.tags))]});
   }));
   return objectBrowseCatalog;
+}
+
+
+  // =========================================================================
+  // MODULE: ZipPackager
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — Zero-Dependency Standalone ZIP Packager
+ *
+ * Implements standard PKZIP 2.0 (Store / Method 0) in pure JavaScript.
+ * Allows client-side bundling of multiple CAD files (DXF, LSP, SCR, TXT)
+ * into a single archive so modern browsers never block multi-file downloads.
+ */
+
+
+
+
+
+/** Pre-computed CRC32 lookup table for high-speed checksumming */
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) {
+      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+/**
+ * Calculates standard IEEE 802.3 32-bit CRC.
+ *
+ * @param {Uint8Array} bytes
+ * @returns {number}
+ */
+function crc32(bytes) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) {
+    crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ bytes[i]) & 0xFF];
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+/**
+ * Creates a valid, uncompressed standard ZIP archive buffer (PKZIP 2.0).
+ *
+ * @param {Array<{name: string, content: string|Uint8Array}>} files
+ * @returns {Uint8Array} Valid ZIP file binary bytes
+ */
+function createZipArchive(files) {
+  const enc = new TextEncoder();
+  const fileEntries = [];
+  let offset = 0;
+  const parts = [];
+
+  for (const file of files) {
+    const nameBytes = enc.encode(file.name);
+    const dataBytes = typeof file.content === 'string' ? enc.encode(file.content) : file.content;
+    const crc = crc32(dataBytes);
+    const size = dataBytes.length;
+
+    // Local file header: 30 bytes + filename
+    const localHeader = new Uint8Array(30 + nameBytes.length);
+    const view = new DataView(localHeader.buffer);
+    view.setUint32(0, 0x04034b50, true); // Local file header signature
+    view.setUint16(4, 20, true);         // Version needed: 2.0
+    view.setUint16(6, 0x0800, true);      // General purpose bit flag (UTF-8 filename)
+    view.setUint16(8, 0, true);           // Compression: 0 (Store)
+    view.setUint16(10, 0, true);          // Last mod time
+    view.setUint16(12, 0, true);          // Last mod date
+    view.setUint32(14, crc, true);        // CRC-32
+    view.setUint32(18, size, true);       // Compressed size
+    view.setUint32(22, size, true);       // Uncompressed size
+    view.setUint16(26, nameBytes.length, true);
+    view.setUint16(28, 0, true);          // Extra field length
+    localHeader.set(nameBytes, 30);
+
+    parts.push(localHeader);
+    parts.push(dataBytes);
+
+    fileEntries.push({ nameBytes, crc, size, offset });
+    offset += localHeader.length + dataBytes.length;
+  }
+
+  const centralDirStart = offset;
+  let centralDirSize = 0;
+
+  for (const entry of fileEntries) {
+    // Central directory file header: 46 bytes + filename
+    const cdHeader = new Uint8Array(46 + entry.nameBytes.length);
+    const view = new DataView(cdHeader.buffer);
+    view.setUint32(0, 0x02014b50, true); // Central dir signature
+    view.setUint16(4, 20, true);         // Version made by
+    view.setUint16(6, 20, true);         // Version needed: 2.0
+    view.setUint16(8, 0x0800, true);      // UTF-8 flag
+    view.setUint16(10, 0, true);          // Compression: 0
+    view.setUint16(12, 0, true);          // Last mod time
+    view.setUint16(14, 0, true);          // Last mod date
+    view.setUint32(16, entry.crc, true);  // CRC-32
+    view.setUint32(20, entry.size, true); // Compressed size
+    view.setUint32(24, entry.size, true); // Uncompressed size
+    view.setUint16(28, entry.nameBytes.length, true);
+    view.setUint16(30, 0, true);          // Extra field length
+    view.setUint16(32, 0, true);          // File comment length
+    view.setUint16(34, 0, true);          // Disk number start
+    view.setUint16(36, 0, true);          // Internal attributes
+    view.setUint32(38, 0, true);          // External attributes
+    view.setUint32(42, entry.offset, true); // Relative offset of local header
+    cdHeader.set(entry.nameBytes, 46);
+
+    parts.push(cdHeader);
+    centralDirSize += cdHeader.length;
+  }
+
+  // End of central directory record (EOCD): 22 bytes
+  const eocd = new Uint8Array(22);
+  const eocdView = new DataView(eocd.buffer);
+  eocdView.setUint32(0, 0x06054b50, true);
+  eocdView.setUint16(4, 0, true);                  // Disk number
+  eocdView.setUint16(6, 0, true);                  // CD disk number
+  eocdView.setUint16(8, files.length, true);       // Total entries on this disk
+  eocdView.setUint16(10, files.length, true);      // Total entries
+  eocdView.setUint32(12, centralDirSize, true);    // Size of central directory
+  eocdView.setUint32(16, centralDirStart, true);   // Offset of central directory
+  eocdView.setUint16(20, 0, true);                 // Comment length
+  parts.push(eocd);
+
+  const totalLength = parts.reduce((acc, p) => acc + p.length, 0);
+  const archive = new Uint8Array(totalLength);
+  let pos = 0;
+  for (const part of parts) {
+    archive.set(part, pos);
+    pos += part.length;
+  }
+  return archive;
+}
+
+/**
+ * Builds a complete CAD Package (.zip) for an individual object.
+ *
+ * @param {object} asset
+ * @param {object} [options]
+ * @param {string} [options.view='plan'] 'plan', 'front', or 'side'
+ * @param {boolean} [options.includeClearance=false]
+ * @returns {Uint8Array}
+ */
+function generateCadPackageZip(asset, options = {}) {
+  const view = options.view || 'plan';
+  const suffix = view !== 'plan' ? `-${view}` : '';
+  const baseName = `${asset.id}${suffix}-${asset.dimensions.widthMm}x${asset.dimensions.depthMm}mm`;
+  const dxfName = `${baseName}.dxf`;
+  const lspName = `${asset.id}${suffix}-injector.lsp`;
+  const scrName = `convert_to_dwg.scr`;
+
+  const dxfData = furnitureAssetDXF(asset, { view, includeClearance: options.includeClearance });
+  const lspData = generateAutoLispBlock(asset, { view, includeClearance: options.includeClearance });
+  const scrData = generateAutoCadBatchDwgScript([dxfName]);
+
+  const blockCmd = 'AHH_' + String(asset.id || 'OBJECT').toUpperCase().replace(/[^A-Za-z0-9_]/g, '_') + (view === 'front' ? '_FRONT' : view === 'side' ? '_SIDE' : '');
+
+  const guide = [
+    `========================================================================`,
+    `ARCHITECTURE HELPING HAND — CAD BLOCK PACKAGE (1:1 MILLIMETERS)`,
+    `========================================================================`,
+    `Asset Name:   ${asset.name}`,
+    `View:         ${view.toUpperCase()}`,
+    `Size:         ${asset.dimensions.widthMm} x ${asset.dimensions.depthMm}${asset.dimensions.heightMm ? ' x ' + asset.dimensions.heightMm : ''} mm`,
+    `CAD Layer:    ${asset.planGeometry[0]?.layer || 'A-FURN'}`,
+    `Standards:    AIA NCS 6.0 / ISO 13567 Standard Layer Names`,
+    ``,
+    `------------------------------------------------------------------------`,
+    `METHOD 1: OPEN DIRECTLY IN AUTOCAD & SAVE AS .DWG (RECOMMENDED)`,
+    `------------------------------------------------------------------------`,
+    `1. Double-click '${dxfName}'. AutoCAD opens it natively right away.`,
+    `2. Press Ctrl + Shift + S (or type SAVEAS in the command line).`,
+    `3. Select "AutoCAD Drawing (*.dwg)" and click Save.`,
+    `   -> You now have the native .dwg file!`,
+    ``,
+    `------------------------------------------------------------------------`,
+    `METHOD 2: INSERT DIRECTLY INTO AN EXISTING DWG PROJECT`,
+    `------------------------------------------------------------------------`,
+    `1. Open your project drawing (.dwg) in AutoCAD.`,
+    `2. Type INSERT (or CLASSICINSERT) in the AutoCAD command prompt.`,
+    `3. Browse to '${dxfName}' and click OK.`,
+    `4. Click where you want to place the block in your drawing.`,
+    ``,
+    `------------------------------------------------------------------------`,
+    `METHOD 3: DRAG & DROP AUTOLISP BLOCK INJECTOR (.LSP)`,
+    `------------------------------------------------------------------------`,
+    `1. Drag and drop '${lspName}' directly into any open AutoCAD .dwg window.`,
+    `2. Type the command: ${blockCmd}`,
+    `3. The block is created and inserted directly into your drawing.`,
+    ``,
+    `------------------------------------------------------------------------`,
+    `METHOD 4: 1-CLICK AUTOCAD BATCH CONVERTER (.SCR)`,
+    `------------------------------------------------------------------------`,
+    `1. Drag and drop '${scrName}' into AutoCAD, or type SCRIPT and select it.`,
+    `2. AutoCAD will automatically , zoom extents, and save`,
+    `   a native .dwg drawing file in the same folder.`,
+    `========================================================================`
+  ].join('\r\n');
+
+  return createZipArchive([
+    { name: dxfName, content: dxfData },
+    { name: lspName, content: lspData },
+    { name: scrName, content: scrData },
+    { name: 'AUTOCAD_DWG_GUIDE.txt', content: guide }
+  ]);
+}
+
+/**
+ * Builds a complete Category CAD Palette Pack (.zip) for all objects in a category.
+ *
+ * @param {Array<object>} items
+ * @param {object} [options]
+ * @returns {Uint8Array}
+ */
+function generateCategoryPackZip(items, options = {}) {
+  const dxfName = `autocad-palette-${items.length}-blocks.dxf`;
+  const scrName = `convert_palette_to_dwg.scr`;
+  const lspName = `setup_aia_layers.lsp`;
+
+  const dxfData = categoryToToolPaletteDXF(items, { includeClearance: options.includeClearance });
+  const scrData = generateAutoCadBatchDwgScript([dxfName]);
+  const lspData = generateAiaLayersAutoLisp();
+
+  const guide = [
+    `========================================================================`,
+    `ARCHITECTURE HELPING HAND — AUTOCAD PALETTE PACK (${items.length} CAD BLOCKS)`,
+    `========================================================================`,
+    `Total Blocks: ${items.length} 1:1 Millimeter CAD Blocks`,
+    `Standards:    AIA NCS 6.0 Standard Layers (A-FURN, A-DOOR, A-CLEARANCE)`,
+    ``,
+    `FILES INCLUDED:`,
+    `1. '${dxfName}'`,
+    `   Full multi-block sheet. Double-click to open in AutoCAD at 1:1 scale.`,
+    ``,
+    `2. '${scrName}'`,
+    `   AutoCAD script for 1-click batch conversion from DXF to native .dwg.`,
+    ``,
+    `3. '${lspName}'`,
+    `   AutoLISP script that instantly creates all 24 certified AIA NCS layers`,
+    `   in any active DWG with standard colors, linetypes, and lineweights.`,
+    `========================================================================`
+  ].join('\r\n');
+
+  return createZipArchive([
+    { name: dxfName, content: dxfData },
+    { name: scrName, content: scrData },
+    { name: lspName, content: lspData },
+    { name: 'AUTOCAD_PALETTE_GUIDE.txt', content: guide }
+  ]);
 }
 
 
@@ -31596,7 +37713,11 @@ const StorageService = {
 function downloadExport(content, fileName, format) {
   const contentType = EXPORT_CONTENT_TYPES[format] || 'text/plain';
   try {
-    const blob = new Blob([content], { type: `${contentType};charset=utf-8` });
+    const isBinary = (typeof Uint8Array !== 'undefined' && content instanceof Uint8Array) ||
+                     (typeof ArrayBuffer !== 'undefined' && content instanceof ArrayBuffer);
+    const blob = isBinary
+      ? new Blob([content], { type: contentType })
+      : new Blob([content], { type: `${contentType};charset=utf-8` });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -32870,6 +38991,16 @@ const DEFAULT_COMMANDS = [
     icon: '⚡',
     keywords: ['batch', 'cad', 'bulk', 'multi-scale', 'schedule', 'table', 'mode 12', 'b'],
     shortcut: 'B',
+    actionType: 'navigation',
+    available: true
+  },
+  {
+    id: 'nav-cad-automation',
+    title: 'AutoCAD & BIM Automation',
+    description: 'AutoLISP AIA layer setup, Tool Palettes (.atc), DXF purger & sanitizer, Revit Shared Parameters and BIM schedules',
+    category: 'Navigation',
+    icon: '⚡',
+    keywords: ['automation', 'cad', 'bim', 'revit', 'autolisp', 'lisp', 'palette', 'atc', 'purger', 'dxf', 'layers', 'schedule'],
     actionType: 'navigation',
     available: true
   },
@@ -35836,34 +41967,118 @@ function getFurniturePlanSVG(item) {
 
 
 
-/** Temporary sizes belong to the open library session, never to catalog records. */
+
+
+/** Temporary sizes belong to the open library session, never to catalog records. Tailored for AutoCAD blocks and 1:1 DXF use. */
 function renderObjectLibraryCards({host,items,scale,instances,download,copy,send}) {
   const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const sizeText=a=>`${formatNumber(a.dimensions.widthMm,1)} × ${formatNumber(a.dimensions.depthMm,1)} mm`;
-  host.innerHTML=items.map(item=>{
+
+  const packBar = items.length > 1 ? `
+    <div class="category-pack-export-bar" style="grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.75rem 1rem; margin-bottom: 0.75rem; background: var(--bg-surface-secondary, rgba(255,255,255,0.04)); border: 1px solid var(--border-color, rgba(255,255,255,0.12)); border-radius: 8px;">
+      <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span style="font-weight: 600; font-size: 0.85rem; color: var(--color-primary, #60a5fa); text-transform: uppercase; letter-spacing: 0.04em;">AutoCAD DXF &amp; DWG Palette Pack</span>
+          <span style="font-size: 0.85rem; color: var(--text-secondary, #94a3b8);">${items.length} CAD Blocks</span>
+        </div>
+        <span style="font-size: 0.75rem; color: var(--text-muted, #94a3b8);">Standard 1:1 millimeter AutoCAD blocks on AIA CAD layers. Extracts both .DXF palette and DWG converter script.</span>
+      </div>
+      <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <label class="object-check" style="margin: 0; font-size: 0.8rem; cursor: pointer;"><input type="checkbox" data-pack-clearance> Include A-CLEARANCE</label>
+        <button type="button" class="action-tool-btn primary" data-download-category-pack="zip" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; padding: 0.35rem 0.75rem;" title="Extract complete palette package (.zip) containing 1:1 DXF palette sheet, DWG batch script, and AutoLISP layer builder in one file">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          CAD Pack (.ZIP)
+        </button>
+        <button type="button" class="action-tool-btn" data-download-category-pack="dxf" title="Download 1:1 DXF Multi-Block Sheet — opens directly in AutoCAD">
+          Palette (.DXF)
+        </button>
+        <button type="button" class="action-tool-btn" data-download-dwg-script title="Download AutoCAD .scr script for 1-click batch conversion to native .dwg">
+          DWG Script (.scr)
+        </button>
+      </div>
+    </div>
+  ` : '';
+
+  host.innerHTML = packBar + items.map(item=>{
     const asset=createFurnitureAsset(item,instances.get(item.id)||{}),d=asset.dimensions;
+    const cadLayer=asset.planGeometry[0]?.layer||'A-FURN';
     return `<article class="furniture-card object-card" data-id="${safe(item.id)}">
       <h3 class="furn-name">${safe(item.name)}</h3><p class="object-category">${safe(item.category.replaceAll('-',' '))} › ${safe(item.subcategory.replaceAll('-',' '))}</p>
+      <div class="view-projection-selector" style="display: flex; gap: 0.25rem; margin-bottom: 0.5rem;">
+        <button type="button" class="view-proj-btn active" data-view="plan" style="flex: 1; padding: 0.2rem 0.4rem; font-size: 0.75rem; border-radius: 4px; border: 1px solid var(--border-color, #444); background: var(--bg-accent, #2563eb); color: #fff; cursor: pointer;">Top Plan</button>
+        <button type="button" class="view-proj-btn" data-view="front" style="flex: 1; padding: 0.2rem 0.4rem; font-size: 0.75rem; border-radius: 4px; border: 1px solid var(--border-color, #444); background: transparent; color: inherit; cursor: pointer;">Front</button>
+        <button type="button" class="view-proj-btn" data-view="side" style="flex: 1; padding: 0.2rem 0.4rem; font-size: 0.75rem; border-radius: 4px; border: 1px solid var(--border-color, #444); background: transparent; color: inherit; cursor: pointer;">Side</button>
+      </div>
       <div class="furn-plan-preview-box" data-object-preview>${furnitureAssetSVG(asset)}</div>
       <p class="object-size" data-object-size>${sizeText(asset)}</p><p class="object-provenance" data-object-provenance>${d.modified?'Edited size':item.dimensionSourceType==='accessibility-guideline'?'Accessibility reference — verify local code':item.dimensionSourceType==='illustrative-reference'?'Editable design reference':'Typical planning dimension'}</p>
       <details class="object-size-editor"><summary>Edit Size</summary><div class="object-size-fields">
         <label>Width (mm)<input class="form-input" type="number" min="1" max="1000000" step="any" data-size="widthMm" value="${d.widthMm}"></label>
         <label>Depth (mm)<input class="form-input" type="number" min="1" max="1000000" step="any" data-size="depthMm" value="${d.depthMm}"></label>
         ${d.heightMm!=null?`<label>Height (mm)<input class="form-input" type="number" min="0" max="1000000" step="any" data-size="heightMm" value="${d.heightMm}"></label>`:''}
-      </div><label class="object-check"><input type="checkbox" data-lock-proportions> Preserve proportions</label><button type="button" class="action-tool-btn" data-reset-size>Reset Original</button><p class="object-error" role="alert" data-size-error></p><p class="object-note">This stretches the schematic top view. Verify functional details and working clearances.</p></details>
-      <div class="object-actions"><button type="button" class="action-tool-btn primary" data-furniture-download="dxf">Download DXF</button><button type="button" class="action-tool-btn" data-furniture-download="svg">SVG</button><button type="button" class="action-tool-btn" data-copy-object>Copy Dimensions</button></div>
+      </div><label class="object-check"><input type="checkbox" data-lock-proportions> Preserve proportions</label><button type="button" class="action-tool-btn" data-reset-size>Reset Original</button><p class="object-error" role="alert" data-size-error></p><p class="object-note">Stretches the 2D CAD plan symbol. Scaled 1:1 in millimeters for AutoCAD.</p></details>
+      <div class="object-actions">
+        <button type="button" class="action-tool-btn primary" data-furniture-download="dxf" title="Download 1:1 AutoCAD DXF drawing — double-click to open directly in AutoCAD at real-world millimeter scale">AutoCAD (.DXF)</button>
+        <button type="button" class="action-tool-btn" data-furniture-download="zip" title="Download complete CAD Pack (.zip) containing DXF drawing + AutoLISP DWG injector + conversion script + instructions">CAD Pack (.ZIP)</button>
+        <button type="button" class="action-tool-btn" data-furniture-download="dwg" title="Download AutoLISP DWG block injector (.lsp) — drag into any open AutoCAD .dwg window to insert block">DWG (.lsp)</button>
+        <button type="button" class="action-tool-btn" data-copy-object>Copy Size</button>
+      </div>
       <details class="object-information"><summary>More information</summary><p>Original: ${item.wCm*10} × ${item.dCm*10}${item.hCm?` × ${item.hCm*10}`:''} mm</p><p data-object-imperial>Imperial: ${formatNumber(d.widthMm/25.4,2)} × ${formatNumber(d.depthMm/25.4,2)} in</p><p data-paper-preview></p><p>${safe(item.desc)}</p><p>${safe(item.dimensionSource.note)}</p><p>${safe(item.tags.join(' · '))}</p>
       ${item.aliases?.length?`<p>Same plan symbol is also listed as: ${item.aliases.map(a=>safe(a.name)+(a.heightMm?' (height '+a.heightMm+' mm)':'')).join('; ')}. Edit height when using a size variant.</p>`:''}
-      ${item.clearance?'<label class="object-check"><input type="checkbox" data-include-clearance> Include reference clearance</label>':''}<p class="object-note">DXF and SVG always use real-size millimeters. Drawing scale affects only the paper readout.</p><button type="button" class="action-tool-btn btn-furn-send" data-send-object>To Converter</button></details>
+      ${item.clearance?'<label class="object-check"><input type="checkbox" data-include-clearance> Include reference clearance</label>':''}
+      <p class="object-note">Standard 1:1 scale in millimeters on AIA CAD layers. Double-click the .DXF to open directly in AutoCAD (or Save As .DWG), or download the CAD Pack (.ZIP) for the complete package.</p><button type="button" class="action-tool-btn btn-furn-send" data-send-object>To Converter</button></details>
     </article>`;
   }).join('');
+
+  host.querySelectorAll('[data-download-category-pack]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.downloadCategoryPack || 'zip';
+      const incClr = !!host.querySelector('[data-pack-clearance]')?.checked;
+      if (mode === 'dxf') {
+        const defaultDxf = `autocad-palette-${items.length}-blocks.dxf`;
+        const dxf = categoryToToolPaletteDXF(items, { includeClearance: incClr });
+        download(dxf, defaultDxf, 'dxf');
+      } else {
+        const zipData = generateCategoryPackZip(items, { includeClearance: incClr });
+        download(zipData, `autocad-palette-${items.length}-blocks-pack.zip`, 'zip');
+      }
+    });
+  });
+
+  host.querySelector('[data-download-dwg-script]')?.addEventListener('click', () => {
+    const defaultDxf = `autocad-palette-${items.length}-blocks.dxf`;
+    const scr = generateAutoCadBatchDwgScript([defaultDxf]);
+    download(scr, `convert_palette_to_dwg.scr`, 'txt');
+  });
+
   host.querySelectorAll('.object-card').forEach(card=>{
     const item=items.find(i=>i.id===card.dataset.id);
     let valid=true;
+    let currentView='plan';
     const options=()=>instances.get(item.id)||{};
     const asset=()=>createFurnitureAsset(item,{...options(),includeClearance:!!card.querySelector('[data-include-clearance]')?.checked});
     const paper=()=>{const p=objectPaperDimensions(asset().dimensions,scale);card.querySelector('[data-paper-preview]').textContent=`Drawing preview at 1:${scale}: ${formatNumber(p.widthMm,2)} × ${formatNumber(p.depthMm,2)} mm on paper.`;};
-    const paint=()=>{const a=asset();card.querySelector('[data-object-preview]').innerHTML=furnitureAssetSVG(a);card.querySelector('[data-object-size]').textContent=sizeText(a);card.querySelector('[data-object-imperial]').textContent='Imperial: '+formatNumber(a.dimensions.widthMm/25.4,2)+' × '+formatNumber(a.dimensions.depthMm/25.4,2)+' in';card.querySelector('[data-object-provenance]').textContent=a.dimensions.modified?'Edited size — verify before use':item.dimensionSourceType==='illustrative-reference'?'Editable design reference':item.dimensionSourceType==='accessibility-guideline'?'Accessibility reference — verify local code':'Typical planning dimension';paper();};
+    const paint=()=>{
+      const a=asset();
+      card.querySelector('[data-object-preview]').innerHTML=furnitureAssetSVG(a,{view:currentView});
+      const dimText=currentView==='front'?`${formatNumber(a.dimensions.widthMm,1)} × ${formatNumber((a.height||0.85)*1000,1)} mm (Front Elevation)`:currentView==='side'?`${formatNumber(a.dimensions.depthMm,1)} × ${formatNumber((a.height||0.85)*1000,1)} mm (Side Elevation)`:sizeText(a);
+      card.querySelector('[data-object-size]').textContent=dimText;
+      card.querySelector('[data-object-imperial]').textContent='Imperial: '+formatNumber(a.dimensions.widthMm/25.4,2)+' × '+formatNumber(a.dimensions.depthMm/25.4,2)+' in';
+      card.querySelector('[data-object-provenance]').textContent=a.dimensions.modified?'Edited size — verify before use':item.dimensionSourceType==='illustrative-reference'?'Editable design reference':item.dimensionSourceType==='accessibility-guideline'?'Accessibility reference — verify local code':'Typical planning dimension';
+      paper();
+    };
+
+    const viewBtns = card.querySelectorAll('[data-view]');
+    viewBtns.forEach(btn => btn.addEventListener('click', () => {
+      currentView = btn.dataset.view;
+      viewBtns.forEach(b => {
+        const isActive = b.dataset.view === currentView;
+        b.classList.toggle('active', isActive);
+        b.style.background = isActive ? 'var(--bg-accent, #2563eb)' : 'transparent';
+        b.style.color = isActive ? '#fff' : 'inherit';
+      });
+      paint();
+    }));
+
     card.querySelectorAll('[data-size]').forEach(input=>input.addEventListener('input',()=>{
       try {
         const next={};card.querySelectorAll('[data-size]').forEach(field=>next[field.dataset.size]=field.value===''?NaN:Number(field.value));
@@ -35877,7 +42092,31 @@ function renderObjectLibraryCards({host,items,scale,instances,download,copy,send
     }));
     card.querySelector('[data-reset-size]').addEventListener('click',()=>{instances.delete(item.id);const d=asset().dimensions;card.querySelectorAll('[data-size]').forEach(field=>field.value=d[field.dataset.size]);valid=true;card.querySelector('[data-size-error]').textContent='';card.querySelectorAll('button').forEach(b=>b.disabled=false);paint();});
     card.querySelector('[data-include-clearance]')?.addEventListener('change',paint);
-    card.querySelectorAll('[data-furniture-download]').forEach(button=>button.addEventListener('click',()=>{if(!valid)return;const a=asset(),format=button.dataset.furnitureDownload;download(format==='dxf'?furnitureAssetDXF(a):furnitureAssetSVG(a),`${item.id}-${a.dimensions.widthMm}x${a.dimensions.depthMm}mm.${format}`,format);}));
+    card.querySelectorAll('[data-furniture-download]').forEach(button=>button.addEventListener('click',()=>{
+      if(!valid)return;
+      const a=asset();
+      const format=button.dataset.furnitureDownload;
+      const suffix=currentView!=='plan'?`-${currentView}`:'';
+      const baseName=`${item.id}${suffix}-${a.dimensions.widthMm}x${a.dimensions.depthMm}mm`;
+      const dxfName=`${baseName}.dxf`;
+      const lspName=`${item.id}${suffix}-injector.lsp`;
+      const zipName=`${baseName}-cad-pack.zip`;
+      const incClr=!!card.querySelector('[data-include-clearance]')?.checked;
+
+      if (format === 'zip' || format === 'both') {
+        const zipData = generateCadPackageZip(a, { view: currentView, includeClearance: incClr });
+        download(zipData, zipName, 'zip');
+      } else if (format === 'dxf') {
+        const dxfData = furnitureAssetDXF(a, { view: currentView, includeClearance: incClr });
+        download(dxfData, dxfName, 'dxf');
+      } else if (format === 'dwg' || format === 'lsp') {
+        const lspData = generateAutoLispBlock(a, {
+          view: currentView,
+          includeClearance: incClr
+        });
+        download(lspData, lspName, 'txt');
+      }
+    }));
     card.querySelector('[data-copy-object]').addEventListener('click',()=>{if(valid){const a=asset();copy(sizeText(a)+(a.dimensions.heightMm!=null?' × height '+formatNumber(a.dimensions.heightMm,1)+' mm':''),'Object dimensions');}});
     card.querySelector('[data-send-object]').addEventListener('click',()=>{if(valid)send(asset().dimensions.widthMm);});
     card.querySelector('[data-lock-proportions]').addEventListener('change',()=>{if(!valid||!card.querySelector('[data-lock-proportions]').checked)return;card.querySelector('[data-size=widthMm]').dispatchEvent(new Event('input'));});
@@ -38159,6 +44398,1150 @@ function createBatchCadView(context) {
         saveBatchCadSettings
       };
     }
+  };
+}
+
+
+  // =========================================================================
+  // MODULE: ViewCadAutomation
+  // =========================================================================
+
+/**
+ * Architecture Helping Hand — AutoCAD & BIM Workflow Automation View
+ *
+ * Interactive CAD & BIM automation center featuring:
+ *   1. AutoLISP & Script Generator (AIA Layer Setup .lsp, .scr, Batch DWG .bat)
+ *   2. Stair & Ramp 1:1 CAD Detail Generator (Cross-sections, stringers, handrails, dimensions)
+ *   3. Parking Lot & ADA Stall Bay Layout Generator (Stalls, drive aisles, ADA aisles, ISA symbols)
+ *   4. Graphical Door & Window Elevation Schedule (CAD sheet with elevations, frames, swings, tags)
+ *   5. AutoCAD Plot Style Table (CTB) & Pen Weight Manager (AIA standard pen weights, scripts, guides)
+ *   6. AutoCAD Native Tool Palette Generator (.atc XML catalog)
+ *   7. CAD Layer Standardizer & Purger (DXF Hygiene, Zero-Length Purge, Duplicate Purge, Remapper)
+ *   8. Autodesk Revit & BIM Integration (Shared Parameters .txt, Dynamo Python, BIM Schedules)
+ */
+
+
+
+
+
+
+
+
+
+function createCadAutomationView(context) {
+  const { showToast, copyToClipboard, AudioService } = context;
+
+  let activeSubTab = 'layers'; // 'layers', 'stairs_ramps', 'parking', 'doors_windows', 'plot_styles', 'tool_palette', 'dxf_hygiene', 'bim'
+  let sanitizeResults = null;
+  let activeScheduleType = 'doors';
+  let activePaletteCategory = 'all';
+
+  // State for Stair & Ramp generator
+  let stairRampMode = 'stairs'; // 'stairs' or 'ramps'
+  let stairParams = { totalRiseMm: 2700, riserCount: 15, treadDepthMm: 280, nosingMm: 25, includeHandrail: true };
+  let rampParams = { totalRiseMm: 600, slopeRatio: 12, landingLengthMm: 1500, includeHandrail: true };
+
+  // State for Parking Bay generator
+  let parkingParams = { stallCount: 16, angle: 90, stallWidthMm: 2700, stallDepthMm: 5500, aisleWidthMm: 7300, adaCount: 2, vanAdaCount: 1, doubleBay: true, includeTireStops: true };
+
+  // State for Door/Window elevation schedule
+  let selectedDoors = ['D01', 'D02', 'D03'];
+  let selectedWindows = ['W01', 'W02', 'W03'];
+
+  // Sample messy DXF text for testing the purger/standardizer
+  const sampleMessyDxf = [
+    '  0', 'SECTION',
+    '  2', 'ENTITIES',
+    '  0', 'LINE',
+    '  8', 'Layer 1',
+    ' 10', '0.0', ' 20', '0.0',
+    ' 11', '1200.0', ' 21', '0.0',
+    ' 62', '1',
+    '  0', 'LINE', // Duplicate line
+    '  8', 'walls',
+    ' 10', '0.0', ' 20', '0.0',
+    ' 11', '1200.0', ' 21', '0.0',
+    '  0', 'LINE', // Zero length degenerate line
+    '  8', 'temp',
+    ' 10', '500.0', ' 20', '500.0',
+    ' 11', '500.0', ' 21', '500.0',
+    '  0', 'LINE',
+    '  8', 'doors',
+    ' 10', '1200.0', ' 20', '0.0',
+    ' 11', '1200.0', ' 21', '900.0',
+    '  0', 'LINE',
+    '  8', 'windows',
+    ' 10', '1500.0', ' 20', '0.0',
+    ' 11', '2400.0', ' 21', '0.0',
+    '  0', 'ENDSEC',
+    '  0', 'EOF'
+  ].join('\n');
+
+  function render() {
+    const container = document.getElementById('mode-view-cad_automation');
+    if (!container) return;
+
+    container.innerHTML = `
+      <header class="simple-tool-header" style="margin-bottom: 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem;">
+          <div>
+            <h2 class="card-title" style="display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+              <span>⚡</span> AutoCAD &amp; BIM Workflow Automation
+            </h2>
+            <p style="margin: 0.25rem 0 0; color: var(--text-secondary); font-size: 0.875rem;">
+              AutoLISP script generators, Stair &amp; Ramp details, Parking bays, Door/Window elevations, CTB Plot Styles, Tool Palettes (.atc), and BIM schedules.
+            </p>
+          </div>
+          <div class="sub-tab-group" role="tablist" style="display: flex; flex-wrap: wrap; gap: 0.35rem; background: var(--bg-surface-secondary, rgba(255,255,255,0.06)); padding: 0.25rem; border-radius: 8px; border: 1px solid var(--border-color, rgba(255,255,255,0.1));">
+            ${[
+              { id: 'layers', label: '📜 Layers' },
+              { id: 'stairs_ramps', label: '🪜 Stairs & Ramps' },
+              { id: 'parking', label: '🚗 Parking Bays' },
+              { id: 'doors_windows', label: '🚪 Door & Window' },
+              { id: 'plot_styles', label: '🖨️ Plot Styles (CTB)' },
+              { id: 'tool_palette', label: '🎨 Palettes (.atc)' },
+              { id: 'dxf_hygiene', label: '🧹 DXF Purger' },
+              { id: 'bim', label: '🏢 Revit & BIM' }
+            ].map(tab => `
+              <button class="sub-tab-btn ${activeSubTab === tab.id ? 'active' : ''}" data-subtab="${tab.id}" role="tab" style="padding: 0.4rem 0.65rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: none; background: ${activeSubTab === tab.id ? 'var(--accent-primary, #3b82f6)' : 'transparent'}; color: ${activeSubTab === tab.id ? '#fff' : 'var(--text-secondary)'};">
+                ${tab.label}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      </header>
+
+      <div class="cad-automation-body">
+        ${activeSubTab === 'layers' ? renderLayersTab()
+        : activeSubTab === 'stairs_ramps' ? renderStairsRampsTab()
+        : activeSubTab === 'parking' ? renderParkingTab()
+        : activeSubTab === 'doors_windows' ? renderDoorsWindowsTab()
+        : activeSubTab === 'plot_styles' ? renderPlotStylesTab()
+        : activeSubTab === 'tool_palette' ? renderToolPaletteTab()
+        : activeSubTab === 'dxf_hygiene' ? renderDxfHygieneTab()
+        : renderBimTab()}
+      </div>
+    `;
+
+    bindEvents();
+  }
+
+  // --- Subtab 1: Layers ---
+  function renderLayersTab() {
+    return `
+      <div style="display: grid; grid-template-columns: 1fr 340px; gap: 1.5rem; align-items: start;">
+        <div>
+          <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">AIA National CAD Standard (NCS) / ISO 13567 Layer Matrix</h3>
+              <span class="badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
+                ${AIA_STANDARD_LAYERS.length} Certified Layers
+              </span>
+            </div>
+            <div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 6px;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 0.825rem; text-align: left;">
+                <thead style="position: sticky; top: 0; background: var(--bg-surface-secondary, #1e293b); z-index: 2;">
+                  <tr style="border-bottom: 1px solid var(--border-color);">
+                    <th style="padding: 0.5rem 0.75rem;">Color</th>
+                    <th style="padding: 0.5rem 0.75rem;">Layer Name</th>
+                    <th style="padding: 0.5rem 0.75rem;">Linetype</th>
+                    <th style="padding: 0.5rem 0.75rem;">Weight</th>
+                    <th style="padding: 0.5rem 0.75rem;">Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${AIA_STANDARD_LAYERS.map(l => `
+                    <tr style="border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.05));">
+                      <td style="padding: 0.45rem 0.75rem;">
+                        <span style="display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: ${l.colorHex}; vertical-align: middle; border: 1px solid rgba(255,255,255,0.2);" title="ACI ${l.colorIndex}"></span>
+                        <span style="margin-left: 0.35rem; color: var(--text-secondary); font-size: 0.75rem;">${l.colorIndex}</span>
+                      </td>
+                      <td style="padding: 0.45rem 0.75rem; font-family: monospace; font-weight: 600; color: #38bdf8;">${l.name}</td>
+                      <td style="padding: 0.45rem 0.75rem; color: var(--text-secondary); font-family: monospace;">${l.linetype}</td>
+                      <td style="padding: 0.45rem 0.75rem; color: var(--text-secondary);">${l.lineweightMm} mm</td>
+                      <td style="padding: 0.45rem 0.75rem; color: var(--text-secondary);">${l.description}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- How to Use Guidance Box -->
+            <div style="margin-top: 1rem; padding: 0.85rem 1rem; background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.25); border-radius: 6px;">
+              <h4 style="margin: 0 0 0.35rem; font-size: 0.85rem; font-weight: 600; color: #60a5fa; display: flex; align-items: center; gap: 0.35rem;">
+                <span>💡</span> How to Use AIA Standard Layers in AutoCAD
+              </h4>
+              <ol style="margin: 0; padding-left: 1.2rem; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+                <li><strong>Method 1 (Instant Drag &amp; Drop):</strong> Click <em>Download AutoLISP (.lsp)</em>. Drag <code>setup_aia_layers.lsp</code> directly into any open AutoCAD <code>.dwg</code> window. All 24 layers, colors, and linetypes are created automatically in 1 second!</li>
+                <li><strong>Method 2 (AutoCAD Script):</strong> Click <em>AutoCAD Script (.scr)</em>. In AutoCAD, type <code>SCRIPT</code>, select <code>setup_aia_layers.scr</code>, and press Enter.</li>
+                <li><strong>Verification:</strong> Type <code>LAYER</code> in AutoCAD to see all newly created AIA certified layers.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+            <h3 style="margin: 0 0 0.5rem; font-size: 1rem; font-weight: 600;">Export Layer Automation</h3>
+            <p style="margin: 0 0 1rem; color: var(--text-secondary); font-size: 0.8rem; line-height: 1.4;">
+              Instantly create all 24 AIA standard layers in any active drawing without opening templates manually.
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+              <button type="button" class="action-tool-btn primary" id="btn-download-aia-lisp" style="width: 100%; text-align: left; padding: 0.6rem 0.85rem;">
+                <div style="font-weight: 600;">Download AutoLISP (.lsp)</div>
+                <div style="font-size: 0.75rem; opacity: 0.85;">Drag & drop into open .dwg window</div>
+              </button>
+              <button type="button" class="action-tool-btn" id="btn-download-aia-scr" style="width: 100%; text-align: left; padding: 0.6rem 0.85rem;">
+                <div style="font-weight: 600;">AutoCAD Script (.scr)</div>
+                <div style="font-size: 0.75rem; color: var(--text-secondary);">Run via SCRIPT command or batch setup</div>
+              </button>
+              <button type="button" class="action-tool-btn" id="btn-copy-aia-lisp" style="width: 100%; padding: 0.5rem 0.85rem;">
+                Copy AutoLISP to Clipboard
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // --- Subtab 2: Stairs & Ramps CAD Detail Generator ---
+  function renderStairsRampsTab() {
+    const isStair = stairRampMode === 'stairs';
+    const detail = isStair ? generateStairCadDetail(stairParams) : generateRampCadDetail(rampParams);
+
+    return `
+      <div style="display: grid; grid-template-columns: 320px 1fr; gap: 1.5rem; align-items: start;">
+        <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+          <div style="display: flex; gap: 0.25rem; margin-bottom: 1rem; background: var(--bg-surface-secondary); padding: 0.2rem; border-radius: 6px;">
+            <button type="button" class="sub-tab-btn ${isStair ? 'active' : ''}" data-stair-mode="stairs" style="flex:1; padding: 0.35rem; font-size: 0.75rem; border-radius: 4px; border:none; background:${isStair ? 'var(--accent-primary, #3b82f6)' : 'transparent'}; color:${isStair ? '#fff' : 'inherit'}; cursor:pointer;">🪜 Stair Detail</button>
+            <button type="button" class="sub-tab-btn ${!isStair ? 'active' : ''}" data-stair-mode="ramps" style="flex:1; padding: 0.35rem; font-size: 0.75rem; border-radius: 4px; border:none; background:${!isStair ? 'var(--accent-primary, #3b82f6)' : 'transparent'}; color:${!isStair ? '#fff' : 'inherit'}; cursor:pointer;">♿ ADA Ramp</button>
+          </div>
+
+          ${isStair ? `
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+              <label style="font-size: 0.8rem; color: var(--text-secondary);">Total Rise (mm)
+                <input type="number" class="form-input" id="input-stair-rise" value="${stairParams.totalRiseMm}" min="500" max="6000" step="50" style="width: 100%; margin-top: 0.25rem;">
+              </label>
+              <label style="font-size: 0.8rem; color: var(--text-secondary);">Riser Count
+                <input type="number" class="form-input" id="input-stair-count" value="${stairParams.riserCount}" min="2" max="35" style="width: 100%; margin-top: 0.25rem;">
+                <span style="font-size: 0.75rem; color: #38bdf8; display: block; margin-top: 0.2rem;">Riser Height: <strong>${detail.specs.riserHeight.toFixed(1)} mm</strong></span>
+              </label>
+              <label style="font-size: 0.8rem; color: var(--text-secondary);">Tread Depth / Going (mm)
+                <input type="number" class="form-input" id="input-stair-tread" value="${stairParams.treadDepthMm}" min="200" max="450" step="10" style="width: 100%; margin-top: 0.25rem;">
+              </label>
+              <label style="font-size: 0.8rem; color: var(--text-secondary);">Nosing Overhang (mm)
+                <input type="number" class="form-input" id="input-stair-nosing" value="${stairParams.nosingMm}" min="0" max="50" step="5" style="width: 100%; margin-top: 0.25rem;">
+              </label>
+              <label class="object-check" style="font-size: 0.8rem; cursor: pointer;">
+                <input type="checkbox" id="chk-stair-handrail" ${stairParams.includeHandrail ? 'checked' : ''}> Include 900mm Handrails &amp; Balusters
+              </label>
+            </div>
+          ` : `
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+              <label style="font-size: 0.8rem; color: var(--text-secondary);">Total Rise (mm)
+                <input type="number" class="form-input" id="input-ramp-rise" value="${rampParams.totalRiseMm}" min="50" max="2000" step="25" style="width: 100%; margin-top: 0.25rem;">
+              </label>
+              <label style="font-size: 0.8rem; color: var(--text-secondary);">Slope Ratio (1:X)
+                <input type="number" class="form-input" id="input-ramp-ratio" value="${rampParams.slopeRatio}" min="4" max="24" step="1" style="width: 100%; margin-top: 0.25rem;">
+                <span style="font-size: 0.75rem; color: #38bdf8; display: block; margin-top: 0.2rem;">Slope: <strong>1:${rampParams.slopeRatio} (${(100/rampParams.slopeRatio).toFixed(2)}%)</strong></span>
+              </label>
+              <label style="font-size: 0.8rem; color: var(--text-secondary);">Landing Length (mm)
+                <input type="number" class="form-input" id="input-ramp-landing" value="${rampParams.landingLengthMm}" min="1200" max="2400" step="100" style="width: 100%; margin-top: 0.25rem;">
+              </label>
+              <label class="object-check" style="font-size: 0.8rem; cursor: pointer;">
+                <input type="checkbox" id="chk-ramp-handrail" ${rampParams.includeHandrail ? 'checked' : ''}> Include ADA Handrails &amp; Extensions
+              </label>
+            </div>
+          `}
+
+          <div style="margin-top: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem;">
+            <button type="button" class="action-tool-btn primary" id="btn-download-stair-dxf" style="width: 100%;">
+              Download 1:1 CAD Section (.DXF)
+            </button>
+            <button type="button" class="action-tool-btn" id="btn-download-stair-zip" style="width: 100%;">
+              Download CAD Pack (.ZIP)
+            </button>
+            <button type="button" class="action-tool-btn" id="btn-copy-stair-lsp" style="width: 100%;">
+              Copy AutoLISP Command
+            </button>
+          </div>
+        </div>
+
+        <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">1:1 Millimeter CAD Section Preview</h3>
+            ${isStair ? `
+              <div style="display: flex; gap: 0.5rem; font-size: 0.75rem;">
+                <span class="badge" style="background: rgba(34,197,94,0.15); color: #4ade80; padding: 0.2rem 0.5rem; border-radius: 4px;">2R+G: ${detail.specs.blondel.toFixed(1)} mm</span>
+                <span class="badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; padding: 0.2rem 0.5rem; border-radius: 4px;">Pitch: ${detail.specs.pitchDegrees}&deg;</span>
+              </div>
+            ` : `
+              <span class="badge" style="background: rgba(34,197,94,0.15); color: #4ade80; padding: 0.2rem 0.5rem; border-radius: 4px;">ADA §405 Compliant</span>
+            `}
+          </div>
+          <div style="width: 100%; height: 320px; border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 6px; overflow: hidden;">
+            ${isStair ? detail.svg : `
+              <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; background: #0f172a; padding: 1.5rem; text-align: center;">
+                <div style="font-size: 1.1rem; font-weight: 600; color: #38bdf8; margin-bottom: 0.5rem;">ADA Ramp Section Generated</div>
+                <div style="color: #94a3b8; font-size: 0.85rem; max-width: 480px; line-height: 1.5;">
+                  Ramp Run: <strong>${Math.round(detail.specs.rampRun)} mm</strong> | Total Rise: <strong>${detail.specs.totalRise} mm</strong><br>
+                  Slope: <strong>1:${detail.specs.slopeRatio} (${detail.specs.slopePercent}%)</strong> | Landings: <strong>${detail.specs.landingLength} mm</strong><br>
+                  Includes 100mm curb protection and 900mm handrails with 300mm level ADA extensions.
+                </div>
+              </div>
+            `}
+          </div>
+
+          <!-- How to Use Guidance Box -->
+          <div style="margin-top: 0.85rem; padding: 0.85rem 1rem; background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.25); border-radius: 6px;">
+            <h4 style="margin: 0 0 0.35rem; font-size: 0.85rem; font-weight: 600; color: #60a5fa; display: flex; align-items: center; gap: 0.35rem;">
+              <span>💡</span> How to Use Stair &amp; Ramp Sections in AutoCAD
+            </h4>
+            <ol style="margin: 0; padding-left: 1.2rem; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+              <li><strong>Open Directly in AutoCAD:</strong> Click <em>Download 1:1 CAD Section (.DXF)</em>. Double-click the downloaded <code>.dxf</code> file — AutoCAD opens it directly in 1:1 millimeters.</li>
+              <li><strong>Save as Native .DWG:</strong> Inside AutoCAD, press <code>Ctrl + Shift + S</code> (or type <code>SAVEAS</code>) and choose <em>AutoCAD Drawing (*.dwg)</em>.</li>
+              <li><strong>Insert into Active Project:</strong> In your building section DWG, type <code>INSERT</code> (or <code>CLASSICINSERT</code>), browse to the downloaded file, and place the section.</li>
+              <li><strong>Layers Included:</strong> <code>A-FLOR-STRS</code> (flight &amp; nosing), <code>A-FLOR-HRAL</code> (handrail &amp; balusters), <code>A-ANNO-DIMS</code> (dimensions &amp; pitch).</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // --- Subtab 3: Parking Lot & ADA Stall Bay Layout ---
+  function renderParkingTab() {
+    const bay = generateParkingBayCadDetail(parkingParams);
+
+    return `
+      <div style="display: grid; grid-template-columns: 320px 1fr; gap: 1.5rem; align-items: start;">
+        <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+          <h3 style="margin: 0 0 1rem; font-size: 1rem; font-weight: 600;">Parking Bay Configuration</h3>
+          <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <label style="font-size: 0.8rem; color: var(--text-secondary);">Total Standard Stalls
+              <input type="number" class="form-input" id="input-parking-stalls" value="${parkingParams.stallCount}" min="4" max="40" step="2" style="width: 100%; margin-top: 0.25rem;">
+            </label>
+            <label style="font-size: 0.8rem; color: var(--text-secondary);">Stall Angle
+              <select class="form-select" id="select-parking-angle" style="width: 100%; margin-top: 0.25rem;">
+                <option value="90" ${parkingParams.angle === 90 ? 'selected' : ''}>90&deg; (Perpendicular - Two-Way)</option>
+                <option value="60" ${parkingParams.angle === 60 ? 'selected' : ''}>60&deg; (Angled - One-Way)</option>
+                <option value="45" ${parkingParams.angle === 45 ? 'selected' : ''}>45&deg; (Angled - One-Way)</option>
+              </select>
+            </label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+              <label style="font-size: 0.8rem; color: var(--text-secondary);">Standard ADA
+                <input type="number" class="form-input" id="input-parking-ada" value="${parkingParams.adaCount}" min="0" max="6" style="width: 100%; margin-top: 0.25rem;">
+              </label>
+              <label style="font-size: 0.8rem; color: var(--text-secondary);">Van Accessible
+                <input type="number" class="form-input" id="input-parking-van" value="${parkingParams.vanAdaCount}" min="0" max="4" style="width: 100%; margin-top: 0.25rem;">
+              </label>
+            </div>
+            <label style="font-size: 0.8rem; color: var(--text-secondary);">Drive Aisle Width (mm)
+              <input type="number" class="form-input" id="input-parking-aisle" value="${parkingParams.aisleWidthMm}" min="3500" max="9000" step="100" style="width: 100%; margin-top: 0.25rem;">
+            </label>
+            <label class="object-check" style="font-size: 0.8rem; cursor: pointer;">
+              <input type="checkbox" id="chk-parking-double" ${parkingParams.doubleBay ? 'checked' : ''}> Double-Loaded Bay (Both Sides)
+            </label>
+            <label class="object-check" style="font-size: 0.8rem; cursor: pointer;">
+              <input type="checkbox" id="chk-parking-stops" ${parkingParams.includeTireStops ? 'checked' : ''}> Include Concrete Wheel Stops
+            </label>
+          </div>
+
+          <div style="margin-top: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem;">
+            <button type="button" class="action-tool-btn primary" id="btn-download-parking-dxf" style="width: 100%;">
+              Download Parking Bay (.DXF)
+            </button>
+            <button type="button" class="action-tool-btn" id="btn-download-parking-zip" style="width: 100%;">
+              Download CAD Pack (.ZIP)
+            </button>
+            <button type="button" class="action-tool-btn" id="btn-copy-parking-dxf" style="width: 100%;">
+              Copy DXF Content
+            </button>
+          </div>
+        </div>
+
+        <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">1:1 Parking Bay Layout Preview</h3>
+            <div style="display: flex; gap: 0.5rem; font-size: 0.75rem;">
+              <span class="badge" style="background: rgba(234,179,8,0.15); color: #facc15; padding: 0.2rem 0.5rem; border-radius: 4px;">Length: ${(bay.specs.totalLengthMm / 1000).toFixed(1)} m</span>
+              <span class="badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; padding: 0.2rem 0.5rem; border-radius: 4px;">Width: ${(bay.specs.totalWidthMm / 1000).toFixed(1)} m</span>
+            </div>
+          </div>
+          <div style="width: 100%; height: 320px; border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 6px; overflow: hidden;">
+            ${bay.svg}
+          </div>
+
+          <!-- How to Use Guidance Box -->
+          <div style="margin-top: 0.85rem; padding: 0.85rem 1rem; background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.25); border-radius: 6px;">
+            <h4 style="margin: 0 0 0.35rem; font-size: 0.85rem; font-weight: 600; color: #60a5fa; display: flex; align-items: center; gap: 0.35rem;">
+              <span>💡</span> How to Use Parking Bays in AutoCAD
+            </h4>
+            <ol style="margin: 0; padding-left: 1.2rem; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+              <li><strong>Configure Bay:</strong> Select 90&deg; perpendicular or 60&deg;/45&deg; angled stalls. Enable double-loaded bay for two rows sharing a drive aisle.</li>
+              <li><strong>Download CAD Layout:</strong> Click <em>Download Parking Bay (.DXF)</em>.</li>
+              <li><strong>Insert in Site Plan:</strong> In your AutoCAD civil/site drawing, type <code>INSERT</code>, select the DXF, and align to your site boundary or curb.</li>
+              <li><strong>Pre-Configured Layers:</strong> <code>C-ROAD-STRP</code> (yellow striping), <code>C-ROAD-PARK</code> (curbs &amp; wheel stops), <code>C-ROAD-SYMB</code> (wheelchair symbols), <code>C-ROAD-ANNO</code> (drive aisle width).</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // --- Subtab 4: Graphical Door & Window Elevation Schedule ---
+  function renderDoorsWindowsTab() {
+    const activeDoors = STANDARD_DOOR_TYPES.filter(d => selectedDoors.includes(d.id));
+    const activeWindows = STANDARD_WINDOW_TYPES.filter(w => selectedWindows.includes(w.id));
+    const schedule = generateDoorWindowElevationSchedule({ doors: activeDoors, windows: activeWindows });
+
+    return `
+      <div style="display: grid; grid-template-columns: 320px 1fr; gap: 1.5rem; align-items: start;">
+        <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+          <h3 style="margin: 0 0 0.75rem; font-size: 1rem; font-weight: 600;">Schedule Components</h3>
+          
+          <div style="margin-bottom: 1rem;">
+            <div style="font-size: 0.8rem; font-weight: 600; color: #38bdf8; margin-bottom: 0.4rem; text-transform: uppercase;">Doors (${activeDoors.length} selected)</div>
+            <div style="display: flex; flex-direction: column; gap: 0.35rem; max-height: 150px; overflow-y: auto;">
+              ${STANDARD_DOOR_TYPES.map(d => `
+                <label style="font-size: 0.775rem; display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+                  <input type="checkbox" class="chk-door-item" data-id="${d.id}" ${selectedDoors.includes(d.id) ? 'checked' : ''}>
+                  <span><strong>${d.id}</strong>: ${d.name} (${d.widthMm}x${d.heightMm})</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <div style="font-size: 0.8rem; font-weight: 600; color: #38bdf8; margin-bottom: 0.4rem; text-transform: uppercase;">Windows (${activeWindows.length} selected)</div>
+            <div style="display: flex; flex-direction: column; gap: 0.35rem; max-height: 150px; overflow-y: auto;">
+              ${STANDARD_WINDOW_TYPES.map(w => `
+                <label style="font-size: 0.775rem; display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+                  <input type="checkbox" class="chk-win-item" data-id="${w.id}" ${selectedWindows.includes(w.id) ? 'checked' : ''}>
+                  <span><strong>${w.id}</strong>: ${w.name} (${w.widthMm}x${w.heightMm})</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <button type="button" class="action-tool-btn primary" id="btn-download-elev-dxf" style="width: 100%;">
+              Download CAD Elevation Sheet (.DXF)
+            </button>
+            <button type="button" class="action-tool-btn" id="btn-download-elev-zip" style="width: 100%;">
+              Download CAD Pack (.ZIP)
+            </button>
+            <button type="button" class="action-tool-btn" id="btn-copy-elev-dxf" style="width: 100%;">
+              Copy DXF Content
+            </button>
+          </div>
+        </div>
+
+        <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">Graphical Elevation CAD Sheet</h3>
+            <span class="badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">
+              ${schedule.entities.length} CAD Entities
+            </span>
+          </div>
+
+          <div style="border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 6px; padding: 1rem; background: #0f172a; min-height: 300px;">
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+              <div style="border-bottom: 1px dashed rgba(255,255,255,0.2); padding-bottom: 0.75rem;">
+                <div style="font-size: 0.85rem; font-weight: 600; color: #38bdf8; margin-bottom: 0.5rem;">WINDOW ELEVATIONS (Row 1)</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end;">
+                  ${activeWindows.map(w => `
+                    <div style="border: 1px solid #06b6d4; padding: 0.4rem; background: rgba(6,182,212,0.05); border-radius: 4px; text-align: center; width: ${Math.max(75, w.widthMm / 18)}px;">
+                      <div style="font-size: 0.75rem; font-weight: 700; color: #fff;">${w.id}</div>
+                      <div style="font-size: 0.65rem; color: #94a3b8;">${w.widthMm}x${w.heightMm}</div>
+                      <div style="height: ${Math.max(35, w.heightMm / 22)}px; border: 1px solid #06b6d4; margin: 0.3rem 0; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: #06b6d4;">Glass</div>
+                      <div style="font-size: 0.65rem; color: #e2e8f0;">Sill: ${w.sillMm} mm</div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+
+              <div>
+                <div style="font-size: 0.85rem; font-weight: 600; color: #22c55e; margin-bottom: 0.5rem;">DOOR ELEVATIONS (Row 2 - Ground Floor FFL ±0.00)</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end;">
+                  ${activeDoors.map(d => `
+                    <div style="border: 1px solid #22c55e; padding: 0.4rem; background: rgba(34,197,94,0.05); border-radius: 4px; text-align: center; width: ${Math.max(75, d.widthMm / 16)}px;">
+                      <div style="font-size: 0.75rem; font-weight: 700; color: #fff;">${d.id}</div>
+                      <div style="font-size: 0.65rem; color: #94a3b8;">${d.widthMm}x${d.heightMm}</div>
+                      <div style="height: ${Math.max(50, d.heightMm / 22)}px; border: 1px solid #22c55e; margin: 0.3rem 0; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: #22c55e;">Leaf</div>
+                      <div style="font-size: 0.65rem; color: #e2e8f0;">${d.fireRating}</div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- How to Use Guidance Box -->
+          <div style="margin-top: 0.85rem; padding: 0.85rem 1rem; background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.25); border-radius: 6px;">
+            <h4 style="margin: 0 0 0.35rem; font-size: 0.85rem; font-weight: 600; color: #60a5fa; display: flex; align-items: center; gap: 0.35rem;">
+              <span>💡</span> How to Use Door &amp; Window Elevation Sheets in AutoCAD
+            </h4>
+            <ol style="margin: 0; padding-left: 1.2rem; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+              <li><strong>Select Openings:</strong> Toggle which door and window types you want on your drawing sheet.</li>
+              <li><strong>Download Sheet:</strong> Click <em>Download CAD Elevation Sheet (.DXF)</em>.</li>
+              <li><strong>Place in AutoCAD Drawing:</strong> Open in AutoCAD or type <code>INSERT</code> to drop into a Paper Space sheet layout or Model Space schedule area.</li>
+              <li><strong>Everything Aligned:</strong> Doors align to Finished Floor Line (<code>A-FLOR-LEVL</code>), frames on <code>A-DOOR</code> / <code>A-GLAZ</code>, tags (D01, W01) on <code>A-ANNO-TEXT</code>.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // --- Subtab 5: AutoCAD Plot Style (CTB) & Pen Weights ---
+  function renderPlotStylesTab() {
+    return `
+      <div style="display: grid; grid-template-columns: 1fr 340px; gap: 1.5rem; align-items: start;">
+        <div>
+          <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">AIA National CAD Standard (NCS) Pen Weight Table</h3>
+              <span class="badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
+                Color-Dependent (.ctb)
+              </span>
+            </div>
+
+            <div style="overflow-x: auto; border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 6px;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 0.825rem; text-align: left;">
+                <thead style="background: var(--bg-surface-secondary, #1e293b);">
+                  <tr style="border-bottom: 1px solid var(--border-color);">
+                    <th style="padding: 0.5rem 0.75rem;">ACI Color</th>
+                    <th style="padding: 0.5rem 0.75rem;">Name</th>
+                    <th style="padding: 0.5rem 0.75rem;">Lineweight</th>
+                    <th style="padding: 0.5rem 0.75rem;">Visual Stroke</th>
+                    <th style="padding: 0.5rem 0.75rem;">Screening</th>
+                    <th style="padding: 0.5rem 0.75rem;">Primary Use</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${AIA_PLOT_STYLE_PENS.map(p => `
+                    <tr style="border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.05));">
+                      <td style="padding: 0.5rem 0.75rem;">
+                        <span style="display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: ${p.hex}; vertical-align: middle; border: 1px solid rgba(255,255,255,0.2);"></span>
+                        <span style="margin-left: 0.35rem; font-weight: 600; color: #fff;">${p.colorIndex}</span>
+                      </td>
+                      <td style="padding: 0.5rem 0.75rem; color: var(--text-secondary);">${p.colorName}</td>
+                      <td style="padding: 0.5rem 0.75rem; font-weight: 600; color: #38bdf8;">${p.mm.toFixed(2)} mm</td>
+                      <td style="padding: 0.5rem 0.75rem;">
+                        <div style="width: 60px; height: ${Math.max(1, p.mm * 6)}px; background: ${p.hex}; border-radius: 1px;"></div>
+                      </td>
+                      <td style="padding: 0.5rem 0.75rem; color: var(--text-secondary);">${p.screening}%</td>
+                      <td style="padding: 0.5rem 0.75rem; color: var(--text-secondary); font-size: 0.775rem;">${p.use}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- How to Use Guidance Box -->
+            <div style="margin-top: 1rem; padding: 0.85rem 1rem; background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.25); border-radius: 6px;">
+              <h4 style="margin: 0 0 0.35rem; font-size: 0.85rem; font-weight: 600; color: #60a5fa; display: flex; align-items: center; gap: 0.35rem;">
+                <span>💡</span> How to Calibrate Pen Weights &amp; CTB in AutoCAD
+              </h4>
+              <ol style="margin: 0; padding-left: 1.2rem; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+                <li><strong>Apply Lineweights to Layers:</strong> Click <em>Download Lineweight Script (.scr)</em>. In AutoCAD, type <code>SCRIPT</code>, select the file, and press Enter. It assigns pen weights to all layers and turns on on-screen lineweights (<code>LWDISPLAY 1</code>).</li>
+                <li><strong>AutoLISP 1-Click:</strong> Click <em>AutoLISP Pen Setup (.lsp)</em>. Drag into AutoCAD and type <code>(c:AHH_SET_PEN_WEIGHTS)</code>.</li>
+                <li><strong>Configure AutoCAD Plot Style:</strong> Type <code>PLOTSTYLEMANAGER</code> in AutoCAD. Open or create your <code>.ctb</code> file and assign the millimeter widths shown above so printed PDFs have crisp, sharp linework.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+            <h3 style="margin: 0 0 0.5rem; font-size: 1rem; font-weight: 600;">CTB Automation &amp; Setup</h3>
+            <p style="margin: 0 0 1rem; color: var(--text-secondary); font-size: 0.8rem; line-height: 1.4;">
+              Calibrate your layer lineweights directly in AutoCAD so PDFs and plotted drawings have crisp, professional linework.
+            </p>
+
+            <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+              <button type="button" class="action-tool-btn primary" id="btn-download-pen-scr" style="width: 100%; text-align: left; padding: 0.6rem 0.85rem;">
+                <div style="font-weight: 600;">Download Lineweight Script (.scr)</div>
+                <div style="font-size: 0.75rem; opacity: 0.85;">Sets layer lineweights &amp; turns LWDISPLAY ON</div>
+              </button>
+              <button type="button" class="action-tool-btn" id="btn-download-pen-lsp" style="width: 100%; text-align: left; padding: 0.6rem 0.85rem;">
+                <div style="font-weight: 600;">AutoLISP Pen Setup (.lsp)</div>
+                <div style="font-size: 0.75rem; color: var(--text-secondary);">Command (c:AHH_SET_PEN_WEIGHTS)</div>
+              </button>
+              <button type="button" class="action-tool-btn" id="btn-download-ctb-guide" style="width: 100%; padding: 0.5rem 0.85rem;">
+                Download CTB Configuration Guide (.txt)
+              </button>
+              <button type="button" class="action-tool-btn" id="btn-download-pen-csv" style="width: 100%; padding: 0.5rem 0.85rem;">
+                Download Pen Weight CSV Table
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // --- Subtab 6: Tool Palettes ---
+  function renderToolPaletteTab() {
+    return `
+      <div style="display: grid; grid-template-columns: 1fr 340px; gap: 1.5rem; align-items: start;">
+        <div>
+          <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">Autodesk Tool Palette XML Definition (.atc)</h3>
+              <span class="badge" style="background: rgba(34,197,94,0.15); color: #4ade80; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
+                Schema 2.0 / NCS Compliant
+              </span>
+            </div>
+            <p style="margin: 0 0 1rem; color: var(--text-secondary); font-size: 0.85rem; line-height: 1.5;">
+              Generates native Autodesk Tool Palette catalog files (<code>.atc</code>). When imported into AutoCAD via <code>TOOLPALETTES</code>, blocks appear on an interactive toolbar with pre-assigned layers and colors.
+            </p>
+            <div style="border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 6px; padding: 1rem; background: #0f172a; font-family: monospace; font-size: 0.75rem; color: #94a3b8; max-height: 250px; overflow-y: auto;">
+              <pre style="margin: 0;">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;ToolPalette schemaVersion="2.0"&gt;
+  &lt;Name&gt;Architecture Helping Hand - CAD Blocks&lt;/Name&gt;
+  &lt;Tools&gt;
+    &lt;Tool&gt;
+      &lt;Name&gt;Sofa 3-Person&lt;/Name&gt;
+      &lt;BlockName&gt;AHH_SOFA_3P&lt;/BlockName&gt;
+      &lt;Layer&gt;A-FURN&lt;/Layer&gt;
+      &lt;Color&gt;5&lt;/Color&gt;
+    &lt;/Tool&gt;
+    ...
+  &lt;/Tools&gt;
+&lt;/ToolPalette&gt;</pre>
+            </div>
+
+            <!-- How to Use Guidance Box -->
+            <div style="margin-top: 1rem; padding: 0.85rem 1rem; background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.25); border-radius: 6px;">
+              <h4 style="margin: 0 0 0.35rem; font-size: 0.85rem; font-weight: 600; color: #60a5fa; display: flex; align-items: center; gap: 0.35rem;">
+                <span>💡</span> How to Import Tool Palettes in AutoCAD
+              </h4>
+              <ol style="margin: 0; padding-left: 1.2rem; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+                <li><strong>Download Palette File:</strong> Click <em>Download Tool Palette (.atc)</em>.</li>
+                <li><strong>Open Tool Palettes in AutoCAD:</strong> Press <code>Ctrl + 3</code> (or type <code>TOOLPALETTES</code>).</li>
+                <li><strong>Import Catalog:</strong> Right-click the palette bar title ➔ select <em>Customize Palettes...</em>. Right-click in the Palettes list on the left ➔ select <em>Import...</em> ➔ choose the <code>.atc</code> file.</li>
+                <li><strong>Use:</strong> A new tab appears on your palette! Click any block icon to drop it into your drawing with automatic AIA layer placement.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+            <h3 style="margin: 0 0 0.5rem; font-size: 1rem; font-weight: 600;">Download Palette Catalog</h3>
+            <p style="margin: 0 0 1rem; color: var(--text-secondary); font-size: 0.8rem; line-height: 1.4;">
+              Export the XML tool palette and import into AutoCAD by right-clicking any Tool Palette and choosing "Customize Palettes...".
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+              <button type="button" class="action-tool-btn primary" id="btn-download-atc-palette" style="width: 100%; text-align: left; padding: 0.6rem 0.85rem;">
+                <div style="font-weight: 600;">Download Tool Palette (.atc)</div>
+                <div style="font-size: 0.75rem; opacity: 0.85;">Native AutoCAD Tool Palette Catalog</div>
+              </button>
+              <button type="button" class="action-tool-btn" id="btn-copy-atc-xml" style="width: 100%; padding: 0.5rem 0.85rem;">
+                Copy XML to Clipboard
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // --- Subtab 7: DXF Hygiene ---
+  function renderDxfHygieneTab() {
+    return `
+      <div style="display: grid; grid-template-columns: 1fr 340px; gap: 1.5rem; align-items: start;">
+        <div>
+          <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+              <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">CAD Layer Standardizer &amp; DXF Purger</h3>
+              <button type="button" class="action-tool-btn" id="btn-load-sample-dxf" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">
+                Load Messy Sample DXF
+              </button>
+            </div>
+            <textarea id="dxf-hygiene-input" class="form-input" rows="12" style="width: 100%; font-family: monospace; font-size: 0.75rem; padding: 0.5rem; background: #0f172a; resize: vertical;" placeholder="Paste DXF content here to purge degenerate entities and remap non-standard layers..."></textarea>
+
+            <!-- How to Use Guidance Box -->
+            <div style="margin-top: 1rem; padding: 0.85rem 1rem; background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.25); border-radius: 6px;">
+              <h4 style="margin: 0 0 0.35rem; font-size: 0.85rem; font-weight: 600; color: #60a5fa; display: flex; align-items: center; gap: 0.35rem;">
+                <span>💡</span> How to Clean Consultant Drawings with DXF Purger
+              </h4>
+              <ol style="margin: 0; padding-left: 1.2rem; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+                <li><strong>Paste or Load DXF:</strong> Open any messy consultant <code>.dxf</code> in Notepad, copy the text, and paste it into the box above (or click <em>Load Messy Sample DXF</em> to test).</li>
+                <li><strong>Select Cleaning Actions:</strong> Purges degenerate zero-length lines, removes duplicate overlapping lines, remaps consultant layer names to AIA NCS (e.g. "walls" ➔ <code>A-WALL-FULL</code>), and resets color to <code>BYLAYER</code>.</li>
+                <li><strong>Sanitize &amp; Download:</strong> Click <em>Sanitize &amp; Purge DXF</em>, then click <em>Download DXF</em>.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+            <h3 style="margin: 0 0 0.5rem; font-size: 1rem; font-weight: 600;">Sanitizer Options</h3>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.25rem;">
+              <label class="object-check" style="font-size: 0.8rem; cursor: pointer;">
+                <input type="checkbox" id="chk-remap-layers" checked> Remap consultant layers to AIA NCS
+              </label>
+              <label class="object-check" style="font-size: 0.8rem; cursor: pointer;">
+                <input type="checkbox" id="chk-purge-zero" checked> Purge zero-length lines &amp; points
+              </label>
+              <label class="object-check" style="font-size: 0.8rem; cursor: pointer;">
+                <input type="checkbox" id="chk-purge-dups" checked> Purge duplicate overlapping lines
+              </label>
+              <label class="object-check" style="font-size: 0.8rem; cursor: pointer;">
+                <input type="checkbox" id="chk-bylayer-color" checked> Force color 256 (BYLAYER)
+              </label>
+            </div>
+            <button type="button" class="action-tool-btn primary" id="btn-run-dxf-sanitize" style="width: 100%; margin-bottom: 0.6rem;">
+              Sanitize &amp; Purge DXF
+            </button>
+            ${sanitizeResults ? `
+              <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); border-radius: 6px; font-size: 0.8rem;">
+                <div style="font-weight: 600; color: #4ade80; margin-bottom: 0.25rem;">Sanitization Complete</div>
+                <div>Purged Zero-Length: <strong>${sanitizeResults.stats.purgedZeroLength}</strong></div>
+                <div>Purged Duplicates: <strong>${sanitizeResults.stats.purgedDuplicates}</strong></div>
+                <div>Remapped Layers: <strong>${sanitizeResults.stats.remappedLayers}</strong></div>
+                <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                  <button type="button" class="action-tool-btn" id="btn-download-sanitized-dxf" style="flex: 1; font-size: 0.75rem;">Download DXF</button>
+                  <button type="button" class="action-tool-btn" id="btn-copy-sanitized-dxf" style="flex: 1; font-size: 0.75rem;">Copy</button>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // --- Subtab 8: Revit & BIM ---
+  function renderBimTab() {
+    return `
+      <div style="display: grid; grid-template-columns: 1fr 340px; gap: 1.5rem; align-items: start;">
+        <div>
+          <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+              <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">Autodesk Revit Shared Parameters File</h3>
+              <span class="badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
+                16 Parameters
+              </span>
+            </div>
+            <p style="margin: 0 0 1rem; color: var(--text-secondary); font-size: 0.825rem; line-height: 1.4;">
+              Standardized Revit Shared Parameters text file with unique GUIDs across 4 essential groups: <em>Clearances &amp; Accessibility</em>, <em>Building Codes &amp; Life Safety</em>, <em>COBie &amp; Facility Management</em>, and <em>OmniClass Classification</em>.
+            </p>
+            <div style="display: flex; gap: 0.5rem;">
+              <button type="button" class="action-tool-btn primary" id="btn-download-revit-params" style="font-size: 0.8rem;">
+                Download Revit_Shared_Parameters.txt
+              </button>
+              <button type="button" class="action-tool-btn" id="btn-copy-revit-params" style="font-size: 0.8rem;">
+                Copy Shared Parameters
+              </button>
+            </div>
+          </div>
+
+          <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+              <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">Dynamo Python Batch Instance Placer</h3>
+              <button type="button" class="action-tool-btn" id="btn-copy-dynamo-py" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">
+                Copy Python Script
+              </button>
+            </div>
+            <p style="margin: 0 0 0.75rem; color: var(--text-secondary); font-size: 0.8rem;">
+              Automates bulk family placement inside Autodesk Revit using Revit API transactions (<code>Autodesk.Revit.DB.FamilySymbol</code>).
+            </p>
+            <div style="border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 6px; padding: 0.75rem; background: #0f172a; font-family: monospace; font-size: 0.75rem; color: #94a3b8; max-height: 140px; overflow-y: auto;">
+              <pre style="margin: 0;">import clr
+clr.AddReference('RevitAPI')
+from Autodesk.Revit.DB import *
+doc = DocumentManager.Instance.CurrentDBDocument
+# Batch placement wrapped in transaction</pre>
+            </div>
+          </div>
+
+          <!-- How to Use Guidance Box -->
+          <div style="margin-top: 1rem; padding: 0.85rem 1rem; background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.25); border-radius: 6px;">
+            <h4 style="margin: 0 0 0.35rem; font-size: 0.85rem; font-weight: 600; color: #60a5fa; display: flex; align-items: center; gap: 0.35rem;">
+              <span>💡</span> How to Use Revit &amp; BIM Automation Files
+            </h4>
+            <ol style="margin: 0; padding-left: 1.2rem; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+              <li><strong>Revit Shared Parameters:</strong> In Autodesk Revit, navigate to <strong>Manage ➔ Shared Parameters</strong>. Click <em>Browse...</em>, select <code>Revit_Shared_Parameters.txt</code>, and bind parameters (ClearanceWidth, FireRating, COBie) to your families.</li>
+              <li><strong>Dynamo Python Placer:</strong> Open Dynamo in Revit, create a <em>Python Script</em> node, paste the copied script, and run to batch-place instances automatically.</li>
+              <li><strong>BIM Schedules to CAD Table:</strong> Click <em>Download 1:1 DXF Table Sheet</em> to drop a complete formatted schedule sheet into AutoCAD Paper Space.</li>
+            </ol>
+          </div>
+        </div>
+
+        <div>
+          <div class="card" style="padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+            <h3 style="margin: 0 0 0.5rem; font-size: 1rem; font-weight: 600;">BIM Schedules (CSV &amp; CAD Table)</h3>
+            <p style="margin: 0 0 1rem; color: var(--text-secondary); font-size: 0.8rem; line-height: 1.4;">
+              Export certified schedules for Revit/Excel or 1:1 AutoCAD Paper Space table sheets with borders and text cells.
+            </p>
+            <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.75rem;">Schedule Category:
+              <select class="form-select" id="bim-schedule-type-select" style="width: 100%; margin-top: 0.25rem;">
+                <option value="doors" ${activeScheduleType === 'doors' ? 'selected' : ''}>Door &amp; Hardware Schedule</option>
+                <option value="rooms" ${activeScheduleType === 'rooms' ? 'selected' : ''}>Room Finish &amp; Occupancy Schedule</option>
+                <option value="ffe" ${activeScheduleType === 'ffe' ? 'selected' : ''}>FF&amp;E Furniture &amp; Equipment Schedule</option>
+              </select>
+            </label>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+              <button type="button" class="action-tool-btn primary" id="btn-download-schedule-csv" style="width: 100%;">
+                Download Schedule (.CSV)
+              </button>
+              <button type="button" class="action-tool-btn" id="btn-download-schedule-dxf" style="width: 100%;">
+                Download 1:1 DXF Table Sheet
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function bindEvents() {
+    // Sub-tab switching
+    document.querySelectorAll('.sub-tab-btn[data-subtab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeSubTab = btn.dataset.subtab;
+        render();
+      });
+    });
+
+    // --- Tab 1: Layers ---
+    document.getElementById('btn-download-aia-lisp')?.addEventListener('click', () => {
+      const lsp = generateAiaLayersAutoLisp();
+      downloadExport(lsp, 'setup_aia_layers.lsp', 'text/plain');
+      showToast('AutoLISP Layer Setup downloaded! Drag & drop directly into your AutoCAD .dwg window.', 'success');
+      AudioService.playSuccess();
+    });
+
+    document.getElementById('btn-download-aia-scr')?.addEventListener('click', () => {
+      const scr = generateAiaLayersScript();
+      downloadExport(scr, 'setup_aia_layers.scr', 'text/plain');
+      showToast('AutoCAD Layer Setup Script downloaded!', 'success');
+      AudioService.playSuccess();
+    });
+
+    document.getElementById('btn-copy-aia-lisp')?.addEventListener('click', () => {
+      const lsp = generateAiaLayersAutoLisp();
+      copyToClipboard(lsp, 'AutoLISP Layer Setup');
+    });
+
+    // --- Tab 2: Stairs & Ramps CAD ---
+    document.querySelectorAll('[data-stair-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        stairRampMode = btn.dataset.stairMode;
+        render();
+      });
+    });
+
+    document.getElementById('input-stair-rise')?.addEventListener('input', e => {
+      stairParams.totalRiseMm = Number(e.target.value) || 2700;
+      render();
+    });
+    document.getElementById('input-stair-count')?.addEventListener('input', e => {
+      stairParams.riserCount = Number(e.target.value) || 15;
+      render();
+    });
+    document.getElementById('input-stair-tread')?.addEventListener('input', e => {
+      stairParams.treadDepthMm = Number(e.target.value) || 280;
+      render();
+    });
+    document.getElementById('input-stair-nosing')?.addEventListener('input', e => {
+      stairParams.nosingMm = Number(e.target.value) || 25;
+      render();
+    });
+    document.getElementById('chk-stair-handrail')?.addEventListener('change', e => {
+      stairParams.includeHandrail = !!e.target.checked;
+      render();
+    });
+
+    document.getElementById('input-ramp-rise')?.addEventListener('input', e => {
+      rampParams.totalRiseMm = Number(e.target.value) || 600;
+      render();
+    });
+    document.getElementById('input-ramp-ratio')?.addEventListener('input', e => {
+      rampParams.slopeRatio = Number(e.target.value) || 12;
+      render();
+    });
+    document.getElementById('input-ramp-landing')?.addEventListener('input', e => {
+      rampParams.landingLengthMm = Number(e.target.value) || 1500;
+      render();
+    });
+    document.getElementById('chk-ramp-handrail')?.addEventListener('change', e => {
+      rampParams.includeHandrail = !!e.target.checked;
+      render();
+    });
+
+    document.getElementById('btn-download-stair-dxf')?.addEventListener('click', () => {
+      const isStair = stairRampMode === 'stairs';
+      const detail = isStair ? generateStairCadDetail(stairParams) : generateRampCadDetail(rampParams);
+      const filename = isStair ? `stair-detail-${Math.round(stairParams.totalRiseMm)}mm.dxf` : `ramp-detail-${Math.round(rampParams.totalRiseMm)}mm.dxf`;
+      downloadExport(detail.dxf, filename, 'application/dxf');
+      showToast('1:1 Millimeter CAD detail downloaded! Opens natively in AutoCAD.', 'success');
+      AudioService.playSuccess();
+    });
+
+    document.getElementById('btn-download-stair-zip')?.addEventListener('click', () => {
+      const isStair = stairRampMode === 'stairs';
+      const detail = isStair ? generateStairCadDetail(stairParams) : generateRampCadDetail(rampParams);
+      const dxfName = isStair ? `stair-detail-${Math.round(stairParams.totalRiseMm)}mm.dxf` : `ramp-detail-${Math.round(rampParams.totalRiseMm)}mm.dxf`;
+      const lspName = isStair ? `stair-injector.lsp` : `ramp-injector.lsp`;
+      const scrData = generateAutoCadBatchDwgScript([dxfName]);
+
+      const zip = createZipArchive([
+        { name: dxfName, content: detail.dxf },
+        { name: lspName, content: detail.lisp || '; Detail script' },
+        { name: 'convert_to_dwg.scr', content: scrData },
+        { name: 'AUTOCAD_DWG_GUIDE.txt', content: 'Double click .dxf to open in AutoCAD or use Save As to convert to .dwg.' }
+      ]);
+      downloadExport(zip, isStair ? 'stair-cad-package.zip' : 'ramp-cad-package.zip', 'zip');
+      showToast('Complete CAD detail package (.zip) downloaded!', 'success');
+      AudioService.playSuccess();
+    });
+
+    document.getElementById('btn-copy-stair-lsp')?.addEventListener('click', () => {
+      const isStair = stairRampMode === 'stairs';
+      const detail = isStair ? generateStairCadDetail(stairParams) : generateRampCadDetail(rampParams);
+      copyToClipboard(detail.lisp || detail.dxf, isStair ? 'Stair AutoLISP Command' : 'Ramp CAD DXF');
+    });
+
+    // --- Tab 3: Parking Bays ---
+    document.getElementById('input-parking-stalls')?.addEventListener('input', e => {
+      parkingParams.stallCount = Number(e.target.value) || 16;
+      render();
+    });
+    document.getElementById('select-parking-angle')?.addEventListener('change', e => {
+      parkingParams.angle = Number(e.target.value) || 90;
+      render();
+    });
+    document.getElementById('input-parking-ada')?.addEventListener('input', e => {
+      parkingParams.adaCount = Number(e.target.value) || 0;
+      render();
+    });
+    document.getElementById('input-parking-van')?.addEventListener('input', e => {
+      parkingParams.vanAdaCount = Number(e.target.value) || 0;
+      render();
+    });
+    document.getElementById('input-parking-aisle')?.addEventListener('input', e => {
+      parkingParams.aisleWidthMm = Number(e.target.value) || 7300;
+      render();
+    });
+    document.getElementById('chk-parking-double')?.addEventListener('change', e => {
+      parkingParams.doubleBay = !!e.target.checked;
+      render();
+    });
+    document.getElementById('chk-parking-stops')?.addEventListener('change', e => {
+      parkingParams.includeTireStops = !!e.target.checked;
+      render();
+    });
+
+    document.getElementById('btn-download-parking-dxf')?.addEventListener('click', () => {
+      const bay = generateParkingBayCadDetail(parkingParams);
+      downloadExport(bay.dxf, `parking-bay-${parkingParams.stallCount}-stalls-${parkingParams.angle}deg.dxf`, 'application/dxf');
+      showToast('1:1 Millimeter Parking Bay Layout downloaded for AutoCAD!', 'success');
+      AudioService.playSuccess();
+    });
+
+    document.getElementById('btn-download-parking-zip')?.addEventListener('click', () => {
+      const bay = generateParkingBayCadDetail(parkingParams);
+      const dxfName = `parking-bay-${parkingParams.stallCount}-stalls.dxf`;
+      const scr = generateAutoCadBatchDwgScript([dxfName]);
+      const zip = createZipArchive([
+        { name: dxfName, content: bay.dxf },
+        { name: 'convert_to_dwg.scr', content: scr },
+        { name: 'AUTOCAD_DWG_GUIDE.txt', content: 'Double click .dxf to open in AutoCAD or use Save As to convert to .dwg.' }
+      ]);
+      downloadExport(zip, `parking-bay-cad-package.zip`, 'zip');
+      showToast('Parking bay CAD package (.zip) downloaded!', 'success');
+      AudioService.playSuccess();
+    });
+
+    document.getElementById('btn-copy-parking-dxf')?.addEventListener('click', () => {
+      const bay = generateParkingBayCadDetail(parkingParams);
+      copyToClipboard(bay.dxf, 'Parking Bay DXF');
+    });
+
+    // --- Tab 4: Door & Window Elevations ---
+    document.querySelectorAll('.chk-door-item').forEach(chk => {
+      chk.addEventListener('change', () => {
+        const id = chk.dataset.id;
+        if (chk.checked && !selectedDoors.includes(id)) selectedDoors.push(id);
+        else if (!chk.checked) selectedDoors = selectedDoors.filter(x => x !== id);
+        render();
+      });
+    });
+
+    document.querySelectorAll('.chk-win-item').forEach(chk => {
+      chk.addEventListener('change', () => {
+        const id = chk.dataset.id;
+        if (chk.checked && !selectedWindows.includes(id)) selectedWindows.push(id);
+        else if (!chk.checked) selectedWindows = selectedWindows.filter(x => x !== id);
+        render();
+      });
+    });
+
+    document.getElementById('btn-download-elev-dxf')?.addEventListener('click', () => {
+      const activeDoors = STANDARD_DOOR_TYPES.filter(d => selectedDoors.includes(d.id));
+      const activeWindows = STANDARD_WINDOW_TYPES.filter(w => selectedWindows.includes(w.id));
+      const sched = generateDoorWindowElevationSchedule({ doors: activeDoors, windows: activeWindows });
+      downloadExport(sched.dxf, 'door-window-elevation-sheet.dxf', 'application/dxf');
+      showToast('Door & Window Elevation CAD Sheet downloaded!', 'success');
+      AudioService.playSuccess();
+    });
+
+    document.getElementById('btn-download-elev-zip')?.addEventListener('click', () => {
+      const activeDoors = STANDARD_DOOR_TYPES.filter(d => selectedDoors.includes(d.id));
+      const activeWindows = STANDARD_WINDOW_TYPES.filter(w => selectedWindows.includes(w.id));
+      const sched = generateDoorWindowElevationSchedule({ doors: activeDoors, windows: activeWindows });
+      const dxfName = 'door-window-elevation-sheet.dxf';
+      const scr = generateAutoCadBatchDwgScript([dxfName]);
+      const zip = createZipArchive([
+        { name: dxfName, content: sched.dxf },
+        { name: 'convert_to_dwg.scr', content: scr },
+        { name: 'AUTOCAD_DWG_GUIDE.txt', content: 'Double click .dxf to open in AutoCAD or use Save As to convert to .dwg.' }
+      ]);
+      downloadExport(zip, 'door-window-elevations-package.zip', 'zip');
+      showToast('Elevation CAD package (.zip) downloaded!', 'success');
+      AudioService.playSuccess();
+    });
+
+    document.getElementById('btn-copy-elev-dxf')?.addEventListener('click', () => {
+      const activeDoors = STANDARD_DOOR_TYPES.filter(d => selectedDoors.includes(d.id));
+      const activeWindows = STANDARD_WINDOW_TYPES.filter(w => selectedWindows.includes(w.id));
+      const sched = generateDoorWindowElevationSchedule({ doors: activeDoors, windows: activeWindows });
+      copyToClipboard(sched.dxf, 'Door & Window Elevation DXF');
+    });
+
+    // --- Tab 5: Plot Styles & Pen Weights ---
+    document.getElementById('btn-download-pen-scr')?.addEventListener('click', () => {
+      const scr = generateLayerLineweightScript();
+      downloadExport(scr, 'setup_aia_pen_weights.scr', 'text/plain');
+      showToast('Layer Lineweight Setup Script (.scr) downloaded!', 'success');
+      AudioService.playSuccess();
+    });
+
+    document.getElementById('btn-download-pen-lsp')?.addEventListener('click', () => {
+      const lsp = generatePlotStyleAutoLisp();
+      downloadExport(lsp, 'setup_aia_pen_weights.lsp', 'text/plain');
+      showToast('AutoLISP Pen Setup downloaded! Drag & drop into AutoCAD.', 'success');
+      AudioService.playSuccess();
+    });
+
+    document.getElementById('btn-download-ctb-guide')?.addEventListener('click', () => {
+      const txt = generatePlotStyleReportText();
+      downloadExport(txt, 'AIA_NCS_Plot_Style_CTB_Guide.txt', 'text/plain');
+      showToast('CTB Configuration Guide downloaded!', 'success');
+      AudioService.playSuccess();
+    });
+
+    document.getElementById('btn-download-pen-csv')?.addEventListener('click', () => {
+      const header = 'Color_Index,Color_Name,Lineweight_mm,Screening_Percent,Description\n';
+      const rows = AIA_PLOT_STYLE_PENS.map(p => `${p.colorIndex},"${p.colorName}",${p.mm},${p.screening},"${p.use}"`).join('\n');
+      downloadExport(header + rows, 'AIA_Plot_Style_Pen_Table.csv', 'text/csv');
+      showToast('Pen Table CSV downloaded!', 'success');
+      AudioService.playSuccess();
+    });
+
+    // --- Tab 6: Tool Palettes ---
+    document.getElementById('btn-download-atc-palette')?.addEventListener('click', () => {
+      const sampleAssets = FURNITURE_DATABASE.slice(0, 20).map(item => createFurnitureAsset(item));
+      const atc = generateAutoCadToolPaletteAtc('Architecture Helping Hand - Master Catalog', sampleAssets);
+      downloadExport(atc, 'Architecture_Helping_Hand_Catalog.atc', 'text/xml');
+      showToast('Autodesk Tool Palette (.atc) downloaded!', 'success');
+      AudioService.playSuccess();
+    });
+
+    document.getElementById('btn-copy-atc-xml')?.addEventListener('click', () => {
+      const sampleAssets = FURNITURE_DATABASE.slice(0, 10).map(item => createFurnitureAsset(item));
+      const atc = generateAutoCadToolPaletteAtc('Architecture Helping Hand - Blocks', sampleAssets);
+      copyToClipboard(atc, 'Tool Palette XML');
+    });
+
+    // --- Tab 7: DXF Hygiene ---
+    document.getElementById('btn-load-sample-dxf')?.addEventListener('click', () => {
+      const ta = document.getElementById('dxf-hygiene-input');
+      if (ta) ta.value = sampleMessyDxf;
+    });
+
+    document.getElementById('btn-run-dxf-sanitize')?.addEventListener('click', () => {
+      const ta = document.getElementById('dxf-hygiene-input');
+      const val = ta?.value?.trim();
+      if (!val) {
+        showToast('Please paste DXF content or click "Load Messy Sample DXF".', 'warning');
+        return;
+      }
+
+      const remap = document.getElementById('chk-remap-layers')?.checked;
+      const purgeZero = document.getElementById('chk-purge-zero')?.checked;
+      const purgeDups = document.getElementById('chk-purge-dups')?.checked;
+      const byLayerColor = document.getElementById('chk-bylayer-color')?.checked;
+
+      sanitizeResults = sanitizeAndStandardizeDxf(val, {
+        remapLayers: remap,
+        purgeZeroLength: purgeZero,
+        purgeDuplicates: purgeDups,
+        normalizeColorByLayer: byLayerColor
+      });
+
+      AudioService.playSuccess();
+      showToast(`Sanitized! Purged ${sanitizeResults.stats.purgedZeroLength + sanitizeResults.stats.purgedDuplicates} invalid entities.`, 'success');
+      render();
+    });
+
+    document.getElementById('btn-download-sanitized-dxf')?.addEventListener('click', () => {
+      if (!sanitizeResults?.sanitizedDxf) return;
+      downloadExport(sanitizeResults.sanitizedDxf, 'sanitized_standard_drawing.dxf', 'application/dxf');
+      showToast('Sanitized AIA-standard DXF downloaded!', 'success');
+    });
+
+    document.getElementById('btn-copy-sanitized-dxf')?.addEventListener('click', () => {
+      if (!sanitizeResults?.sanitizedDxf) return;
+      copyToClipboard(sanitizeResults.sanitizedDxf, 'Sanitized DXF');
+    });
+
+    // --- Tab 8: BIM ---
+    document.getElementById('btn-download-revit-params')?.addEventListener('click', () => {
+      const txt = generateRevitSharedParametersFile();
+      downloadExport(txt, 'Revit_Shared_Parameters.txt', 'text/plain');
+      showToast('Revit Shared Parameters file downloaded! Import via Manage > Shared Parameters in Revit.', 'success');
+      AudioService.playSuccess();
+    });
+
+    document.getElementById('btn-copy-revit-params')?.addEventListener('click', () => {
+      const txt = generateRevitSharedParametersFile();
+      copyToClipboard(txt, 'Revit Shared Parameters');
+    });
+
+    document.getElementById('btn-copy-dynamo-py')?.addEventListener('click', () => {
+      const py = generateDynamoPythonBatchPlacer();
+      copyToClipboard(py, 'Dynamo Python Script');
+    });
+
+    document.getElementById('bim-schedule-type-select')?.addEventListener('change', (e) => {
+      activeScheduleType = e.target.value;
+      render();
+    });
+
+    document.getElementById('btn-download-schedule-csv')?.addEventListener('click', () => {
+      const sched = generateBimSchedule(activeScheduleType);
+      downloadExport(sched.csv, `BIM_${activeScheduleType.toUpperCase()}_SCHEDULE.csv`, 'text/csv');
+      showToast('BIM Schedule CSV downloaded for Revit/Excel!', 'success');
+      AudioService.playSuccess();
+    });
+
+    document.getElementById('btn-download-schedule-dxf')?.addEventListener('click', () => {
+      const sched = generateBimSchedule(activeScheduleType);
+      downloadExport(sched.dxfTable, `BIM_${activeScheduleType.toUpperCase()}_TABLE.dxf`, 'application/dxf');
+      showToast('1:1 BIM Schedule DXF Table Sheet downloaded for AutoCAD!', 'success');
+      AudioService.playSuccess();
+    });
+  }
+
+  return {
+    id: 'cad_automation',
+    mount() { render(); },
+    onModeEnter() { render(); },
+    getController() { return { render }; }
   };
 }
 
@@ -42122,6 +49505,7 @@ const WORKFLOW_GUIDES = Object.freeze({
   requirements: ['Brief & Requirements', 'Editable project requirements and adjacency relationships.', 'Track what the project must provide.', 'During programming and review.', 'Record building type, area targets, room counts and relationships. Check requirements against verified external drawings.', 'Record classroom counts and net area targets before evaluating a CAD plan.'],
   survey: ['Survey', 'Measurements with origin and verification status.', 'Keep estimates separate from verified dimensions.', 'During fieldwork or calibration of a scanned drawing.', 'Record source and units, verify measurements, calibrate a known distance, then copy room dimensions.', 'Verify measured width and depth before copying a room footprint to CAD.'],
   imports: ['Imports', 'Review supported CAD and tabular data before saving it as project reference.', 'Preserve external data and provenance.', 'When receiving surveys, schedules or draft geometry.', 'Choose format, review units and import warnings, then save to project.', 'Import a DXF as a reference and verify a known dimension in the original application.'],
+  cad_automation: ['AutoCAD & BIM Automation', 'Generate AutoLISP layers, Tool Palettes (.atc), clean and standardize messy DXF drawings, and export Revit Shared Parameters and BIM schedules.', 'Streamline drafting and prevent CAD/BIM standard mismatches.', 'When setting up CAD projects, creating block toolbars, sanitizing consultant drawings, or coordinating BIM schedules.', 'Select a tab (AutoLISP, Tool Palette, DXF Hygiene, or Revit/BIM), configure options, and download or copy the generated automation files.', 'Drag the generated AutoLISP script into any DWG to create 24 AIA standard layers in one second.'],
   export: ['Exports', 'Download structured project and utility data.', 'Back up work and share deterministic results.', 'After completing calculations or before moving to another device.', 'Select source and format, review output, then download.', 'Export project JSON to preserve research, source metadata and legacy geometry.'],
   ai: ['Assistant', 'Natural-language assistance with inspectable routing.', 'Explore alternatives and review reasoning.', 'When drafting, comparing or critiquing design ideas.', 'Configure a provider, ask naturally or attach an image, inspect the answer, then save reviewed notes.', 'Ask “Prepare me for jury” to select jury assistance automatically.'],
   ai_settings: ['AI Providers', 'Provider keys and default models with optional advanced routes.', 'Configure AI once for everyday work.', 'When first connecting AI or changing providers.', 'Choose provider, save a key, choose default model and test connection. Open Advanced for manual routes.', 'Use a vision-capable model for images and a text model for research drafts.']
@@ -45487,8 +52871,12 @@ function createStandardsExplorerView(context) {
 
 
 
+
+
 function createSunPathView(context) {
   const { dom, showToast, copyToClipboard, AudioService, projectStore } = context;
+
+  let activeSubTab = 'sun_path'; // 'sun_path' or 'solar_shading'
 
   // UI state — defaults from the project's site study when present
   const ui = {
@@ -45496,6 +52884,17 @@ function createSunPathView(context) {
     date: new Date().toISOString().slice(0, 10),
     hour: 12, minute: 0,
     height: 10
+  };
+
+  const shadingUi = {
+    facadeAz: 180,
+    winH: 1.8,
+    winW: 2.4,
+    sillH: 0.9,
+    gapH: 0.15,
+    depth: null, // null = auto optimal
+    louvers: 1,
+    hour: 12
   };
 
   function escapeHtml(str) {
@@ -45608,8 +53007,234 @@ function createSunPathView(context) {
     const posOk = pos.ok && pos.position;
     const shadowOk = shadow.ok && shadow.shadow;
 
+    if (activeSubTab === 'solar_shading') {
+      const shading = calculateSolarShading({
+        latitudeDeg: ui.lat,
+        longitudeDeg: ui.lon,
+        timezoneOffsetHours: ui.tz,
+        facadeAzimuthDeg: shadingUi.facadeAz,
+        windowHeightM: shadingUi.winH,
+        windowWidthM: shadingUi.winW,
+        sillHeightM: shadingUi.sillH,
+        headToOverhangM: shadingUi.gapH,
+        overhangDepthM: shadingUi.depth,
+        louverCount: shadingUi.louvers,
+        designHour: shadingUi.hour
+      });
+
+      host.innerHTML = `
+        <div class="sun-tool-grid">
+          <div class="sun-subnav-bar" style="grid-column: 1 / -1; display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+            <button type="button" class="action-tool-btn" id="btn-subtab-sun" style="padding: 0.45rem 1rem;">☀️ Sun Path &amp; Shadow</button>
+            <button type="button" class="action-tool-btn primary" id="btn-subtab-shading" style="padding: 0.45rem 1rem; font-weight: 600;">🏛️ Solar Shading &amp; Overhang Calculator</button>
+          </div>
+
+          <!-- Facade & Window Inputs Card -->
+          <section class="archi-card sun-input-card" aria-label="Facade and window geometry">
+            <div class="result-header"><span class="result-label">FACADE &amp; OVERHANG GEOMETRY</span></div>
+            <div class="sun-input-form">
+              <label class="input-label" for="shading-lat-input">Site Latitude (° N+)</label>
+              <input type="number" id="shading-lat-input" class="sun-input" step="0.1" min="-90" max="90" value="${ui.lat}" />
+
+              <label class="input-label">Facade Orientation</label>
+              <div class="orientation-pills" style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.5rem;">
+                <button type="button" class="action-tool-btn compact ${shadingUi.facadeAz === 180 ? 'primary' : ''}" data-az="180">South (180°)</button>
+                <button type="button" class="action-tool-btn compact ${shadingUi.facadeAz === 135 ? 'primary' : ''}" data-az="135">SE (135°)</button>
+                <button type="button" class="action-tool-btn compact ${shadingUi.facadeAz === 225 ? 'primary' : ''}" data-az="225">SW (225°)</button>
+                <button type="button" class="action-tool-btn compact ${shadingUi.facadeAz === 90 ? 'primary' : ''}" data-az="90">East (90°)</button>
+                <button type="button" class="action-tool-btn compact ${shadingUi.facadeAz === 270 ? 'primary' : ''}" data-az="270">West (270°)</button>
+                <button type="button" class="action-tool-btn compact ${shadingUi.facadeAz === 0 ? 'primary' : ''}" data-az="0">North (0°)</button>
+              </div>
+              <input type="number" id="shading-az-input" class="sun-input" step="1" min="0" max="360" value="${shadingUi.facadeAz}" placeholder="Facade Azimuth (0–360°)" />
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <div>
+                  <label class="input-label" for="shading-winh-input">Window Height (m)</label>
+                  <input type="number" id="shading-winh-input" class="sun-input" step="0.05" min="0.2" value="${shadingUi.winH}" />
+                </div>
+                <div>
+                  <label class="input-label" for="shading-winw-input">Window Width (m)</label>
+                  <input type="number" id="shading-winw-input" class="sun-input" step="0.05" min="0.2" value="${shadingUi.winW}" />
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <div>
+                  <label class="input-label" for="shading-sillh-input">Sill Height (m)</label>
+                  <input type="number" id="shading-sillh-input" class="sun-input" step="0.05" min="0" value="${shadingUi.sillH}" />
+                </div>
+                <div>
+                  <label class="input-label" for="shading-gaph-input">Lintel Gap (m)</label>
+                  <input type="number" id="shading-gaph-input" class="sun-input" step="0.05" min="0" value="${shadingUi.gapH}" />
+                </div>
+              </div>
+
+              <label class="input-label" for="shading-depth-input">Overhang Projection (m)</label>
+              <input type="number" id="shading-depth-input" class="sun-input" step="0.05" min="0.05" placeholder="Optimal auto (${shading.optimalOverhangDepthM} m)" value="${shadingUi.depth !== null ? shadingUi.depth : ''}" />
+
+              <label class="input-label" for="shading-louvers-input">Shading System</label>
+              <select id="shading-louvers-input" class="form-select sun-input" style="width: 100%;">
+                <option value="1" ${shadingUi.louvers === 1 ? 'selected' : ''}>Solid Cantilever Overhang (1 Blade)</option>
+                <option value="2" ${shadingUi.louvers === 2 ? 'selected' : ''}>Brise-Soleil (2 Horizontal Blades)</option>
+                <option value="3" ${shadingUi.louvers === 3 ? 'selected' : ''}>Brise-Soleil (3 Horizontal Blades)</option>
+                <option value="4" ${shadingUi.louvers === 4 ? 'selected' : ''}>Brise-Soleil (4 Horizontal Blades)</option>
+                <option value="5" ${shadingUi.louvers === 5 ? 'selected' : ''}>Brise-Soleil (5 Horizontal Blades)</option>
+                <option value="6" ${shadingUi.louvers === 6 ? 'selected' : ''}>Brise-Soleil (6 Horizontal Blades)</option>
+              </select>
+
+              <button type="button" class="result-action-btn primary sun-run-btn" id="shading-calc-btn">Update Shading Analysis</button>
+              <button type="button" class="result-action-btn sun-copy-btn" id="shading-reset-depth-btn">Reset to Optimal Depth</button>
+            </div>
+          </section>
+
+          <!-- Shading Performance & Seasonal Metrics Card -->
+          <section class="archi-card sun-times-card" aria-label="Passive solar performance">
+            <div class="result-header"><span class="result-label">PASSIVE SOLAR SHADING PERFORMANCE</span></div>
+            <div class="sun-times-row" style="margin-bottom: 1rem;">
+              <div class="sun-time-tile"><span class="sun-time-value" style="color: #4ade80;">${shading.summer.shadePercent}%</span><span class="sun-time-label">Summer Solstice Shade</span></div>
+              <div class="sun-time-tile"><span class="sun-time-value" style="color: #fb923c;">${(100 - shading.winter.shadePercent).toFixed(1)}%</span><span class="sun-time-label">Winter Sun Gain</span></div>
+              <div class="sun-time-tile"><span class="sun-time-value">${shading.actualOverhangDepthM}<span class="sun-time-unit">m</span></span><span class="sun-time-label">Overhang Depth</span></div>
+              <div class="sun-time-tile"><span class="sun-time-value">${shading.winter.sunPenetrationM}<span class="sun-time-unit">m</span></span><span class="sun-time-label">Winter Sun Floor Depth</span></div>
+            </div>
+
+            <table class="standards-table" style="width: 100%; margin-top: 0.5rem;">
+              <thead>
+                <tr>
+                  <th>Season</th>
+                  <th>Solar Altitude</th>
+                  <th>Profile Angle (VSA)</th>
+                  <th>Window Shaded</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="standards-label">☀️ Summer Solstice</td>
+                  <td class="standards-value">${shading.summer.altitudeDeg}°</td>
+                  <td class="standards-value"><strong>${shading.summer.vsaDeg}°</strong></td>
+                  <td class="standards-value">${shading.summer.shadedHeightM} m (${shading.summer.shadePercent}%)</td>
+                  <td class="standards-value" style="color: #4ade80;">Full 100% Protection</td>
+                </tr>
+                <tr>
+                  <td class="standards-label">❄️ Winter Solstice</td>
+                  <td class="standards-value">${shading.winter.altitudeDeg}°</td>
+                  <td class="standards-value"><strong>${shading.winter.vsaDeg}°</strong></td>
+                  <td class="standards-value">${shading.winter.shadedHeightM} m (${shading.winter.shadePercent}%)</td>
+                  <td class="standards-value" style="color: #fb923c;">${(100 - shading.winter.shadePercent).toFixed(1)}% Passive Heating</td>
+                </tr>
+                <tr>
+                  <td class="standards-label">🌱 Equinox (Spring/Fall)</td>
+                  <td class="standards-value">${shading.equinox.altitudeDeg}°</td>
+                  <td class="standards-value"><strong>${shading.equinox.vsaDeg}°</strong></td>
+                  <td class="standards-value">${shading.equinox.shadedHeightM} m (${shading.equinox.shadePercent}%)</td>
+                  <td class="standards-value">Balanced Transition</td>
+                </tr>
+              </tbody>
+            </table>
+
+            ${shading.briseSoleil.louverCount > 1 ? `
+              <div style="margin-top: 0.75rem; padding: 0.6rem; background: rgba(255,255,255,0.03); border-radius: 6px; font-size: 0.85rem;">
+                <strong>Brise-Soleil Specification:</strong> ${shading.briseSoleil.louverCount} blades @ ${Math.round(shading.briseSoleil.louverSpacingM * 1000)} mm vertical spacing, blade projection: ${Math.round(shading.briseSoleil.bladeDepthM * 1000)} mm.
+              </div>
+            ` : ''}
+
+            <div style="margin-top: 0.75rem; padding: 0.6rem; background: rgba(255,255,255,0.03); border-radius: 6px; font-size: 0.85rem;">
+              <strong>Side Fin Recommendation:</strong> For low morning/afternoon sun protection, use vertical side fins of ${Math.round(shading.verticalFins.finDepthM * 1000)} mm projection.
+            </div>
+          </section>
+
+          <!-- 2D Architectural Section Preview Card -->
+          <section class="archi-card sun-path-card" style="grid-column: 1 / -1;" aria-label="Architectural section detail">
+            <div class="result-header">
+              <span class="result-label">1:1 ARCHITECTURAL DETAIL SECTION — PASSIVE SOLAR CUTOFF</span>
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <button type="button" class="action-tool-btn primary compact" id="shading-dxf-btn">Download 1:1 DXF (AutoCAD)</button>
+                <button type="button" class="action-tool-btn compact" id="shading-svg-btn">Download SVG</button>
+                <button type="button" class="action-tool-btn compact" id="shading-copy-btn">Copy Spec Report</button>
+              </div>
+            </div>
+            <div style="padding: 0.5rem 0;">
+              ${shadingSectionToSVG(shading)}
+            </div>
+            <p class="sun-hint">Real-scale architectural section detail showing wall, glazing, overhang profile, summer cutoff angle (${shading.summer.vsaDeg}°), and winter penetration ray. DXF exports true 1:1 millimeter AutoCAD entities on layers A-WALL, A-GLAZ, A-ROOF, and A-SITE.</p>
+          </section>
+        </div>
+      `;
+
+      document.getElementById('btn-subtab-sun')?.addEventListener('click', () => {
+        activeSubTab = 'sun_path';
+        AudioService.playTick();
+        render();
+      });
+
+      document.querySelectorAll('.orientation-pills button').forEach(b => {
+        b.addEventListener('click', () => {
+          shadingUi.facadeAz = parseInt(b.dataset.az, 10);
+          AudioService.playTick();
+          render();
+        });
+      });
+
+      document.getElementById('shading-calc-btn')?.addEventListener('click', () => {
+        const g = id => document.getElementById(id);
+        const latVal = parseFloat(g('shading-lat-input')?.value);
+        if (Number.isFinite(latVal)) ui.lat = latVal;
+        const azVal = parseFloat(g('shading-az-input')?.value);
+        if (Number.isFinite(azVal)) shadingUi.facadeAz = azVal;
+        shadingUi.winH = parseFloat(g('shading-winh-input')?.value || 1.8);
+        shadingUi.winW = parseFloat(g('shading-winw-input')?.value || 2.4);
+        shadingUi.sillH = parseFloat(g('shading-sillh-input')?.value || 0.9);
+        shadingUi.gapH = parseFloat(g('shading-gaph-input')?.value || 0.15);
+        const depthVal = parseFloat(g('shading-depth-input')?.value);
+        shadingUi.depth = Number.isFinite(depthVal) && depthVal > 0 ? depthVal : null;
+        shadingUi.louvers = parseInt(g('shading-louvers-input')?.value || 1, 10);
+        AudioService.playTick();
+        render();
+      });
+
+      document.getElementById('shading-reset-depth-btn')?.addEventListener('click', () => {
+        shadingUi.depth = null;
+        AudioService.playTick();
+        render();
+      });
+
+      document.getElementById('shading-dxf-btn')?.addEventListener('click', () => {
+        const dxf = shadingSectionToDXF(shading);
+        const ok = downloadExport(dxf, `solar-shading-section-${Math.round(shading.actualOverhangDepthM * 1000)}mm.dxf`, 'dxf');
+        showToast(ok ? 'Downloaded 1:1 AutoCAD Section DXF' : 'Download failed', ok ? 'success' : 'error');
+      });
+
+      document.getElementById('shading-svg-btn')?.addEventListener('click', () => {
+        const svg = shadingSectionToSVG(shading);
+        const ok = downloadExport(svg, `solar-shading-section.svg`, 'svg');
+        showToast(ok ? 'Downloaded SVG Section Detail' : 'Download failed', ok ? 'success' : 'error');
+      });
+
+      document.getElementById('shading-copy-btn')?.addEventListener('click', () => {
+        const report = [
+          `Passive Solar Shading Report`,
+          `Site Latitude: ${ui.lat}° | Facade Azimuth: ${shadingUi.facadeAz}°`,
+          `Window: ${shadingUi.winW}m W x ${shadingUi.winH}m H | Sill: ${shadingUi.sillH}m | Head Gap: ${shadingUi.gapH}m`,
+          `Optimal Overhang Depth: ${shading.optimalOverhangDepthM}m (${Math.round(shading.optimalOverhangDepthM * 1000)} mm)`,
+          `Actual Depth: ${shading.actualOverhangDepthM}m (${Math.round(shading.actualOverhangDepthM * 1000)} mm)`,
+          `Summer Solstice (June 21): VSA ${shading.summer.vsaDeg}° -> ${shading.summer.shadePercent}% Shade`,
+          `Winter Solstice (Dec 21): VSA ${shading.winter.vsaDeg}° -> ${(100 - shading.winter.shadePercent).toFixed(1)}% Solar Heat Gain (Floor penetration: ${shading.winter.sunPenetrationM}m)`,
+          shading.briseSoleil.louverCount > 1
+            ? `Brise-Soleil: ${shading.briseSoleil.louverCount} louvers @ ${Math.round(shading.briseSoleil.louverSpacingM * 1000)}mm spacing, blade depth ${Math.round(shading.briseSoleil.bladeDepthM * 1000)}mm`
+            : `Solid Cantilever Overhang`
+        ].join('\n');
+        copyToClipboard(report, 'Shading report');
+      });
+
+      return;
+    }
+
     host.innerHTML = `
       <div class="sun-tool-grid">
+        <div class="sun-subnav-bar" style="grid-column: 1 / -1; display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+          <button type="button" class="action-tool-btn primary" id="btn-subtab-sun" style="padding: 0.45rem 1rem; font-weight: 600;">☀️ Sun Path &amp; Shadow</button>
+          <button type="button" class="action-tool-btn" id="btn-subtab-shading" style="padding: 0.45rem 1rem; font-weight: 600;">🏛️ Solar Shading &amp; Overhang Calculator</button>
+        </div>
         <!-- Location & time inputs -->
         <section class="archi-card sun-input-card" aria-label="Location and time">
           <div class="result-header"><span class="result-label">SITE &amp; TIME</span></div>
@@ -45698,6 +53323,17 @@ function createSunPathView(context) {
         </section>` : ''}
       </div>
     `;
+
+    document.getElementById('btn-subtab-shading')?.addEventListener('click', () => {
+      activeSubTab = 'solar_shading';
+      AudioService.playTick();
+      render();
+    });
+    document.getElementById('btn-subtab-sun')?.addEventListener('click', () => {
+      activeSubTab = 'sun_path';
+      AudioService.playTick();
+      render();
+    });
 
     document.getElementById('sun-run-btn')?.addEventListener('click', () => {
       readInputs();
@@ -46335,6 +53971,7 @@ function createReportsView(context) {
 
 // Workspace & tool registry — the single source of truth for navigation
 // (sidebar, landing pages, breadcrumbs, palette nav commands, digit keys).
+
 
 
 
@@ -48153,6 +55790,9 @@ function initializeApp() {
     }
     else if (targetMode === 'cad_handoff') {
       views.callController('cad_handoff', 'renderCadHandoff');
+    }
+    else if (targetMode === 'cad_automation') {
+      views.callController('cad_automation', 'render');
     }
     else if (targetMode === 'stairs') {
       views.callController('stairs', 'calculate');
@@ -52534,6 +60174,7 @@ const viewContext = Object.freeze({
   views.register(createCadClipboardView(viewContext));
   views.register(createCadHandoffView(viewContext));
   views.register(createBatchCadView(viewContext));
+  views.register(createCadAutomationView(viewContext));
   views.register(createQuickDimensionView({ ...viewContext, renderHistoryListRef: () => views.callController('history', 'renderHistoryList') }));
   views.register(createHistoryView({
     ...viewContext,

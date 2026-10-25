@@ -15,7 +15,11 @@ import { EXPORT_CONTENT_TYPES } from '../core/export/export-model.js';
 export function downloadExport(content, fileName, format) {
   const contentType = EXPORT_CONTENT_TYPES[format] || 'text/plain';
   try {
-    const blob = new Blob([content], { type: `${contentType};charset=utf-8` });
+    const isBinary = (typeof Uint8Array !== 'undefined' && content instanceof Uint8Array) ||
+                     (typeof ArrayBuffer !== 'undefined' && content instanceof ArrayBuffer);
+    const blob = isBinary
+      ? new Blob([content], { type: contentType })
+      : new Blob([content], { type: `${contentType};charset=utf-8` });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

@@ -78,7 +78,11 @@ const testFiles = [
   'issue-engine.test.js',
   'honesty-pass.test.js',
   'engine-wiring.test.js',
-  'object-library.test.js'
+  'object-library.test.js',
+  'solar-shading.test.js',
+  'cad-bim-automation.test.js',
+  'zip-packager.test.js',
+  'cad-generators.test.js'
 ];
 
 console.log('=================================================================');

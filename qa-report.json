@@ -60,7 +60,8 @@
     "reports",
     "export",
     "ai",
-    "ai_settings"
+    "ai_settings",
+    "cad_automation"
   ],
   "checks": {
     "390x844": {
@@ -253,6 +254,10 @@
         "problems": []
       },
       "dialog:shortcuts": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "cad_automation": {
         "overflowX": 0,
         "problems": []
       }
@@ -449,6 +454,10 @@
       "dialog:shortcuts": {
         "overflowX": 0,
         "problems": []
+      },
+      "cad_automation": {
+        "overflowX": 0,
+        "problems": []
       }
     },
     "768x1024": {
@@ -641,6 +650,10 @@
         "problems": []
       },
       "dialog:shortcuts": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "cad_automation": {
         "overflowX": 0,
         "problems": []
       }
@@ -837,6 +850,10 @@
       "dialog:shortcuts": {
         "overflowX": 0,
         "problems": []
+      },
+      "cad_automation": {
+        "overflowX": 0,
+        "problems": []
       }
     },
     "1280x800": {
@@ -1029,6 +1046,10 @@
         "problems": []
       },
       "dialog:shortcuts": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "cad_automation": {
         "overflowX": 0,
         "problems": []
       }
@@ -1225,6 +1246,10 @@
       "dialog:shortcuts": {
         "overflowX": 0,
         "problems": []
+      },
+      "cad_automation": {
+        "overflowX": 0,
+        "problems": []
       }
     },
     "1920x1080": {
@@ -1417,6 +1442,10 @@
         "problems": []
       },
       "dialog:shortcuts": {
+        "overflowX": 0,
+        "problems": []
+      },
+      "cad_automation": {
         "overflowX": 0,
         "problems": []
       }

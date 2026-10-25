@@ -4,7 +4,7 @@ import { FURNITURE_DATABASE,filterFurnitureCatalog } from '../src/core/furniture
 import { OBJECT_COLLECTIONS } from '../src/core/furniture/collections.js';
 import { getObjectGeometryDefinition,objectGeometryBounds } from '../src/core/furniture/geometry-registry.js';
 import { resolveObjectDimensions,objectPaperDimensions } from '../src/core/furniture/scaling.js';
-import { createFurnitureAsset,furnitureAssetDXF,furnitureAssetSVG } from '../src/core/furniture-assets.js';
+import { createFurnitureAsset,furnitureAssetDXF,furnitureAssetSVG,categoryToToolPaletteDXF } from '../src/core/furniture-assets.js';
 import { createConverterView,syncConverterDirectionUI } from '../src/ui/views/converter.js';
 import { NAV_TOOL_LIST } from '../src/core/workspaces.js';
 import { getWorkflowGuide } from '../src/core/tool-guides.js';
@@ -39,6 +39,28 @@ check('Actual calculation synchronizes external navigation and clears stale erro
   const previous=globalThis.document;globalThis.document={getElementById:()=>null};try{const view=createConverterView({state,dom,setUnifiedResultState:()=>{},AudioService:{playSwapSound(){}}});view.getController().calculateConverter();assert.equal(Number(dom.converterResultVal.textContent),100);assert.equal(dom.converterInputBadge.textContent,'Real measurement');state.direction='drawing_to_real';dom.converterInputVal.value='100';dom.converterInputUnit.value='mm';dom.converterOutputUnit.value='m';view.getController().calculateConverter();assert.equal(Number(dom.converterResultVal.textContent),5);assert.equal(dom.converterInputBadge.textContent,'Measurement on drawing');dom.converterInputVal.value='';view.getController().calculateConverter();assert.equal(dom.converterResultVal.textContent,'—');assert.equal(dom.converterExplanation.textContent,'');}finally{globalThis.document=previous;}
 });
 check('Current navigation, help and removed editor components agree',()=>{assert.ok(NAV_TOOL_LIST.every(t=>t.toolId!=='plan'&&getWorkflowGuide(t.toolId)));for(const file of ['src/ui/views/plan.js','src/core/plan-canvas.js','src/ui/components/ribbon.js','src/ui/components/palette.js','src/ui/components/cpanels.js','scripts/qa_plan_canvas_accuracy.py'])assert.ok(!fs.existsSync(file));});
+check('Category pack exports multi-block DXF tool palette sheet',()=>{
+  const kitchenItems = filterFurnitureCatalog(FURNITURE_DATABASE, '', 'kitchen').slice(0, 4);
+  const dxf = categoryToToolPaletteDXF(kitchenItems, { includeClearance: true });
+  assert.ok(dxf.includes('0\nBLOCK\n'));
+  assert.ok(dxf.includes('2\nAHH_'));
+  assert.ok(dxf.includes('0\nENDBLK\n'));
+  assert.ok(dxf.includes('0\nINSERT\n'));
+  assert.ok(dxf.includes('A-CLEARANCE'));
+  assert.ok(dxf.includes('CONTINUOUS'));
+  assert.ok(dxf.includes('DASHED'));
+});
+check('Multi-view projections render front and side elevations',()=>{
+  const desk = createFurnitureAsset(FURNITURE_DATABASE.find(i => i.id === 'desk-exec-180') || { id: 'desk-std-140', wCm: 140, dCm: 70, hCm: 75 });
+  assert.ok(desk.frontGeometry && desk.frontGeometry.length > 0);
+  assert.ok(desk.sideGeometry && desk.sideGeometry.length > 0);
+  const frontSvg = furnitureAssetSVG(desk, { view: 'front' });
+  const sideSvg = furnitureAssetSVG(desk, { view: 'side' });
+  assert.ok(frontSvg.includes('front elevation'));
+  assert.ok(sideSvg.includes('side elevation'));
+  const frontDxf = furnitureAssetDXF(desk, { view: 'front' });
+  assert.ok(frontDxf.includes('2\nAHH_') && frontDxf.includes('_FRONT'));
+});
 check('Responsive QA configuration covers the current registry at all seven sizes',()=>{assert.deepEqual(new Set(QA_MODES),new Set(['home',...NAV_TOOL_LIST.map(t=>t.toolId)]));assert.equal(QA_VIEWPORTS.length,7);assert.ok(QA_VIEWPORTS.some(([w,h])=>w===390&&h===844));assert.ok(QA_VIEWPORTS.some(([w,h])=>w===1920&&h===1080));assert.ok(!QA_MODES.some(m=>['plan','workspace','expression','chains','multiscale'].includes(m)));});
 check('Generated responsive report describes the current live navigation',()=>{const report=JSON.parse(fs.readFileSync('qa-report.json','utf8'));assert.deepEqual(new Set(report.modes),new Set(QA_MODES));assert.deepEqual(report.viewports,QA_VIEWPORTS);for(const [w,h] of QA_VIEWPORTS)assert.ok(QA_MODES.every(mode=>report.checks[`${w}x${h}`]?.[mode]));assert.equal(report.summary.failures.length,0);assert.equal(report.errors.length,0);});
 console.log(`Object follow-up: ${passed} passed, 0 failed.`);

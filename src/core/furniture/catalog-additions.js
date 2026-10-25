@@ -38,7 +38,11 @@ const objectAdditions = [
   ['street-bollard','Street Bollard','transport',35,35,95,'pole'],
   ['street-curb-ramp','Curb Ramp Symbol','transport',150,180,15,'ramp'],
   ['street-lane-marker','Road Lane Marker','transport',25,300,0,'mat'],
-  ['mall-checkout','Mall Checkout Counter','commercial',250,100,95,'kitchen']
+  ['mall-checkout','Mall Checkout Counter','commercial',250,100,95,'kitchen'],
+  ['poker-table-oval','Poker Table (10-Player Casino/Home)','living',240,120,76,'sportsTable'],
+  ['toilet-stall-std','Standard Commercial Toilet Stall','bathroom',90,150,200,'toilet'],
+  ['toilet-stall-ada','ADA Accessible Toilet Stall','bathroom',155,155,200,'toilet'],
+  ['salon-shampoo-station','Hair Salon Backwash Shampoo Station','commercial',65,130,95,'basin']
 ];
 export const ARCHITECTURAL_OBJECT_ADDITIONS = Object.freeze(objectAdditions.map(([id,name,category,wCm,dCm,hCm,type])=>Object.freeze({id,name,category,wCm,dCm,hCm,type,
   desc:'Editable schematic design footprint; verify the selected product and project requirements.',
