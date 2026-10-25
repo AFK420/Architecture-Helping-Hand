@@ -7,10 +7,16 @@ A personal architecture research, site-analysis, calculation, CAD-assistance and
 Architecture Helping Hand is 100% cross-platform, self-contained, and runs offline on **macOS** and **Windows** with zero setup, zero accounts, and no dependencies.
 
 ### 🍎 For macOS (MacBook, iMac, Mac Studio, Mac Mini)
-1. **Native Mac Application:** Double-click `Architecture Helping Hand.app` directly in Finder. Opens in a clean windowed app mode (using Chrome, Edge, Brave, or Safari).
-2. **1-Click Mac Installer:** Double-click `Install Mac App.command` to automatically set executable permissions, install to `~/Applications`, and add a shortcut to your Desktop.
-3. **Shell Launcher:** Double-click `Launch Architecture App.command`.
-4. **Safari / Chrome "Add to Dock":** Open `index.html` in Safari -> click **File → Add to Dock...** to pin it as a native Mac app in your Dock and Launchpad.
+1. **Zero-Warning Method (Recommended):** Open `index.html` in Safari -> Click **File → Add to Dock...** (or Chrome install icon). macOS will create a 100% genuine, native Apple-signed app directly in your Dock and Launchpad with zero Gatekeeper warnings!
+2. **Native Mac Application:** Double-click `Architecture Helping Hand.app` directly in Finder. Opens in a clean windowed app mode (using Chrome, Edge, Brave, or Safari).
+3. **1-Click Mac Installer:** Double-click `Install Mac App.command` to automatically set executable permissions, install to `~/Applications`, and add a shortcut to your Desktop.
+4. **Shell Launcher:** Double-click `Launch Architecture App.command`.
+
+> [!NOTE]
+> **If macOS blocks the .app ("Malware / Cannot check for malicious software"):**
+> Modern macOS shows this warning on any downloaded app that does not carry a paid Apple Developer ID. You can unblock it instantly:
+> - **System Settings:** Go to **Apple menu () → System Settings → Privacy & Security**, scroll down to **Security**, and click **"Open Anyway"**.
+> - **Or Terminal (1 second):** Open Terminal and run: `xattr -cr ~/Downloads/Architecture-Helping-Hand` to strip the quarantine attribute.
 
 ### 🪟 For Windows (Windows 10 / Windows 11)
 1. **Instant Run:** Double-click `Launch Architecture App.bat`. The app opens in a dedicated, high-performance desktop window (using Microsoft Edge or Google Chrome app-mode).

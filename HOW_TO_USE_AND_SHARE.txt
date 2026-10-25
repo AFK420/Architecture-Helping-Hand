@@ -11,25 +11,45 @@ internet connection, or administrative privileges.
 🍎 FOR macOS USERS (MacBook, iMac, Mac Studio, Mac Mini):
 ======================================================================
 
-Option 1 (Native Mac App — Recommended):
-  1. Double-click "Architecture Helping Hand.app" directly in Finder.
-  2. The application opens immediately in a borderless window (using
-     Chrome, Edge, Brave, or Safari).
+----------------------------------------------------------------------
+⭐ METHOD 1: SAFARI / CHROME "ADD TO DOCK" (RECOMMENDED — NO WARNINGS!)
+----------------------------------------------------------------------
+This is the cleanest, Apple-approved way to run on macOS without ANY
+Gatekeeper or malware warnings:
+  1. Double-click "index.html" to open in Safari (or Chrome).
+  2. In Safari: Click the menu bar "File" -> "Add to Dock..."
+     (In Chrome: Click the install icon in the address bar -> "Install App").
+  3. Click "Add".
+  🎉 Architecture Helping Hand is now a 100% genuine, native macOS app
+     sitting in your Mac Dock and Launchpad, opening in its own window!
 
-Option 2 (1-Click Mac Installer / Setup):
-  1. Double-click "Install Mac App.command".
-  2. This sets executable permissions, installs the app to your
-     ~/Applications folder, and adds a shortcut to your Desktop!
+----------------------------------------------------------------------
+⭐ METHOD 2: IF macOS BLOCKS THE .APP ("MALWARE / CANNOT BE CHECKED")
+----------------------------------------------------------------------
+Apple Gatekeeper displays this warning on ALL software downloaded from the
+web that does not have a $99/year Apple Developer Certificate.
 
-Option 3 (Shell Launcher):
-  1. Double-click "Launch Architecture App.command".
-  2. It automatically locates your browser and opens the workspace.
+To bypass this in 5 seconds:
 
-Option 4 (Safari / Chrome "Add to Dock"):
-  1. Open "index.html" in Safari or Chrome.
-  2. In Safari: Click "File" -> "Add to Dock..."
-  3. In Chrome: Click the install icon in the address bar -> "Install App".
-  4. The app is now a permanent standalone macOS app in your Dock!
+Option A (System Settings — Easiest):
+  1. Try opening "Architecture Helping Hand.app" once.
+  2. Open Apple Menu () -> "System Settings" -> "Privacy & Security".
+  3. Scroll down to the "Security" section.
+  4. You will see: "'Architecture Helping Hand' was blocked from use..."
+  5. Click the "Open Anyway" button and enter your Mac password or Touch ID.
+  macOS will now permanently remember this and open it every time!
+
+Option B (Terminal 1-Line Command):
+  1. Open the "Terminal" app on your Mac (press Cmd+Space and type Terminal).
+  2. Paste this command and press Enter:
+     xattr -cr ~/Downloads/Architecture-Helping-Hand
+     (Or type "xattr -cr " with a space, then drag this folder into Terminal).
+  3. That's it! All quarantine flags are cleared. Double-click the app to open.
+
+Option C (Right-Click Open):
+  1. Hold down the "Control" key (or right-click) on "Architecture Helping Hand.app".
+  2. Click "Open" from the menu.
+  3. Click "Open" again in the dialog box.
 
 ======================================================================
 🪟 FOR WINDOWS USERS (Windows 10 / Windows 11):
@@ -51,7 +71,7 @@ Option 3 (Default Browser):
 ======================================================================
 - Architecture Helping Hand.app   : Native macOS Application Bundle
 - Launch Architecture App.command : macOS shell desktop launcher
-- Install Mac App.command         : macOS 1-click installer and Desktop setup
+- Install Mac App.command         : macOS 1-click installer (~/Applications & Desktop)
 - Launch Architecture App.bat     : Windows instant desktop app launcher
 - Install Desktop Shortcut.bat    : Windows desktop shortcut installer
 - Uninstall Shortcut.bat          : Removes the Windows desktop shortcut
