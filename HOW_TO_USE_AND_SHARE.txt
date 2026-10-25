@@ -1,41 +1,69 @@
 ======================================================================
-  🏛️ ARCHITECTURE HELPING HAND (v2.8.0) — PORTABLE STANDALONE EDITION
+  🏛️ ARCHITECTURE HELPING HAND (v2.8.0) — CROSS-PLATFORM EDITION
+       (Full Offline Standalone Support for Windows & macOS)
 ======================================================================
 
 Thank you for using Architecture Helping Hand! This software runs 100%
 locally on your computer without requiring any installation, account,
 internet connection, or administrative privileges.
 
-----------------------------------------------------------------------
-⚡ HOW TO RUN ON ANY WINDOWS PC:
-----------------------------------------------------------------------
+======================================================================
+🍎 FOR macOS USERS (MacBook, iMac, Mac Studio, Mac Mini):
+======================================================================
+
+Option 1 (Native Mac App — Recommended):
+  1. Double-click "Architecture Helping Hand.app" directly in Finder.
+  2. The application opens immediately in a borderless window (using
+     Chrome, Edge, Brave, or Safari).
+
+Option 2 (1-Click Mac Installer / Setup):
+  1. Double-click "Install Mac App.command".
+  2. This sets executable permissions, installs the app to your
+     ~/Applications folder, and adds a shortcut to your Desktop!
+
+Option 3 (Shell Launcher):
+  1. Double-click "Launch Architecture App.command".
+  2. It automatically locates your browser and opens the workspace.
+
+Option 4 (Safari / Chrome "Add to Dock"):
+  1. Open "index.html" in Safari or Chrome.
+  2. In Safari: Click "File" -> "Add to Dock..."
+  3. In Chrome: Click the install icon in the address bar -> "Install App".
+  4. The app is now a permanent standalone macOS app in your Dock!
+
+======================================================================
+🪟 FOR WINDOWS USERS (Windows 10 / Windows 11):
+======================================================================
+
 Option 1 (Instant Run):
-  - Simply double-click "Launch Architecture App.bat".
-  - The application opens immediately in a clean, borderless desktop window.
+  - Double-click "Launch Architecture App.bat".
+  - Opens immediately in dedicated desktop app mode.
 
 Option 2 (Install Desktop Shortcut):
   - Double-click "Install Desktop Shortcut.bat".
-  - This automatically creates an "Architecture Helping Hand" icon on your
-    Windows Desktop so you can launch it like any other program!
+  - Places an "Architecture Helping Hand" icon on your Windows Desktop.
 
-Option 3 (Run in Default Web Browser):
-  - Double-click "index.html" directly.
+Option 3 (Default Browser):
+  - Double-click "index.html".
 
-----------------------------------------------------------------------
+======================================================================
 📦 WHAT IS INCLUDED IN THIS FOLDER:
-----------------------------------------------------------------------
-- Launch Architecture App.bat     : Instant desktop app launcher (Edge/Chrome app-mode)
-- Install Desktop Shortcut.bat    : Adds an app shortcut with icon to your Desktop
-- Uninstall Shortcut.bat          : Removes the Desktop shortcut
+======================================================================
+- Architecture Helping Hand.app   : Native macOS Application Bundle
+- Launch Architecture App.command : macOS shell desktop launcher
+- Install Mac App.command         : macOS 1-click installer and Desktop setup
+- Launch Architecture App.bat     : Windows instant desktop app launcher
+- Install Desktop Shortcut.bat    : Windows desktop shortcut installer
+- Uninstall Shortcut.bat          : Removes the Windows desktop shortcut
 - index.html                      : Complete application UI and workspace
-- css/                            : Design system, themes, and responsive layouts
+- css/                            : Design system, themes, and layouts
 - js/app.js                       : Standalone production bundle (all 35 tools)
-- assets/                         : Application icons (192px, 512px, SVG, ICO)
+- assets/                         : App icons (Apple .icns, Windows .ico, PNG, SVG)
 - manifest.json & sw.js           : PWA offline caching support
 
-----------------------------------------------------------------------
+======================================================================
 🎯 KEY ARCHITECTURAL TOOLS INCLUDED:
-----------------------------------------------------------------------
+======================================================================
 1. 📐 Universal Scale Converter: Real-to-drawing & drawing-to-real conversions
 2. 🛋️ Object Library & CAD Blocks: 681 resizable architectural symbols
 3. ⚡ AutoCAD & BIM Studio:
@@ -50,8 +78,8 @@ Option 3 (Run in Default Web Browser):
 4. ☀️ Solar Shading & Overhang Calculator: Summer cutoff & winter heating
 5. 📊 Dimension Chains, Workspace, Geometry, and Multi-Scale Comparison
 
-----------------------------------------------------------------------
-🌐 SOURCE CODE & UPDATES:
-----------------------------------------------------------------------
+======================================================================
+🌐 SOURCE CODE & REPOSITORY:
+======================================================================
 GitHub Repository: https://github.com/AFK420/Architecture-Helping-Hand
 ======================================================================

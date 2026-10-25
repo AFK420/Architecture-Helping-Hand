@@ -48,15 +48,21 @@ assert(crc32(enc.encode('')) === 0, 'crc32 computes 0 for empty string');
 const files = [
   { name: 'test.dxf', content: '0\nSECTION\n0\nEOF\n' },
   { name: 'test.lsp', content: '; AutoLISP block' },
-  { name: 'AUTOCAD_DWG_GUIDE.txt', content: 'AutoCAD instructions' }
+  { name: 'AUTOCAD_DWG_GUIDE.txt', content: 'AutoCAD instructions' },
+  { name: 'run.command', content: '#!/bin/bash\necho ok' }
 ];
 const zip = createZipArchive(files);
 assert(zip instanceof Uint8Array, 'createZipArchive returns Uint8Array');
 assert(zip.length > 200, 'Zip file has expected minimum length');
 assert(zip[0] === 0x50 && zip[1] === 0x4B && zip[2] === 0x03 && zip[3] === 0x04, 'Zip starts with PK\\x03\\x04 local header magic');
 
+// Verify Unix external attributes in central directory
+const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
 const eocdPos = zip.length - 22;
 assert(zip[eocdPos] === 0x50 && zip[eocdPos + 1] === 0x4B && zip[eocdPos + 2] === 0x05 && zip[eocdPos + 3] === 0x06, 'Zip ends with PK\\x05\\x06 EOCD magic');
+const cdOffset = view.getUint32(eocdPos + 16, true);
+assert(view.getUint32(cdOffset, true) === 0x02014b50, 'Central directory signature is valid');
+assert(view.getUint16(cdOffset + 4, true) === ((3 << 8) | 20), 'Version made by sets Unix OS (3) and PKZIP 2.0 (20)');
 
 // --- 3. Individual CAD Package ZIP ---
 const item = FURNITURE_DATABASE.find(f => f.id === 'sofa-3p') || FURNITURE_DATABASE[0];

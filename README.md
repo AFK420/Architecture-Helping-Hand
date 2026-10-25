@@ -4,12 +4,25 @@ A personal architecture research, site-analysis, calculation, CAD-assistance and
 
 ## Start & Standalone Desktop Installation
 
-### Instant Desktop Run (Zero Setup)
-1. **Launch Directly:** Double-click `Launch Architecture App.bat`. The app opens immediately in a dedicated, high-performance desktop window (using Microsoft Edge or Google Chrome app-mode).
-2. **Install Desktop Shortcut:** Double-click `Install Desktop Shortcut.bat` to place a permanent "Architecture Helping Hand" icon on your Windows Desktop.
-3. **Web Browser Mode:** Open `index.html` directly in any modern browser for offline use.
+Architecture Helping Hand is 100% cross-platform, self-contained, and runs offline on **macOS** and **Windows** with zero setup, zero accounts, and no dependencies.
 
-To package a clean, portable distribution to share with others, run `npm run package` (or `node scripts/package-dist.js`). This generates a self-contained ~3 MB ZIP in `dist/Architecture-Helping-Hand-v2.8.0.zip` containing everything needed to run on any Windows PC without Node.js, Python, or administrative rights.
+### 🍎 For macOS (MacBook, iMac, Mac Studio, Mac Mini)
+1. **Native Mac Application:** Double-click `Architecture Helping Hand.app` directly in Finder. Opens in a clean windowed app mode (using Chrome, Edge, Brave, or Safari).
+2. **1-Click Mac Installer:** Double-click `Install Mac App.command` to automatically set executable permissions, install to `~/Applications`, and add a shortcut to your Desktop.
+3. **Shell Launcher:** Double-click `Launch Architecture App.command`.
+4. **Safari / Chrome "Add to Dock":** Open `index.html` in Safari -> click **File → Add to Dock...** to pin it as a native Mac app in your Dock and Launchpad.
+
+### 🪟 For Windows (Windows 10 / Windows 11)
+1. **Instant Run:** Double-click `Launch Architecture App.bat`. The app opens in a dedicated, high-performance desktop window (using Microsoft Edge or Google Chrome app-mode).
+2. **Install Desktop Shortcut:** Double-click `Install Desktop Shortcut.bat` to place an "Architecture Helping Hand" icon with custom artwork on your Desktop.
+3. **Web Browser Mode:** Open `index.html` directly in any modern browser.
+
+### 📦 Portable Distribution
+To package a clean, self-contained portable release to share with others across Mac and Windows, run:
+```bash
+npm run package
+```
+*(or `node scripts/package-dist.js`)*. This generates `dist/Architecture-Helping-Hand-v2.8.0.zip` (~3.1 MB) containing both macOS and Windows launchers with pre-configured Unix executable permissions.
 
 For direct PDF export, follow [REPORT_ENGINE.md](REPORT_ENGINE.md) and run `npm run reports`. Open the local URL printed by the server. The optional report runtime is isolated from the dependency-free frontend.
 

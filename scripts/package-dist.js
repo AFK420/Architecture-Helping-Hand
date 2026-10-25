@@ -34,8 +34,11 @@ if (fs.existsSync(TARGET_DIR)) {
 }
 fs.mkdirSync(TARGET_DIR, { recursive: true });
 
-// 3. Define essential runtime files and folders
+// 3. Define essential runtime files and folders for Windows & macOS
 const ESSENTIAL_ITEMS = [
+  'Architecture Helping Hand.app',
+  'Launch Architecture App.command',
+  'Install Mac App.command',
   'Launch Architecture App.bat',
   'Install Desktop Shortcut.bat',
   'Uninstall Shortcut.bat',

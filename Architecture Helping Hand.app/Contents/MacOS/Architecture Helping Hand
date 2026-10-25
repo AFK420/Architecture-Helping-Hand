@@ -1,0 +1,41 @@
+#!/bin/bash
+# ======================================================================
+# Architecture Helping Hand - macOS Native Application Executable
+# ======================================================================
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_BUNDLE="$(cd "$SCRIPT_DIR/../.." && pwd)"
+BUNDLE_PARENT="$(cd "$APP_BUNDLE/.." && pwd)"
+
+# Resolve location of index.html
+if [ -f "$BUNDLE_PARENT/index.html" ]; then
+    HTML_PATH="$BUNDLE_PARENT/index.html"
+elif [ -f "$SCRIPT_DIR/../Resources/index.html" ]; then
+    HTML_PATH="$SCRIPT_DIR/../Resources/index.html"
+else
+    HTML_PATH="$(pwd)/index.html"
+fi
+
+CACHE_BUST=$(date +%s)
+
+# 1. Try Google Chrome in app mode (windowed desktop experience)
+if [ -d "/Applications/Google Chrome.app" ]; then
+    open -na "Google Chrome" --args --app="file://$HTML_PATH?v=$CACHE_BUST" --disable-cache
+    exit 0
+fi
+
+# 2. Try Microsoft Edge in app mode
+if [ -d "/Applications/Microsoft Edge.app" ]; then
+    open -na "Microsoft Edge" --args --app="file://$HTML_PATH?v=$CACHE_BUST" --disable-cache
+    exit 0
+fi
+
+# 3. Try Brave Browser in app mode
+if [ -d "/Applications/Brave Browser.app" ]; then
+    open -na "Brave Browser" --args --app="file://$HTML_PATH?v=$CACHE_BUST" --disable-cache
+    exit 0
+fi
+
+# 4. Universal Fallback: Open in default browser (Safari, Firefox, Arc, etc.)
+open "file://$HTML_PATH?v=$CACHE_BUST"
+exit 0

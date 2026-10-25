@@ -74,7 +74,26 @@ export function createZipArchive(files) {
     parts.push(localHeader);
     parts.push(dataBytes);
 
-    fileEntries.push({ nameBytes, crc, size, offset });
+    const nameStr = file.name;
+    const isExe = Boolean(
+      file.isExecutable ||
+      nameStr.endsWith('.command') ||
+      nameStr.endsWith('.sh') ||
+      nameStr.includes('/MacOS/') ||
+      nameStr.endsWith('.bat')
+    );
+    const isDir = nameStr.endsWith('/');
+
+    let externalAttr;
+    if (isDir) {
+      externalAttr = (0o040755 << 16) >>> 0; // Directory (rwxr-xr-x)
+    } else if (isExe) {
+      externalAttr = (0o100755 << 16) >>> 0; // Executable file (rwxr-xr-x)
+    } else {
+      externalAttr = (0o100644 << 16) >>> 0; // Regular file (rw-r--r--)
+    }
+
+    fileEntries.push({ nameBytes, crc, size, offset, externalAttr });
     offset += localHeader.length + dataBytes.length;
   }
 
@@ -86,7 +105,7 @@ export function createZipArchive(files) {
     const cdHeader = new Uint8Array(46 + entry.nameBytes.length);
     const view = new DataView(cdHeader.buffer);
     view.setUint32(0, 0x02014b50, true); // Central dir signature
-    view.setUint16(4, 20, true);         // Version made by
+    view.setUint16(4, (3 << 8) | 20, true); // Version made by: Unix (3), PKZIP 2.0 (20)
     view.setUint16(6, 20, true);         // Version needed: 2.0
     view.setUint16(8, 0x0800, true);      // UTF-8 flag
     view.setUint16(10, 0, true);          // Compression: 0
@@ -100,7 +119,7 @@ export function createZipArchive(files) {
     view.setUint16(32, 0, true);          // File comment length
     view.setUint16(34, 0, true);          // Disk number start
     view.setUint16(36, 0, true);          // Internal attributes
-    view.setUint32(38, 0, true);          // External attributes
+    view.setUint32(38, entry.externalAttr, true); // External attributes (Unix file permissions)
     view.setUint32(42, entry.offset, true); // Relative offset of local header
     cdHeader.set(entry.nameBytes, 46);
 
